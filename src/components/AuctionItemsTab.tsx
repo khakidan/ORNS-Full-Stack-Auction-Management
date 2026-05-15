@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Edit2, Check, X, Plus, ArrowUpDown, ArrowDown, ArrowUp } from "lucide-react";
+import { Loader2, Edit2, Check, X, Plus, ArrowUpDown, ArrowDown, ArrowUp, Package, Wand2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -30,7 +30,7 @@ interface AuctionItem {
   rowIndex: number;
   id: string;
   category: string;
-  packaged: string;
+  bundled: string;
   name: string;
   description: string;
   value: string;
@@ -38,6 +38,10 @@ interface AuctionItem {
   minRaise: string;
   donor: string;
   itemType: string;
+}
+
+interface BundlingSelection {
+  [rowIndex: number]: boolean;
 }
 
 function EditableCell({ 
@@ -145,7 +149,15 @@ export default function AuctionItemsTab() {
   const [valueCalculations, setValueCalculations] = useState<{minRange: number, minRaise: number}[]>([]);
   const [sortConfig, setSortConfig] = useState<{key: keyof AuctionItem | null, direction: 'asc' | 'desc'}>({ key: null, direction: 'asc' });
   
+  const [selectedRows, setSelectedRows] = useState<BundlingSelection>({});
+  const [isBundling, setIsBundling] = useState(false);
+  const [bundleDetails, setBundleDetails] = useState<Partial<AuctionItem>>({});
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [isExecutingBundle, setIsExecutingBundle] = useState(false);
   const [isAddingItem, setIsAddingItem] = useState(false);
+
+  const selectedItemsCount = Object.values(selectedRows).filter(Boolean).length;
   const [newItem, setNewItem] = useState<Partial<AuctionItem>>({
     category: "",
     name: "",
@@ -155,7 +167,7 @@ export default function AuctionItemsTab() {
     minRaise: "",
     donor: "",
     itemType: "",
-    packaged: ""
+    bundled: ""
   });
   const [isSubmittingItem, setIsSubmittingItem] = useState(false);
 
@@ -212,7 +224,7 @@ export default function AuctionItemsTab() {
             rowIndex: index + 2, // 1 for 1-based index, +1 for header row
             id: row[0]?.toString() || "",
             category: row[1]?.toString() || "",
-            packaged: row[2]?.toString() || "",
+            bundled: row[2]?.toString() || "",
             name: row[3]?.toString() || "",
             description: row[4]?.toString() || "",
             value: row[5]?.toString() || "",
@@ -263,6 +275,133 @@ export default function AuctionItemsTab() {
       raise = `$${calculatedRaise.toFixed(2)}`;
     }
     return { opening, raise };
+  };
+
+  const toggleRow = (rowIndex: number) => {
+    setSelectedRows(prev => ({
+      ...prev,
+      [rowIndex]: !prev[rowIndex]
+    }));
+  };
+
+  const toggleAll = () => {
+    if (selectedItemsCount === sortedItems.length) {
+      setSelectedRows({});
+    } else {
+      const all: BundlingSelection = {};
+      sortedItems.forEach(item => {
+        all[item.rowIndex] = true;
+      });
+      setSelectedRows(all);
+    }
+  };
+
+  const openBundlingModal = () => {
+    const selectedItems = items.filter(i => selectedRows[i.rowIndex]);
+    if (selectedItems.length < 2) {
+      toast.error("Select at least 2 items to bundle");
+      return;
+    }
+
+    // Merge logic
+    const mergedDescription = selectedItems.map(i => `- ${i.name}: ${i.description}`).join('\n\n');
+    const totalValue = selectedItems.reduce((sum, item) => sum + parseDollar(item.value), 0);
+    const mergedDonor = Array.from(new Set(selectedItems.map(i => i.donor).filter(Boolean))).join(', ');
+    const commonCategory = selectedItems[0].category;
+    
+    // Auto Bid calculation for bundle
+    const { opening, raise } = calculateAutoBids(totalValue.toString());
+
+    setBundleDetails({
+      category: commonCategory,
+      name: "",
+      description: mergedDescription,
+      value: totalValue > 0 ? `$${totalValue.toFixed(2)}` : "",
+      donor: mergedDonor,
+      openingBid: opening,
+      minRaise: raise,
+      itemType: selectedItems[0].itemType,
+      bundled: "yes"
+    });
+    setAiSuggestions([]);
+    setIsBundling(true);
+  };
+
+  const getAiSuggestions = async () => {
+    const selectedItems = items.filter(i => selectedRows[i.rowIndex]);
+    setLoadingSuggestions(true);
+    try {
+      const res = await fetch(`${getBaseUrl()}/api/bundle/suggest-names`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: selectedItems })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setAiSuggestions(data.suggestions || []);
+    } catch (e: any) {
+      toast.error("AI naming failed: " + e.message);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+
+  const executeBundle = async () => {
+    if (!bundleDetails.name || !bundleDetails.category) {
+      toast.error("Bundle Name and Category are required");
+      return;
+    }
+
+    setIsExecutingBundle(true);
+    try {
+      const selectedItems = items.filter(i => selectedRows[i.rowIndex]);
+      const sourceRowIndices = selectedItems.map(i => i.rowIndex);
+      
+      // Calculate ID
+      const catBase = categoriesWithBase.find(c => c.name === bundleDetails.category)?.base || 0;
+      const itemsInCat = items.filter(i => {
+        const idNum = parseInt(i.id, 10);
+        return i.category === bundleDetails.category || (!isNaN(idNum) && catBase > 0 && idNum >= catBase && idNum < catBase + 100);
+      });
+      let nextId = catBase > 0 ? catBase + 1 : 1;
+      const validIds = itemsInCat.map(i => parseInt(i.id, 10)).filter(num => !isNaN(num) && (catBase === 0 || (num >= catBase && num < catBase + 100)));
+      if (validIds.length > 0) nextId = Math.max(...validIds) + 1;
+
+      const bundleRow = [
+        nextId.toString(),
+        bundleDetails.category,
+        "yes",
+        bundleDetails.name,
+        bundleDetails.description,
+        bundleDetails.value,
+        bundleDetails.openingBid,
+        bundleDetails.minRaise,
+        bundleDetails.donor,
+        bundleDetails.itemType
+      ];
+
+      const res = await fetch(`${getBaseUrl()}/api/bundle/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          spreadsheetId,
+          bundleRow,
+          sourceRowIndices
+        })
+      });
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      toast.success("Items bundled successfully! Backup created.");
+      setSelectedRows({});
+      setIsBundling(false);
+      await fetchData();
+    } catch (e: any) {
+      toast.error("Bundling failed: " + e.message);
+    } finally {
+      setIsExecutingBundle(false);
+    }
   };
 
   const handleUpdate = async (rowIndex: number, field: keyof AuctionItem, colLetter: string, value: string) => {
@@ -360,7 +499,7 @@ export default function AuctionItemsTab() {
       const submitRow = [
         newIdString,
         newItem.category || "",
-        newItem.packaged || "",
+        newItem.bundled || "",
         newItem.name || "",
         newItem.description || "",
         newItem.value || "",
@@ -385,7 +524,7 @@ export default function AuctionItemsTab() {
         minRaise: "",
         donor: "",
         itemType: "",
-        packaged: ""
+        bundled: ""
       });
       setIsAddingItem(false);
     } catch (e) {
@@ -477,7 +616,10 @@ export default function AuctionItemsTab() {
           <div className="rounded-md border overflow-x-auto pb-4">
             <Table className="w-full table-fixed">
             <TableHeader>
-              <TableRow className="bg-slate-50">
+              <TableRow className="bg-slate-50 text-xs">
+                <TableHead style={{ width: '40px' }} className="px-2">
+                   <Checkbox checked={selectedItemsCount === sortedItems.length && sortedItems.length > 0} onCheckedChange={toggleAll} />
+                </TableHead>
                 <TableHead style={{ width: '7%' }} className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => requestSort('id')}>
                   ID <SortIndicator columnKey="id" />
                 </TableHead>
@@ -507,7 +649,10 @@ export default function AuctionItemsTab() {
                 </TableRow>
               ) : (
                 sortedItems.map((item) => (
-                  <TableRow key={item.rowIndex} className="group/row">
+                  <TableRow key={item.rowIndex} className={`group/row ${selectedRows[item.rowIndex] ? 'bg-primary/5' : ''}`}>
+                    <TableCell className="px-2 align-top pt-4">
+                      <Checkbox checked={!!selectedRows[item.rowIndex]} onCheckedChange={() => toggleRow(item.rowIndex)} />
+                    </TableCell>
                     <TableCell className="font-mono text-xs align-top">
                       <EditableCell 
                         value={item.id} 
@@ -577,17 +722,17 @@ export default function AuctionItemsTab() {
                       />
                       <div className="flex items-center space-x-2 mt-4 ml-1">
                         <Checkbox 
-                          id={`packaged-${item.rowIndex}`} 
-                          checked={item.packaged.toLowerCase() === 'yes' || item.packaged === '☑️' || item.packaged === 'true'} 
+                          id={`bundled-${item.rowIndex}`} 
+                          checked={item.bundled.toLowerCase() === 'yes' || item.bundled === '☑️' || item.bundled === 'true'} 
                           onCheckedChange={(checked) => {
-                            handleUpdate(item.rowIndex, 'packaged', 'C', checked ? 'yes' : '');
+                            handleUpdate(item.rowIndex, 'bundled', 'C', checked ? 'yes' : '');
                           }}
                         />
                         <label 
-                          htmlFor={`packaged-${item.rowIndex}`} 
+                          htmlFor={`bundled-${item.rowIndex}`} 
                           className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-muted-foreground cursor-pointer"
                         >
-                          Packaged?
+                          Bundled?
                         </label>
                       </div>
                     </TableCell>
@@ -599,6 +744,134 @@ export default function AuctionItemsTab() {
         </div>
       </CardContent>
     </Card>
+
+    {/* Selection Action Bar */}
+    {selectedItemsCount > 0 && (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-background border-2 border-primary shadow-2xl rounded-full px-6 py-3 flex items-center gap-6 animate-in fade-in slide-in-from-bottom-4">
+        <div className="flex flex-col">
+          <span className="text-sm font-bold text-primary">{selectedItemsCount} items selected</span>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Bundling Ready</span>
+        </div>
+        <div className="w-[1px] h-8 bg-border" />
+        <div className="flex gap-2">
+          <Button size="sm" onClick={openBundlingModal} className="rounded-full px-4 bg-primary hover:bg-primary/90 flex items-center gap-2">
+            <Package className="w-4 h-4" /> Bundle Selected
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setSelectedRows({})} className="rounded-full">
+            Cancel
+          </Button>
+        </div>
+      </div>
+    )}
+
+    {/* Bundling Dialog */}
+    <Dialog open={isBundling} onOpenChange={setIsBundling}>
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Package className="w-6 h-6 text-primary" /> Bundle Auction Items</DialogTitle>
+          <DialogDescription>
+            This will combine {selectedItemsCount} items into one new package. A backup of your spreadsheet will be created automatically.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-6 py-4">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-bold flex items-center justify-between">
+                <span>Bundle Name *</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-7 text-xs text-primary hover:text-primary animate-pulse flex items-center gap-1"
+                  onClick={getAiSuggestions}
+                  disabled={loadingSuggestions}
+                >
+                  {loadingSuggestions ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                  Ask Gemini for Ideas
+                </Button>
+              </Label>
+              
+              {aiSuggestions.length > 0 && (
+                <div className="bg-primary/5 p-3 rounded-lg border border-primary/20 space-y-2 mb-3">
+                  <span className="text-[10px] font-bold text-primary uppercase">Suggested by Gemini:</span>
+                  <div className="flex flex-wrap gap-2">
+                    {aiSuggestions.map((name, i) => (
+                      <Badge 
+                        key={i} 
+                        variant="secondary" 
+                        className="cursor-pointer hover:bg-primary hover:text-white transition-colors"
+                        onClick={() => setBundleDetails({...bundleDetails, name})}
+                      >
+                        {name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Input 
+                placeholder="e.g. The Ultimate Family Staycation Pack" 
+                value={bundleDetails.name || ""} 
+                onChange={(e) => setBundleDetails({...bundleDetails, name: e.target.value})}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-bold">Category *</Label>
+                <Select value={bundleDetails.category} onValueChange={(val) => setBundleDetails({...bundleDetails, category: val})}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-bold">Total Value (Calculated)</Label>
+                <Input value={bundleDetails.value || ""} onChange={(e) => setBundleDetails({...bundleDetails, value: e.target.value})} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-muted-foreground">Combined Description</Label>
+              <Textarea 
+                className="min-h-[150px] text-xs font-mono"
+                value={bundleDetails.description || ""} 
+                onChange={(e) => setBundleDetails({...bundleDetails, description: e.target.value})}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-2">
+                <Label className="text-sm font-bold">Opening Bid</Label>
+                <Input value={bundleDetails.openingBid || ""} onChange={(e) => setBundleDetails({...bundleDetails, openingBid: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-bold">Min Raise</Label>
+                <Input value={bundleDetails.minRaise || ""} onChange={(e) => setBundleDetails({...bundleDetails, minRaise: e.target.value})} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-bold">Donors (Combined)</Label>
+              <Input value={bundleDetails.donor || ""} onChange={(e) => setBundleDetails({...bundleDetails, donor: e.target.value})} />
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="bg-slate-50 -mx-6 -mb-6 p-6">
+          <Button variant="outline" onClick={() => setIsBundling(false)}>Cancel</Button>
+          <Button 
+            onClick={executeBundle} 
+            disabled={isExecutingBundle}
+            className="bg-primary text-white hover:bg-primary/90 flex items-center gap-2"
+          >
+            {isExecutingBundle ? <Loader2 className="w-4 h-4 animate-spin" /> : <Package className="w-4 h-4" />}
+            Confirm Bundle & Merge Rows
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <Dialog open={isAddingItem} onOpenChange={setIsAddingItem}>
       <DialogContent className="sm:max-w-[600px] overflow-y-auto max-h-[90vh]">
@@ -706,15 +979,15 @@ export default function AuctionItemsTab() {
           <div className="grid grid-cols-4 items-center gap-4">
             <div className="col-start-2 col-span-3 flex items-center space-x-2">
               <Checkbox 
-                id="packaged-new" 
-                checked={newItem.packaged === 'yes'}
-                onCheckedChange={(checked) => setNewItem({...newItem, packaged: checked ? 'yes' : ''})}
+                id="bundled-new" 
+                checked={newItem.bundled === 'yes'}
+                onCheckedChange={(checked) => setNewItem({...newItem, bundled: checked ? 'yes' : ''})}
               />
               <label 
-                htmlFor="packaged-new" 
+                htmlFor="bundled-new" 
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
               >
-                Packaged?
+                Bundled?
               </label>
             </div>
           </div>

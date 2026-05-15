@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { google } from "googleapis";
+import { GoogleGenAI } from "@google/genai";
 import session from "express-session";
 import sessionFileStore from "session-file-store";
 import dotenv from "dotenv";
@@ -20,6 +21,16 @@ dotenv.config();
 
 const app = express();
 const PORT = 3000;
+
+// Gemini AI setup
+const genAI = new GoogleGenAI({ 
+  apiKey: process.env.GEMINI_API_KEY || "",
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
 
 // CORS configuration to allow Tauri app to talk to local server
 app.use(cors({
@@ -435,6 +446,119 @@ app.post("/api/script/run", async (req, res) => {
     });
   }
 });
+// Gemini Suggest Bundle Names
+app.post("/api/bundle/suggest-names", async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ error: "GEMINI_API_KEY is not configured in the environment." });
+  }
+
+  const { items } = req.body;
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: "No items provided for suggestions" });
+  }
+
+  try {
+    const itemsDescription = items.map((it: any) => `- ${it.name}: ${it.description || 'No description'}`).join('\n');
+    const prompt = `Suggested names for bundle: ${itemsDescription}`;
+
+    const response = await genAI.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: prompt,
+      config: {
+        systemInstruction: "You are an expert at creating catchy, themed bundle names for a non-profit preschool's silent auction. Return JSON array of 5 strings.",
+        responseMimeType: "application/json"
+      }
+    });
+
+    const rawText = response.text || "[]";
+    let cleanedText = rawText.trim();
+    if (cleanedText.startsWith("```json")) {
+      cleanedText = cleanedText.replace(/^```json\n?/, "").replace(/\n?```$/, "");
+    } else if (cleanedText.startsWith("```")) {
+      cleanedText = cleanedText.replace(/^```\n?/, "").replace(/\n?```$/, "");
+    }
+    
+    const suggestions = JSON.parse(cleanedText);
+    res.json({ suggestions });
+  } catch (error: any) {
+    console.error("Gemini suggestion error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Execute Bundling Workflow
+app.post("/api/bundle/execute", async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+  const { spreadsheetId, bundleRow, sourceRowIndices } = req.body;
+  if (!spreadsheetId || !bundleRow || !sourceRowIndices || sourceRowIndices.length === 0) {
+    return res.status(400).json({ error: "Missing required bundling parameters" });
+  }
+
+  try {
+    const client = getAuthenticatedClient(req.session.tokens);
+    const sheets = google.sheets({ version: "v4", auth: client });
+
+    // 1. Create Backup
+    const dateStr = new Date().toLocaleString().replace(/[\/:]/g, '-');
+    const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId });
+    const sourceSheetId = sheetInfo.data.sheets?.find(s => s.properties?.title === "Auction-Items")?.properties?.sheetId;
+    
+    if (sourceSheetId !== undefined) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [{
+            duplicateSheet: {
+              sourceSheetId,
+              newSheetName: `Auction-Items Back Up (${dateStr})`,
+              insertSheetIndex: 1
+            }
+          }]
+        }
+      });
+    }
+
+    // 2. Append new bundled row
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: "Auction-Items!A:J",
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [bundleRow]
+      }
+    });
+
+    // 3. Delete source rows
+    // Sort indices descending to avoid shifting issues
+    const sortedIndices = [...sourceRowIndices].sort((a, b) => b - a);
+    
+    const deleteRequests = sortedIndices.map(idx => ({
+      deleteDimension: {
+        range: {
+          sheetId: sourceSheetId,
+          dimension: "ROWS",
+          startIndex: idx - 1,
+          endIndex: idx
+        }
+      }
+    }));
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: deleteRequests
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("Bundling execution error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post("/api/settings/update", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
 
