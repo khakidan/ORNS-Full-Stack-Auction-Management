@@ -487,6 +487,121 @@ app.post("/api/bundle/suggest-names", async (req, res) => {
   }
 });
 
+// Gemini Suggest Bundle Description
+app.post("/api/bundle/suggest-description", async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ error: "GEMINI_API_KEY is not configured in the environment." });
+  }
+
+  const { items } = req.body;
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: "No items provided for description suggestions" });
+  }
+
+  try {
+    const itemsList = items.map((it: any) => `- ${it.name}: ${it.description || 'No description'}`).join('\n');
+    const prompt = `Write a professional, catchy, and appealing auction description for a bundle containing these items:
+    ${itemsList}
+    
+    The description MUST be exactly one paragraph long, professional yet exciting for a school fundraiser. Don't use placeholders. Focus on the value and experience of the bundle.`;
+
+    const response = await genAI.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: prompt,
+      config: {
+        systemInstruction: "You are an expert at writing compelling silent auction descriptions for non-profit preschool fundraisers. Return a plain text description that is exactly one paragraph long.",
+      }
+    });
+
+    res.json({ description: response.text });
+  } catch (error: any) {
+    console.error("Gemini description error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// List Auction Backups
+app.get("/api/backups/list/:spreadsheetId", async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const client = getAuthenticatedClient(req.session.tokens);
+    const sheets = google.sheets({ version: "v4", auth: client });
+
+    const metadata = await sheets.spreadsheets.get({
+      spreadsheetId: req.params.spreadsheetId,
+    });
+
+    const backupSheets = metadata.data.sheets?.filter(s => 
+      s.properties?.title?.startsWith("Auction-Items Back Up (")
+    ).map(s => ({
+      title: s.properties?.title,
+      sheetId: s.properties?.sheetId,
+      index: s.properties?.index
+    })) || [];
+
+    res.json(backupSheets);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Restore Auction Backup
+app.post("/api/backups/restore", async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+  const { spreadsheetId, backupSheetName } = req.body;
+  if (!spreadsheetId || !backupSheetName) return res.status(400).json({ error: "Missing required parameters" });
+
+  try {
+    const client = getAuthenticatedClient(req.session.tokens);
+    const sheets = google.sheets({ version: "v4", auth: client });
+
+    const metadata = await sheets.spreadsheets.get({ spreadsheetId });
+    const sheetsList = metadata.data.sheets || [];
+    
+    const currentSheet = sheetsList.find(s => s.properties?.title === "Auction-Items");
+    const backupSheet = sheetsList.find(s => s.properties?.title === backupSheetName);
+
+    if (!backupSheet) throw new Error("Backup sheet not found");
+
+    const requests: any[] = [];
+    const timestamp = new Date().getTime();
+
+    // 1. Rename current to an archive name
+    if (currentSheet) {
+      requests.push({
+        updateSheetProperties: {
+          properties: {
+            sheetId: currentSheet.properties?.sheetId,
+            title: `Auction-Items (Archived ${timestamp})`
+          },
+          fields: "title"
+        }
+      });
+    }
+
+    // 2. Duplicate backup sheet
+    requests.push({
+      duplicateSheet: {
+        sourceSheetId: backupSheet.properties?.sheetId,
+        newSheetName: "Auction-Items",
+        insertSheetIndex: 0
+      }
+    });
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests }
+    });
+
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Execute Bundling Workflow
 app.post("/api/bundle/execute", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });

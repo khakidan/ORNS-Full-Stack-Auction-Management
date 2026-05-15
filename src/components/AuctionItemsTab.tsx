@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Edit2, Check, X, Plus, ArrowUpDown, ArrowDown, ArrowUp, Package, Wand2, Trash2 } from "lucide-react";
+import { Loader2, Edit2, Check, X, Plus, ArrowUpDown, ArrowDown, ArrowUp, Package, Wand2, Trash2, History, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -154,8 +154,13 @@ export default function AuctionItemsTab() {
   const [bundleDetails, setBundleDetails] = useState<Partial<AuctionItem>>({});
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [loadingDescription, setLoadingDescription] = useState(false);
   const [isExecutingBundle, setIsExecutingBundle] = useState(false);
   const [isAddingItem, setIsAddingItem] = useState(false);
+  const [isRestoreOpen, setIsRestoreOpen] = useState(false);
+  const [backups, setBackups] = useState<{title: string, sheetId: number}[]>([]);
+  const [loadingBackups, setLoadingBackups] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   const selectedItemsCount = Object.values(selectedRows).filter(Boolean).length;
   const [newItem, setNewItem] = useState<Partial<AuctionItem>>({
@@ -343,6 +348,64 @@ export default function AuctionItemsTab() {
       toast.error("AI naming failed: " + e.message);
     } finally {
       setLoadingSuggestions(false);
+    }
+  };
+
+  const getAiDescriptionSuggestion = async () => {
+    const selectedItems = items.filter(i => selectedRows[i.rowIndex]);
+    setLoadingDescription(true);
+    try {
+      const res = await fetch(`${getBaseUrl()}/api/bundle/suggest-description`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: selectedItems })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setBundleDetails(prev => ({ ...prev, description: data.description }));
+      toast.success("AI description generated!");
+    } catch (e: any) {
+      toast.error("AI description failed: " + e.message);
+    } finally {
+      setLoadingDescription(false);
+    }
+  };
+
+  const fetchBackups = async () => {
+    if (!spreadsheetId) return;
+    setLoadingBackups(true);
+    try {
+      const res = await fetch(`${getBaseUrl()}/api/backups/list/${spreadsheetId}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setBackups(data);
+    } catch (e: any) {
+      toast.error("Failed to load backups: " + e.message);
+    } finally {
+      setLoadingBackups(false);
+    }
+  };
+
+  const executeRestore = async (backupName: string) => {
+    if (!spreadsheetId) return;
+    if (!confirm(`Are you sure you want to restore "${backupName}"? This will replace the current Auction-Items tab.`)) return;
+
+    setIsRestoring(true);
+    try {
+      const res = await fetch(`${getBaseUrl()}/api/backups/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spreadsheetId, backupSheetName: backupName })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      toast.success("Backup restored successfully!");
+      setIsRestoreOpen(false);
+      await fetchData();
+    } catch (e: any) {
+      toast.error("Restore failed: " + e.message);
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -608,9 +671,14 @@ export default function AuctionItemsTab() {
               Showing {items.length} items from the Auction-Items spreadsheet. Click the edit icon to make changes.
             </CardDescription>
           </div>
-          <Button onClick={() => setIsAddingItem(true)} className="flex items-center gap-2">
-            <Plus className="w-4 h-4" /> Add New Item
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => { setIsRestoreOpen(true); fetchBackups(); }} className="flex items-center gap-2">
+              <History className="w-4 h-4" /> Restore Backup
+            </Button>
+            <Button onClick={() => setIsAddingItem(true)} className="flex items-center gap-2">
+              <Plus className="w-4 h-4" /> Add New Item
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="rounded-md border overflow-x-auto pb-4">
@@ -833,7 +901,19 @@ export default function AuctionItemsTab() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-bold text-muted-foreground">Combined Description</Label>
+              <Label className="text-sm font-bold text-muted-foreground flex items-center justify-between">
+                <span>Combined Description</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-7 text-xs text-primary hover:text-primary animate-pulse flex items-center gap-1"
+                  onClick={getAiDescriptionSuggestion}
+                  disabled={loadingDescription}
+                >
+                  {loadingDescription ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                  Ask Gemini for Description
+                </Button>
+              </Label>
               <Textarea 
                 className="min-h-[150px] text-xs font-mono"
                 value={bundleDetails.description || ""} 
@@ -870,6 +950,50 @@ export default function AuctionItemsTab() {
             Confirm Bundle & Merge Rows
           </Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={isRestoreOpen} onOpenChange={setIsRestoreOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><History className="w-5 h-5 text-primary" /> Restore Backup</DialogTitle>
+          <DialogDescription>
+            Choose a previous version of the Auction Items spreadsheet to restore. 
+            This will archive your current version before replacing it.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="py-4">
+          {loadingBackups ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : backups.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No backups found in this spreadsheet.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {backups.map((b) => (
+                <div key={b.sheetId} className="flex items-center justify-between p-3 rounded-lg border hover:bg-slate-50 transition-colors">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">{b.title}</span>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    className="text-primary hover:text-primary hover:bg-primary/10"
+                    onClick={() => executeRestore(b.title)}
+                    disabled={isRestoring}
+                  >
+                    {isRestoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                    <span className="ml-2">Restore</span>
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
 
