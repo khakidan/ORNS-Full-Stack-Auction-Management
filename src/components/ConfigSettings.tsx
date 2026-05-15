@@ -396,24 +396,6 @@ export default function ConfigSettings() {
               {savingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Save Configuration
             </Button>
-            <Button 
-                variant="outline" 
-                onClick={syncSettingsFromCloud} 
-                disabled={initializing}
-                className="flex-1 gap-2 h-12 border-primary/20 hover:bg-primary/5"
-            >
-              <RefreshCw className={`w-4 h-4 ${initializing ? 'animate-spin' : ''}`} />
-              Sync from Cloud
-            </Button>
-            <Button 
-                variant="outline" 
-                onClick={initializeSheets} 
-                disabled={initializing}
-                className="flex-1 gap-2 h-12 border-primary/20 hover:bg-primary/5"
-            >
-              {initializing ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlaySquare className="w-4 h-4" />}
-              Initialize Main Sheets
-            </Button>
           </div>
         </CardContent>
       </Card>

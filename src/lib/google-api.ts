@@ -64,3 +64,18 @@ export async function appendSheetData(spreadsheetId: string, range: string, valu
   }
   return res.json();
 }
+
+export async function clearSheetData(spreadsheetId: string, range: string) {
+  if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+    throw new Error("Invalid Spreadsheet ID");
+  }
+  const res = await fetch(`${getBaseUrl()}/api/sheets/${spreadsheetId}/${encodeURIComponent(range)}/clear`, {
+    method: "POST",
+    credentials: "include"
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to clear sheet data");
+  }
+  return res.json();
+}

@@ -18,6 +18,7 @@ export interface Bidder {
 export interface AuctionItem {
   id: string;
   name: string;
+  type?: string;
   description?: string;
 }
 
@@ -61,11 +62,12 @@ export function useAuction() {
     if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) return;
     try {
       const sheetName = localStorage.getItem("auctionItemsSheet") || "Auction-Items";
-      const data = await getSheetData(spreadsheetId, `${sheetName}!A:B`);
+      const data = await getSheetData(spreadsheetId, `${sheetName}!A:C`);
       if (data.values?.length > 1) {
         const itemsList = data.values.slice(1).map((row: any[]) => ({
           id: row[0]?.toString() || "",
           name: row[1]?.toString() || "",
+          type: row[2]?.toString() || "",
         }));
         setItems(itemsList);
       }

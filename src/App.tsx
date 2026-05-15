@@ -194,10 +194,10 @@ export default function App() {
             variant={activeWorkflow === 'items' ? 'secondary' : 'ghost'} 
             className={`justify-start gap-3 h-10 ${isSidebarOpen ? 'w-full' : 'w-10 px-0 justify-center'}`} 
             onClick={() => setActiveWorkflow('items')}
-            title="Auction Items Management"
+            title="Auction Items"
           >
             <Package className="w-5 h-5 shrink-0" />
-            {isSidebarOpen && <span className="truncate">Auction Items Management</span>}
+            {isSidebarOpen && <span className="truncate">Auction Items</span>}
           </Button>
 
           <Button 

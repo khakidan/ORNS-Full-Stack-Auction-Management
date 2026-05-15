@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Gavel, Loader2, Search, User } from "lucide-react";
+import { Gavel, Loader2, RefreshCw, Search, User } from "lucide-react";
 
 export default function BidEntry() {
   const { bidders, items } = useAuction();
@@ -102,9 +102,27 @@ export default function BidEntry() {
   return (
     <Card className="max-w-xl mx-auto">
       <CardHeader>
-        <CardTitle className="flex items-center gap-3">
-          <Gavel className="w-6 h-6" /> Winning Bid Entry
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-3">
+            <Gavel className="w-6 h-6" /> Winning Bid Entry
+          </CardTitle>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => {
+              const spreadId = localStorage.getItem("spreadsheetId");
+              if (spreadId && !spreadId.includes("PASTE")) {
+                window.open(`https://docs.google.com/spreadsheets/d/${spreadId}`, "_blank");
+              } else {
+                toast.error("Spreadsheet ID not configured");
+              }
+            }}
+            className="gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Open Spreadsheet
+          </Button>
+        </div>
         <CardDescription>Live auction data entry — matches your original workflow</CardDescription>
       </CardHeader>
       <CardContent>

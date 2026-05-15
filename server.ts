@@ -837,6 +837,24 @@ app.post("/api/sheets/:spreadsheetId/:range/append", async (req, res) => {
   }
 });
 
+app.post("/api/sheets/:spreadsheetId/:range/clear", async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const client = getAuthenticatedClient(req.session.tokens);
+    const sheets = google.sheets({ version: "v4", auth: client });
+
+    const result = await sheets.spreadsheets.values.clear({
+      spreadsheetId: req.params.spreadsheetId,
+      range: req.params.range,
+    });
+    res.json(result.data);
+  } catch (error: any) {
+    console.error(`[Sheets API Error] CLEAR ${req.params.spreadsheetId}:`, error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Drive API Proxy
 app.get("/api/drive/files/:folderId", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
