@@ -21,7 +21,7 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchSpecialWinners = async () => {
       const spreadsheetId = localStorage.getItem("spreadsheetId");
-      if (!spreadsheetId) return;
+      if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) return;
       try {
         const data = await getSheetData(spreadsheetId, "Special-Winners!A2:B3");
         if (data.values) {
@@ -38,7 +38,10 @@ export default function Dashboard() {
 
   const saveGiftCardWinner = async () => {
     const spreadsheetId = localStorage.getItem("spreadsheetId");
-    if (!spreadsheetId) return;
+    if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+      toast.error("Spreadsheet ID not configured.");
+      return;
+    }
     setSavingGiftCard(true);
     try {
       await updateSheetData(spreadsheetId, "Special-Winners!B2", [[giftCardWinnerId]]);
@@ -52,7 +55,10 @@ export default function Dashboard() {
 
   const saveRaffleWinner = async () => {
     const spreadsheetId = localStorage.getItem("spreadsheetId");
-    if (!spreadsheetId) return;
+    if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+      toast.error("Spreadsheet ID not configured.");
+      return;
+    }
     setSavingRaffle(true);
     try {
       await updateSheetData(spreadsheetId, "Special-Winners!B3", [[raffleWinnerId]]);

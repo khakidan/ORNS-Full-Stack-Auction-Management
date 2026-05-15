@@ -75,17 +75,21 @@ export default function Bidders() {
 
   const markAsProxy = async (bidder: Bidder) => {
     if (!bidder) return;
+    const spreadsheetId = localStorage.getItem("spreadsheetId");
+    if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+      toast.error("Spreadsheet ID not configured.");
+      return;
+    }
     setProcessingId(bidder.id);
     try {
-      const spreadsheetId = localStorage.getItem("spreadsheetId");
       const sheetName = localStorage.getItem("bidderNumbersSheet") || "Bidder-Numbers";
 
       // Dynamically find the row to prevent sorting bugs
-      const data = await getSheetData(spreadsheetId!, `${sheetName}!A:A`);
+      const data = await getSheetData(spreadsheetId, `${sheetName}!A:A`);
       const rowIndex = data.values.findIndex((row: any) => row[0]?.toString() === bidder.id) + 1;
 
       if (rowIndex > 1) {
-        await updateSheetData(spreadsheetId!, `${sheetName}!F${rowIndex}`, [[true]]);
+        await updateSheetData(spreadsheetId, `${sheetName}!F${rowIndex}`, [[true]]);
         toast.success(`${bidder.firstName} ${bidder.lastName} marked as Proxy Bidder`);
         fetchBidders();
       } else {

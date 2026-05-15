@@ -87,7 +87,7 @@ export default function Checkout() {
 
   const loadWinners = async () => {
     const spreadsheetId = localStorage.getItem("spreadsheetId");
-    if (!spreadsheetId) return;
+    if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) return;
 
     setFetchingWinners(true);
     try {
@@ -239,6 +239,10 @@ export default function Checkout() {
 
   const handleMarkPaid = async (winner: any) => {
     const spreadsheetId = localStorage.getItem("spreadsheetId");
+    if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+      toast.error("Bid Management Spreadsheet ID not configured correctly.");
+      return;
+    }
     setProcessingId(`${winner.bidder.id}-pay`);
     try {
       const sheetName = localStorage.getItem("bidderNumbersSheet") || "Bidder-Numbers";

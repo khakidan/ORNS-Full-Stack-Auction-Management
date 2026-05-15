@@ -15,6 +15,7 @@ export interface Config {
   auctionItemsSheet: string;
   bidManagementSheet: string;
   receiptFolderId: string;
+  forPrintFolderId: string;
   ornsLogoId: string;
   ticketPrice: string;
   auctionItemsScriptId: string;
@@ -31,6 +32,7 @@ export default function ConfigSettings() {
     auctionItemsSheet: localStorage.getItem("auctionItemsSheet") || "Auction-Items",
     bidManagementSheet: localStorage.getItem("bidManagementSheet") || "Bid-Management",
     receiptFolderId: localStorage.getItem("receiptFolderId") || "",
+    forPrintFolderId: localStorage.getItem("forPrintFolderId") || "",
     ornsLogoId: localStorage.getItem("ornsLogoId") || "",
     ticketPrice: localStorage.getItem("ticketPrice") || "35",
     auctionItemsScriptId: localStorage.getItem("auctionItemsScriptId") || "",
@@ -93,11 +95,13 @@ export default function ConfigSettings() {
       const data = await getSheetData(spreadsheetId, "_Settings!A:C");
       if (data && data.values) {
         let newReceiptFolderId = config.receiptFolderId;
+        let newForPrintFolderId = config.forPrintFolderId;
         let newOrnsLogoId = config.ornsLogoId;
         let newTicketPrice = config.ticketPrice;
 
         for (const row of data.values) {
           if (row[0] === "receiptFolderID") newReceiptFolderId = row[1];
+          if (row[0] === "forPrintFolderID") newForPrintFolderId = row[1];
           if (row[0] === "ornsLogoID") newOrnsLogoId = row[1];
           if (row[0] === "ticketPrice") newTicketPrice = row[1];
         }
@@ -105,6 +109,7 @@ export default function ConfigSettings() {
         setConfig(curr => ({
           ...curr,
           receiptFolderId: newReceiptFolderId,
+          forPrintFolderId: newForPrintFolderId,
           ornsLogoId: newOrnsLogoId,
           ticketPrice: newTicketPrice
         }));
@@ -143,6 +148,7 @@ export default function ConfigSettings() {
     const auctionTicketsId = extractId(config.auctionTicketsSpreadsheetId);
 
     const receiptFolderId = extractId(config.receiptFolderId);
+    const forPrintFolderId = extractId(config.forPrintFolderId);
     const ornsLogoId = extractId(config.ornsLogoId);
     const auctionItemsScriptId = extractId(config.auctionItemsScriptId);
     const auctionTicketsScriptId = extractId(config.auctionTicketsScriptId);
@@ -159,6 +165,7 @@ export default function ConfigSettings() {
     localStorage.setItem("auctionItemsSheet", config.auctionItemsSheet);
     localStorage.setItem("bidManagementSheet", config.bidManagementSheet);
     localStorage.setItem("receiptFolderId", receiptFolderId);
+    localStorage.setItem("forPrintFolderId", forPrintFolderId);
     localStorage.setItem("ornsLogoId", ornsLogoId);
     localStorage.setItem("ticketPrice", config.ticketPrice);
     localStorage.setItem("auctionItemsScriptId", auctionItemsScriptId);
@@ -172,6 +179,7 @@ export default function ConfigSettings() {
       try {
         await syncSettingToCloud(bidMgtId, "ticketPrice", config.ticketPrice, "Standard Walk-In Ticket Price");
         await syncSettingToCloud(bidMgtId, "receiptFolderID", receiptFolderId, "Receipts Folder ID");
+        await syncSettingToCloud(bidMgtId, "forPrintFolderID", forPrintFolderId, "For Print Folder ID");
         await syncSettingToCloud(bidMgtId, "ornsLogoID", ornsLogoId, "ORNS Logo File ID");
       } catch (err) {
         console.error("Failed to sync settings to cloud:", err);
@@ -350,6 +358,16 @@ export default function ConfigSettings() {
                   value={config.receiptFolderId}
                   onChange={(e) => setConfig({ ...config, receiptFolderId: extractId(e.target.value) })}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="forPrintFolderId">For Print Folder ID</Label>
+                <Input
+                  id="forPrintFolderId"
+                  placeholder="Paste folder URL or ID"
+                  value={config.forPrintFolderId}
+                  onChange={(e) => setConfig({ ...config, forPrintFolderId: extractId(e.target.value) })}
+                />
+                <p className="text-xs text-muted-foreground">Folder where generated documents and presentations are stored.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="ornsLogoId">ORNS Logo File ID</Label>

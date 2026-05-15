@@ -30,7 +30,7 @@ export function useAuction() {
   const [loading, setLoading] = useState(false);
 
   const fetchBidders = useCallback(async () => {
-    if (!spreadsheetId) return;
+    if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) return;
     setLoading(true);
     try {
       const sheetName = localStorage.getItem("bidderNumbersSheet") || "Bidder-Numbers";
@@ -58,7 +58,7 @@ export function useAuction() {
   }, [spreadsheetId]);
 
   const fetchItems = useCallback(async () => {
-    if (!spreadsheetId) return;
+    if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) return;
     try {
       const sheetName = localStorage.getItem("auctionItemsSheet") || "Auction-Items";
       const data = await getSheetData(spreadsheetId, `${sheetName}!A:B`);
@@ -75,7 +75,7 @@ export function useAuction() {
   }, [spreadsheetId]);
 
   const fetchWinners = useCallback(async () => {
-    if (!spreadsheetId || bidders.length === 0) return;
+    if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE") || bidders.length === 0) return;
     try {
       const sheetName = localStorage.getItem("bidManagementSheet") || "Bid-Management";
       const data = await getSheetData(spreadsheetId, `${sheetName}!A:ZZ`); // Fetch wide range to catch all bidders
@@ -117,6 +117,7 @@ export function useAuction() {
   }, [spreadsheetId, bidders]);
 
   const checkInBidder = async (bidder: Bidder) => {
+    if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) return;
     try {
       const sheetName = localStorage.getItem("bidderNumbersSheet") || "Bidder-Numbers";
       const data = await getSheetData(spreadsheetId, `${sheetName}!A:A`);

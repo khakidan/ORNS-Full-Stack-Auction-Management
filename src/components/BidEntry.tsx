@@ -40,9 +40,13 @@ export default function BidEntry() {
     setSubmitting(true);
     try {
       const spreadsheetId = localStorage.getItem("spreadsheetId");
+      if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+        toast.error("Bid Management Spreadsheet ID not configured correctly.");
+        return;
+      }
       const sheetName = localStorage.getItem("bidManagementSheet") || "Bid-Management";
 
-      const data = await getSheetData(spreadsheetId!, `${sheetName}!1:200`);
+      const data = await getSheetData(spreadsheetId, `${sheetName}!1:200`);
       if (!data.values || data.values.length === 0) {
         throw new Error("Bid Management sheet is empty or inaccessible. Please ensure headers are set up.");
       }

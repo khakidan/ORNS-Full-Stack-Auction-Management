@@ -440,9 +440,19 @@ app.post("/api/script/run", async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error("[Server Error]", error);
-    res.status(500).json({
-      error: error.message || "Failed to trigger Apps Script. Check Script ID and permissions."
+    console.error("[Script API] Error running script:", error);
+    if (error.code === 404) {
+      return res.status(404).json({ 
+        error: "Script not found. Please verify the Script ID in the Settings tab. Ensure you have copied the correct Script ID from the Google Apps Script project settings (Gear icon > Script ID)." 
+      });
+    }
+    if (error.code === 403) {
+      return res.status(403).json({
+        error: "Access denied to the script. Ensure you have enabled the Google Apps Script API at https://script.google.com/home/usersettings and that you have 'Deployed as API Executable' if required by your script configuration."
+      });
+    }
+    res.status(500).json({ 
+      error: error.message || "Failed to trigger Apps Script. Check Script ID and permissions." 
     });
   }
 });
@@ -543,6 +553,9 @@ app.get("/api/backups/list/:spreadsheetId", async (req, res) => {
 
     res.json(backupSheets);
   } catch (error: any) {
+    if (error.code === 404) {
+      return res.status(404).json({ error: "Spreadsheet not found. Please check the Spreadsheet ID in Settings." });
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -598,6 +611,9 @@ app.post("/api/backups/restore", async (req, res) => {
 
     res.json({ success: true });
   } catch (error: any) {
+    if (error.code === 404) {
+      return res.status(404).json({ error: "Spreadsheet not found. Please check the Spreadsheet ID in Settings." });
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -670,6 +686,9 @@ app.post("/api/bundle/execute", async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error("Bundling execution error:", error);
+    if (error.code === 404) {
+      return res.status(404).json({ error: "Spreadsheet not found. Please check the Spreadsheet ID in Settings." });
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -725,6 +744,9 @@ app.post("/api/settings/update", async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error("Error updating setting:", error);
+    if (error.code === 404) {
+      return res.status(404).json({ error: "Spreadsheet or Settings tab not found. Please check your IDs." });
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -743,6 +765,10 @@ app.get("/api/sheets/:spreadsheetId/:range", async (req, res) => {
     });
     res.json(result.data);
   } catch (error: any) {
+    console.error(`[Sheets API Error] GET ${req.params.spreadsheetId}:`, error);
+    if (error.code === 404) {
+      return res.status(404).json({ error: "Spreadsheet not found. Please check the Spreadsheet ID in Settings." });
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -764,6 +790,10 @@ app.post("/api/sheets/:spreadsheetId/:range", async (req, res) => {
     });
     res.json(result.data);
   } catch (error: any) {
+    console.error(`[Sheets API Error] POST ${req.params.spreadsheetId}:`, error);
+    if (error.code === 404) {
+      return res.status(404).json({ error: "Spreadsheet not found. Please check the Spreadsheet ID in Settings." });
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -785,6 +815,10 @@ app.post("/api/sheets/:spreadsheetId/:range/append", async (req, res) => {
     });
     res.json(result.data);
   } catch (error: any) {
+    console.error(`[Sheets API Error] APPEND ${req.params.spreadsheetId}:`, error);
+    if (error.code === 404) {
+      return res.status(404).json({ error: "Spreadsheet not found. Please check the Spreadsheet ID in Settings." });
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -801,6 +835,11 @@ app.get("/api/drive/files/:folderId", async (req, res) => {
     console.log(`[Drive API] Cached Scopes: ${req.session.tokens.scope}`);
     
     console.log(`[Drive API] Fetching files for folderId: ${req.params.folderId}`);
+    
+    if (!req.params.folderId || req.params.folderId === "undefined" || req.params.folderId === "null" || req.params.folderId === "") {
+      return res.json([]);
+    }
+
     const query = `'${req.params.folderId}' in parents and trashed = false`;
     console.log(`[Drive API] Query: ${query}`);
 
@@ -820,6 +859,9 @@ app.get("/api/drive/files/:folderId", async (req, res) => {
     res.json(result.data.files || []);
   } catch (error: any) {
     console.error(`[Drive API] Error fetching files:`, error);
+    if (error.code === 404) {
+      return res.status(404).json({ error: "Folder not found. Please check the folder ID in Settings." });
+    }
     res.status(500).json({ error: error.message });
   }
 });

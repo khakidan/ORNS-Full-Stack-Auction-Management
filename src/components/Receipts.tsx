@@ -52,7 +52,7 @@ export default function Receipts() {
 
   const fetchFiles = async () => {
     const folderId = localStorage.getItem("receiptFolderId");
-    if (!folderId) {
+    if (!folderId || folderId === "undefined" || folderId === "null" || folderId.includes("PASTE")) {
       setLoading(false);
       return;
     }
@@ -63,13 +63,21 @@ export default function Receipts() {
         credentials: "include"
       });
       
-      if (!res.ok) throw new Error("Failed to fetch files");
+      if (res.status === 404) {
+        setFiles([]);
+        return;
+      }
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to fetch files");
+      }
       
       const data = await res.json();
       setFiles(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error("Could not load receipts from Google Drive");
+      toast.error(`Error loading receipts: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -80,15 +88,16 @@ export default function Receipts() {
   }, []);
 
   const folderId = localStorage.getItem("receiptFolderId");
+  const isInvalidId = !folderId || folderId === "undefined" || folderId === "null" || folderId.includes("PASTE");
 
-  if (!folderId) {
+  if (isInvalidId) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center justify-center h-[400px]">
           <FileText className="w-12 h-12 text-slate-300 mb-4" />
           <h3 className="text-xl font-semibold mb-2">No Folder Configured</h3>
           <p className="text-muted-foreground text-center max-w-md">
-            Please configure the Receipt Folder ID in the Settings tab to view generated receipts.
+            Please correctly configure the Receipt Folder ID in the Settings tab to view generated receipts.
           </p>
         </CardContent>
       </Card>
