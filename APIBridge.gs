@@ -84,6 +84,87 @@ function apiCreateSlideshow(spreadsheetId) {
       message: 'Live auction slideshow created successfully.'
     };
   } catch (e) {
+    console.error('apiCreateSlideshow Error: ' + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+/**
+ * Bridge for creating Bidding Guide Cover Page.
+ */
+function apiCreateBiddingGuideCoverPage(spreadsheetId) {
+  try {
+    const itemManager = new AuctionItemManager();
+    const generator = new BiddingGuideDoc('Auction Bidding Guide Cover Page', itemManager);
+    setupForPrintOverride(generator);
+    generator.generateCoverPage();
+    return { success: true, message: 'Cover page created successfully.' };
+  } catch (e) {
+    console.error('apiCreateBiddingGuideCoverPage Error: ' + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+/**
+ * Bridge for creating Bidding Guide Inner Pages.
+ */
+function apiCreateBiddingGuideInnerPages(spreadsheetId) {
+  try {
+    const itemManager = new AuctionItemManager();
+    const generator = new BiddingGuideDoc('Auction Bidding Guide Inner Pages', itemManager);
+    setupForPrintOverride(generator);
+    generator.generateInnerPages();
+    return { success: true, message: 'Inner pages created successfully.' };
+  } catch (e) {
+    console.error('apiCreateBiddingGuideInnerPages Error: ' + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+/**
+ * Bridge for creating Bid Sheets.
+ */
+function apiCreateBidSheets(spreadsheetId) {
+  try {
+    const itemManager = new AuctionItemManager();
+    const generator = new BidSheetDoc('Bid Sheets', itemManager);
+    setupForPrintOverride(generator);
+    generator.generateBidSheets();
+    return { success: true, message: 'Bid sheets created successfully.' };
+  } catch (e) {
+    console.error('apiCreateBidSheets Error: ' + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+/**
+ * Bridge for creating Auction Catalog.
+ */
+function apiCreateCatalog(spreadsheetId) {
+  try {
+    const itemManager = new AuctionItemManager();
+    const generator = new CatalogDoc('Auction Catalog', itemManager);
+    setupForPrintOverride(generator);
+    generator.generateCatalog();
+    return { success: true, message: 'Auction catalog created successfully.' };
+  } catch (e) {
+    console.error('apiCreateCatalog Error: ' + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+/**
+ * Bridge for creating Table Tents.
+ */
+function apiCreateTableTents(spreadsheetId) {
+  try {
+    const itemManager = new AuctionItemManager();
+    const generator = new TableTentDoc('Table Tents', itemManager);
+    setupForPrintOverride(generator);
+    generator.generateTableTents();
+    return { success: true, message: 'Table tents created successfully.' };
+  } catch (e) {
+    console.error('apiCreateTableTents Error: ' + e.toString());
     return { success: false, error: e.toString() };
   }
 }

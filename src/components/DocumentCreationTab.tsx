@@ -84,7 +84,7 @@ export default function DocumentCreationTab() {
               Generate printable documents and presentations.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2">
             <Button 
               className="w-full justify-start gap-2" 
               variant="secondary" 
@@ -98,8 +98,48 @@ export default function DocumentCreationTab() {
               variant="secondary" 
               onClick={() => runScript('apiCreateItemLabels', 'Create Item Labels')}
             >
-              <PlaySquare className="w-4 h-4" />
+              <FileText className="w-4 h-4" />
               Create Item Labels Document
+            </Button>
+            <Button 
+              className="w-full justify-start gap-2" 
+              variant="secondary" 
+              onClick={() => runScript('apiCreateBiddingGuideCoverPage', 'Bidding Guide Cover Page')}
+            >
+              <FileText className="w-4 h-4" />
+              Create Bidding Guide Cover Page
+            </Button>
+            <Button 
+              className="w-full justify-start gap-2" 
+              variant="secondary" 
+              onClick={() => runScript('apiCreateBiddingGuideInnerPages', 'Bidding Guide Inner Pages')}
+            >
+              <FileText className="w-4 h-4" />
+              Create Bidding Guide Inner Pages
+            </Button>
+            <Button 
+              className="w-full justify-start gap-2" 
+              variant="secondary" 
+              onClick={() => runScript('apiCreateBidSheets', 'Bid Sheets')}
+            >
+              <FileText className="w-4 h-4" />
+              Create Bid Sheets Doc (A5)
+            </Button>
+            <Button 
+              className="w-full justify-start gap-2" 
+              variant="secondary" 
+              onClick={() => runScript('apiCreateCatalog', 'Auction Catalog')}
+            >
+              <FileText className="w-4 h-4" />
+              Create Auction Catalog Doc
+            </Button>
+            <Button 
+              className="w-full justify-start gap-2" 
+              variant="secondary" 
+              onClick={() => runScript('apiCreateTableTents', 'Table Tents')}
+            >
+              <FileText className="w-4 h-4" />
+              Create Table Tents Doc
             </Button>
             <Button 
               className="w-full justify-start gap-2" 
@@ -107,7 +147,7 @@ export default function DocumentCreationTab() {
               onClick={() => runScript('apiCreateSlideshow', 'Create Slideshow')}
             >
               <PlaySquare className="w-4 h-4" />
-              Create Auction Slideshow
+              Create Live Auction Slideshow
             </Button>
             
             <p className="text-[10px] text-muted-foreground mt-4 px-1 italic">

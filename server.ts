@@ -74,10 +74,10 @@ const SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/drive",
   "https://www.googleapis.com/auth/documents",
+  "https://www.googleapis.com/auth/presentations",
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/script.projects",
-  "https://www.googleapis.com/auth/script.external_request",
-  "https://www.googleapis.com/auth/drive"
+  "https://www.googleapis.com/auth/script.external_request"
 ];
 
 const getOAuthClient = (req?: express.Request) => {
@@ -409,7 +409,7 @@ app.post("/api/script/run", async (req, res) => {
     const client = getAuthenticatedClient(req.session.tokens);
     const script = google.script({ version: "v1", auth: client });
 
-    console.log(`[Script API] Calling bridge function '${functionName}'`);
+    console.log(`[Script API] Calling bridge function '${functionName}' with parameters:`, parameters);
 
     const response = await script.scripts.run({
       scriptId: scriptId,
@@ -422,9 +422,10 @@ app.post("/api/script/run", async (req, res) => {
 
     if (response.data.error) {
       const error = response.data.error;
-      console.error("[Script API Error]", error);
+      console.error("[Script API Response Error]", JSON.stringify(error, null, 2));
       return res.status(500).json({
-        error: `Apps Script Execution Error: ${error.details?.[0]?.errorMessage || error.message}`
+        error: `Apps Script Execution Error: ${error.details?.[0]?.errorMessage || error.message}`,
+        details: error
       });
     }
 
@@ -440,19 +441,32 @@ app.post("/api/script/run", async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error("[Script API] Error running script:", error);
+    console.error("[Script API] Request Exception:", error.response?.data || error);
+    
     if (error.code === 404) {
       return res.status(404).json({ 
-        error: "Script not found. Please verify the Script ID in the Settings tab. Ensure you have copied the correct Script ID from the Google Apps Script project settings (Gear icon > Script ID)." 
+        error: "Script project not found. verify the Script ID in Settings." 
       });
     }
+    
+    if (error.code === 400) {
+      const apiError = error.response?.data?.error || {};
+      return res.status(400).json({
+        error: `Invalid Request (400): ${apiError.message || "Check if the script ID is correct and the Google Apps Script API is enabled."}`,
+        details: apiError
+      });
+    }
+
     if (error.code === 403) {
+      const apiError = error.response?.data?.error || {};
       return res.status(403).json({
-        error: "Access denied to the script. Ensure you have enabled the Google Apps Script API at https://script.google.com/home/usersettings and that you have 'Deployed as API Executable' if required by your script configuration."
+        error: `Access Denied (403): ${apiError.message || "Ensure Apps Script API is enabled at https://script.google.com/home/usersettings"}`,
+        details: apiError
       });
     }
+    
     res.status(500).json({ 
-      error: error.message || "Failed to trigger Apps Script. Check Script ID and permissions." 
+      error: error.message || "Failed to trigger Apps Script." 
     });
   }
 });
