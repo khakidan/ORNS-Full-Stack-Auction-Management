@@ -228,22 +228,22 @@ export default function Bidders() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="px-4 py-6 md:px-6">
           <CardTitle>Bidder Check-In</CardTitle>
           <CardDescription>
             Search by last name. Mark bidders as present or as proxy bidders.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <ScrollArea className="h-[650px]">
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader className="bg-slate-50 sticky top-0 z-10">
                 <TableRow>
                   <TableHead 
-                    className="w-24 cursor-pointer hover:text-primary transition-colors group"
+                    className="w-20 md:w-24 cursor-pointer hover:text-primary transition-colors group px-4"
                     onClick={() => handleSort("id")}
                   >
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 font-mono">
                       ID
                       {sortConfig?.key === "id" ? (
                         sortConfig.direction === "asc" ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
@@ -265,7 +265,7 @@ export default function Bidders() {
                       )}
                     </div>
                   </TableHead>
-                  <TableHead className="hidden md:table-cell">Email</TableHead>
+                  <TableHead className="hidden lg:table-cell">Email</TableHead>
                   <TableHead 
                     className="cursor-pointer hover:text-primary transition-colors group"
                     onClick={() => handleSort("status")}
@@ -279,7 +279,7 @@ export default function Bidders() {
                       )}
                     </div>
                   </TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="text-right px-4">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -289,54 +289,59 @@ export default function Bidders() {
                   ))
                 ) : sortedBidders.length > 0 ? (
                   sortedBidders.map((bidder) => (
-                    <TableRow key={bidder.id}>
-                      <TableCell className="font-mono font-bold">{bidder.id}</TableCell>
+                    <TableRow key={bidder.id} className="group hover:bg-slate-50/50">
+                      <TableCell className="font-mono font-bold px-4">{bidder.id}</TableCell>
                       <TableCell>
-                        <div className="font-medium">{bidder.firstName} {bidder.lastName}</div>
+                        <div className="font-medium whitespace-nowrap">{bidder.firstName} {bidder.lastName}</div>
                       </TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
+                      <TableCell className="hidden lg:table-cell text-muted-foreground text-sm max-w-[200px] truncate">
                         {bidder.email || "—"}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-1 md:gap-2">
                           {bidder.checkedIn ? (
-                            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700">
-                              <CheckCircle className="w-3 h-3 mr-1" /> Checked In
+                            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 whitespace-nowrap">
+                              <CheckCircle className="w-3 h-3 mr-1 shrink-0" /> Checked In
                             </Badge>
                           ) : !bidder.isProxy ? (
-                            <Badge variant="outline">
-                              <Clock className="w-3 h-3 mr-1" /> Not Present
+                            <Badge variant="outline" className="whitespace-nowrap">
+                              <Clock className="w-3 h-3 mr-1 shrink-0" /> Not Present
                             </Badge>
                           ) : null}
                           {bidder.isProxy && (
-                            <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50">
-                              Proxy Bidder
+                            <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 whitespace-nowrap">
+                              Proxy
                             </Badge>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right space-x-2">
-                        {!bidder.checkedIn && (
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => checkInBidder(bidder)}
-                            disabled={processingId === bidder.id}
-                          >
-                            Check In
-                          </Button>
-                        )}
-                        {!bidder.isProxy && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => markAsProxy(bidder)}
-                            disabled={processingId === bidder.id}
-                          >
-                            <UserCheck className="w-4 h-4" />
-                            Proxy Bidder
-                          </Button>
-                        )}
+                      <TableCell className="text-right px-4">
+                        <div className="flex justify-end gap-1.5 md:gap-2">
+                          {!bidder.checkedIn && (
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={() => checkInBidder(bidder)}
+                              disabled={processingId === bidder.id}
+                              className="h-8 md:h-9"
+                            >
+                              <span className="hidden sm:inline">Check In</span>
+                              <UserCheck className="w-4 h-4 sm:hidden" />
+                            </Button>
+                          )}
+                          {!bidder.isProxy && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => markAsProxy(bidder)}
+                              disabled={processingId === bidder.id}
+                              className="h-8 md:h-9"
+                            >
+                              <UserCheck className="w-4 h-4 md:mr-1.5" />
+                              <span className="hidden md:inline">Proxy</span>
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -349,7 +354,7 @@ export default function Bidders() {
                 )}
               </TableBody>
             </Table>
-          </ScrollArea>
+          </div>
         </CardContent>
       </Card>
     </div>

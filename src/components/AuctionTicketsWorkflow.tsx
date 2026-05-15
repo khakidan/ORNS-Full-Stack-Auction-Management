@@ -11,16 +11,21 @@ export default function AuctionTicketsWorkflow() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-end">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Auction Tickets</h2>
-          <p className="text-muted-foreground mt-2">
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Auction Tickets</h2>
+          <p className="text-muted-foreground mt-1 text-sm md:text-base">
             Manage bidders, check-ins, and prepare bidder documents for the day of the auction.
           </p>
         </div>
         {spreadsheetId && (
-          <Button variant="outline" onClick={() => window.open(`https://docs.google.com/spreadsheets/d/${spreadsheetId}`, "_blank")}>
-            <RefreshCw className="w-4 h-4" />
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => window.open(`https://docs.google.com/spreadsheets/d/${spreadsheetId}`, "_blank")}
+            className="w-full sm:w-auto"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
             Open Spreadsheet
           </Button>
         )}

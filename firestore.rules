@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Helper to validate Config object
+    function isValidConfig(data) {
+      return data.keys().hasAll([
+        'auctionItemsSpreadsheetId', 
+        'auctionTicketsSpreadsheetId', 
+        'bidManagementSpreadsheetId',
+        'bidderNumbersSheet',
+        'auctionItemsSheet',
+        'bidManagementSheet',
+        'receiptFolderId',
+        'forPrintFolderId',
+        'ornsLogoId',
+        'ticketPrice',
+        'auctionItemsScriptId',
+        'auctionTicketsScriptId',
+        'bidManagementScriptId'
+      ]) && 
+      data.auctionItemsSpreadsheetId is string &&
+      data.auctionTicketsSpreadsheetId is string &&
+      data.bidManagementSpreadsheetId is string &&
+      data.bidderNumbersSheet is string &&
+      data.auctionItemsSheet is string &&
+      data.bidManagementSheet is string &&
+      data.receiptFolderId is string &&
+      data.forPrintFolderId is string &&
+      data.ornsLogoId is string &&
+      data.ticketPrice is string &&
+      data.auctionItemsScriptId is string &&
+      data.auctionTicketsScriptId is string &&
+      data.bidManagementScriptId is string;
+    }
+
+    match /settings/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(docId) && isValidConfig(incoming());
+    }
+  }
+}

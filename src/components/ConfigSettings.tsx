@@ -1,44 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Save, AlertCircle, PlaySquare, Loader2, Copy, CheckSquare, RefreshCw } from "lucide-react";
+import { Save, AlertCircle, PlaySquare, Loader2, Copy, CheckSquare, RefreshCw, Cloud, CloudOff, LogIn } from "lucide-react";
 import { updateSheetData, appendSheetData, getSheetData, getBaseUrl } from "@/lib/google-api";
-
-export interface Config {
-  auctionItemsSpreadsheetId: string;
-  auctionTicketsSpreadsheetId: string;
-  bidManagementSpreadsheetId: string;
-  bidderNumbersSheet: string;
-  auctionItemsSheet: string;
-  bidManagementSheet: string;
-  receiptFolderId: string;
-  forPrintFolderId: string;
-  ornsLogoId: string;
-  ticketPrice: string;
-  auctionItemsScriptId: string;
-  auctionTicketsScriptId: string;
-  bidManagementScriptId: string;
-}
+import { useConfig, Config } from "@/context/ConfigContext";
 
 export default function ConfigSettings() {
-  const [config, setConfig] = useState<Config>({
-    auctionItemsSpreadsheetId: localStorage.getItem("auctionItemsSpreadsheetId") || "",
-    auctionTicketsSpreadsheetId: localStorage.getItem("auctionTicketsSpreadsheetId") || "",
-    bidManagementSpreadsheetId: localStorage.getItem("bidManagementSpreadsheetId") || localStorage.getItem("spreadsheetId") || "",
-    bidderNumbersSheet: localStorage.getItem("bidderNumbersSheet") || "Bidder-Numbers",
-    auctionItemsSheet: localStorage.getItem("auctionItemsSheet") || "Auction-Items",
-    bidManagementSheet: localStorage.getItem("bidManagementSheet") || "Bid-Management",
-    receiptFolderId: localStorage.getItem("receiptFolderId") || "",
-    forPrintFolderId: localStorage.getItem("forPrintFolderId") || "",
-    ornsLogoId: localStorage.getItem("ornsLogoId") || "",
-    ticketPrice: localStorage.getItem("ticketPrice") || "35",
-    auctionItemsScriptId: localStorage.getItem("auctionItemsScriptId") || "",
-    auctionTicketsScriptId: localStorage.getItem("auctionTicketsScriptId") || "",
-    bidManagementScriptId: localStorage.getItem("bidManagementScriptId") || localStorage.getItem("googleScriptId") || "",
-  });
+  const { config: remoteConfig, saveConfig, firebaseUser, loginToFirebase, loading: configLoading } = useConfig();
+  const [config, setConfig] = useState<Config>(remoteConfig);
+
+  useEffect(() => {
+    setConfig(remoteConfig);
+  }, [remoteConfig]);
+
   const [initializing, setInitializing] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -173,8 +150,27 @@ export default function ConfigSettings() {
     localStorage.setItem("bidManagementScriptId", bidManagementScriptId);
     // Legacy support
     localStorage.setItem("googleScriptId", bidManagementScriptId);
+
+    // Save to Firebase for cross-device sync
+    try {
+      await saveConfig({
+        ...config,
+        bidManagementSpreadsheetId: bidMgtId,
+        auctionItemsSpreadsheetId: auctionItemsId,
+        auctionTicketsSpreadsheetId: auctionTicketsId,
+        receiptFolderId,
+        forPrintFolderId,
+        ornsLogoId,
+        auctionItemsScriptId,
+        auctionTicketsScriptId,
+        bidManagementScriptId
+      });
+    } catch (err) {
+      console.error("Firebase sync failed:", err);
+      // We don't block saving locally if Firebase fails, but we already toasted in saveConfig
+    }
     
-    // Sync to Bid Management
+    // Sync to Bid Management Spreadsheet (Legacy cloud sync)
     if (bidMgtId) {
       try {
         await syncSettingToCloud(bidMgtId, "ticketPrice", config.ticketPrice, "Standard Walk-In Ticket Price");
@@ -224,6 +220,40 @@ export default function ConfigSettings() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      <Card className={`${firebaseUser ? 'border-emerald-200 bg-emerald-50/10' : 'border-amber-200 bg-amber-50/10'}`}>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              {firebaseUser ? <Cloud className="w-5 h-5 text-emerald-600" /> : <CloudOff className="w-5 h-5 text-amber-600" />}
+              Cloud Sync Status
+            </CardTitle>
+            {firebaseUser ? (
+              <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Synced: {firebaseUser.email}
+              </div>
+            ) : (
+               <div className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-1 rounded-full">
+                Offline Sync
+              </div>
+            )}
+          </div>
+          <CardDescription>
+            {firebaseUser 
+              ? "Your configuration is automatically backed up and synced across all your devices."
+              : "Settings are currently only saved on this device. Sign in to enable cross-device synchronization."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!firebaseUser && (
+            <Button variant="outline" onClick={loginToFirebase} className="w-full gap-2 border-amber-300 hover:bg-amber-100/50">
+              <LogIn className="w-4 h-4" />
+              Sign in to Sync Across Devices
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Google OAuth Helper</CardTitle>

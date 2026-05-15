@@ -267,12 +267,12 @@ export default function Checkout() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-4 items-center justify-between bg-slate-50 p-4 rounded-lg border border-slate-200">
-        <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between bg-slate-50 p-4 rounded-lg border border-slate-200">
+        <div className="flex flex-col xs:flex-row gap-2 w-full sm:w-auto">
           <Button
             onClick={() => setShowPrintConfirm(true)}
             disabled={isPrintingAll}
-            className="bg-[#e31b23] text-white hover:bg-[#e31b23]/90 font-medium"
+            className="bg-[#e31b23] text-white hover:bg-[#e31b23]/90 font-medium w-full sm:w-auto"
           >
             {isPrintingAll ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Receipt className="w-4 h-4 mr-2" />}
             {isPrintingAll ? "Printing Batch..." : "Print All Receipts"}
@@ -281,12 +281,13 @@ export default function Checkout() {
             variant="outline"
             onClick={() => setShowEmailConfirm(true)}
             disabled={isEmailingAll}
+            className="w-full sm:w-auto"
           >
             {isEmailingAll ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Mail className="w-4 h-4 mr-2" />}
             {isEmailingAll ? "Sending Emails..." : "Email All Winners"}
           </Button>
         </div>
-        <div className="text-sm font-medium text-muted-foreground bg-white px-3 py-1.5 rounded border border-slate-200 shadow-sm">
+        <div className="text-sm font-medium text-muted-foreground bg-white px-3 py-1.5 rounded border border-slate-200 shadow-sm w-full sm:w-auto text-center">
           Total Winners: <span className="text-[#e31b23] font-bold">{winners.length}</span>
         </div>
       </div>

@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlaySquare, Download, Package } from "lucide-react";
+import { PlaySquare, Download, Package, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { getBaseUrl } from "@/lib/google-api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCw, Package } from "lucide-react";
 import AuctionItemsTab from "./AuctionItemsTab";
 import DocumentCreationTab from "./DocumentCreationTab";
 
@@ -15,16 +14,21 @@ export default function AuctionItemsWorkflow() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-end">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Auction Items Management</h2>
-          <p className="text-muted-foreground mt-2">
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Auction Items Management</h2>
+          <p className="text-muted-foreground mt-1 text-sm md:text-base">
             The database for all auction items. Assign categories, bundle items, and generate documents.
           </p>
         </div>
         {spreadsheetId && (
-          <Button variant="outline" onClick={() => window.open(`https://docs.google.com/spreadsheets/d/${spreadsheetId}`, "_blank")}>
-            <RefreshCw className="w-4 h-4" />
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => window.open(`https://docs.google.com/spreadsheets/d/${spreadsheetId}`, "_blank")}
+            className="w-full sm:w-auto"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
             Open Spreadsheet
           </Button>
         )}

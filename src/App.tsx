@@ -62,6 +62,13 @@ export default function App() {
   const [activeWorkflow, setActiveWorkflow] = useState<WorkflowType>('bids');
   const [activeBidTab, setActiveBidTab] = useState("dashboard");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    // Determine initial sidebar state based on screen size
+    const isMobile = window.innerWidth < 768;
+    setIsSidebarOpen(!isMobile);
+  }, []);
 
   useEffect(() => {
     checkAuth();
@@ -161,103 +168,121 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row h-screen md:h-auto overflow-hidden md:overflow-visible">
+      {/* Mobile Header */}
+      <div className="md:hidden h-16 border-b flex items-center justify-between bg-background shrink-0 font-semibold px-4 sticky top-0 z-50">
+        <div className="flex items-center gap-2">
+          <WalletCards className="w-5 h-5 text-primary" />
+          <span className="text-sm font-bold">ORNS Auction</span>
+        </div>
+        <div className="flex items-center gap-2">
+           <span className="text-xs text-muted-foreground font-medium uppercase tracking-tight truncate max-w-[120px]">
+             {activeWorkflow === 'items' && "Items"}
+             {activeWorkflow === 'tickets' && "Tickets"}
+             {activeWorkflow === 'bids' && "Bids"}
+             {activeWorkflow === 'settings' && "Config"}
+           </span>
+           <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+             {isMobileMenuOpen ? <PanelLeftClose className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+           </Button>
+        </div>
+      </div>
+
+      {/* Overlay for mobile menu */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="fixed inset-0 bg-black/40 z-40 md:hidden"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar Navigation */}
       <aside 
-        className={`bg-background border-r border-border shrink-0 flex-col sticky top-0 md:h-screen z-40 flex overflow-hidden relative transition-all duration-300 ${isSidebarOpen ? 'w-full md:w-64' : 'w-full md:w-16'}`}
+        className={`bg-background border-r border-border shrink-0 flex-col fixed md:sticky inset-y-0 left-0 md:h-screen z-50 flex overflow-hidden transition-all duration-300 shadow-xl md:shadow-none
+          ${isMobileMenuOpen ? 'translate-x-0 w-64' : '-translate-x-full md:translate-x-0'}
+          ${isSidebarOpen ? 'md:w-64' : 'md:w-16'}`}
       >
         <div className={`h-16 flex items-center border-b shrink-0 ${isSidebarOpen ? 'px-4 justify-between' : 'justify-center'}`}>
-          <div className={`flex items-center gap-2 overflow-hidden whitespace-nowrap ${!isSidebarOpen && 'hidden'}`}>
+          <div className={`flex items-center gap-2 overflow-hidden whitespace-nowrap ${(!isSidebarOpen && !isMobileMenuOpen) && 'hidden'}`}>
             <WalletCards className="w-6 h-6 shrink-0 text-primary" />
-            <AnimatePresence mode="popLayout">
-              {isSidebarOpen && (
-                <motion.span 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="text-lg font-bold tracking-tight"
-                >
-                  ORNS Auction
-                </motion.span>
-              )}
-            </AnimatePresence>
+            <span className="text-lg font-bold tracking-tight">ORNS Auction</span>
           </div>
           <Button variant="ghost" size="icon" className={`shrink-0 h-8 w-8 hidden md:flex ${isSidebarOpen ? 'ml-2' : ''}`} onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
             {isSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </Button>
+          <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8 md:hidden" onClick={() => setIsMobileMenuOpen(false)}>
+            <PanelLeftClose className="h-4 w-4" />
+          </Button>
         </div>
 
         <div className="flex-1 py-6 px-3 space-y-1 overflow-y-auto overflow-x-hidden flex flex-col">
-          {isSidebarOpen && <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Workflows</p>}
+          {(isSidebarOpen || isMobileMenuOpen) && <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Workflows</p>}
           
           <Button 
             variant={activeWorkflow === 'items' ? 'secondary' : 'ghost'} 
-            className={`justify-start gap-3 h-10 ${isSidebarOpen ? 'w-full' : 'w-10 px-0 justify-center'}`} 
-            onClick={() => setActiveWorkflow('items')}
+            className={`justify-start gap-3 h-10 ${(isSidebarOpen || isMobileMenuOpen) ? 'w-full' : 'w-10 px-0 justify-center'}`} 
+            onClick={() => { setActiveWorkflow('items'); setIsMobileMenuOpen(false); }}
             title="Auction Items"
           >
             <Package className="w-5 h-5 shrink-0" />
-            {isSidebarOpen && <span className="truncate">Auction Items</span>}
+            {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Auction Items</span>}
           </Button>
 
           <Button 
             variant={activeWorkflow === 'tickets' ? 'secondary' : 'ghost'} 
-            className={`justify-start gap-3 h-10 ${isSidebarOpen ? 'w-full' : 'w-10 px-0 justify-center'}`} 
-            onClick={() => setActiveWorkflow('tickets')}
+            className={`justify-start gap-3 h-10 ${(isSidebarOpen || isMobileMenuOpen) ? 'w-full' : 'w-10 px-0 justify-center'}`} 
+            onClick={() => { setActiveWorkflow('tickets'); setIsMobileMenuOpen(false); }}
             title="Auction Tickets"
           >
             <Ticket className="w-5 h-5 shrink-0" />
-            {isSidebarOpen && <span className="truncate">Auction Tickets</span>}
+            {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Auction Tickets</span>}
           </Button>
           
           <Button 
             variant={activeWorkflow === 'bids' ? 'secondary' : 'ghost'} 
-            className={`justify-start gap-3 h-10 ${isSidebarOpen ? 'w-full' : 'w-10 px-0 justify-center'}`} 
-            onClick={() => setActiveWorkflow('bids')}
+            className={`justify-start gap-3 h-10 ${(isSidebarOpen || isMobileMenuOpen) ? 'w-full' : 'w-10 px-0 justify-center'}`} 
+            onClick={() => { setActiveWorkflow('bids'); setIsMobileMenuOpen(false); }}
             title="Bid Management"
           >
             <ClipboardList className="w-5 h-5 shrink-0" />
-            {isSidebarOpen && <span className="truncate">Bid Management</span>}
+            {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Bid Management</span>}
           </Button>
 
           <div className="h-6" />
-          {isSidebarOpen && <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">System</p>}
+          {(isSidebarOpen || isMobileMenuOpen) && <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">System</p>}
 
           <Button 
             variant={activeWorkflow === 'settings' ? 'secondary' : 'ghost'} 
-            className={`justify-start gap-3 h-10 ${isSidebarOpen ? 'w-full' : 'w-10 px-0 justify-center'}`} 
-            onClick={() => setActiveWorkflow('settings')}
+            className={`justify-start gap-3 h-10 ${(isSidebarOpen || isMobileMenuOpen) ? 'w-full' : 'w-10 px-0 justify-center'}`} 
+            onClick={() => { setActiveWorkflow('settings'); setIsMobileMenuOpen(false); }}
             title="Configuration"
           >
             <Settings className="w-5 h-5 shrink-0" />
-            {isSidebarOpen && <span className="truncate">Configuration</span>}
+            {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Configuration</span>}
           </Button>
         </div>
 
         <div className="p-3 border-t shrink-0 flex flex-col items-center">
           <Button 
             variant="ghost" 
-            className={`justify-start gap-3 text-muted-foreground hover:text-destructive ${isSidebarOpen ? 'w-full' : 'w-10 px-0 justify-center'}`} 
+            className={`justify-start gap-3 text-muted-foreground hover:text-destructive ${(isSidebarOpen || isMobileMenuOpen) ? 'w-full' : 'w-10 px-0 justify-center'}`} 
             onClick={handleLogout}
             title="Sign Out"
           >
             <LogOut className="w-5 h-5 shrink-0" />
-            {isSidebarOpen && <span>Sign Out</span>}
+            {(isSidebarOpen || isMobileMenuOpen) && <span>Sign Out</span>}
           </Button>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0">
-        {/* Top header spacing for mobile, hidden on md since we have sidebar */}
-        <div className="md:hidden h-16 border-b flex items-center justify-center bg-background shrink-0 font-semibold px-4 sticky top-0 z-30">
-          {activeWorkflow === 'items' && "Auction Items Management"}
-          {activeWorkflow === 'tickets' && "Auction Tickets Workflow"}
-          {activeWorkflow === 'bids' && "Bid Management Workflow"}
-          {activeWorkflow === 'settings' && "System Configuration"}
-        </div>
-
-        <div className="p-6 md:p-10 max-w-7xl mx-auto w-full flex-1 min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        <div className="p-4 md:p-10 max-w-7xl mx-auto w-full flex-1 min-w-0">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeWorkflow}
@@ -273,16 +298,17 @@ export default function App() {
               
               {activeWorkflow === 'bids' && (
                 <div className="space-y-6">
-                  <div className="flex justify-between items-end mb-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6">
                     <div>
-                      <h2 className="text-3xl font-bold tracking-tight">Bid Management</h2>
-                      <p className="text-muted-foreground mt-2">
+                      <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Bid Management</h2>
+                      <p className="text-muted-foreground mt-1 text-sm md:text-base">
                         Run the auction! Track bids, enter silent auction sheets, and manage checkout.
                       </p>
                     </div>
                     {localStorage.getItem("spreadsheetId") && (
                       <Button 
                         variant="outline" 
+                        size="sm"
                         onClick={() => {
                           const spreadId = localStorage.getItem("spreadsheetId");
                           if (spreadId && !spreadId.includes("PASTE")) {
@@ -291,7 +317,7 @@ export default function App() {
                             toast.error("Spreadsheet ID not configured");
                           }
                         }}
-                        className="gap-2"
+                        className="gap-2 w-full sm:w-auto"
                       >
                         <RefreshCw className="w-4 h-4" />
                         Open Spreadsheet
