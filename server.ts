@@ -765,21 +765,41 @@ app.post("/api/settings/update", async (req, res) => {
   }
 });
 
+// Sheet API Cache
+const sheetCache = new Map<string, { data: any, timestamp: number }>();
+const CACHE_TTL = 5000; // 5 seconds cache
+
 // Sheet API Proxy
 app.get("/api/sheets/:spreadsheetId/:range", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+  const { spreadsheetId, range } = req.params;
+  const cacheKey = `${spreadsheetId}:${range}`;
+  const cached = sheetCache.get(cacheKey);
+
+  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+    console.log(`[Cache Hit] GET ${spreadsheetId} / ${range}`);
+    return res.json(cached.data);
+  }
 
   try {
     const client = getAuthenticatedClient(req.session.tokens);
     const sheets = google.sheets({ version: "v4", auth: client });
 
     const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: req.params.spreadsheetId,
-      range: req.params.range,
+      spreadsheetId,
+      range,
     });
+    
+    // Update cache
+    sheetCache.set(cacheKey, { data: result.data, timestamp: Date.now() });
+    
     res.json(result.data);
   } catch (error: any) {
-    console.error(`[Sheets API Error] GET ${req.params.spreadsheetId}:`, error);
+    console.error(`[Sheets API Error] GET ${spreadsheetId}:`, error);
+    if (error.code === 429) {
+      return res.status(429).json({ error: "Google API Quota exceeded. Please wait a moment and try again." });
+    }
     if (error.code === 404) {
       return res.status(404).json({ error: "Spreadsheet not found. Please check the Spreadsheet ID in Settings." });
     }
@@ -791,17 +811,29 @@ app.post("/api/sheets/:spreadsheetId/:range", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
 
   try {
+    const { spreadsheetId, range } = req.params;
     const client = getAuthenticatedClient(req.session.tokens);
     const sheets = google.sheets({ version: "v4", auth: client });
 
     const result = await sheets.spreadsheets.values.update({
-      spreadsheetId: req.params.spreadsheetId,
-      range: req.params.range,
+      spreadsheetId,
+      range,
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: req.body.values,
       },
     });
+    
+    // Invalidate cache for this sheet/range
+    const cacheKey = `${spreadsheetId}:${range}`;
+    sheetCache.delete(cacheKey);
+    // Also invalidate any overlapping ranges (simplest is to clear all for this sheet)
+    for (const key of sheetCache.keys()) {
+      if (key.startsWith(`${spreadsheetId}:`)) {
+        sheetCache.delete(key);
+      }
+    }
+
     res.json(result.data);
   } catch (error: any) {
     console.error(`[Sheets API Error] POST ${req.params.spreadsheetId}:`, error);
@@ -816,17 +848,26 @@ app.post("/api/sheets/:spreadsheetId/:range/append", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
 
   try {
+    const { spreadsheetId, range } = req.params;
     const client = getAuthenticatedClient(req.session.tokens);
     const sheets = google.sheets({ version: "v4", auth: client });
 
     const result = await sheets.spreadsheets.values.append({
-      spreadsheetId: req.params.spreadsheetId,
-      range: req.params.range,
+      spreadsheetId,
+      range,
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: req.body.values,
       },
     });
+
+    // Invalidate cache for this sheet
+    for (const key of sheetCache.keys()) {
+      if (key.startsWith(`${spreadsheetId}:`)) {
+        sheetCache.delete(key);
+      }
+    }
+
     res.json(result.data);
   } catch (error: any) {
     console.error(`[Sheets API Error] APPEND ${req.params.spreadsheetId}:`, error);
@@ -841,13 +882,22 @@ app.post("/api/sheets/:spreadsheetId/:range/clear", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
 
   try {
+    const { spreadsheetId, range } = req.params;
     const client = getAuthenticatedClient(req.session.tokens);
     const sheets = google.sheets({ version: "v4", auth: client });
 
     const result = await sheets.spreadsheets.values.clear({
-      spreadsheetId: req.params.spreadsheetId,
-      range: req.params.range,
+      spreadsheetId,
+      range,
     });
+
+    // Invalidate cache for this sheet
+    for (const key of sheetCache.keys()) {
+      if (key.startsWith(`${spreadsheetId}:`)) {
+        sheetCache.delete(key);
+      }
+    }
+
     res.json(result.data);
   } catch (error: any) {
     console.error(`[Sheets API Error] CLEAR ${req.params.spreadsheetId}:`, error);

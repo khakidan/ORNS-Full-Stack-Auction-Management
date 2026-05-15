@@ -102,28 +102,12 @@ export default function BidEntry() {
   return (
     <Card className="max-w-xl mx-auto">
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-3">
-            <Gavel className="w-6 h-6" /> Winning Bid Entry
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Gavel className="w-6 h-6" /> Winning Bid Entry
+            </div>
           </CardTitle>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => {
-              const spreadId = localStorage.getItem("spreadsheetId");
-              if (spreadId && !spreadId.includes("PASTE")) {
-                window.open(`https://docs.google.com/spreadsheets/d/${spreadId}`, "_blank");
-              } else {
-                toast.error("Spreadsheet ID not configured");
-              }
-            }}
-            className="gap-2"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Open Spreadsheet
-          </Button>
-        </div>
-        <CardDescription>Live auction data entry — matches your original workflow</CardDescription>
+          <CardDescription>Live auction data entry — matches your original workflow</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">

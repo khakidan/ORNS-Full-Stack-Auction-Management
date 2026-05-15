@@ -128,33 +128,17 @@ export default function Items() {
                 Full list of auction items. Item numbers should match the display cards.
               </CardDescription>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const spreadId = localStorage.getItem("spreadsheetId");
-                if (spreadId && !spreadId.includes("PASTE")) {
-                  window.open(`https://docs.google.com/spreadsheets/d/${spreadId}`, "_blank");
-                } else {
-                  toast.error("Spreadsheet ID not configured");
-                }
-              }}
-              className="gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Open Spreadsheet
-            </Button>
           </div>
         </CardHeader>
         <CardContent className="p-0">
           <ScrollArea className="h-[650px]">
-            <Table>
+            <Table className="table-fixed w-full">
               <TableHeader className="bg-slate-50 sticky top-0 z-10">
                 <TableRow>
-                  <TableHead className="w-[15%]">Item #</TableHead>
-                  <TableHead className="w-[35%]">Item Name</TableHead>
-                  <TableHead className="w-[25%]">Type</TableHead>
-                  <TableHead className="w-[25%]">Winning Bidder</TableHead>
+                  <TableHead className="w-[15%] whitespace-normal break-words">Item #</TableHead>
+                  <TableHead className="w-[35%] whitespace-normal break-words">Item Name</TableHead>
+                  <TableHead className="w-[25%] whitespace-normal break-words">Type</TableHead>
+                  <TableHead className="w-[25%] whitespace-normal break-words">Winning Bidder</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

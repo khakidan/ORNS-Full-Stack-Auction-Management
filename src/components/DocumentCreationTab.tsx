@@ -151,7 +151,7 @@ export default function DocumentCreationTab() {
             </Button>
             
             <p className="text-[10px] text-muted-foreground mt-4 px-1 italic">
-              Note: Documents will be placed in your "For Print" folder.
+              Note: Documents will be placed in your For Print folder.
             </p>
           </CardContent>
         </Card>
@@ -163,7 +163,7 @@ export default function DocumentCreationTab() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" /> 
-                "For Print" Folder Contents
+                For Print Folder Contents
               </CardTitle>
               <CardDescription>
                 Files recently generated for the auction.
@@ -176,7 +176,7 @@ export default function DocumentCreationTab() {
           <CardContent>
             {isInvalidFolder ? (
               <div className="text-center py-12 border-2 border-dashed rounded-lg">
-                <p className="text-muted-foreground mb-2">"For Print" Folder ID not configured.</p>
+                <p className="text-muted-foreground mb-2">For Print Folder ID not configured.</p>
                 <p className="text-xs">Set it in the Configuration {'>'} Styling & Files section.</p>
               </div>
             ) : loadingFiles ? (
@@ -185,7 +185,7 @@ export default function DocumentCreationTab() {
               </div>
             ) : files.length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed rounded-lg">
-                <p className="text-muted-foreground">No files found in the "For Print" folder.</p>
+                <p className="text-muted-foreground">No files found in the For Print folder.</p>
               </div>
             ) : (
               <div className="rounded-md border overflow-hidden">

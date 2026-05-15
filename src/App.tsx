@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { Loader2, LayoutDashboard, Users, ShoppingBag, CreditCard, Handshake, WalletCards, Settings, LogOut, FileText, Ticket, Package, ClipboardList, PanelLeftClose, Menu, ArrowUp } from "lucide-react";
+import { Loader2, LayoutDashboard, RefreshCw, Users, ShoppingBag, CreditCard, Handshake, WalletCards, Settings, LogOut, FileText, Ticket, Package, ClipboardList, PanelLeftClose, Menu, ArrowUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import Dashboard from "./components/Dashboard";
 import Bidders from "./components/Bidders";
@@ -273,11 +273,30 @@ export default function App() {
               
               {activeWorkflow === 'bids' && (
                 <div className="space-y-6">
-                  <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Bid Management</h2>
-                    <p className="text-muted-foreground mt-2">
-                      Run the auction! Track bids, enter silent auction sheets, and manage checkout.
-                    </p>
+                  <div className="flex justify-between items-end mb-6">
+                    <div>
+                      <h2 className="text-3xl font-bold tracking-tight">Bid Management</h2>
+                      <p className="text-muted-foreground mt-2">
+                        Run the auction! Track bids, enter silent auction sheets, and manage checkout.
+                      </p>
+                    </div>
+                    {localStorage.getItem("spreadsheetId") && (
+                      <Button 
+                        variant="outline" 
+                        onClick={() => {
+                          const spreadId = localStorage.getItem("spreadsheetId");
+                          if (spreadId && !spreadId.includes("PASTE")) {
+                            window.open(`https://docs.google.com/spreadsheets/d/${spreadId}`, "_blank");
+                          } else {
+                            toast.error("Spreadsheet ID not configured");
+                          }
+                        }}
+                        className="gap-2"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Open Spreadsheet
+                      </Button>
+                    )}
                   </div>
                   
                   <Tabs value={activeBidTab} onValueChange={setActiveBidTab} className="space-y-6">
@@ -310,34 +329,24 @@ export default function App() {
                       </TabsList>
                     </div>
 
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={activeBidTab}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <TabsContent value="dashboard" className="m-0 mt-2">
-                          <Dashboard />
-                        </TabsContent>
-                        <TabsContent value="bidders" className="m-0 mt-2">
-                          <Bidders />
-                        </TabsContent>
-                        <TabsContent value="items" className="m-0 mt-2">
-                          <Items />
-                        </TabsContent>
-                        <TabsContent value="bids" className="m-0 mt-2">
-                          <BidEntry />
-                        </TabsContent>
-                        <TabsContent value="checkout" className="m-0 mt-2">
-                          <Checkout />
-                        </TabsContent>
-                        <TabsContent value="receipts" className="m-0 mt-2">
-                          <Receipts />
-                        </TabsContent>
-                      </motion.div>
-                    </AnimatePresence>
+                    <TabsContent value="dashboard" className="m-0 mt-2">
+                      <Dashboard />
+                    </TabsContent>
+                    <TabsContent value="bidders" className="m-0 mt-2">
+                      <Bidders />
+                    </TabsContent>
+                    <TabsContent value="items" className="m-0 mt-2">
+                      <Items />
+                    </TabsContent>
+                    <TabsContent value="bids" className="m-0 mt-2">
+                      <BidEntry />
+                    </TabsContent>
+                    <TabsContent value="checkout" className="m-0 mt-2">
+                      <Checkout />
+                    </TabsContent>
+                    <TabsContent value="receipts" className="m-0 mt-2">
+                      <Receipts />
+                    </TabsContent>
                   </Tabs>
                 </div>
               )}

@@ -5,6 +5,7 @@ import { PlaySquare, Download, Package } from "lucide-react";
 import { toast } from "sonner";
 import { getBaseUrl } from "@/lib/google-api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RefreshCw, Package } from "lucide-react";
 import AuctionItemsTab from "./AuctionItemsTab";
 import DocumentCreationTab from "./DocumentCreationTab";
 
@@ -23,6 +24,7 @@ export default function AuctionItemsWorkflow() {
         </div>
         {spreadsheetId && (
           <Button variant="outline" onClick={() => window.open(`https://docs.google.com/spreadsheets/d/${spreadsheetId}`, "_blank")}>
+            <RefreshCw className="w-4 h-4" />
             Open Spreadsheet
           </Button>
         )}
