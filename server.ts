@@ -18,31 +18,7 @@ declare module "express-session" {
 
 dotenv.config();
 
-import { GoogleGenAI } from "@google/genai";
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-app.post("/api/ai/suggest-name", async (req, res) => {
-  try {
-    const { descriptions } = req.body;
-    if (!descriptions || !Array.isArray(descriptions) || descriptions.length === 0) {
-      return res.status(400).json({ error: "Missing descriptions array" });
-    }
-
-    const prompt = `I am putting together a silent auction bundle for a non-profit preschool fundraiser. The bundle includes the following items:\n\n${descriptions.join("\n")}\n\nPlease suggest 3 clever, fun, or catchy names for this bundle. Return ONLY a JSON array of strings containing the 3 names, and nothing else.`;
-    
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
-    
-    const text = response.text || "[]";
-    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
-    res.json({ names: parsed });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+const app = express();
 const PORT = 3000;
 
 // CORS configuration to allow Tauri app to talk to local server
@@ -567,39 +543,6 @@ app.post("/api/sheets/:spreadsheetId/:range/append", async (req, res) => {
       requestBody: {
         values: req.body.values,
       },
-    });
-    res.json(result.data);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get("/api/sheets/:spreadsheetId/metadata", async (req, res) => {
-  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
-
-  try {
-    const client = getAuthenticatedClient(req.session.tokens);
-    const sheets = google.sheets({ version: "v4", auth: client });
-
-    const result = await sheets.spreadsheets.get({
-      spreadsheetId: req.params.spreadsheetId,
-    });
-    res.json(result.data);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post("/api/sheets/:spreadsheetId/batchUpdate", async (req, res) => {
-  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
-
-  try {
-    const client = getAuthenticatedClient(req.session.tokens);
-    const sheets = google.sheets({ version: "v4", auth: client });
-
-    const result = await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: req.params.spreadsheetId,
-      requestBody: req.body,
     });
     res.json(result.data);
   } catch (error: any) {

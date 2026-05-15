@@ -166,22 +166,25 @@ export default function App() {
       <aside 
         className={`bg-background border-r border-border shrink-0 flex-col sticky top-0 md:h-screen z-40 flex overflow-hidden relative transition-all duration-300 ${isSidebarOpen ? 'w-full md:w-64' : 'w-full md:w-16'}`}
       >
-        <div className={`h-16 flex items-center border-b shrink-0 ${isSidebarOpen ? 'px-4 justify-between' : 'justify-center w-full'}`}>
-          {isSidebarOpen ? (
-            <>
-              <div className="flex items-center gap-2 overflow-hidden whitespace-nowrap">
-                <WalletCards className="w-6 h-6 shrink-0 text-primary" />
-                <span className="text-lg font-bold tracking-tight">ORNS Auction</span>
-              </div>
-              <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8 hidden md:flex ml-2" onClick={() => setIsSidebarOpen(false)}>
-                <PanelLeftClose className="h-4 w-4" />
-              </Button>
-            </>
-          ) : (
-            <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8 hidden md:flex" onClick={() => setIsSidebarOpen(true)}>
-              <Menu className="h-4 w-4" />
-            </Button>
-          )}
+        <div className={`h-16 flex items-center border-b shrink-0 ${isSidebarOpen ? 'px-4 justify-between' : 'justify-center'}`}>
+          <div className={`flex items-center gap-2 overflow-hidden whitespace-nowrap ${!isSidebarOpen && 'hidden'}`}>
+            <WalletCards className="w-6 h-6 shrink-0 text-primary" />
+            <AnimatePresence mode="popLayout">
+              {isSidebarOpen && (
+                <motion.span 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="text-lg font-bold tracking-tight"
+                >
+                  ORNS Auction
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </div>
+          <Button variant="ghost" size="icon" className={`shrink-0 h-8 w-8 hidden md:flex ${isSidebarOpen ? 'ml-2' : ''}`} onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+            {isSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          </Button>
         </div>
 
         <div className="flex-1 py-6 px-3 space-y-1 overflow-y-auto overflow-x-hidden flex flex-col">

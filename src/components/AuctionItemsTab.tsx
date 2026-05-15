@@ -30,7 +30,7 @@ interface AuctionItem {
   rowIndex: number;
   id: string;
   category: string;
-  bundled: string;
+  packaged: string;
   name: string;
   description: string;
   value: string;
@@ -155,7 +155,7 @@ export default function AuctionItemsTab() {
     minRaise: "",
     donor: "",
     itemType: "",
-    bundled: ""
+    packaged: ""
   });
   const [isSubmittingItem, setIsSubmittingItem] = useState(false);
 
@@ -212,7 +212,7 @@ export default function AuctionItemsTab() {
             rowIndex: index + 2, // 1 for 1-based index, +1 for header row
             id: row[0]?.toString() || "",
             category: row[1]?.toString() || "",
-            bundled: row[2]?.toString() || "",
+            packaged: row[2]?.toString() || "",
             name: row[3]?.toString() || "",
             description: row[4]?.toString() || "",
             value: row[5]?.toString() || "",
@@ -243,7 +243,7 @@ export default function AuctionItemsTab() {
     let opening = "";
     let raise = "";
     if (v > 0) {
-      opening = (v * 0.45).toFixed(2);
+      opening = `$${(v * 0.45).toFixed(2)}`;
       
       let calculatedRaise = 5;
       if (valueCalculations.length > 0) {
@@ -260,7 +260,7 @@ export default function AuctionItemsTab() {
         else if (v >= 150) calculatedRaise = 10;
         else calculatedRaise = 5;
       }
-      raise = calculatedRaise.toFixed(2);
+      raise = `$${calculatedRaise.toFixed(2)}`;
     }
     return { opening, raise };
   };
@@ -279,12 +279,7 @@ export default function AuctionItemsTab() {
     );
 
     try {
-      let submitValue: any = value;
-      if (['value', 'openingBid', 'minRaise', 'id'].includes(field as string) && value) {
-        submitValue = Number(value.toString().replace(/[^0-9.-]+/g, ""));
-      }
-
-      const updatePromise = updateSheetData(spreadsheetId, `Auction-Items!${colLetter}${rowIndex}`, [[submitValue]]);
+      const updatePromise = updateSheetData(spreadsheetId, `Auction-Items!${colLetter}${rowIndex}`, [[value]]);
       toast.promise(updatePromise, {
         loading: 'Saving...',
         success: 'Saved successfully',
@@ -307,10 +302,10 @@ export default function AuctionItemsTab() {
         }
         
         if (updateOpening) {
-           await updateSheetData(spreadsheetId, `Auction-Items!G${rowIndex}`, [[Number(opening)]]);
+           await updateSheetData(spreadsheetId, `Auction-Items!G${rowIndex}`, [[opening]]);
         }
         if (updateRaise) {
-           await updateSheetData(spreadsheetId, `Auction-Items!H${rowIndex}`, [[Number(raise)]]);
+           await updateSheetData(spreadsheetId, `Auction-Items!H${rowIndex}`, [[raise]]);
         }
       }
     } catch (e) {
@@ -363,14 +358,14 @@ export default function AuctionItemsTab() {
       }
 
       const submitRow = [
-        Number(newIdString),
+        newIdString,
         newItem.category || "",
-        newItem.bundled || "",
+        newItem.packaged || "",
         newItem.name || "",
         newItem.description || "",
-        newItem.value ? Number(newItem.value.toString().replace(/[^0-9.-]+/g, "")) : "",
-        finalOpeningBid ? Number(finalOpeningBid.toString().replace(/[^0-9.-]+/g, "")) : "",
-        finalMinRaise ? Number(finalMinRaise.toString().replace(/[^0-9.-]+/g, "")) : "",
+        newItem.value || "",
+        finalOpeningBid,
+        finalMinRaise,
         newItem.donor || "",
         newItem.itemType || ""
       ];
@@ -390,7 +385,7 @@ export default function AuctionItemsTab() {
         minRaise: "",
         donor: "",
         itemType: "",
-        bundled: ""
+        packaged: ""
       });
       setIsAddingItem(false);
     } catch (e) {
@@ -582,17 +577,17 @@ export default function AuctionItemsTab() {
                       />
                       <div className="flex items-center space-x-2 mt-4 ml-1">
                         <Checkbox 
-                          id={`bundled-${item.rowIndex}`} 
-                          checked={item.bundled.toLowerCase() === 'yes' || item.bundled === '☑️' || item.bundled === 'true'} 
+                          id={`packaged-${item.rowIndex}`} 
+                          checked={item.packaged.toLowerCase() === 'yes' || item.packaged === '☑️' || item.packaged === 'true'} 
                           onCheckedChange={(checked) => {
-                            handleUpdate(item.rowIndex, 'bundled', 'C', checked ? 'yes' : '');
+                            handleUpdate(item.rowIndex, 'packaged', 'C', checked ? 'yes' : '');
                           }}
                         />
                         <label 
-                          htmlFor={`bundled-${item.rowIndex}`} 
+                          htmlFor={`packaged-${item.rowIndex}`} 
                           className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-muted-foreground cursor-pointer"
                         >
-                          Bundled?
+                          Packaged?
                         </label>
                       </div>
                     </TableCell>
@@ -711,15 +706,15 @@ export default function AuctionItemsTab() {
           <div className="grid grid-cols-4 items-center gap-4">
             <div className="col-start-2 col-span-3 flex items-center space-x-2">
               <Checkbox 
-                id="bundled-new" 
-                checked={newItem.bundled === 'yes'}
-                onCheckedChange={(checked) => setNewItem({...newItem, bundled: checked ? 'yes' : ''})}
+                id="packaged-new" 
+                checked={newItem.packaged === 'yes'}
+                onCheckedChange={(checked) => setNewItem({...newItem, packaged: checked ? 'yes' : ''})}
               />
               <label 
-                htmlFor="bundled-new" 
+                htmlFor="packaged-new" 
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
               >
-                Bundled?
+                Packaged?
               </label>
             </div>
           </div>

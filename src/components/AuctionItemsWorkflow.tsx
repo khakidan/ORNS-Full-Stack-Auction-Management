@@ -7,8 +7,6 @@ import { getBaseUrl } from "@/lib/google-api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AuctionItemsTab from "./AuctionItemsTab";
 
-import BundlingWorkflow from "./BundlingWorkflow";
-
 export default function AuctionItemsWorkflow() {
   const spreadsheetId = localStorage.getItem("auctionItemsSpreadsheetId");
   const scriptId = localStorage.getItem("auctionItemsScriptId");
@@ -71,19 +69,21 @@ export default function AuctionItemsWorkflow() {
           <AuctionItemsTab />
         </TabsContent>
 
-        <TabsContent value="bundling" className="m-0 space-y-6">
-          <BundlingWorkflow />
-          
+        <TabsContent value="bundling" className="m-0">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Download className="w-5 h-5 text-primary" /> Sync to Production</CardTitle>
+              <CardTitle className="flex items-center gap-2"><Package className="w-5 h-5 text-primary" /> Bundling Management</CardTitle>
               <CardDescription>
-                Once you are done adding and bundling items, sync them to the main bidirectional system.
+                Operate on the item database data. Bundle your items and sync them to your Bid Management system.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <Button className="w-full md:w-auto justify-start gap-2" variant="secondary" onClick={() => runScript('apiSyncItemsToMain', 'Sync Items')}>
-                <PlaySquare className="w-4 h-4 text-emerald-600" />
+            <CardContent className="space-y-4 max-w-xl">
+              <Button className="w-full justify-start gap-2" variant="secondary" onClick={() => runScript('apiBundleItems', 'Bundle Items')}>
+                <PlaySquare className="w-4 h-4" />
+                Bundle Items
+              </Button>
+              <Button className="w-full justify-start gap-2" variant="secondary" onClick={() => runScript('apiSyncItemsToMain', 'Sync Items')}>
+                <PlaySquare className="w-4 h-4" />
                 Sync Items to Bid Management System
               </Button>
             </CardContent>
