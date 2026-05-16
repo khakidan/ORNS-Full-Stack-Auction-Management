@@ -1,20 +1,27 @@
-import { useState, useEffect } from "react";
-import { useAuction, Bidder } from "@/hooks/useAuction";
-import { useAttendees } from "@/hooks/useAttendees";
+import { useState, useEffect, useCallback } from "react";
+import { useAuction } from "@/context/AuctionContext";
+import { useConfig } from "@/context/ConfigContext";
 import { getSheetData, updateSheetData, getBaseUrl } from "@/lib/google-api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Handshake, Receipt, Mail, CheckCircle2, Loader2, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 export default function Checkout() {
-  const { bidders, items, loading, fetchBidders, fetchItems } = useAuction();
-  const { attendees, fetchAttendees } = useAttendees();
+  const { bidders, items, loading, fetchAllData, attendees } = useAuction();
+  const { config } = useConfig();
+  const spreadsheetId = config.bidManagementSpreadsheetId;
+  const ticketsSpreadsheetId = config.auctionTicketsSpreadsheetId;
+  const scriptId = config.bidManagementScriptId;
+  const bidManagementSheet = config.bidManagementSheet;
+  const bidderNumbersSheet = config.bidderNumbersSheet;
+  const folderId = config.receiptFolderId;
+  const ornsLogoId = config.ornsLogoId;
+
   const [winners, setWinners] = useState<any[]>([]);
   const [fetchingWinners, setFetchingWinners] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -25,16 +32,10 @@ export default function Checkout() {
   const [showEmailConfirm, setShowEmailConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<"pending" | "completed">("pending");
 
-  useEffect(() => {
-    const ticketsSpreadsheetId = localStorage.getItem("auctionTicketsSpreadsheetId");
-    fetchAttendees(ticketsSpreadsheetId);
-  }, [fetchAttendees]);
-
   const startBatchPrint = async () => {
     setShowPrintConfirm(false);
     try {
       setIsPrintingAll(true);
-      const scriptId = localStorage.getItem("bidManagementScriptId");
       if (!scriptId) {
         toast.error("Google Script ID not found. Please set it in the Config tab.");
         setIsPrintingAll(false);
@@ -42,7 +43,6 @@ export default function Checkout() {
       }
 
       console.log("[Checkout] Starting batch print...");
-      const spreadsheetId = localStorage.getItem("spreadsheetId");
       const res = await fetch(`${getBaseUrl()}/api/receipts/generate-all`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -65,7 +65,6 @@ export default function Checkout() {
     setShowEmailConfirm(false);
     try {
       setIsEmailingAll(true);
-      const scriptId = localStorage.getItem("bidManagementScriptId");
       if (!scriptId) {
         toast.error("Google Script ID not found. Please set it in the Config tab.");
         setIsEmailingAll(false);
@@ -73,7 +72,6 @@ export default function Checkout() {
       }
 
       console.log("[Checkout] Starting batch email...");
-      const spreadsheetId = localStorage.getItem("spreadsheetId");
       const res = await fetch(`${getBaseUrl()}/api/receipts/email-all`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -92,13 +90,12 @@ export default function Checkout() {
     }
   };
 
-  const loadWinners = async () => {
-    const spreadsheetId = localStorage.getItem("spreadsheetId");
-    if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) return;
+  const loadWinners = useCallback(async () => {
+    if (!spreadsheetId) return;
 
     setFetchingWinners(true);
     try {
-      const sheetName = localStorage.getItem("bidManagementSheet") || "Bid-Management";
+      const sheetName = bidManagementSheet;
       const data = await getSheetData(spreadsheetId, `${sheetName}!1:100`);
 
       if (!data.values || data.values.length < 4) {
@@ -143,12 +140,11 @@ export default function Checkout() {
     } finally {
       setFetchingWinners(false);
     }
-  };
+  }, [spreadsheetId, bidManagementSheet, items, bidders]);
 
   const handleRefresh = async () => {
     setFetchingWinners(true);
-    await fetchBidders();
-    await fetchItems();
+    await fetchAllData();
     await loadWinners();
   };
 
@@ -156,7 +152,7 @@ export default function Checkout() {
     if (bidders.length && items.length) {
       loadWinners();
     }
-  }, [bidders, items]);
+  }, [bidders, items, loadWinners]);
 
   const pendingWinners = winners.filter(w => {
     const bidder = bidders.find(b => b.id === w.bidder.id);
@@ -180,8 +176,6 @@ export default function Checkout() {
   
   const handleEmailReceipt = async (winner: any) => {
     setProcessingId(`${winner.bidder.id}-email`);
-    const scriptId = localStorage.getItem("bidManagementScriptId");
-    const spreadsheetId = localStorage.getItem("spreadsheetId");
     try {
       const res = await fetch(`${getBaseUrl()}/api/receipts/email-only`, {
         method: "POST",
@@ -204,10 +198,6 @@ export default function Checkout() {
   };
 
   const handlePrintReceipt = async (winner: any) => {
-    const folderId = localStorage.getItem("receiptFolderId");
-    const ornsLogoId = localStorage.getItem("ornsLogoId");
-    const scriptId = localStorage.getItem("bidManagementScriptId");
-    const spreadsheetId = localStorage.getItem("spreadsheetId");
     setProcessingId(`${winner.bidder.id}-print`);
     try {
       const res = await fetch(`${getBaseUrl()}/api/receipts/generate`, {
@@ -245,24 +235,22 @@ export default function Checkout() {
   };
 
   const handleMarkPaid = async (winner: any) => {
-    const spreadsheetId = localStorage.getItem("spreadsheetId");
-    if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+    if (!spreadsheetId) {
       toast.error("Bid Management Spreadsheet ID not configured correctly.");
       return;
     }
     setProcessingId(`${winner.bidder.id}-pay`);
     try {
-      const sheetName = localStorage.getItem("bidderNumbersSheet") || "Bidder-Numbers";
+      const sheetName = bidderNumbersSheet;
       
       // Dynamically find the row to prevent sorting bugs
-      const data = await getSheetData(spreadsheetId!, `${sheetName}!A:A`);
+      const data = await getSheetData(spreadsheetId, `${sheetName}!A:A`);
       const rowIndex = data.values.findIndex((row: any) => row[0]?.toString() === winner.bidder.id) + 1;
       
       if (rowIndex > 1) {
-        await updateSheetData(spreadsheetId!, `${sheetName}!G${rowIndex}:H${rowIndex}`, [[true, true]]);
+        await updateSheetData(spreadsheetId, `${sheetName}!G${rowIndex}:H${rowIndex}`, [[true, true]]);
         
         // Also mark as paid in Auction Tickets if they're a walk-in or pending ticket buyer
-        const ticketsSpreadsheetId = localStorage.getItem("auctionTicketsSpreadsheetId");
         if (ticketsSpreadsheetId && attendees.length > 0) {
           const attendee = attendees.find(a => 
             a.firstName.trim().toLowerCase() === winner.bidder.firstName.trim().toLowerCase() &&

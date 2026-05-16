@@ -1,17 +1,19 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
+import { useConfig } from "@/context/ConfigContext";
+import { ExternalLink } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import TicketAttendeeTab from "./TicketAttendeeTab";
 import TicketDocumentCreationTab from "./TicketDocumentCreationTab";
 
 export default function AuctionTicketsWorkflow() {
-  const spreadsheetId = localStorage.getItem("auctionTicketsSpreadsheetId");
+  const { config } = useConfig();
+  const spreadsheetId = config.auctionTicketsSpreadsheetId;
   const [activeTab, setActiveTab] = useState("auction_tickets");
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Auction Tickets</h2>
           <p className="text-muted-foreground mt-1 text-sm md:text-base">
@@ -25,7 +27,7 @@ export default function AuctionTicketsWorkflow() {
             onClick={() => window.open(`https://docs.google.com/spreadsheets/d/${spreadsheetId}`, "_blank")}
             className="w-full sm:w-auto"
           >
-            <RefreshCw className="w-4 h-4 mr-2" />
+            <ExternalLink className="w-4 h-4 mr-2" />
             Open Spreadsheet
           </Button>
         )}

@@ -1,17 +1,20 @@
 import { useState, useEffect } from "react";
-import { useAuction } from "@/hooks/useAuction";
+import { useAuction } from "@/context/AuctionContext";
+import { useConfig } from "@/context/ConfigContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Users, ShoppingBag, TrendingUp, UserCheck, Trophy, Loader2, RefreshCw } from "lucide-react";
+import { Users, ShoppingBag, TrendingUp, UserCheck, Trophy, Loader2 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getSheetData, updateSheetData, getBaseUrl } from "@/lib/google-api";
+import { getSheetData, updateSheetData } from "@/lib/google-api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 export default function Dashboard() {
-  const { bidders, items, totalRaised, loading, fetchBidders } = useAuction();
+  const { bidders, items, totalRaised, loading } = useAuction();
+  const { config } = useConfig();
+  const spreadsheetId = config.bidManagementSpreadsheetId;
 
   const [giftCardWinnerId, setGiftCardWinnerId] = useState("");
   const [raffleWinnerId, setRaffleWinnerId] = useState("");
@@ -20,8 +23,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchSpecialWinners = async () => {
-      const spreadsheetId = localStorage.getItem("spreadsheetId");
-      if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) return;
+      if (!spreadsheetId) return;
       try {
         const data = await getSheetData(spreadsheetId, "Special-Winners!A2:B3");
         if (data.values) {
@@ -34,11 +36,10 @@ export default function Dashboard() {
       }
     };
     fetchSpecialWinners();
-  }, []);
+  }, [spreadsheetId]);
 
   const saveGiftCardWinner = async () => {
-    const spreadsheetId = localStorage.getItem("spreadsheetId");
-    if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+    if (!spreadsheetId) {
       toast.error("Spreadsheet ID not configured.");
       return;
     }
@@ -54,8 +55,7 @@ export default function Dashboard() {
   };
 
   const saveRaffleWinner = async () => {
-    const spreadsheetId = localStorage.getItem("spreadsheetId");
-    if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+    if (!spreadsheetId) {
       toast.error("Spreadsheet ID not configured.");
       return;
     }

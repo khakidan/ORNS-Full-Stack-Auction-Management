@@ -1,0 +1,327 @@
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { getSheetData, updateSheetData, appendSheetData, clearSheetData } from "@/lib/google-api";
+import { toast } from "sonner";
+import { useConfig } from "./ConfigContext";
+
+export interface Bidder {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  checkedIn: boolean;
+  isProxy: boolean;
+  checkedOut: boolean;
+  paid: boolean;
+  rowIndex: number;
+}
+
+export interface AuctionItem {
+  id: string;
+  name: string;
+  type?: string;
+  description?: string;
+}
+
+export interface Guest {
+  name: string;
+  email: string;
+  guestIndex: number;
+  ownBidderNumber: string;
+}
+
+export interface Attendee {
+  id: string;
+  sheet: string;
+  rowIndex: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  ticketsPurchased: string;
+  hasGuests: string;
+  guestsInfo: Guest[];
+  paymentMethod: string;
+  paymentStatus: string;
+  totalPaid: string;
+}
+
+interface AuctionContextType {
+  bidders: Bidder[];
+  items: AuctionItem[];
+  attendees: Attendee[];
+  winners: Record<string, string>;
+  totalRaised: number;
+  loading: boolean;
+  fetchBidders: () => Promise<void>;
+  fetchItems: () => Promise<void>;
+  fetchWinners: () => Promise<void>;
+  fetchAttendees: () => Promise<void>;
+  fetchAllData: () => Promise<void>;
+  checkInBidder: (bidder: Bidder) => Promise<void>;
+  setAttendees: React.Dispatch<React.SetStateAction<Attendee[]>>;
+  addAttendee: (sheet: string, data: any[]) => Promise<void>;
+  removeAttendee: (attendee: Attendee) => Promise<void>;
+}
+
+const AuctionContext = createContext<AuctionContextType | undefined>(undefined);
+
+export function AuctionProvider({ children }: { children: React.ReactNode }) {
+  const { config } = useConfig();
+  const spreadsheetId = config.bidManagementSpreadsheetId;
+  const ticketsSpreadsheetId = config.auctionTicketsSpreadsheetId;
+  const [bidders, setBidders] = useState<Bidder[]>([]);
+  const [items, setItems] = useState<AuctionItem[]>([]);
+  const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [winners, setWinners] = useState<Record<string, string>>({});
+  const [totalRaised, setTotalRaised] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  const fetchBidders = useCallback(async () => {
+    if (!spreadsheetId) return;
+    setLoading(true);
+    try {
+      const sheetName = config.bidderNumbersSheet;
+      const data = await getSheetData(spreadsheetId, `${sheetName}!A:H`);
+
+      if (data.values?.length > 1) {
+        const biddersList: Bidder[] = data.values.slice(1).map((row: any[], idx: number) => ({
+          id: row[0]?.toString() || "",
+          firstName: row[1]?.toString() || "",
+          lastName: row[2]?.toString() || "",
+          email: row[3]?.toString() || "",
+          checkedIn: row[4] === true || row[4] === "TRUE",
+          isProxy: row[5] === true || row[5] === "TRUE",
+          checkedOut: row[6] === true || row[6] === "TRUE",
+          paid: row[7] === true || row[7] === "TRUE",
+          rowIndex: idx + 2,
+        })).filter(b => b.id);
+        setBidders(biddersList);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [spreadsheetId, config.bidderNumbersSheet]);
+
+  const fetchItems = useCallback(async () => {
+    if (!spreadsheetId) return;
+    try {
+      const sheetName = config.auctionItemsSheet;
+      const data = await getSheetData(spreadsheetId, `${sheetName}!A:C`);
+      if (data.values?.length > 1) {
+        const itemsList = data.values.slice(1).map((row: any[]) => ({
+          id: row[0]?.toString() || "",
+          name: row[1]?.toString() || "",
+          type: row[2]?.toString() || "",
+        }));
+        setItems(itemsList);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [spreadsheetId, config.auctionItemsSheet]);
+
+  const fetchAttendees = useCallback(async () => {
+    if (!ticketsSpreadsheetId) return;
+    try {
+      const sheetsToFetch = ["tickets", "staff tickets", "sponsor tickets"];
+      let allAttendees: Attendee[] = [];
+      
+      for (const sheetName of sheetsToFetch) {
+        try {
+          const data = await getSheetData(ticketsSpreadsheetId, `${sheetName}!A:Z`);
+          if (data.values && data.values.length > 1) {
+            const rows = data.values.slice(1).map((row: any[], i: number) => {
+              const guests: Guest[] = [];
+              const isGeneral = sheetName === 'tickets';
+
+              let g1own = '', g2f = row[10], g2l = row[11], g2e = row[12], g2own = '';
+              let g3f = row[13], g3l = row[14], g3e = row[15], g3own = '';
+              let pm = row[16], ps = row[17], tp = row[18];
+
+              if (isGeneral) {
+                g1own = row[10];
+                g2f = row[11]; g2l = row[12]; g2e = row[13]; g2own = row[14];
+                g3f = row[15]; g3l = row[16]; g3e = row[17]; g3own = row[18];
+                pm = row[19]; ps = row[20]; tp = row[21];
+              }
+
+              if (row[7] || row[8] || row[9]) guests.push({ name: `${row[7] || ''} ${row[8] || ''}`.trim(), email: row[9]?.toString() || '', guestIndex: 1, ownBidderNumber: g1own?.toString() || '' });
+              if (g2f || g2l || g2e) guests.push({ name: `${g2f || ''} ${g2l || ''}`.trim(), email: g2e?.toString() || '', guestIndex: 2, ownBidderNumber: g2own?.toString() || '' });
+              if (g3f || g3l || g3e) guests.push({ name: `${g3f || ''} ${g3l || ''}`.trim(), email: g3e?.toString() || '', guestIndex: 3, ownBidderNumber: g3own?.toString() || '' });
+
+              return {
+                id: `${sheetName}-${i}`,
+                sheet: sheetName,
+                rowIndex: i + 2,
+                firstName: row[0]?.toString() || "",
+                lastName: row[1]?.toString() || "",
+                email: row[2]?.toString() || "",
+                phone: row[3]?.toString() || "",
+                ticketsPurchased: row[4]?.toString() || "0",
+                hasGuests: row[5]?.toString() || "",
+                guestsInfo: guests,
+                paymentMethod: isGeneral ? (pm?.toString() || "") : "Comp",
+                paymentStatus: isGeneral ? (ps?.toString() || "") : "Paid",
+                totalPaid: isGeneral ? (tp?.toString() || "") : "$0"
+              };
+            }).filter((a: Attendee) => a.firstName || a.lastName);
+            allAttendees = [...allAttendees, ...rows];
+          }
+        } catch (e) {
+          console.error(`Could not fetch ${sheetName}`, e);
+        }
+      }
+      
+      setAttendees(allAttendees);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [ticketsSpreadsheetId]);
+
+  const fetchWinners = useCallback(async () => {
+    if (!spreadsheetId || bidders.length === 0) return;
+    try {
+      const sheetName = config.bidManagementSheet;
+      const data = await getSheetData(spreadsheetId, `${sheetName}!A:ZZ`);
+      
+      if (!data.values || data.values.length < 4) return;
+
+      const header = data.values[0];
+      const newWinners: Record<string, string> = {};
+      let total = 0;
+
+      // Bidder cache for faster lookup
+      const bidderCache = new Map(bidders.map(b => [b.id, b]));
+
+      // Column pair loop
+      for (let j = 0; j < header.length; j += 2) {
+        const bidderId = header[j]?.toString();
+        if (!bidderId) continue;
+
+        const bidder = bidderCache.get(bidderId);
+        const bidderName = bidder ? `${bidder.firstName} ${bidder.lastName}` : `Bidder ${bidderId}`;
+
+        for (let i = 3; i < data.values.length; i++) {
+          const row = data.values[i];
+          if (row && row[j]) {
+            const itemId = row[j].toString();
+            newWinners[itemId] = bidderName;
+            
+            const priceVal = row[j + 1];
+            const price = parseFloat(priceVal?.toString().replace(/[^0-9.]/g, "") || "0");
+            if (!isNaN(price)) {
+              total += price;
+            }
+          }
+        }
+      }
+      setWinners(newWinners);
+      setTotalRaised(total);
+    } catch (e) {
+      console.error("Error fetching winners:", e);
+    }
+  }, [spreadsheetId, bidders, config.bidManagementSheet]);
+
+  const fetchAllData = useCallback(async () => {
+    setLoading(true);
+    await Promise.all([fetchBidders(), fetchItems(), fetchAttendees()]);
+  }, [fetchBidders, fetchItems, fetchAttendees]);
+
+  const checkInBidder = async (bidder: Bidder) => {
+    if (!spreadsheetId) return;
+    try {
+      setLoading(true);
+      const sheetName = config.bidderNumbersSheet;
+      const data = await getSheetData(spreadsheetId, `${sheetName}!A:A`);
+      const rowIndex = data.values.findIndex((row: any) => row[0]?.toString() === bidder.id) + 1;
+      
+      if (rowIndex > 1) {
+        await updateSheetData(spreadsheetId, `${sheetName}!E${rowIndex}`, [[true]]);
+        setBidders(prev => prev.map(b => b.id === bidder.id ? { ...b, checkedIn: true } : b));
+        toast.success(`${bidder.firstName} ${bidder.lastName} checked in`);
+      } else {
+        toast.error("Bidder not found in sheet.");
+      }
+    } catch (e) {
+      toast.error("Failed to check in bidder.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addAttendee = async (sheetName: string, rowData: any[]) => {
+    if (!ticketsSpreadsheetId) return;
+    try {
+      setLoading(true);
+      await appendSheetData(ticketsSpreadsheetId, `${sheetName}!A:A`, [rowData]);
+      await fetchAttendees();
+      toast.success("Attendee added successfully");
+    } catch (e) {
+      toast.error("Failed to add attendee");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const removeAttendee = async (attendee: Attendee) => {
+    if (!ticketsSpreadsheetId) return;
+    try {
+      setLoading(true);
+      // We clear the row. To truly delete we'd need a more complex API call.
+      // But clearing row A to Z is a good start.
+      await clearSheetData(ticketsSpreadsheetId, `${attendee.sheet}!A${attendee.rowIndex}:Z${attendee.rowIndex}`);
+      await fetchAttendees();
+      toast.success("Attendee record cleared");
+    } catch (e) {
+      toast.error("Failed to remove attendee");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (spreadsheetId) {
+      fetchAllData();
+    }
+  }, [spreadsheetId, fetchAllData]);
+
+  useEffect(() => {
+    if (bidders.length > 0) {
+      fetchWinners();
+    }
+  }, [bidders.length, fetchWinners]);
+
+  const value = {
+    bidders,
+    items,
+    attendees,
+    winners,
+    totalRaised,
+    loading,
+    fetchBidders,
+    fetchItems,
+    fetchWinners,
+    fetchAttendees,
+    fetchAllData,
+    checkInBidder,
+    setAttendees,
+    addAttendee,
+    removeAttendee
+  };
+
+  return (
+    <AuctionContext.Provider value={value}>
+      {children}
+    </AuctionContext.Provider>
+  );
+}
+
+export function useAuction() {
+  const context = useContext(AuctionContext);
+  if (context === undefined) {
+    throw new Error('useAuction must be used within an AuctionProvider');
+  }
+  return context;
+}

@@ -5,12 +5,13 @@
 
 import { useState, useEffect } from "react";
 import { getAuthStatus, getAuthUrl, logout, getBaseUrl } from "@/lib/google-api";
+import { useConfig } from "@/context/ConfigContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { Loader2, LayoutDashboard, RefreshCw, Users, ShoppingBag, CreditCard, Handshake, WalletCards, Settings, LogOut, FileText, Ticket, Package, ClipboardList, PanelLeftClose, Menu, ArrowUp, AlertCircle } from "lucide-react";
+import { Loader2, LayoutDashboard, RefreshCw, Users, ShoppingBag, CreditCard, Handshake, WalletCards, Settings, LogOut, FileText, Ticket, Package, ClipboardList, PanelLeftClose, Menu, ArrowUp, AlertCircle, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import Dashboard from "./components/Dashboard";
 import Bidders from "./components/Bidders";
@@ -58,6 +59,7 @@ function BackToTop() {
 }
 
 export default function App() {
+  const { config } = useConfig();
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [activeWorkflow, setActiveWorkflow] = useState<WorkflowType>('bids');
   const [activeBidTab, setActiveBidTab] = useState("dashboard");
@@ -67,16 +69,13 @@ export default function App() {
 
   const handleSyncBidders = async () => {
     setIsSyncing(true);
-    
-    const scriptId = localStorage.getItem("bidManagementScriptId");
+    const scriptId = config.bidManagementScriptId;
     
     try {
       const res = await fetch(`${getBaseUrl()}/api/bidders/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          scriptId
-        }),
+        body: JSON.stringify({ scriptId }),
         credentials: "include"
       });
       
@@ -336,7 +335,7 @@ export default function App() {
                         Everything you need to run the auction!
                       </p>
                     </div>
-                    {localStorage.getItem("spreadsheetId") && (
+                    {config.bidManagementSpreadsheetId && (
                       <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                         <Button
                           onClick={handleSyncBidders}
@@ -351,8 +350,8 @@ export default function App() {
                           variant="outline" 
                           size="sm"
                           onClick={() => {
-                            const spreadId = localStorage.getItem("spreadsheetId");
-                            if (spreadId && !spreadId.includes("PASTE")) {
+                            const spreadId = config.bidManagementSpreadsheetId;
+                            if (spreadId) {
                               window.open(`https://docs.google.com/spreadsheets/d/${spreadId}`, "_blank");
                             } else {
                               toast.error("Spreadsheet ID not configured");
@@ -360,7 +359,7 @@ export default function App() {
                           }}
                           className="gap-2 w-full sm:w-auto"
                         >
-                          <RefreshCw className="w-4 h-4" />
+                          <ExternalLink className="w-4 h-4" />
                           Open Spreadsheet
                         </Button>
                       </div>

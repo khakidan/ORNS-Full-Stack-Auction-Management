@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useConfig } from "@/context/ConfigContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PlaySquare, Download, FileText, Loader2, ExternalLink, RefreshCw } from "lucide-react";
@@ -8,9 +9,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 
 export default function DocumentCreationTab() {
-  const spreadsheetId = localStorage.getItem("auctionItemsSpreadsheetId");
-  const scriptId = localStorage.getItem("auctionItemsScriptId");
-  const forPrintFolderId = localStorage.getItem("forPrintFolderId");
+  const { config } = useConfig();
+  const spreadsheetId = config.auctionItemsSpreadsheetId;
+  const scriptId = config.auctionItemsScriptId;
+  const forPrintFolderId = config.forPrintFolderId;
   
   const [files, setFiles] = useState<any[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
@@ -55,7 +57,7 @@ export default function DocumentCreationTab() {
       const res = await fetch(`${getBaseUrl()}/api/script/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ functionName, parameters: [spreadsheetId], scriptId })
+        body: JSON.stringify({ functionName, parameters: [spreadsheetId, config.forPrintFolderId], scriptId })
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -68,7 +70,7 @@ export default function DocumentCreationTab() {
     }
   };
 
-  const folderId = localStorage.getItem("forPrintFolderId");
+  const folderId = config.forPrintFolderId;
   const isInvalidFolder = !folderId || folderId === "undefined" || folderId === "null" || folderId.includes("PASTE");
 
   return (

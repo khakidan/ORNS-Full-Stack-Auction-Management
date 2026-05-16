@@ -1,13 +1,13 @@
 // src/components/Bidders.tsx
 import { useState, useEffect } from "react";
-import { useAuction, Bidder } from "@/hooks/useAuction";
-import { useAttendees, Attendee } from "@/hooks/useAttendees";
+import { useAuction, Bidder } from "@/context/AuctionContext";
+import { useConfig } from "@/context/ConfigContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, UserPlus, CheckCircle, UserCheck, Clock, Loader2, ArrowUpDown, ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
+import { Search, UserPlus, CheckCircle, UserCheck, Clock, Loader2, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { updateSheetData, getBaseUrl, getSheetData, appendSheetData } from "@/lib/google-api";
@@ -33,13 +33,14 @@ import {
 import { Label } from "@/components/ui/label";
 
 export default function Bidders() {
-  const { bidders, loading, checkInBidder, fetchBidders } = useAuction();
-  const { attendees, fetchAttendees } = useAttendees();
-
-  useEffect(() => {
-    const ticketsSpreadsheetId = localStorage.getItem("auctionTicketsSpreadsheetId");
-    fetchAttendees(ticketsSpreadsheetId);
-  }, [fetchAttendees]);
+  const { bidders, loading, checkInBidder, fetchBidders, attendees } = useAuction();
+  const { config } = useConfig();
+  const spreadsheetId = config.bidManagementSpreadsheetId;
+  const ticketsSpreadsheetId = config.auctionTicketsSpreadsheetId;
+  const scriptId = config.bidManagementScriptId;
+  const ticketPrice = config.ticketPrice;
+  const bidManagementSheet = config.bidManagementSheet;
+  const bidderNumbersSheet = config.bidderNumbersSheet;
 
   const [searchTerm, setSearchTerm] = useState("");
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -69,11 +70,10 @@ export default function Bidders() {
     if (addToReceipt) {
       setIsAddingTicketToReceipt(true);
       try {
-        const spreadsheetId = localStorage.getItem("spreadsheetId");
-        if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+        if (!spreadsheetId) {
           throw new Error("Bid Management Spreadsheet ID not configured correctly.");
         }
-        const sheetName = localStorage.getItem("bidManagementSheet") || "Bid-Management";
+        const sheetName = bidManagementSheet;
 
         const data = await getSheetData(spreadsheetId, `${sheetName}!1:200`);
         if (!data.values || data.values.length === 0) {
@@ -113,8 +113,7 @@ export default function Bidders() {
         const colLetter = getColumnLetter(colIndex);
         const nextColLetter = getColumnLetter(colIndex + 1);
 
-        const ticketPriceStr = localStorage.getItem("ticketPrice") || "35";
-        const ticketPrice = parseFloat(ticketPriceStr) || 35;
+        const currentTicketPrice = parseFloat(ticketPrice) || 35;
 
         const attendee = attendees.find(a => 
           a.firstName.trim().toLowerCase() === pendingCheckIn.firstName.trim().toLowerCase() &&
@@ -123,7 +122,7 @@ export default function Bidders() {
         let ticketsCount = attendee ? parseInt(attendee.ticketsPurchased) : 1;
         if (isNaN(ticketsCount) || ticketsCount < 1) ticketsCount = 1;
 
-        const ticketRows = Array(ticketsCount).fill(["1606", ticketPrice]);
+        const ticketRows = Array(ticketsCount).fill(["1606", currentTicketPrice]);
         const endRowIndex = rowIndex + ticketsCount - 1;
 
         await updateSheetData(spreadsheetId, `${sheetName}!${colLetter}${rowIndex}:${nextColLetter}${endRowIndex}`, ticketRows);
@@ -193,14 +192,13 @@ export default function Bidders() {
 
   const markAsProxy = async (bidder: Bidder) => {
     if (!bidder) return;
-    const spreadsheetId = localStorage.getItem("spreadsheetId");
-    if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+    if (!spreadsheetId) {
       toast.error("Spreadsheet ID not configured.");
       return;
     }
     setProcessingId(bidder.id);
     try {
-      const sheetName = localStorage.getItem("bidderNumbersSheet") || "Bidder-Numbers";
+      const sheetName = bidderNumbersSheet;
 
       // Dynamically find the row to prevent sorting bugs
       const data = await getSheetData(spreadsheetId, `${sheetName}!A:A`);
@@ -228,10 +226,6 @@ export default function Bidders() {
     }
 
     setIsSubmittingWalkIn(true);
-    const scriptId = localStorage.getItem("bidManagementScriptId");
-    const spreadsheetId = localStorage.getItem("spreadsheetId");
-    const ticketsSpreadsheetId = localStorage.getItem("auctionTicketsSpreadsheetId");
-    const ticketPrice = localStorage.getItem("ticketPrice") || "35";
 
     try {
       const res = await fetch(`${getBaseUrl()}/api/bidders/walk-in`, {
@@ -249,7 +243,7 @@ export default function Bidders() {
       const result = await res.json();
       toast.success(`Walk-in created: ${result.bidder.firstName} ${result.bidder.lastName}`);
 
-      if (ticketsSpreadsheetId && ticketsSpreadsheetId !== "undefined" && ticketsSpreadsheetId !== "null" && !ticketsSpreadsheetId.includes("PASTE")) {
+      if (ticketsSpreadsheetId) {
         try {
           const rowValue = new Array(22).fill("");
           rowValue[0] = walkInForm.firstName;

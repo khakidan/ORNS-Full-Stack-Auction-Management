@@ -1,16 +1,21 @@
 // src/components/BidEntry.tsx
 import { useState } from "react";
-import { useAuction } from "@/hooks/useAuction";
+import { useAuction } from "@/context/AuctionContext";
+import { useConfig } from "@/context/ConfigContext";
 import { getSheetData, updateSheetData } from "@/lib/google-api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Gavel, Loader2, RefreshCw, Search, User } from "lucide-react";
+import { Gavel, Loader2, Search, User } from "lucide-react";
 
 export default function BidEntry() {
   const { bidders, items } = useAuction();
+  const { config } = useConfig();
+  const spreadsheetId = config.bidManagementSpreadsheetId;
+  const bidManagementSheet = config.bidManagementSheet;
+
   const [itemId, setItemId] = useState("");
   const [bidderId, setBidderId] = useState("");
   const [price, setPrice] = useState("");
@@ -39,12 +44,11 @@ export default function BidEntry() {
 
     setSubmitting(true);
     try {
-      const spreadsheetId = localStorage.getItem("spreadsheetId");
-      if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+      if (!spreadsheetId) {
         toast.error("Bid Management Spreadsheet ID not configured correctly.");
         return;
       }
-      const sheetName = localStorage.getItem("bidManagementSheet") || "Bid-Management";
+      const sheetName = bidManagementSheet;
 
       const data = await getSheetData(spreadsheetId, `${sheetName}!1:200`);
       if (!data.values || data.values.length === 0) {
@@ -86,7 +90,7 @@ export default function BidEntry() {
       const colLetter = getColumnLetter(colIndex);
       const nextColLetter = getColumnLetter(colIndex + 1);
 
-      await updateSheetData(spreadsheetId!, `${sheetName}!${colLetter}${rowIndex}:${nextColLetter}${rowIndex}`, [
+      await updateSheetData(spreadsheetId, `${sheetName}!${colLetter}${rowIndex}:${nextColLetter}${rowIndex}`, [
         [itemId, parseFloat(price)]
       ]);
 

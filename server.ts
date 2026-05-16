@@ -1100,6 +1100,33 @@ app.get("/api/drive/download/:fileId", async (req, res) => {
   }
 });
 
+// Gemini Assistant Endpoint
+app.post("/api/assistant", async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ error: "GEMINI_API_KEY is not configured in the environment." });
+  }
+
+  const { context, message } = req.body;
+  if (!message) {
+    return res.status(400).json({ error: "No message provided" });
+  }
+
+  try {
+    const response = await genAI.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: [
+        { role: "user", parts: [{ text: context + "\n\nUser Question: " + message }] }
+      ],
+    });
+
+    res.json({ text: response.text });
+  } catch (error: any) {
+    console.error("Gemini assistant error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Vite Middleware
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

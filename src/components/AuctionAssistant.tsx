@@ -1,12 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { GoogleGenAI } from "@google/genai";
-import { useAuction } from "@/hooks/useAuction";
+import { useAuction } from "@/context/AuctionContext";
+import { getBaseUrl } from "@/lib/google-api";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Send, Bot, User, Loader2, Sparkles } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import ReactMarkdown from "react-markdown";
 
 interface Message {
@@ -38,8 +37,6 @@ export default function AuctionAssistant({ open, setOpen }: { open: boolean; set
     setLoading(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-      
       const context = `
         You are an AI assistant for a charity auction. 
         Current status:
@@ -53,15 +50,17 @@ export default function AuctionAssistant({ open, setOpen }: { open: boolean; set
         Help the user run the auction. You can answer questions about attendees, help find item numbers, or suggest improvements to the workflow.
       `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [
-          { role: "user", parts: [{ text: context + "\n\nUser Question: " + userMsg }] }
-        ],
+      const response = await fetch(`${getBaseUrl()}/api/assistant`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ context, message: userMsg }),
+        credentials: "include"
       });
 
-      const text = response.text || "I'm sorry, I couldn't process that request.";
-      setMessages(prev => [...prev, { role: "model", text: text }]);
+      if (!response.ok) throw new Error("Assistant error");
+      const data = await response.json();
+      
+      setMessages(prev => [...prev, { role: "model", text: data.text }]);
     } catch (error) {
       console.error(error);
       setMessages(prev => [...prev, { role: "model", text: "Error: I'm having trouble connecting to my brain right now." }]);

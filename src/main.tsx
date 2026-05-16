@@ -3,11 +3,14 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { ConfigProvider } from './context/ConfigContext';
+import { AuctionProvider } from './context/AuctionContext';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ConfigProvider>
-      <App />
+      <AuctionProvider>
+        <App />
+      </AuctionProvider>
     </ConfigProvider>
   </StrictMode>,
 );

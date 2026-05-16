@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useConfig } from "@/context/ConfigContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PlaySquare, Download, Package, RefreshCw } from "lucide-react";
@@ -9,7 +10,8 @@ import AuctionItemsTab from "./AuctionItemsTab";
 import DocumentCreationTab from "./DocumentCreationTab";
 
 export default function AuctionItemsWorkflow() {
-  const spreadsheetId = localStorage.getItem("auctionItemsSpreadsheetId");
+  const { config } = useConfig();
+  const spreadsheetId = config.auctionItemsSpreadsheetId;
   const [activeTab, setActiveTab] = useState("auction_items");
 
   return (

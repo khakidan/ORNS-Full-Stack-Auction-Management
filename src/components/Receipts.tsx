@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getBaseUrl } from "@/lib/google-api";
+import { useConfig } from "@/context/ConfigContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,10 @@ interface DriveFile {
 }
 
 export default function Receipts() {
+  const { config } = useConfig();
+  const folderId = config.receiptFolderId;
+  const isInvalidId = !folderId || folderId === "undefined" || folderId === "null" || folderId.includes("PASTE");
+
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -33,7 +38,6 @@ export default function Receipts() {
       
       const a = document.createElement("a");
       a.href = blobUrl;
-      // Extract extension if possible or default to pdf
       const filename = file.name.toLowerCase().endsWith(".pdf") ? file.name : `${file.name}.pdf`;
       a.download = filename;
       document.body.appendChild(a);
@@ -51,8 +55,7 @@ export default function Receipts() {
   };
 
   const fetchFiles = async () => {
-    const folderId = localStorage.getItem("receiptFolderId");
-    if (!folderId || folderId === "undefined" || folderId === "null" || folderId.includes("PASTE")) {
+    if (isInvalidId) {
       setLoading(false);
       return;
     }
@@ -85,10 +88,7 @@ export default function Receipts() {
 
   useEffect(() => {
     fetchFiles();
-  }, []);
-
-  const folderId = localStorage.getItem("receiptFolderId");
-  const isInvalidId = !folderId || folderId === "undefined" || folderId === "null" || folderId.includes("PASTE");
+  }, [folderId]);
 
   if (isInvalidId) {
     return (

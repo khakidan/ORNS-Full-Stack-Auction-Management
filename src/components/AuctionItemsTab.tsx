@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useConfig } from "@/context/ConfigContext";
 import { getSheetData, updateSheetData, getBaseUrl, appendSheetData } from "@/lib/google-api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -141,7 +142,8 @@ function EditableCell({
 }
 
 export default function AuctionItemsTab() {
-  const spreadsheetId = localStorage.getItem("auctionItemsSpreadsheetId");
+  const { config } = useConfig();
+  const spreadsheetId = config.auctionItemsSpreadsheetId;
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<AuctionItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
