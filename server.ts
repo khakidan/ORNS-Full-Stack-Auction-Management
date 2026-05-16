@@ -77,7 +77,9 @@ const SCOPES = [
   "https://www.googleapis.com/auth/presentations",
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/script.projects",
-  "https://www.googleapis.com/auth/script.external_request"
+  "https://www.googleapis.com/auth/script.external_request",
+  "openid",
+  "https://www.googleapis.com/auth/userinfo.email"
 ];
 
 const getOAuthClient = (req?: express.Request) => {
@@ -88,28 +90,23 @@ const getOAuthClient = (req?: express.Request) => {
     throw new Error("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing from environment. Please check the Secrets panel in AI Studio.");
   }
 
-  // Use the current request host if available, falling back to APP_URL
-  // This helps when switching between DEV and PREVIEW URLs in AI Studio
   let baseUrl = "";
   if (req) {
     let protocol = req.get("x-forwarded-proto") || req.protocol;
     const host = req.get("x-forwarded-host") || req.get("host");
 
-    // Force HTTPS for AI Studio environments which are served behind a proxy
-    if (host && (host.includes("run.app") || host.includes("ais-"))) {
+    if (host && (host.includes("run.app") || host.includes("ais-") || host.includes("aistudio"))) {
       protocol = "https";
     }
 
     baseUrl = `${protocol}://${host}`;
   } else {
     baseUrl = process.env.APP_URL || "http://localhost:3000";
-    // If APP_URL is set but protocol is missing or http for a production host, fix it
-    if (baseUrl.includes("run.app") && baseUrl.startsWith("http:")) {
+    if ((baseUrl.includes("run.app") || baseUrl.includes("ais-")) && baseUrl.startsWith("http:")) {
       baseUrl = baseUrl.replace("http:", "https:");
     }
   }
 
-  // Ensure no trailing slash on baseUrl
   const cleanBaseUrl = baseUrl.replace(/\/+$/, "");
   const redirectUri = `${cleanBaseUrl}/auth/callback`;
 
@@ -129,7 +126,8 @@ app.get("/api/auth/url", (req, res) => {
     const url = client.generateAuthUrl({
       access_type: "offline",
       scope: SCOPES,
-      prompt: "consent",
+      prompt: "select_account consent",
+      hd: "orns.org",
     });
     console.log(`[Server] Generated Auth URL (starts with): ${url.substring(0, 50)}...`);
     res.json({ url });
@@ -144,22 +142,71 @@ app.get("/auth/callback", async (req, res) => {
   try {
     const client = getOAuthClient(req);
     const { tokens } = await client.getToken(code as string);
-    req.session.tokens = tokens;
+    client.setCredentials(tokens);
 
+    // Verify user domain
+    const oauth2 = google.oauth2({ version: 'v2', auth: client });
+    const userInfo = await oauth2.userinfo.get();
+    const email = userInfo.data.email || "";
+
+    if (!email.endsWith("@orns.org")) {
+      console.warn(`[Auth] User ${email} rejected: Not an orns.org account`);
+      return res.status(403).send(`
+        <html>
+          <body style="background: #f8fafc; font-family: sans-serif;">
+            <div style="text-align: center; padding-top: 100px; color: #1e293b;">
+              <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); display: inline-block; max-width: 450px;">
+                <div style="background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-weight: 500;">
+                  Access Restricted
+                </div>
+                <h2 style="margin-top: 0; font-size: 20px;">@orns.org Account Required</h2>
+                <p style="color: #64748b; margin-bottom: 24px; line-height: 1.5;">
+                  You signed in with <strong>${email}</strong>. 
+                  Unfortunately, this app is restricted to users within the <strong>@orns.org</strong> domain.
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                  <button onclick="window.location.href='/api/auth/url?retry=true'" style="background: #0f172a; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">
+                    Sign in with a different account
+                  </button>
+                  <button onclick="window.close()" style="background: transparent; color: #64748b; border: 1px solid #e2e8f0; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+            <script>
+              // If directed here from another endpoint, handle the URL gen
+              if (window.location.search.includes('retry=true')) {
+                fetch('/api/auth/url')
+                  .then(r => r.json())
+                  .then(data => {
+                    if (data.url) window.location.href = data.url;
+                  });
+              }
+            </script>
+          </body>
+        </html>
+      `);
+    }
+
+    req.session.tokens = tokens;
     req.session.save((err) => {
       if (err) console.error("Session save error:", err);
       res.send(`
         <html>
-          <body>
-            <div style="font-family: sans-serif; text-align: center; padding-top: 50px;">
-              <h2>Authentication Successful</h2>
-              <p>You can close this window now.</p>
+          <body style="background: #f8fafc;">
+            <div style="font-family: sans-serif; text-align: center; padding-top: 100px; color: #1e293b;">
+              <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); display: inline-block; max-width: 400px;">
+                <h2 style="margin-top: 0;">Authentication Successful</h2>
+                <p style="color: #64748b;">You have successfully signed in with your ORNS account (${email}).</p>
+                <p style="font-weight: 500; margin-bottom: 20px;">You can now close this window and return to the auction app.</p>
+                <button onclick="window.close()" style="background: #0f172a; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600;">Close Window</button>
+              </div>
               <script>
                 if (window.opener) {
                   window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*');
-                  setTimeout(() => window.close(), 1000);
-                } else {
-                  window.location.href = '/';
+                  // Give a slight delay before closing to ensure message is sent
+                  setTimeout(() => window.close(), 1500);
                 }
               </script>
             </div>
@@ -171,6 +218,16 @@ app.get("/auth/callback", async (req, res) => {
     const errorDetails = error.response?.data || error.message;
     console.error("Error getting tokens during callback:", errorDetails);
     res.status(500).send(`Authentication failed: ${JSON.stringify(errorDetails)}`);
+  }
+});
+
+app.get("/api/auth/callback", (req, res) => {
+  // Redirect to the main callback
+  const code = req.query.code;
+  if (code) {
+    res.redirect(`/auth/callback?code=${code}`);
+  } else {
+    res.status(404).send("Auth callback missing code");
   }
 });
 

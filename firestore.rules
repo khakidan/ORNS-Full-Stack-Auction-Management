@@ -10,6 +10,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isOrnsUser() {
+      return isSignedIn() && 
+             request.auth.token.email_verified == true && 
+             request.auth.token.email.matches('.*@orns\\.org$');
+    }
+
     function isValidId(id) {
        return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
@@ -55,8 +61,8 @@ service cloud.firestore {
     }
 
     match /settings/{docId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidId(docId) && isValidConfig(incoming());
+      allow read: if isOrnsUser();
+      allow write: if isOrnsUser() && isValidId(docId) && isValidConfig(incoming());
     }
   }
 }

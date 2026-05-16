@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { Loader2, LayoutDashboard, RefreshCw, Users, ShoppingBag, CreditCard, Handshake, WalletCards, Settings, LogOut, FileText, Ticket, Package, ClipboardList, PanelLeftClose, Menu, ArrowUp } from "lucide-react";
+import { Loader2, LayoutDashboard, RefreshCw, Users, ShoppingBag, CreditCard, Handshake, WalletCards, Settings, LogOut, FileText, Ticket, Package, ClipboardList, PanelLeftClose, Menu, ArrowUp, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import Dashboard from "./components/Dashboard";
 import Bidders from "./components/Bidders";
@@ -156,11 +156,20 @@ export default function App() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <p className="text-center text-muted-foreground text-sm">
-              Manage this year's ORNS Auction with Style!
+              Manage this year's ORNS Auction with Google Sheets & Drive.
             </p>
-            <Button onClick={handleLogin} size="lg" className="w-full text-md py-6 shadow-md hover:shadow-lg transition-all">
-              Sign in with Google
+            
+            <Button onClick={handleLogin} size="lg" className="w-full text-md py-6 shadow-md hover:shadow-lg transition-all gap-3">
+              <ShoppingBag className="w-6 h-6" />
+              Sign in with @orns.org
             </Button>
+
+            <div className="pt-2">
+              <Button variant="ghost" onClick={checkAuth} className="text-xs text-primary flex items-center gap-2 mx-auto h-8 px-4 hover:bg-primary/5">
+                <RefreshCw className="w-3 h-3" />
+                I'm signed in, let me in!
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

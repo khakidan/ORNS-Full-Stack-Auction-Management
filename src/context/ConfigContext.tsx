@@ -72,6 +72,9 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
         }, (error) => {
           console.error("Firestore Error:", error);
+          if (error.code === 'permission-denied') {
+            toast.error("Permission denied: Sync is only available for @orns.org users.");
+          }
           setLoading(false);
         });
         return () => unsubConfig();
@@ -85,8 +88,19 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
 
   const loginToFirebase = async () => {
     const provider = new GoogleAuthProvider();
+    // Suggest domain restriction to Google
+    provider.setCustomParameters({
+      hd: 'orns.org',
+      prompt: 'select_account'
+    });
+    
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      const email = result.user.email;
+      if (email && !email.endsWith('@orns.org')) {
+        toast.error("Access restricted: Please use an @orns.org account.");
+        await signOut(auth);
+      }
     } catch (error) {
       console.error("Firebase Login Error:", error);
       toast.error("Failed to sign in to sync service.");
