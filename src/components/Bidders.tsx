@@ -1,12 +1,13 @@
 // src/components/Bidders.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuction, Bidder } from "@/hooks/useAuction";
+import { useAttendees, Attendee } from "@/hooks/useAttendees";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, UserPlus, CheckCircle, UserCheck, Clock, Loader2, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
+import { Search, UserPlus, CheckCircle, UserCheck, Clock, Loader2, ArrowUpDown, ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { updateSheetData, getBaseUrl, getSheetData } from "@/lib/google-api";
@@ -19,15 +20,132 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 
 export default function Bidders() {
   const { bidders, loading, checkInBidder, fetchBidders } = useAuction();
+  const { attendees, fetchAttendees } = useAttendees();
+
+  useEffect(() => {
+    const ticketsSpreadsheetId = localStorage.getItem("auctionTicketsSpreadsheetId");
+    fetchAttendees(ticketsSpreadsheetId);
+  }, [fetchAttendees]);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [isWalkInOpen, setIsWalkInOpen] = useState(false);
   const [isSubmittingWalkIn, setIsSubmittingWalkIn] = useState(false);
   const [walkInForm, setWalkInForm] = useState({ firstName: "", lastName: "", email: "" });
+
+  const [pendingCheckIn, setPendingCheckIn] = useState<Bidder | null>(null);
+  const [isAddingTicketToReceipt, setIsAddingTicketToReceipt] = useState(false);
+
+  const handleCheckInAttempt = (bidder: Bidder) => {
+    const attendee = attendees.find(a => 
+      a.firstName.trim().toLowerCase() === bidder.firstName.trim().toLowerCase() &&
+      a.lastName.trim().toLowerCase() === bidder.lastName.trim().toLowerCase()
+    );
+
+    if (attendee && attendee.paymentStatus.toLowerCase() === 'pending') {
+      setPendingCheckIn(bidder);
+    } else {
+      handleConfirmCheckInClick(bidder);
+    }
+  };
+
+  const confirmPendingCheckIn = async (addToReceipt: boolean) => {
+    if (!pendingCheckIn) return;
+    
+    if (addToReceipt) {
+      setIsAddingTicketToReceipt(true);
+      try {
+        const spreadsheetId = localStorage.getItem("spreadsheetId");
+        if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+          throw new Error("Bid Management Spreadsheet ID not configured correctly.");
+        }
+        const sheetName = localStorage.getItem("bidManagementSheet") || "Bid-Management";
+
+        const data = await getSheetData(spreadsheetId, `${sheetName}!1:200`);
+        if (!data.values || data.values.length === 0) {
+          throw new Error("Bid Management sheet is empty or inaccessible.");
+        }
+
+        const header = data.values[0];
+        let colIndex = -1;
+        for (let j = 0; j < header.length; j += 2) {
+          if (header[j]?.toString() === pendingCheckIn.id) {
+            colIndex = j;
+            break;
+          }
+        }
+        if (colIndex === -1) throw new Error("Bidder column not found in Bid-Management sheet");
+
+        let rowIndex = -1;
+        for (let i = 3; i < data.values.length; i++) {
+          const row = data.values[i];
+          if (!row || !row[colIndex]) {
+            rowIndex = i + 1;
+            break;
+          }
+        }
+        if (rowIndex === -1) rowIndex = data.values.length + 1;
+        if (rowIndex < 4) rowIndex = 4;
+
+        const getColumnLetter = (index: number): string => {
+          let letter = "";
+          while (index >= 0) {
+            letter = String.fromCharCode((index % 26) + 65) + letter;
+            index = Math.floor(index / 26) - 1;
+          }
+          return letter;
+        };
+
+        const colLetter = getColumnLetter(colIndex);
+        const nextColLetter = getColumnLetter(colIndex + 1);
+
+        const ticketPriceStr = localStorage.getItem("ticketPrice") || "35";
+        const ticketPrice = parseFloat(ticketPriceStr) || 35;
+
+        const attendee = attendees.find(a => 
+          a.firstName.trim().toLowerCase() === pendingCheckIn.firstName.trim().toLowerCase() &&
+          a.lastName.trim().toLowerCase() === pendingCheckIn.lastName.trim().toLowerCase()
+        );
+        let ticketsCount = attendee ? parseInt(attendee.ticketsPurchased) : 1;
+        if (isNaN(ticketsCount) || ticketsCount < 1) ticketsCount = 1;
+
+        const ticketRows = Array(ticketsCount).fill(["1606", ticketPrice]);
+        const endRowIndex = rowIndex + ticketsCount - 1;
+
+        await updateSheetData(spreadsheetId, `${sheetName}!${colLetter}${rowIndex}:${nextColLetter}${endRowIndex}`, ticketRows);
+
+        toast.success(`${ticketsCount} ticket(s) added to ${pendingCheckIn.firstName}'s receipt`);
+      } catch (e: any) {
+        toast.error(e.message || "Failed to add ticket to receipt");
+        setIsAddingTicketToReceipt(false);
+        return; // Don't check in if writing bid failed
+      }
+      setIsAddingTicketToReceipt(false);
+    }
+    
+    await handleConfirmCheckInClick(pendingCheckIn);
+    setPendingCheckIn(null);
+  };
+
+  const handleConfirmCheckInClick = async (bidder: Bidder) => {
+    setProcessingId(bidder.id);
+    await checkInBidder(bidder);
+    setProcessingId(null);
+  };
 
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>({
     key: "id",
@@ -112,6 +230,9 @@ export default function Bidders() {
     setIsSubmittingWalkIn(true);
     const scriptId = localStorage.getItem("bidManagementScriptId");
     const spreadsheetId = localStorage.getItem("spreadsheetId");
+    const ticketsSpreadsheetId = localStorage.getItem("auctionTicketsSpreadsheetId");
+    const ticketPrice = localStorage.getItem("ticketPrice") || "35";
+
     try {
       const res = await fetch(`${getBaseUrl()}/api/bidders/walk-in`, {
         method: "POST",
@@ -126,7 +247,28 @@ export default function Bidders() {
       }
 
       const result = await res.json();
-      toast.success(`Walk-in created: Bidder ${result.bidder.id} - ${result.bidder.firstName} ${result.bidder.lastName}`);
+      toast.success(`Walk-in created: ${result.bidder.firstName} ${result.bidder.lastName}`);
+
+      if (ticketsSpreadsheetId && ticketsSpreadsheetId !== "undefined" && ticketsSpreadsheetId !== "null" && !ticketsSpreadsheetId.includes("PASTE")) {
+        try {
+          const { appendSheetData } = await import("@/lib/google-api");
+          const rowValue = new Array(22).fill("");
+          rowValue[0] = walkInForm.firstName;
+          rowValue[1] = walkInForm.lastName;
+          rowValue[2] = walkInForm.email || "";
+          rowValue[4] = "1";
+          rowValue[5] = "FALSE";
+          rowValue[19] = "Auction Checkout"; 
+          rowValue[20] = "Pending";
+          rowValue[21] = `$${ticketPrice}`; 
+          
+          await appendSheetData(ticketsSpreadsheetId, "tickets!A:V", [rowValue]);
+          toast.success("Added walk-in to Auction Tickets");
+        } catch (err) {
+          console.error("Failed to append to auction tickets:", err);
+          toast.error("Failed to append walk-in to tickets spreadsheet");
+        }
+      }
 
       setIsWalkInOpen(false);
       setWalkInForm({ firstName: "", lastName: "", email: "" });
@@ -151,15 +293,16 @@ export default function Bidders() {
           />
         </div>
 
-        <Dialog open={isWalkInOpen} onOpenChange={setIsWalkInOpen}>
-          <DialogTrigger
-            render={
-              <Button className="gap-2">
-                <UserPlus className="w-4 h-4" />
-                New Walk-In Ticket
-              </Button>
-            }
-          />
+        <div className="flex gap-2">
+          <Dialog open={isWalkInOpen} onOpenChange={setIsWalkInOpen}>
+            <DialogTrigger
+              render={
+                <Button className="gap-2">
+                  <UserPlus className="w-4 h-4" />
+                  New Walk-In Ticket
+                </Button>
+              }
+            />
           <DialogContent>
             <form onSubmit={handleWalkInSubmit}>
               <DialogHeader>
@@ -225,6 +368,7 @@ export default function Bidders() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card>
@@ -321,8 +465,8 @@ export default function Bidders() {
                             <Button
                               size="sm"
                               variant="default"
-                              onClick={() => checkInBidder(bidder)}
-                              disabled={processingId === bidder.id}
+                              onClick={() => handleCheckInAttempt(bidder)}
+                              disabled={processingId === bidder.id || isAddingTicketToReceipt}
                               className="h-8 md:h-9"
                             >
                               <span className="hidden sm:inline">Check In</span>
@@ -334,7 +478,7 @@ export default function Bidders() {
                               size="sm"
                               variant="outline"
                               onClick={() => markAsProxy(bidder)}
-                              disabled={processingId === bidder.id}
+                              disabled={processingId === bidder.id || isAddingTicketToReceipt}
                               className="h-8 md:h-9"
                             >
                               <UserCheck className="w-4 h-4 md:mr-1.5" />
@@ -357,6 +501,32 @@ export default function Bidders() {
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!pendingCheckIn} onOpenChange={(open) => !open && !isAddingTicketToReceipt && setPendingCheckIn(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Pending Payment Detected</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingCheckIn?.firstName} {pendingCheckIn?.lastName} has not paid for their ticket yet.
+              Would you like to add their ticket to their final receipt so they can pay at checkout?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isAddingTicketToReceipt} onClick={() => confirmPendingCheckIn(false)}>
+              No, Do Not Add
+            </AlertDialogCancel>
+            <Button
+              variant="default"
+              disabled={isAddingTicketToReceipt}
+              onClick={() => confirmPendingCheckIn(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {isAddingTicketToReceipt && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Yes, Add to Receipt
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

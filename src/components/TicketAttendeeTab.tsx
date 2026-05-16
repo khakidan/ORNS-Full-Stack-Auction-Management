@@ -2,47 +2,93 @@ import { useState, useEffect } from "react";
 import { getSheetData, updateSheetData } from "@/lib/google-api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Loader2 } from "lucide-react";
+import { Users, Loader2, Pencil, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useAttendees, Attendee, Guest } from "@/hooks/useAttendees";
 
-interface Guest {
-  name: string;
-  email: string;
-}
+const EditableEmail = ({ email, onSave, placeholder = "No email" }: { email: string, onSave: (newVal: string) => Promise<void>, placeholder?: string }) => {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(email);
+  const [saving, setSaving] = useState(false);
 
-interface Attendee {
-  id: string;
-  sheet: string;
-  rowIndex: number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  ticketsPurchased: string;
-  hasGuests: string;
-  guestsInfo: Guest[];
-  paymentMethod: string;
-  paymentStatus: string;
-  totalPaid: string;
-}
+  useEffect(() => {
+    setValue(email);
+  }, [email]);
+
+  const handleSave = async () => {
+    if (value === email) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(value);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") handleSave();
+    if (e.key === "Escape") {
+      setValue(email);
+      setEditing(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1 mt-1">
+        <Input 
+          autoFocus 
+          value={value} 
+          onChange={e => setValue(e.target.value)} 
+          onKeyDown={handleKeyDown}
+          disabled={saving}
+          className="h-6 w-[140px] text-xs px-2"
+        />
+        <Button size="icon" variant="ghost" className="h-6 w-6 text-green-600" onClick={handleSave} disabled={saving}>
+          {saving ? <Loader2 className="w-3 h-3 animate-spin"/> : <Check className="w-3 h-3" />}
+        </Button>
+        <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600" onClick={() => { setValue(email); setEditing(false); }} disabled={saving}>
+          <X className="w-3 h-3" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group flex items-center gap-2 mt-1">
+      <div className={`text-xs truncate ${!email ? 'text-muted-foreground italic' : 'text-muted-foreground'}`} title={email || placeholder}>
+        {email || placeholder}
+      </div>
+      <button onClick={() => setEditing(true)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-700 transition-opacity">
+        <Pencil className="w-3 h-3" />
+      </button>
+    </div>
+  );
+};
 
 export default function TicketAttendeeTab() {
   const spreadsheetId = localStorage.getItem("auctionTicketsSpreadsheetId");
-  const [attendees, setAttendees] = useState<Attendee[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { attendees, setAttendees, loading, fetchAttendees } = useAttendees();
 
   useEffect(() => {
-    fetchAttendees();
-  }, [spreadsheetId]);
+    fetchAttendees(spreadsheetId);
+  }, [spreadsheetId, fetchAttendees]);
 
   const updatePaymentStatus = async (attendee: Attendee, newStatus: string) => {
     if (!spreadsheetId) return;
+    if (attendee.sheet !== 'tickets') return; // Cannot update sponsor/staff sheets
     
     try {
-      // Payment status is in column R (index 17)
-      await updateSheetData(spreadsheetId, `${attendee.sheet}!R${attendee.rowIndex}`, [[newStatus]]);
+      // Payment status is in column U
+      await updateSheetData(spreadsheetId, `${attendee.sheet}!U${attendee.rowIndex}`, [[newStatus]]);
       setAttendees(attendees.map(a => a.id === attendee.id ? { ...a, paymentStatus: newStatus } : a));
       toast.success("Payment status updated");
     } catch (e) {
@@ -51,56 +97,39 @@ export default function TicketAttendeeTab() {
     }
   };
 
-  const fetchAttendees = async () => {
-    if (!spreadsheetId) {
-      setLoading(false);
-      return;
-    }
+  const updateEmail = async (attendee: Attendee, newEmail: string, guestIndex?: number) => {
+    if (!spreadsheetId) return;
     
-    setLoading(true);
-    try {
-      const sheetsToFetch = ["tickets", "staff tickets", "sponsor tickets"];
-      let allAttendees: Attendee[] = [];
-      
-      for (const sheetName of sheetsToFetch) {
-        try {
-          const data = await getSheetData(spreadsheetId, `${sheetName}!A:S`);
-          if (data.values && data.values.length > 1) {
-            const rows = data.values.slice(1).map((row: any[], i: number) => {
-              const guests: Guest[] = [];
-              if (row[7] || row[8] || row[9]) guests.push({ name: `${row[7] || ''} ${row[8] || ''}`.trim(), email: row[9]?.toString() || '' });
-              if (row[10] || row[11] || row[12]) guests.push({ name: `${row[10] || ''} ${row[11] || ''}`.trim(), email: row[12]?.toString() || '' });
-              if (row[13] || row[14] || row[15]) guests.push({ name: `${row[13] || ''} ${row[14] || ''}`.trim(), email: row[15]?.toString() || '' });
+    let col = 'C';
+    if (attendee.sheet === 'tickets') {
+      if (guestIndex === 1) col = 'J';
+      if (guestIndex === 2) col = 'N';
+      if (guestIndex === 3) col = 'R';
+    } else {
+      if (guestIndex === 1) col = 'J';
+      if (guestIndex === 2) col = 'M';
+      if (guestIndex === 3) col = 'P';
+    }
 
-              return {
-                id: `${sheetName}-${i}`,
-                sheet: sheetName,
-                rowIndex: i + 2,
-                firstName: row[0]?.toString() || "",
-                lastName: row[1]?.toString() || "",
-                email: row[2]?.toString() || "",
-                phone: row[3]?.toString() || "",
-                ticketsPurchased: row[4]?.toString() || "0",
-                hasGuests: row[5]?.toString() || "",
-                guestsInfo: guests,
-                paymentMethod: row[16]?.toString() || "",
-                paymentStatus: row[17]?.toString() || "",
-                totalPaid: row[18]?.toString() || ""
-              };
-            }).filter((a: Attendee) => a.firstName || a.lastName);
-            allAttendees = [...allAttendees, ...rows];
-          }
-        } catch (e) {
-          console.error(`Could not fetch ${sheetName}`, e);
-        }
-      }
+    try {
+      await updateSheetData(spreadsheetId, `${attendee.sheet}!${col}${attendee.rowIndex}`, [[newEmail]]);
       
-      setAttendees(allAttendees);
+      setAttendees(attendees.map(a => {
+        if (a.id !== attendee.id) return a;
+        if (guestIndex === undefined) {
+          return { ...a, email: newEmail };
+        } else {
+          return {
+            ...a,
+            guestsInfo: a.guestsInfo.map(g => g.guestIndex === guestIndex ? { ...g, email: newEmail } : g)
+          };
+        }
+      }));
+      toast.success(`Email updated for ${guestIndex ? 'guest' : 'attendee'}`);
     } catch (e) {
       console.error(e);
-      toast.error("Failed to fetch attendees");
-    } finally {
-      setLoading(false);
+      toast.error("Failed to update email");
+      throw e;
     }
   };
 
@@ -145,8 +174,8 @@ export default function TicketAttendeeTab() {
                     <TableRow key={a.id} className="align-top hover:bg-slate-50/50">
                       <TableCell>
                         <div className="font-medium text-foreground">{a.firstName} {a.lastName}</div>
-                        <div className="text-xs text-muted-foreground mt-1 truncate" title={a.email}>{a.email}</div>
-                        <div className="text-xs text-muted-foreground">{a.phone}</div>
+                        <EditableEmail email={a.email} onSave={(val) => updateEmail(a, val)} placeholder="No email" />
+                        <div className="text-xs text-muted-foreground mt-1">{a.phone}</div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="capitalize text-xs font-normal">
@@ -163,8 +192,17 @@ export default function TicketAttendeeTab() {
                            <div className="space-y-2 mt-0.5">
                              {a.guestsInfo.map((g, idx) => (
                                <div key={idx} className="flex flex-col gap-0.5 pb-2 mb-2 border-b border-slate-100 last:border-0 last:pb-0 last:mb-0">
-                                 <span className="font-medium text-slate-700">{g.name}</span>
-                                 {g.email && <span className="text-[10px] text-muted-foreground break-all">{g.email}</span>}
+                                 <span className="font-medium text-slate-700">
+                                   {g.name || `Guest ${idx + 1}`}
+                                   {g.ownBidderNumber?.toLowerCase() === 'yes' && (
+                                     <Badge variant="secondary" className="ml-2 text-[10px] h-4 px-1 leading-none font-normal bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border-indigo-200">
+                                       Own Bidder #
+                                     </Badge>
+                                   )}
+                                 </span>
+                                 <div className="-mt-1">
+                                    <EditableEmail email={g.email} onSave={(val) => updateEmail(a, val, g.guestIndex)} placeholder="No email" />
+                                 </div>
                                </div>
                              ))}
                            </div>
@@ -173,21 +211,34 @@ export default function TicketAttendeeTab() {
                          )}
                       </TableCell>
                       <TableCell>
-                        <Select value={a.paymentStatus || 'Pending'} onValueChange={(val) => updatePaymentStatus(a, val)}>
-                          <SelectTrigger className={`w-full ${a.paymentStatus?.toLowerCase() === 'paid' ? 'bg-green-50' : 'bg-amber-50'}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Paid">Paid</SelectItem>
-                            <SelectItem value="Pending">Pending</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {a.paymentStatus?.toLowerCase() === 'paid' && (
-                          <div className="text-xs text-green-700 mt-1">Paid: {a.totalPaid}</div>
+                        {a.sheet === 'tickets' ? (
+                          <>
+                            <Select value={a.paymentStatus || 'Pending'} onValueChange={(val) => updatePaymentStatus(a, val)}>
+                              <SelectTrigger className={`w-full h-8 text-xs ${a.paymentStatus?.toLowerCase() === 'paid' ? 'bg-green-50' : 'bg-amber-50'}`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Paid">Paid</SelectItem>
+                                <SelectItem value="Pending">Pending</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {a.paymentStatus?.toLowerCase() === 'paid' && (
+                              <div className="text-xs text-green-700 mt-1">Paid: {a.totalPaid}</div>
+                            )}
+                            <div className="text-[10px] text-muted-foreground mt-1">
+                              Via: {a.paymentMethod || 'Unknown'}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <Badge className="bg-green-100 text-green-800 hover:bg-green-100 font-normal w-fit">
+                              Paid
+                            </Badge>
+                            <div className="text-[10px] text-muted-foreground mt-1">
+                              Via: Comp
+                            </div>
+                          </div>
                         )}
-                        <div className="text-[10px] text-muted-foreground mt-1">
-                          Via: {a.paymentMethod || 'Unknown'}
-                        </div>
                       </TableCell>
                     </TableRow>
                   ))

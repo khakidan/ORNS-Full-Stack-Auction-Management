@@ -413,6 +413,42 @@ app.post("/api/bidders/walk-in", async (req, res) => {
   }
 });
 
+// Sync bidders via Apps Script
+app.post("/api/bidders/sync", async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+  const { scriptId: bodyScriptId } = req.body;
+  const scriptId = bodyScriptId || process.env.GOOGLE_SCRIPT_ID;
+  if (!scriptId) return res.status(500).json({ error: "GOOGLE_SCRIPT_ID not configured. Please set it in Settings." });
+
+  try {
+    const client = getAuthenticatedClient(req.session.tokens);
+    const script = google.script({ version: "v1", auth: client });
+
+    const response = await script.scripts.run({
+      scriptId: scriptId,
+      requestBody: {
+        function: "apiSyncBidders",
+        parameters: [],
+        devMode: true,
+      },
+    });
+
+    if (response.data.error) {
+      throw new Error(response.data.error.details?.[0]?.errorMessage || response.data.error.message);
+    }
+
+    const result: any = response.data.response?.result;
+    if (result && result.success === false) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    res.json({ success: true, result });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Dedicated endpoint to resend an email receipt via Apps Script
 app.post("/api/receipts/email-only", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });

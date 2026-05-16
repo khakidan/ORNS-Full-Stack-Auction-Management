@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { getAuthStatus, getAuthUrl, logout } from "@/lib/google-api";
+import { getAuthStatus, getAuthUrl, logout, getBaseUrl } from "@/lib/google-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -63,6 +63,35 @@ export default function App() {
   const [activeBidTab, setActiveBidTab] = useState("dashboard");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSyncBidders = async () => {
+    setIsSyncing(true);
+    
+    const scriptId = localStorage.getItem("bidManagementScriptId");
+    
+    try {
+      const res = await fetch(`${getBaseUrl()}/api/bidders/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          scriptId
+        }),
+        credentials: "include"
+      });
+      
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to setup bid management app");
+      
+      toast.success("Bidders synced and sheets reset via Apps Script");
+      window.location.reload();
+    } catch (e: any) {
+      console.error("Failed to setup bid management app:", e);
+      toast.error(e.message || "Failed to setup bid management app");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   useEffect(() => {
     // Determine initial sidebar state based on screen size
@@ -304,26 +333,37 @@ export default function App() {
                     <div>
                       <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Bid Management</h2>
                       <p className="text-muted-foreground mt-1 text-sm md:text-base">
-                        Run the auction! Track bids, enter silent auction sheets, and manage checkout.
+                        Everything you need to run the auction!
                       </p>
                     </div>
                     {localStorage.getItem("spreadsheetId") && (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          const spreadId = localStorage.getItem("spreadsheetId");
-                          if (spreadId && !spreadId.includes("PASTE")) {
-                            window.open(`https://docs.google.com/spreadsheets/d/${spreadId}`, "_blank");
-                          } else {
-                            toast.error("Spreadsheet ID not configured");
-                          }
-                        }}
-                        className="gap-2 w-full sm:w-auto"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                        Open Spreadsheet
-                      </Button>
+                      <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <Button
+                          onClick={handleSyncBidders}
+                          disabled={isSyncing}
+                          size="sm"
+                          className="gap-2 w-full sm:w-auto shrink-0 bg-slate-900 text-slate-50 hover:bg-slate-900/90"
+                        >
+                          {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                          {isSyncing ? "Setting up..." : "Set Up Bid Management App"}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            const spreadId = localStorage.getItem("spreadsheetId");
+                            if (spreadId && !spreadId.includes("PASTE")) {
+                              window.open(`https://docs.google.com/spreadsheets/d/${spreadId}`, "_blank");
+                            } else {
+                              toast.error("Spreadsheet ID not configured");
+                            }
+                          }}
+                          className="gap-2 w-full sm:w-auto"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          Open Spreadsheet
+                        </Button>
+                      </div>
                     )}
                   </div>
                   

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuction, Bidder } from "@/hooks/useAuction";
+import { useAttendees } from "@/hooks/useAttendees";
 import { getSheetData, updateSheetData, getBaseUrl } from "@/lib/google-api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,6 +14,7 @@ import { Input } from "@/components/ui/input";
 
 export default function Checkout() {
   const { bidders, items, loading, fetchBidders, fetchItems } = useAuction();
+  const { attendees, fetchAttendees } = useAttendees();
   const [winners, setWinners] = useState<any[]>([]);
   const [fetchingWinners, setFetchingWinners] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -22,6 +24,11 @@ export default function Checkout() {
   const [showPrintConfirm, setShowPrintConfirm] = useState(false);
   const [showEmailConfirm, setShowEmailConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<"pending" | "completed">("pending");
+
+  useEffect(() => {
+    const ticketsSpreadsheetId = localStorage.getItem("auctionTicketsSpreadsheetId");
+    fetchAttendees(ticketsSpreadsheetId);
+  }, [fetchAttendees]);
 
   const startBatchPrint = async () => {
     setShowPrintConfirm(false);
@@ -253,6 +260,19 @@ export default function Checkout() {
       
       if (rowIndex > 1) {
         await updateSheetData(spreadsheetId!, `${sheetName}!G${rowIndex}:H${rowIndex}`, [[true, true]]);
+        
+        // Also mark as paid in Auction Tickets if they're a walk-in or pending ticket buyer
+        const ticketsSpreadsheetId = localStorage.getItem("auctionTicketsSpreadsheetId");
+        if (ticketsSpreadsheetId && attendees.length > 0) {
+          const attendee = attendees.find(a => 
+            a.firstName.trim().toLowerCase() === winner.bidder.firstName.trim().toLowerCase() &&
+            a.lastName.trim().toLowerCase() === winner.bidder.lastName.trim().toLowerCase()
+          );
+          if (attendee && attendee.sheet === 'tickets') {
+            await updateSheetData(ticketsSpreadsheetId, `${attendee.sheet}!U${attendee.rowIndex}`, [["Paid"]]);
+          }
+        }
+        
         toast.success(`${winner.bidder.firstName} marked as Paid & Checked Out`);
         loadWinners();
       } else {
@@ -268,7 +288,7 @@ export default function Checkout() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between bg-slate-50 p-4 rounded-lg border border-slate-200">
-        <div className="flex flex-col xs:flex-row gap-2 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <Button
             onClick={() => setShowPrintConfirm(true)}
             disabled={isPrintingAll}

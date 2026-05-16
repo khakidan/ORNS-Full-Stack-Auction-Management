@@ -1,17 +1,17 @@
 import { useState, useEffect } from "react";
 import { useAuction } from "@/hooks/useAuction";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Users, ShoppingBag, TrendingUp, UserCheck, Trophy, Loader2 } from "lucide-react";
+import { Users, ShoppingBag, TrendingUp, UserCheck, Trophy, Loader2, RefreshCw } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getSheetData, updateSheetData } from "@/lib/google-api";
+import { getSheetData, updateSheetData, getBaseUrl } from "@/lib/google-api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 export default function Dashboard() {
-  const { bidders, items, totalRaised, loading } = useAuction();
+  const { bidders, items, totalRaised, loading, fetchBidders } = useAuction();
 
   const [giftCardWinnerId, setGiftCardWinnerId] = useState("");
   const [raffleWinnerId, setRaffleWinnerId] = useState("");

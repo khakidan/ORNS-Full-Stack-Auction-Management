@@ -4,89 +4,18 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tag, Search, RefreshCw, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { getSheetData, updateSheetData, clearSheetData } from "@/lib/google-api";
+import { Tag, Search } from "lucide-react";
+import { Toast } from "sonner"; // Unused now but can leave toast import in case
 import { toast } from "sonner";
 
-const RESERVED_IDS = [
-  '1401', '1501', '1502', '1503', '1504', 
-  '1601', '1602', '1603', '1604', '1605', '1606'
-];
-
 export default function Items() {
-  const { items, winners, loading, fetchItems } = useAuction();
+  const { items, winners, loading } = useAuction();
   const [searchTerm, setSearchTerm] = useState("");
-  const [syncing, setSyncing] = useState(false);
 
   const filteredItems = items.filter(item =>
     item.id.toString().includes(searchTerm) ||
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  const syncAuctionItems = async () => {
-    const sourceSId = localStorage.getItem("auctionItemsSpreadsheetId");
-    const targetSId = localStorage.getItem("spreadsheetId");
-    const sourceSheetName = localStorage.getItem("auctionItemsSheet") || "Auction-Items";
-    
-    if (!sourceSId || !targetSId) {
-      toast.error("Spreadsheet IDs not configured in Settings");
-      return;
-    }
-
-    setSyncing(true);
-    try {
-      // 1. Fetch source items (Data Entry sheet)
-      // A: ID (0), B: Category (1), D: Name (3), J: PhyOrCert/Type (9)
-      const sourceData = await getSheetData(sourceSId, `${sourceSheetName}!A:J`);
-      if (!sourceData.values || sourceData.values.length <= 1) {
-        throw new Error("No items found in source spreadsheet");
-      }
-
-      const sourceItems = sourceData.values.slice(1).map((row: any[]) => ({
-        id: row[0]?.toString() || "",
-        type: row[9]?.toString() || "", // Column J is index 9
-        name: row[3]?.toString() || ""  // Column D is index 3
-      })).filter(item => item.id && !RESERVED_IDS.includes(item.id));
-
-      // 2. Fetch current target items (to preserve reserved ones)
-      // We already have some in 'items' from useAuction, but let's fetch full rows to be safe
-      const targetData = await getSheetData(targetSId, `${sourceSheetName}!A:C`);
-      const reservedItems = (targetData.values || []).slice(1)
-        .map((row: any[]) => ({
-          id: row[0]?.toString() || "",
-          name: row[1]?.toString() || "",
-          type: row[2]?.toString() || ""
-        }))
-        .filter(item => RESERVED_IDS.includes(item.id));
-
-      // 3. Combine and Sort
-      const combined = [...reservedItems, ...sourceItems].sort((a, b) => {
-        const idA = parseInt(a.id) || 0;
-        const idB = parseInt(b.id) || 0;
-        return idA - idB;
-      });
-
-      // 4. Prepare data for update
-      // We write to A:C (ID, Name, Type)
-      const values = combined.map(item => [item.id, item.name, item.type]);
-
-      // 5. Clear and Update
-      await clearSheetData(targetSId, `${sourceSheetName}!A1:C500`);
-      // Update headers
-      await updateSheetData(targetSId, `${sourceSheetName}!A1:C1`, [["ID", "Item Name", "Type"]]);
-      // Update data
-      await updateSheetData(targetSId, `${sourceSheetName}!A2:C${values.length + 1}`, values);
-
-      toast.success("Auction items synced successfully!");
-      fetchItems();
-    } catch (error: any) {
-      console.error(error);
-      toast.error(error.message || "Failed to sync auction items");
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -101,15 +30,6 @@ export default function Items() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <Button 
-            variant="outline" 
-            onClick={syncAuctionItems} 
-            disabled={syncing}
-            className="gap-2 border-[#e31b23]/30 text-[#e31b23] hover:bg-[#e31b23]/5"
-          >
-            {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            Sync Auction Items
-          </Button>
         </div>
         <div className="text-sm font-medium text-muted-foreground bg-white px-3 py-1.5 rounded border border-slate-200 shadow-sm">
           Total Items: <span className="text-[#e31b23] font-bold">{items.length}</span>

@@ -76,10 +76,10 @@ export default function TicketDocumentCreationTab() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Download className="w-5 h-5 text-primary" /> 
-              Generate Assets
+              Creation Tools
             </CardTitle>
             <CardDescription>
-              Run automated scripts to generate required materials.
+              Generate printable documents.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
