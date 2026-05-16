@@ -163,13 +163,6 @@ export default function App() {
               <ShoppingBag className="w-6 h-6" />
               Sign in with @orns.org
             </Button>
-
-            <div className="pt-2">
-              <Button variant="ghost" onClick={checkAuth} className="text-xs text-primary flex items-center gap-2 mx-auto h-8 px-4 hover:bg-primary/5">
-                <RefreshCw className="w-3 h-3" />
-                I'm signed in, let me in!
-              </Button>
-            </div>
           </CardContent>
         </Card>
       </div>

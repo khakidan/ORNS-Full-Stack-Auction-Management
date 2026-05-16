@@ -91,14 +91,6 @@ export default function TicketDocumentCreationTab() {
               <PlaySquare className="w-4 h-4 text-emerald-600" />
               Create Bidder Labels Doc
             </Button>
-            <Button 
-              className="w-full justify-start gap-2" 
-              variant="secondary" 
-              onClick={() => runScript('apiSyncBiddersToMain', 'Sync Bidders')}
-            >
-              <PlaySquare className="w-4 h-4 text-emerald-600" />
-              Sync Bidders to Main Bid Management
-            </Button>
             
             <p className="text-[10px] text-muted-foreground mt-4 px-1 italic">
               Note: Documents will be placed in your For Print folder.

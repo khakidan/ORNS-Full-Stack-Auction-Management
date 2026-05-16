@@ -1,11 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default deny
+    // Phase 0: Global Safety Net
     match /{document=**} {
       allow read, write: if false;
     }
 
+    // Phase 3: Primitive Definitions
     function isSignedIn() {
       return request.auth != null;
     }
@@ -45,24 +46,59 @@ service cloud.firestore {
         'auctionTicketsScriptId',
         'bidManagementScriptId'
       ]) && 
+      data.keys().size() == 14 && // Strict key count (13 keys + updatedAt)
       data.auctionItemsSpreadsheetId is string &&
+      data.auctionItemsSpreadsheetId.size() <= 256 &&
       data.auctionTicketsSpreadsheetId is string &&
+      data.auctionTicketsSpreadsheetId.size() <= 256 &&
       data.bidManagementSpreadsheetId is string &&
+      data.bidManagementSpreadsheetId.size() <= 256 &&
       data.bidderNumbersSheet is string &&
+      data.bidderNumbersSheet.size() <= 128 &&
       data.auctionItemsSheet is string &&
+      data.auctionItemsSheet.size() <= 128 &&
       data.bidManagementSheet is string &&
+      data.bidManagementSheet.size() <= 128 &&
       data.receiptFolderId is string &&
+      data.receiptFolderId.size() <= 256 &&
       data.forPrintFolderId is string &&
+      data.forPrintFolderId.size() <= 256 &&
       data.ornsLogoId is string &&
+      data.ornsLogoId.size() <= 256 &&
       data.ticketPrice is string &&
+      data.ticketPrice.size() <= 10 &&
       data.auctionItemsScriptId is string &&
+      data.auctionItemsScriptId.size() <= 256 &&
       data.auctionTicketsScriptId is string &&
-      data.bidManagementScriptId is string;
+      data.auctionTicketsScriptId.size() <= 256 &&
+      data.bidManagementScriptId is string &&
+      data.bidManagementScriptId.size() <= 256 &&
+      (data.get('updatedAt', null) == null || data.updatedAt is timestamp);
     }
 
     match /settings/{docId} {
       allow read: if isOrnsUser();
-      allow write: if isOrnsUser() && isValidId(docId) && isValidConfig(incoming());
+      allow create: if isOrnsUser() && isValidId(docId) && isValidConfig(incoming());
+      allow update: if isOrnsUser() && isValidId(docId) && isValidConfig(incoming()) && (
+        // Action: Update Config (allow changing any valid config field)
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'auctionItemsSpreadsheetId', 
+          'auctionTicketsSpreadsheetId', 
+          'bidManagementSpreadsheetId',
+          'bidderNumbersSheet',
+          'auctionItemsSheet',
+          'bidManagementSheet',
+          'receiptFolderId',
+          'forPrintFolderId',
+          'ornsLogoId',
+          'ticketPrice',
+          'auctionItemsScriptId',
+          'auctionTicketsScriptId',
+          'bidManagementScriptId',
+          'updatedAt'
+        ])
+      );
+      allow delete: if false; // Config should not be deleted by client
     }
   }
 }

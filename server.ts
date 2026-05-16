@@ -95,14 +95,14 @@ const getOAuthClient = (req?: express.Request) => {
     let protocol = req.get("x-forwarded-proto") || req.protocol;
     const host = req.get("x-forwarded-host") || req.get("host");
 
-    if (host && (host.includes("run.app") || host.includes("ais-") || host.includes("aistudio"))) {
+    if (host && (host.includes("run.app") || host.includes("ais-") || host.includes("aistudio") || host.includes("orns.org"))) {
       protocol = "https";
     }
 
     baseUrl = `${protocol}://${host}`;
   } else {
     baseUrl = process.env.APP_URL || "http://localhost:3000";
-    if ((baseUrl.includes("run.app") || baseUrl.includes("ais-")) && baseUrl.startsWith("http:")) {
+    if ((baseUrl.includes("run.app") || baseUrl.includes("ais-") || baseUrl.includes("orns.org")) && baseUrl.startsWith("http:")) {
       baseUrl = baseUrl.replace("http:", "https:");
     }
   }
