@@ -1,21 +1,28 @@
 import { useState, useEffect } from "react";
-import { getSheetData } from "@/lib/google-api";
+import { getSheetData, updateSheetData } from "@/lib/google-api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+interface Guest {
+  name: string;
+  email: string;
+}
 
 interface Attendee {
   id: string;
   sheet: string;
+  rowIndex: number;
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
   ticketsPurchased: string;
   hasGuests: string;
-  guestsInfo: string[];
+  guestsInfo: Guest[];
   paymentMethod: string;
   paymentStatus: string;
   totalPaid: string;
@@ -29,6 +36,20 @@ export default function TicketAttendeeTab() {
   useEffect(() => {
     fetchAttendees();
   }, [spreadsheetId]);
+
+  const updatePaymentStatus = async (attendee: Attendee, newStatus: string) => {
+    if (!spreadsheetId) return;
+    
+    try {
+      // Payment status is in column R (index 17)
+      await updateSheetData(spreadsheetId, `${attendee.sheet}!R${attendee.rowIndex}`, [[newStatus]]);
+      setAttendees(attendees.map(a => a.id === attendee.id ? { ...a, paymentStatus: newStatus } : a));
+      toast.success("Payment status updated");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to update payment status");
+    }
+  };
 
   const fetchAttendees = async () => {
     if (!spreadsheetId) {
@@ -46,14 +67,15 @@ export default function TicketAttendeeTab() {
           const data = await getSheetData(spreadsheetId, `${sheetName}!A:S`);
           if (data.values && data.values.length > 1) {
             const rows = data.values.slice(1).map((row: any[], i: number) => {
-              const guests = [];
-              if (row[7] || row[8]) guests.push(`${row[7] || ''} ${row[8] || ''}`.trim());
-              if (row[10] || row[11]) guests.push(`${row[10] || ''} ${row[11] || ''}`.trim());
-              if (row[13] || row[14]) guests.push(`${row[13] || ''} ${row[14] || ''}`.trim());
+              const guests: Guest[] = [];
+              if (row[7] || row[8] || row[9]) guests.push({ name: `${row[7] || ''} ${row[8] || ''}`.trim(), email: row[9]?.toString() || '' });
+              if (row[10] || row[11] || row[12]) guests.push({ name: `${row[10] || ''} ${row[11] || ''}`.trim(), email: row[12]?.toString() || '' });
+              if (row[13] || row[14] || row[15]) guests.push({ name: `${row[13] || ''} ${row[14] || ''}`.trim(), email: row[15]?.toString() || '' });
 
               return {
                 id: `${sheetName}-${i}`,
                 sheet: sheetName,
+                rowIndex: i + 2,
                 firstName: row[0]?.toString() || "",
                 lastName: row[1]?.toString() || "",
                 email: row[2]?.toString() || "",
@@ -138,24 +160,32 @@ export default function TicketAttendeeTab() {
                       </TableCell>
                       <TableCell className="text-xs">
                          {a.guestsInfo.length > 0 ? (
-                           <ul className="list-disc pl-4 space-y-1 text-muted-foreground">
+                           <div className="space-y-3">
                              {a.guestsInfo.map((g, idx) => (
-                               <li key={idx} className="truncate">{g}</li>
+                               <div key={idx} className="flex flex-col gap-0.5 pb-2 border-b last:border-0 last:pb-0 border-gray-100">
+                                 <div className="font-medium text-gray-900">{g.name}</div>
+                                 {g.email && <div className="text-[10px] text-muted-foreground">{g.email}</div>}
+                               </div>
                              ))}
-                           </ul>
+                           </div>
                          ) : (
-                           <span className="text-muted-foreground italic">No guests</span>
+                           <span className="text-muted-foreground italic font-light">No guests</span>
                          )}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2 mb-1">
-                          {a.paymentStatus.toLowerCase() === 'paid' ? (
-                            <Badge className="bg-green-100 text-green-800 hover:bg-green-200">Paid: {a.totalPaid}</Badge>
-                          ) : (
-                            <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200">{a.paymentStatus || 'Pending'}</Badge>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
+                        <Select value={a.paymentStatus || 'Pending'} onValueChange={(val) => updatePaymentStatus(a, val)}>
+                          <SelectTrigger className={`w-full ${a.paymentStatus?.toLowerCase() === 'paid' ? 'bg-green-50' : 'bg-amber-50'}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Paid">Paid</SelectItem>
+                            <SelectItem value="Pending">Pending</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {a.paymentStatus?.toLowerCase() === 'paid' && (
+                          <div className="text-xs text-green-700 mt-1">Paid: {a.totalPaid}</div>
+                        )}
+                        <div className="text-[10px] text-muted-foreground mt-1">
                           Via: {a.paymentMethod || 'Unknown'}
                         </div>
                       </TableCell>

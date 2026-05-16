@@ -10,8 +10,8 @@
       {
         "source": "**",
         "run": {
-          "serviceId": "ais-dev-ss7p32fkb6x6is6w7cy74d-301199179831",
-          "region": "us-west1"
+          "serviceId": "orns-auction-manager",
+          "region": "us-east1"
         }
       }
     ]
