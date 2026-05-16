@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, UserPlus, CheckCircle, UserCheck, Clock, Loader2, ArrowUpDown, ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { updateSheetData, getBaseUrl, getSheetData } from "@/lib/google-api";
+import { updateSheetData, getBaseUrl, getSheetData, appendSheetData } from "@/lib/google-api";
 import {
   Dialog,
   DialogContent,
@@ -251,7 +251,6 @@ export default function Bidders() {
 
       if (ticketsSpreadsheetId && ticketsSpreadsheetId !== "undefined" && ticketsSpreadsheetId !== "null" && !ticketsSpreadsheetId.includes("PASTE")) {
         try {
-          const { appendSheetData } = await import("@/lib/google-api");
           const rowValue = new Array(22).fill("");
           rowValue[0] = walkInForm.firstName;
           rowValue[1] = walkInForm.lastName;

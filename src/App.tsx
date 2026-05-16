@@ -329,7 +329,7 @@ export default function App() {
               
               {activeWorkflow === 'bids' && (
                 <div className="space-y-6">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                     <div>
                       <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Bid Management</h2>
                       <p className="text-muted-foreground mt-1 text-sm md:text-base">
