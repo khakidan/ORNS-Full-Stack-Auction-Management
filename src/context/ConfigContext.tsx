@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db, auth } from '@/lib/firebase';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { toast } from 'sonner';
 
@@ -116,7 +116,7 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
     try {
       await setDoc(doc(db, 'settings', 'global'), {
         ...newConfig,
-        updatedAt: new Date().toISOString(),
+        updatedAt: serverTimestamp(),
         updatedBy: firebaseUser.email
       });
       setConfig(newConfig);

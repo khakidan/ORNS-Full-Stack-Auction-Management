@@ -53,6 +53,7 @@ const SESSIONS_DIR = path.join(DATA_DIR, "sessions");
 
 app.use(
   session({
+    name: "__session", // Required for Firebase Hosting
     store: new FileStore({
       path: SESSIONS_DIR,
       retries: 0,
@@ -238,6 +239,7 @@ app.get("/api/auth/status", (req, res) => {
 app.post("/api/auth/logout", (req, res) => {
   req.session.destroy((err) => {
     if (err) return res.status(500).json({ error: "Logout failed" });
+    res.clearCookie('__session');
     res.json({ success: true });
   });
 });

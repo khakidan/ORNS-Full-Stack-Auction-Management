@@ -160,16 +160,16 @@ export default function TicketAttendeeTab() {
                       </TableCell>
                       <TableCell className="text-xs">
                          {a.guestsInfo.length > 0 ? (
-                           <div className="space-y-3">
+                           <div className="space-y-2 mt-0.5">
                              {a.guestsInfo.map((g, idx) => (
-                               <div key={idx} className="flex flex-col gap-0.5 pb-2 border-b last:border-0 last:pb-0 border-gray-100">
-                                 <div className="font-medium text-gray-900">{g.name}</div>
-                                 {g.email && <div className="text-[10px] text-muted-foreground">{g.email}</div>}
+                               <div key={idx} className="flex flex-col gap-0.5 pb-2 mb-2 border-b border-slate-100 last:border-0 last:pb-0 last:mb-0">
+                                 <span className="font-medium text-slate-700">{g.name}</span>
+                                 {g.email && <span className="text-[10px] text-muted-foreground break-all">{g.email}</span>}
                                </div>
                              ))}
                            </div>
                          ) : (
-                           <span className="text-muted-foreground italic font-light">No guests</span>
+                           <div className="mt-0.5 text-muted-foreground italic font-light">No guests</div>
                          )}
                       </TableCell>
                       <TableCell>

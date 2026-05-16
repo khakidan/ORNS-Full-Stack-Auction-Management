@@ -44,9 +44,11 @@ service cloud.firestore {
         'ticketPrice',
         'auctionItemsScriptId',
         'auctionTicketsScriptId',
-        'bidManagementScriptId'
+        'bidManagementScriptId',
+        'updatedAt',
+        'updatedBy'
       ]) && 
-      data.keys().size() == 14 && // Strict key count (13 keys + updatedAt)
+      data.keys().size() == 15 && // Strict key count
       data.auctionItemsSpreadsheetId is string &&
       data.auctionItemsSpreadsheetId.size() <= 256 &&
       data.auctionTicketsSpreadsheetId is string &&
@@ -73,7 +75,8 @@ service cloud.firestore {
       data.auctionTicketsScriptId.size() <= 256 &&
       data.bidManagementScriptId is string &&
       data.bidManagementScriptId.size() <= 256 &&
-      (data.get('updatedAt', null) == null || data.updatedAt is timestamp);
+      data.updatedAt is timestamp &&
+      data.updatedBy is string && data.updatedBy.matches('.*@orns\\.org$');
     }
 
     match /settings/{docId} {
@@ -95,7 +98,8 @@ service cloud.firestore {
           'auctionItemsScriptId',
           'auctionTicketsScriptId',
           'bidManagementScriptId',
-          'updatedAt'
+          'updatedAt',
+          'updatedBy'
         ])
       );
       allow delete: if false; // Config should not be deleted by client
