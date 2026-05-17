@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { updateSheetData, getSheetData } from "@/lib/google-api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Users, Loader2, Pencil, Check, X, Trash2, UserPlus, Filter, Search } from "lucide-react";
+import { Users, Loader2, Pencil, Check, X, Trash2, UserPlus, Filter, Search, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -77,7 +77,7 @@ const EditableCell = ({ value: initialValue, onSave, placeholder = "N/A" }: { va
 export default function TicketAttendeeTab() {
   const { config } = useConfig();
   const spreadsheetId = config.auctionTicketsSpreadsheetId;
-  const { attendees, setAttendees, loading, addAttendee, removeAttendee } = useAuction();
+  const { attendees, setAttendees, loading, addAttendee, removeAttendee, fetchAttendees } = useAuction();
 
   const [filterSource, setFilterSource] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -208,7 +208,13 @@ export default function TicketAttendeeTab() {
           </Select>
         </div>
 
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <Button variant="outline" onClick={fetchAttendees} disabled={loading} className="gap-2">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2 w-full md:w-auto">
               <UserPlus className="w-4 h-4" />
@@ -261,6 +267,7 @@ export default function TicketAttendeeTab() {
           </DialogContent>
         </Dialog>
       </div>
+    </div>
 
       <Card className="flex flex-col min-h-0">
         <CardHeader className="pb-3">

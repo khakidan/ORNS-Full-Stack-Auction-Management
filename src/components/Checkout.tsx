@@ -437,7 +437,8 @@ function WinnerCard({ winner, processingId, handleEmailReceipt, handlePrintRecei
           size="sm"
           className="flex-1 min-w-[100px] gap-2"
           onClick={() => handleEmailReceipt(winner)}
-          disabled={!!processingId && processingId.startsWith(`${winner.bidder.id}-`)}
+          disabled={(!!processingId && processingId.startsWith(`${winner.bidder.id}-`)) || !winner.bidder.email}
+          title={!winner.bidder.email ? "No email address on file" : ""}
         >
           {processingId === `${winner.bidder.id}-email` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
           {processingId === `${winner.bidder.id}-email` ? "Sending..." : "Email Receipt"}

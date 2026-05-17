@@ -288,6 +288,12 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   }, [spreadsheetId, fetchAllData]);
 
   useEffect(() => {
+    if (ticketsSpreadsheetId) {
+      fetchAttendees();
+    }
+  }, [ticketsSpreadsheetId, fetchAttendees]);
+
+  useEffect(() => {
     if (bidders.length > 0) {
       fetchWinners();
     }
