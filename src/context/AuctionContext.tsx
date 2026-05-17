@@ -58,9 +58,11 @@ interface AuctionContextType {
   fetchAttendees: () => Promise<void>;
   fetchAllData: () => Promise<void>;
   checkInBidder: (bidder: Bidder) => Promise<void>;
+  markBidderAsProxy: (bidder: Bidder) => Promise<void>;
   setAttendees: React.Dispatch<React.SetStateAction<Attendee[]>>;
   addAttendee: (sheet: string, data: any[]) => Promise<void>;
   removeAttendee: (attendee: Attendee) => Promise<void>;
+  recordWinningBid: (bidderId: string, itemId: string, price: number) => Promise<void>;
 }
 
 const AuctionContext = createContext<AuctionContextType | undefined>(undefined);
@@ -121,6 +123,78 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
       console.error(e);
     }
   }, [spreadsheetId, config.auctionItemsSheet]);
+
+  const recordWinningBid = async (bidderId: string, itemId: string, price: number) => {
+    if (!spreadsheetId) {
+      throw new Error("Spreadsheet ID not configured");
+    }
+
+    // 1. Store previous state
+    const previousWinners = { ...winners };
+    const previousTotal = totalRaised;
+    
+    // Find bidder name for optimistic UI
+    const bidder = bidders.find(b => b.id === bidderId);
+    const bidderName = bidder ? `${bidder.firstName} ${bidder.lastName}` : `Bidder ${bidderId}`;
+
+    // 2. Optimistic Update
+    setWinners(prev => ({ ...prev, [itemId]: bidderName }));
+    setTotalRaised(prev => prev + price);
+
+    // 3. Background Sync
+    const sheetName = config.bidManagementSheet;
+    getSheetData(spreadsheetId, `${sheetName}!1:200`)
+      .then(data => {
+        if (!data.values || data.values.length === 0) {
+          throw new Error("Bid Management sheet is empty or inaccessible.");
+        }
+
+        const header = data.values[0];
+        let colIndex = -1;
+        for (let j = 0; j < header.length; j += 2) {
+          if (header[j]?.toString() === bidderId) {
+            colIndex = j;
+            break;
+          }
+        }
+        if (colIndex === -1) throw new Error("Bidder column not found in management sheet");
+
+        let rowIndex = -1;
+        for (let i = 3; i < data.values.length; i++) {
+          const row = data.values[i];
+          if (!row || !row[colIndex]) {
+            rowIndex = i + 1;
+            break;
+          }
+        }
+        if (rowIndex === -1) rowIndex = data.values.length + 1;
+        if (rowIndex < 4) rowIndex = 4;
+
+        const getColumnLetter = (index: number): string => {
+          let letter = "";
+          while (index >= 0) {
+            letter = String.fromCharCode((index % 26) + 65) + letter;
+            index = Math.floor(index / 26) - 1;
+          }
+          return letter;
+        };
+
+        const colLetter = getColumnLetter(colIndex);
+        const nextColLetter = getColumnLetter(colIndex + 1);
+
+        return updateSheetData(spreadsheetId, `${sheetName}!${colLetter}${rowIndex}:${nextColLetter}${rowIndex}`, [
+          [itemId, price]
+        ]);
+      })
+      .then(() => toast.success(`Synced bid: ${bidderName} — ${itemId} — $${price}`))
+      .catch(e => {
+        console.error("Bid sync failed", e);
+        // 4. Rollback
+        setWinners(previousWinners);
+        setTotalRaised(previousTotal);
+        toast.error(`Failed to sync updates—retrying... local state reverted.`);
+      });
+  };
 
   const fetchAttendees = useCallback(async () => {
     if (!ticketsSpreadsheetId) return;
@@ -231,54 +305,117 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
 
   const checkInBidder = async (bidder: Bidder) => {
     if (!spreadsheetId) return;
-    try {
-      setLoading(true);
-      const sheetName = config.bidderNumbersSheet;
-      const data = await getSheetData(spreadsheetId, `${sheetName}!A:A`);
-      const rowIndex = data.values.findIndex((row: any) => row[0]?.toString() === bidder.id) + 1;
-      
-      if (rowIndex > 1) {
-        await updateSheetData(spreadsheetId, `${sheetName}!E${rowIndex}`, [[true]]);
-        setBidders(prev => prev.map(b => b.id === bidder.id ? { ...b, checkedIn: true } : b));
-        toast.success(`${bidder.firstName} ${bidder.lastName} checked in`);
-      } else {
-        toast.error("Bidder not found in sheet.");
-      }
-    } catch (e) {
-      toast.error("Failed to check in bidder.");
-    } finally {
-      setLoading(false);
-    }
+    
+    // 1. Store previous state for rollback
+    const previousBidders = [...bidders];
+    
+    // 2. Optimistic Update (Immediate UI change)
+    setBidders(prev => prev.map(b => b.id === bidder.id ? { ...b, checkedIn: true } : b));
+    
+    // 3. Background Sync
+    const sheetName = config.bidderNumbersSheet;
+    getSheetData(spreadsheetId, `${sheetName}!A:A`)
+      .then(data => {
+        const rowIndex = data.values.findIndex((row: any) => row[0]?.toString() === bidder.id) + 1;
+        if (rowIndex > 1) {
+          return updateSheetData(spreadsheetId, `${sheetName}!E${rowIndex}`, [[true]]);
+        } else {
+          throw new Error("Bidder not found in management sheet.");
+        }
+      })
+      .then(() => toast.success(`${bidder.firstName} ${bidder.lastName} checked in (Synced)`))
+      .catch(e => {
+        // 4. Rollback on failure
+        setBidders(previousBidders);
+        toast.error(`Failed to sync updates—retrying... local state reverted.`);
+      });
+  };
+
+  const markBidderAsProxy = async (bidder: Bidder) => {
+    if (!spreadsheetId) return;
+
+    // 1. Store previous state for rollback
+    const previousBidders = [...bidders];
+    
+    // 2. Optimistic Update
+    setBidders(prev => prev.map(b => b.id === bidder.id ? { ...b, isProxy: true } : b));
+
+    // 3. Background Sync
+    const sheetName = config.bidderNumbersSheet;
+    getSheetData(spreadsheetId, `${sheetName}!A:A`)
+      .then(data => {
+        const rowIndex = data.values.findIndex((row: any) => row[0]?.toString() === bidder.id) + 1;
+        if (rowIndex > 1) {
+          return updateSheetData(spreadsheetId, `${sheetName}!F${rowIndex}`, [[true]]);
+        } else {
+          throw new Error("Bidder not found in sheet.");
+        }
+      })
+      .then(() => toast.success(`${bidder.firstName} ${bidder.lastName} marked as Proxy Bidder`))
+      .catch(err => {
+        // 4. Rollback
+        setBidders(previousBidders);
+        toast.error("Failed to sync updates—retrying... local state reverted.");
+      });
   };
 
   const addAttendee = async (sheetName: string, rowData: any[]) => {
     if (!ticketsSpreadsheetId) return;
-    try {
-      setLoading(true);
-      await appendSheetData(ticketsSpreadsheetId, `${sheetName}!A:A`, [rowData]);
-      await fetchAttendees();
-      toast.success("Attendee added successfully");
-    } catch (e) {
-      toast.error("Failed to add attendee");
-    } finally {
-      setLoading(false);
-    }
+    
+    const tempId = `temp-${Date.now()}`;
+    const newAttendee: Attendee = {
+      id: tempId,
+      sheet: sheetName,
+      rowIndex: -1, // Temporary
+      firstName: rowData[0]?.toString() || "",
+      lastName: rowData[1]?.toString() || "",
+      email: rowData[2]?.toString() || "",
+      phone: rowData[3]?.toString() || "",
+      ticketsPurchased: rowData[4]?.toString() || "0",
+      hasGuests: rowData[5]?.toString() || "",
+      guestsInfo: [],
+      paymentMethod: sheetName === 'tickets' ? (rowData[19]?.toString() || "") : "Comp",
+      paymentStatus: sheetName === 'tickets' ? (rowData[20]?.toString() || "") : "Paid",
+      totalPaid: sheetName === 'tickets' ? (rowData[21]?.toString() || "") : "$0"
+    };
+
+    // 1. Store previous state
+    const previousAttendees = [...attendees];
+    
+    // 2. Optimistic Update
+    setAttendees(prev => [...prev, newAttendee]);
+    
+    // 3. Background Sync
+    appendSheetData(ticketsSpreadsheetId, `${sheetName}!A:A`, [rowData])
+      .then(() => {
+        // Re-fetch to get correct IDs/indices from the source of truth
+        fetchAttendees();
+        toast.success("Attendee record synced successfully");
+      })
+      .catch((e: any) => {
+        // 4. Rollback
+        setAttendees(previousAttendees);
+        toast.error(`Failed to sync updates—retrying... local state reverted.`);
+      });
   };
 
   const removeAttendee = async (attendee: Attendee) => {
     if (!ticketsSpreadsheetId) return;
-    try {
-      setLoading(true);
-      // We clear the row. To truly delete we'd need a more complex API call.
-      // But clearing row A to Z is a good start.
-      await clearSheetData(ticketsSpreadsheetId, `${attendee.sheet}!A${attendee.rowIndex}:Z${attendee.rowIndex}`);
-      await fetchAttendees();
-      toast.success("Attendee record cleared");
-    } catch (e) {
-      toast.error("Failed to remove attendee");
-    } finally {
-      setLoading(false);
-    }
+    
+    // 1. Store previous
+    const previousAttendees = [...attendees];
+    
+    // 2. Optimistic Update
+    setAttendees(prev => prev.filter(a => a.id !== attendee.id));
+    
+    // 3. Background Sync
+    clearSheetData(ticketsSpreadsheetId, `${attendee.sheet}!A${attendee.rowIndex}:Z${attendee.rowIndex}`)
+      .then(() => toast.success("Attendee record cleared in spreadsheet"))
+      .catch((e: any) => {
+        // 4. Rollback
+        setAttendees(previousAttendees);
+        toast.error(`Failed to sync updates—retrying... local state reverted.`);
+      });
   };
 
   useEffect(() => {
@@ -312,9 +449,11 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     fetchAttendees,
     fetchAllData,
     checkInBidder,
+    markBidderAsProxy,
     setAttendees,
     addAttendee,
-    removeAttendee
+    removeAttendee,
+    recordWinningBid
   };
 
   return (

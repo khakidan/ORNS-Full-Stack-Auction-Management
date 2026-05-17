@@ -104,7 +104,7 @@ export default function ConfigSettings() {
   };
 
   const syncSettingToCloud = async (spreadsheetId: string, key: string, value: string, description: string) => {
-    await fetch(`${getBaseUrl()}/api/settings/update`, {
+    await fetchWithRetry(`${getBaseUrl()}/api/settings/update`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

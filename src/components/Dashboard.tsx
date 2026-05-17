@@ -167,8 +167,8 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle>Attendance Overview</CardTitle>
           </CardHeader>
-          <CardContent className="h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <CardContent className="h-[320px] w-full overflow-hidden" style={{ minWidth: 0 }}>
+            <ResponsiveContainer width="99%" height="100%" minHeight={0} minWidth={0}>
               <PieChart>
                 <Pie
                   data={bidderStats}

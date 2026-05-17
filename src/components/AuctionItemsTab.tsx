@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useConfig } from "@/context/ConfigContext";
 import { getSheetData, updateSheetData, getBaseUrl, appendSheetData } from "@/lib/google-api";
+import { motion, AnimatePresence } from "motion/react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -158,6 +159,10 @@ export default function AuctionItemsTab() {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [loadingDescription, setLoadingDescription] = useState(false);
   const [isExecutingBundle, setIsExecutingBundle] = useState(false);
+  const [isBulkEditing, setIsBulkEditing] = useState(false);
+  const [bulkField, setBulkField] = useState<"category" | "itemType" | null>(null);
+  const [bulkValue, setBulkValue] = useState("");
+  const [isExecutingBulk, setIsExecutingBulk] = useState(false);
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [isRestoreOpen, setIsRestoreOpen] = useState(false);
   const [backups, setBackups] = useState<{title: string, sheetId: number}[]>([]);
@@ -338,12 +343,23 @@ export default function AuctionItemsTab() {
     const selectedItems = items.filter(i => selectedRows[i.rowIndex]);
     setLoadingSuggestions(true);
     try {
-      const res = await fetch(`${getBaseUrl()}/api/bundle/suggest-names`, {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/bundle/suggest-names`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: selectedItems })
       });
       const data = await res.json();
+      
+      if (data.fallback) {
+        toast.error("AI generation failed. Please enter a bundle name manually.");
+        setAiSuggestions([
+          "The Ultimate Collection",
+          "Deluxe Surprise Package",
+          "Premium Gala Bundle"
+        ]);
+        return;
+      }
+      
       if (data.error) throw new Error(data.error);
       setAiSuggestions(data.suggestions || []);
     } catch (e: any) {
@@ -357,12 +373,22 @@ export default function AuctionItemsTab() {
     const selectedItems = items.filter(i => selectedRows[i.rowIndex]);
     setLoadingDescription(true);
     try {
-      const res = await fetch(`${getBaseUrl()}/api/bundle/suggest-description`, {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/bundle/suggest-description`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: selectedItems })
       });
       const data = await res.json();
+      
+      if (data.fallback) {
+        toast.error("AI generation failed. Please write a description manually.");
+        setBundleDetails(prev => ({ 
+          ...prev, 
+          description: "An exclusive item collection bundled together for this special event. Don't miss out!" 
+        }));
+        return;
+      }
+      
       if (data.error) throw new Error(data.error);
       setBundleDetails(prev => ({ ...prev, description: data.description }));
       toast.success("AI description generated!");
@@ -377,7 +403,7 @@ export default function AuctionItemsTab() {
     if (!spreadsheetId) return;
     setLoadingBackups(true);
     try {
-      const res = await fetch(`${getBaseUrl()}/api/backups/list/${spreadsheetId}`);
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/backups/list/${spreadsheetId}`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setBackups(data);
@@ -394,7 +420,7 @@ export default function AuctionItemsTab() {
 
     setIsRestoring(true);
     try {
-      const res = await fetch(`${getBaseUrl()}/api/backups/restore`, {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/backups/restore`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ spreadsheetId, backupSheetName: backupName })
@@ -418,6 +444,9 @@ export default function AuctionItemsTab() {
     }
 
     setIsExecutingBundle(true);
+    const previousItems = [...items];
+    const idempotencyKey = crypto.randomUUID?.() || Math.random().toString(36).substring(2);
+
     try {
       const selectedItems = items.filter(i => selectedRows[i.rowIndex]);
       const sourceRowIndices = selectedItems.map(i => i.rowIndex);
@@ -432,8 +461,29 @@ export default function AuctionItemsTab() {
       const validIds = itemsInCat.map(i => parseInt(i.id, 10)).filter(num => !isNaN(num) && (catBase === 0 || (num >= catBase && num < catBase + 100)));
       if (validIds.length > 0) nextId = Math.max(...validIds) + 1;
 
+      const optimisticId = nextId.toString();
+
+      // Optimistic Update: Hide original items, add new bundle
+      setItems(prev => {
+        const remaining = prev.filter(item => !selectedRows[item.rowIndex]);
+        const newBundle: AuctionItem = {
+          rowIndex: 9999, // Temporary
+          id: optimisticId,
+          category: bundleDetails.category!,
+          bundled: "yes",
+          name: bundleDetails.name!,
+          description: bundleDetails.description || "",
+          value: bundleDetails.value || "",
+          openingBid: bundleDetails.openingBid || "",
+          minRaise: bundleDetails.minRaise || "",
+          donor: bundleDetails.donor || "",
+          itemType: bundleDetails.itemType || ""
+        };
+        return [...remaining, newBundle];
+      });
+
       const bundleRow = [
-        nextId.toString(),
+        optimisticId,
         bundleDetails.category,
         "yes",
         bundleDetails.name,
@@ -445,28 +495,75 @@ export default function AuctionItemsTab() {
         bundleDetails.itemType
       ];
 
-      const res = await fetch(`${getBaseUrl()}/api/bundle/execute`, {
+      // Background sync
+      fetchWithRetry(`${getBaseUrl()}/api/bundle/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           spreadsheetId,
           bundleRow,
-          sourceRowIndices
+          sourceRowIndices,
+          idempotencyKey
         })
+      })
+      .then(async (res) => {
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        toast.success("Items bundled successfully! Backup created.");
+        fetchData(); // Resync to get real row indices
+      })
+      .catch((e: any) => {
+        console.error(e);
+        setItems(previousItems);
+        toast.error("Failed to sync updates—retrying... local state reverted.");
       });
 
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-
-      toast.success("Items bundled successfully! Backup created.");
       setSelectedRows({});
       setIsBundling(false);
-      await fetchData();
     } catch (e: any) {
-      toast.error("Bundling failed: " + e.message);
+      console.error(e);
+      setItems(previousItems);
+      toast.error("Failed to sync updates—retrying... local state reverted.");
     } finally {
       setIsExecutingBundle(false);
     }
+  };
+
+  const executeBulkUpdate = async () => {
+    if (!bulkField || !bulkValue || !spreadsheetId) return;
+    
+    setIsExecutingBulk(true);
+    const selectedIndices = Object.keys(selectedRows).filter(k => selectedRows[parseInt(k)]).map(k => parseInt(k));
+    const previousItems = [...items];
+
+    // Optimistic Update
+    setItems(prev => prev.map(item => 
+      selectedIndices.includes(item.rowIndex) ? { ...item, [bulkField]: bulkValue } : item
+    ));
+
+    const colLetter = bulkField === 'category' ? 'B' : 'J';
+    const updatePromises = selectedIndices.map(idx => 
+      updateSheetData(spreadsheetId, `Auction-Items!${colLetter}${idx}`, [[bulkValue]])
+    );
+
+    // Background sync
+    Promise.all(updatePromises)
+      .then(() => {
+        toast.success(`Updated ${bulkField} for ${selectedIndices.length} items`);
+        setSelectedRows({});
+        setIsBulkEditing(false);
+        setBulkField(null);
+        setBulkValue("");
+      })
+      .catch((e: any) => {
+        // Rollback
+        setItems(previousItems);
+        toast.error("Failed to sync updates—retrying... local state reverted.");
+      })
+      .finally(() => {
+        setIsExecutingBulk(false);
+      });
   };
 
   const handleUpdate = async (rowIndex: number, field: keyof AuctionItem, colLetter: string, value: string) => {
@@ -475,6 +572,8 @@ export default function AuctionItemsTab() {
     const targetItem = items.find(i => i.rowIndex === rowIndex);
     if (!targetItem) return;
 
+    const previousItems = [...items];
+
     // Optimistic update
     setItems((prev) => 
       prev.map((item) => 
@@ -482,41 +581,46 @@ export default function AuctionItemsTab() {
       )
     );
 
-    try {
-      const updatePromise = updateSheetData(spreadsheetId, `Auction-Items!${colLetter}${rowIndex}`, [[value]]);
-      toast.promise(updatePromise, {
-        loading: 'Saving...',
-        success: 'Saved successfully',
-        error: 'Failed to save changes'
-      });
-      await updatePromise;
+    let updateOpening = false;
+    let updateRaise = false;
+    let opening = "";
+    let raise = "";
 
-      if (field === 'value') {
-        const { opening, raise } = calculateAutoBids(value);
-        let updateOpening = false;
-        let updateRaise = false;
+    if (field === 'value') {
+      const calculated = calculateAutoBids(value);
+      opening = calculated.opening;
+      raise = calculated.raise;
 
-        if (opening && (!targetItem.openingBid || targetItem.openingBid.trim() === '')) {
-          setItems(p => p.map(i => i.rowIndex === rowIndex ? { ...i, openingBid: opening } : i));
-          updateOpening = true;
-        }
-        if (raise && (!targetItem.minRaise || targetItem.minRaise.trim() === '')) {
-          setItems(p => p.map(i => i.rowIndex === rowIndex ? { ...i, minRaise: raise } : i));
-          updateRaise = true;
-        }
-        
-        if (updateOpening) {
-           await updateSheetData(spreadsheetId, `Auction-Items!G${rowIndex}`, [[opening]]);
-        }
-        if (updateRaise) {
-           await updateSheetData(spreadsheetId, `Auction-Items!H${rowIndex}`, [[raise]]);
-        }
+      const currentOpening = targetItem.openingBid;
+      const currentRaise = targetItem.minRaise;
+
+      if (opening && (!currentOpening || currentOpening.trim() === '')) {
+        setItems(p => p.map(i => i.rowIndex === rowIndex ? { ...i, openingBid: opening } : i));
+        updateOpening = true;
       }
-    } catch (e) {
-      console.error(e);
-      // Fallback: re-fetch on error
-      fetchData();
+      if (raise && (!currentRaise || currentRaise.trim() === '')) {
+        setItems(p => p.map(i => i.rowIndex === rowIndex ? { ...i, minRaise: raise } : i));
+        updateRaise = true;
+      }
     }
+
+    // Background sync
+    const syncOperations = [updateSheetData(spreadsheetId, `Auction-Items!${colLetter}${rowIndex}`, [[value]])];
+    if (updateOpening) {
+      syncOperations.push(updateSheetData(spreadsheetId, `Auction-Items!G${rowIndex}`, [[opening]]));
+    }
+    if (updateRaise) {
+      syncOperations.push(updateSheetData(spreadsheetId, `Auction-Items!H${rowIndex}`, [[raise]]));
+    }
+
+    Promise.all(syncOperations)
+      .then(() => toast.success('Saved successfully'))
+      .catch(e => {
+        console.error(e);
+        // Rollback
+        setItems(previousItems);
+        toast.error("Failed to sync updates—retrying... local state reverted.");
+      });
   };
 
   const handleAddItem = async () => {
@@ -527,31 +631,19 @@ export default function AuctionItemsTab() {
     }
 
     setIsSubmittingItem(true);
-    try {
-      // Determine new ID
-      const catBase = categoriesWithBase.find(c => c.name === newItem.category)?.base || 0;
-      
-      const itemsInCat = items.filter(i => {
-        const idNum = parseInt(i.id, 10);
-        if (i.category === newItem.category) return true;
-        if (!isNaN(idNum) && catBase > 0 && idNum >= catBase && idNum < catBase + 100) return true;
-        return false;
-      });
+    const previousItems = [...items];
 
+    try {
+      // Determine new ID (simplified for optimistic)
+      const catBase = categoriesWithBase.find(c => c.name === newItem.category)?.base || 0;
+      const itemsInCat = items.filter(i => i.category === newItem.category);
       let nextVal = catBase > 0 ? catBase + 1 : 1;
       if (itemsInCat.length > 0) {
         const itemIds = itemsInCat.map(i => parseInt(i.id, 10)).filter(num => !isNaN(num));
-        // Only consider max from same category matching base if there's a base
-        const validIds = catBase > 0 ? itemIds.filter(num => num >= catBase && num < catBase + 100) : itemIds;
-        if (validIds.length > 0) {
-          nextVal = Math.max(...validIds) + 1;
-        } else if (itemIds.length > 0) {
-          nextVal = Math.max(...itemIds) + 1;
-        }
+        if (itemIds.length > 0) nextVal = Math.max(...itemIds) + 1;
       }
       
       const newIdString = nextVal.toString();
-
       let finalOpeningBid = newItem.openingBid || "";
       let finalMinRaise = newItem.minRaise || "";
 
@@ -560,6 +652,23 @@ export default function AuctionItemsTab() {
         if (!finalOpeningBid) finalOpeningBid = opening;
         if (!finalMinRaise) finalMinRaise = raise;
       }
+
+      const optimisticItem: AuctionItem = {
+        rowIndex: items.length > 0 ? Math.max(...items.map(i => i.rowIndex)) + 1 : 2,
+        id: newIdString,
+        category: newItem.category!,
+        bundled: newItem.bundled || "",
+        name: newItem.name!,
+        description: newItem.description || "",
+        value: newItem.value || "",
+        openingBid: finalOpeningBid,
+        minRaise: finalMinRaise,
+        donor: newItem.donor || "",
+        itemType: newItem.itemType || ""
+      };
+
+      // Optimistic update
+      setItems(prev => [...prev, optimisticItem]);
 
       const submitRow = [
         newIdString,
@@ -575,10 +684,9 @@ export default function AuctionItemsTab() {
       ];
 
       await appendSheetData(spreadsheetId, "Auction-Items!A:J", [submitRow]);
-
-      toast.success(`Item added successfully with ID ${newIdString}`);
       
-      await fetchData();
+      toast.success(`Item added successfully with ID ${newIdString}`);
+      await fetchData(); // Full resync to confirm row indices
 
       setNewItem({
         category: "",
@@ -594,7 +702,8 @@ export default function AuctionItemsTab() {
       setIsAddingItem(false);
     } catch (e) {
       console.error(e);
-      toast.error("Failed to add new item");
+      setItems(previousItems);
+      toast.error("Failed to add item. Reverting UI state.");
     } finally {
       setIsSubmittingItem(false);
     }
@@ -718,11 +827,19 @@ export default function AuctionItemsTab() {
                   </TableCell>
                 </TableRow>
               ) : (
-                sortedItems.map((item) => (
-                  <TableRow key={item.rowIndex} className={`group/row ${selectedRows[item.rowIndex] ? 'bg-primary/5' : ''}`}>
-                    <TableCell className="px-2 align-top pt-4">
-                      <Checkbox checked={!!selectedRows[item.rowIndex]} onCheckedChange={() => toggleRow(item.rowIndex)} />
-                    </TableCell>
+                <AnimatePresence mode="popLayout">
+                  {sortedItems.map((item) => (
+                    <motion.tr 
+                      layout
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      key={item.rowIndex} 
+                      className={`group/row border-b transition-colors ${selectedRows[item.rowIndex] ? 'bg-primary/5' : ''}`}
+                    >
+                      <TableCell className="px-2 align-top pt-4">
+                        <Checkbox checked={!!selectedRows[item.rowIndex]} onCheckedChange={() => toggleRow(item.rowIndex)} />
+                      </TableCell>
                     <TableCell className="font-mono text-xs align-top">
                       <EditableCell 
                         value={item.id} 
@@ -806,8 +923,9 @@ export default function AuctionItemsTab() {
                         </label>
                       </div>
                     </TableCell>
-                  </TableRow>
-                ))
+                    </motion.tr>
+                  ))}
+                </AnimatePresence>
               )}
             </TableBody>
           </Table>
@@ -816,23 +934,70 @@ export default function AuctionItemsTab() {
     </Card>
 
     {/* Selection Action Bar */}
-    {selectedItemsCount > 0 && (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-background border-2 border-primary shadow-2xl rounded-full px-6 py-3 flex items-center gap-6 animate-in fade-in slide-in-from-bottom-4">
-        <div className="flex flex-col">
-          <span className="text-sm font-bold text-primary">{selectedItemsCount} items selected</span>
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Bundling Ready</span>
-        </div>
-        <div className="w-[1px] h-8 bg-border" />
-        <div className="flex gap-2">
-          <Button size="sm" onClick={openBundlingModal} className="rounded-full px-4 bg-primary hover:bg-primary/90 flex items-center gap-2">
-            <Package className="w-4 h-4" /> Bundle Selected
+    <AnimatePresence>
+      {selectedItemsCount > 0 && (
+        <motion.div 
+          initial={{ y: 100, opacity: 0, x: "-50%" }}
+          animate={{ y: 0, opacity: 1, x: "-50%" }}
+          exit={{ y: 100, opacity: 0, x: "-50%" }}
+          className="fixed bottom-6 left-1/2 z-50 bg-background border-2 border-primary shadow-2xl rounded-2xl px-6 py-4 flex items-center gap-6"
+        >
+          <div className="flex flex-col">
+            <span className="text-sm font-bold text-primary">{selectedItemsCount} items selected</span>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Bulk Actions</span>
+          </div>
+          <div className="w-[1px] h-10 bg-border" />
+          <div className="flex gap-2">
+            <Button size="sm" onClick={openBundlingModal} className="rounded-lg px-4 bg-primary hover:bg-primary/90 flex items-center gap-2">
+              <Package className="w-4 h-4" /> Bundle
+            </Button>
+            
+            <Select onValueChange={(val: string) => { setBulkField("category"); setBulkValue(val); setIsBulkEditing(true); }}>
+              <SelectTrigger className="h-9 w-[140px] text-xs">
+                <SelectValue placeholder="Set Category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+
+            <Select onValueChange={(val: string) => { setBulkField("itemType"); setBulkValue(val); setIsBulkEditing(true); }}>
+              <SelectTrigger className="h-9 w-[130px] text-xs">
+                <SelectValue placeholder="Set Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Physical Item">Physical Item</SelectItem>
+                <SelectItem value="Certificate">Certificate</SelectItem>
+                <SelectItem value="Both">Both</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button size="sm" variant="ghost" onClick={() => setSelectedRows({})} className="rounded-lg hover:bg-red-50 hover:text-red-600">
+              Clear
+            </Button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    {/* Bulk Edit Confirm Dialog */}
+    <Dialog open={isBulkEditing} onOpenChange={setIsBulkEditing}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Confirm Bulk Update</DialogTitle>
+          <DialogDescription>
+            You are about to set the {bulkField} of {selectedItemsCount} items to <strong>"{bulkValue}"</strong>.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsBulkEditing(false)}>Cancel</Button>
+          <Button onClick={executeBulkUpdate} disabled={isExecutingBulk}>
+            {isExecutingBulk ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+            Apply to {selectedItemsCount} Items
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setSelectedRows({})} className="rounded-full">
-            Cancel
-          </Button>
-        </div>
-      </div>
-    )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     {/* Bundling Dialog */}
     <Dialog open={isBundling} onOpenChange={setIsBundling}>

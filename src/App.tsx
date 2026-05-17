@@ -61,7 +61,7 @@ function BackToTop() {
 export default function App() {
   const { config } = useConfig();
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
-  const [activeWorkflow, setActiveWorkflow] = useState<WorkflowType>('bids');
+  const [activeWorkflow, setActiveWorkflow] = useState<WorkflowType>('settings');
   const [activeBidTab, setActiveBidTab] = useState("dashboard");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -72,7 +72,7 @@ export default function App() {
     const scriptId = config.bidManagementScriptId;
     
     try {
-      const res = await fetch(`${getBaseUrl()}/api/bidders/sync`, {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/bidders/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scriptId }),
@@ -397,7 +397,7 @@ export default function App() {
                     </div>
 
                     <TabsContent value="dashboard" className="m-0 mt-2">
-                      <Dashboard />
+                      {activeBidTab === "dashboard" && <Dashboard />}
                     </TabsContent>
                     <TabsContent value="bidders" className="m-0 mt-2">
                       <Bidders />

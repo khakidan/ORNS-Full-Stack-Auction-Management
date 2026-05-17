@@ -11,10 +11,9 @@ import { toast } from "sonner";
 import { Gavel, Loader2, Search, User } from "lucide-react";
 
 export default function BidEntry() {
-  const { bidders, items } = useAuction();
+  const { bidders, items, recordWinningBid } = useAuction();
   const { config } = useConfig();
   const spreadsheetId = config.bidManagementSpreadsheetId;
-  const bidManagementSheet = config.bidManagementSheet;
 
   const [itemId, setItemId] = useState("");
   const [bidderId, setBidderId] = useState("");
@@ -48,56 +47,13 @@ export default function BidEntry() {
         toast.error("Bid Management Spreadsheet ID not configured correctly.");
         return;
       }
-      const sheetName = bidManagementSheet;
-
-      const data = await getSheetData(spreadsheetId, `${sheetName}!1:200`);
-      if (!data.values || data.values.length === 0) {
-        throw new Error("Bid Management sheet is empty or inaccessible. Please ensure headers are set up.");
-      }
-
-      // Find bidder column
-      const header = data.values[0];
-      let colIndex = -1;
-      for (let j = 0; j < header.length; j += 2) {
-        if (header[j]?.toString() === bidderId) {
-          colIndex = j;
-          break;
-        }
-      }
-      if (colIndex === -1) throw new Error("Bidder column not found in Bid-Management sheet");
-
-      // Find next empty row in that column (starting row 4)
-      let rowIndex = -1;
-      for (let i = 3; i < data.values.length; i++) {
-        const row = data.values[i];
-        if (!row || !row[colIndex]) {
-          rowIndex = i + 1;
-          break;
-        }
-      }
-      if (rowIndex === -1) rowIndex = data.values.length + 1;
-      if (rowIndex < 4) rowIndex = 4; // Ensure we don't overwrite headers if sheet is mostly empty
-
-      const getColumnLetter = (index: number): string => {
-        let letter = "";
-        while (index >= 0) {
-          letter = String.fromCharCode((index % 26) + 65) + letter;
-          index = Math.floor(index / 26) - 1;
-        }
-        return letter;
-      };
-
-      const colLetter = getColumnLetter(colIndex);
-      const nextColLetter = getColumnLetter(colIndex + 1);
-
-      await updateSheetData(spreadsheetId, `${sheetName}!${colLetter}${rowIndex}:${nextColLetter}${rowIndex}`, [
-        [itemId, parseFloat(price)]
-      ]);
+      
+      await recordWinningBid(bidderId, itemId, parseFloat(price));
 
       toast.success(`Bid recorded for ${selectedBidder.firstName} — ${selectedItem.name}`);
       setItemId(""); setBidderId(""); setPrice("");
     } catch (err: any) {
-      toast.error(err.message || "Failed to record bid");
+      toast.error(err.message || "Failed to record bid. UI was rolled back.");
     } finally {
       setSubmitting(false);
     }

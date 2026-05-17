@@ -1,5 +1,6 @@
 // src/components/Bidders.tsx
 import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { useAuction, Bidder } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -31,9 +32,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Filter } from "lucide-react";
 
 export default function Bidders() {
-  const { bidders, loading, checkInBidder, fetchBidders, attendees } = useAuction();
+  const { bidders, loading, checkInBidder, markBidderAsProxy, fetchBidders, fetchAttendees, attendees } = useAuction();
   const { config } = useConfig();
   const spreadsheetId = config.bidManagementSpreadsheetId;
   const ticketsSpreadsheetId = config.auctionTicketsSpreadsheetId;
@@ -50,6 +59,10 @@ export default function Bidders() {
 
   const [pendingCheckIn, setPendingCheckIn] = useState<Bidder | null>(null);
   const [isAddingTicketToReceipt, setIsAddingTicketToReceipt] = useState(false);
+
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
 
   const handleCheckInAttempt = (bidder: Bidder) => {
     const attendee = attendees.find(a => 
@@ -68,76 +81,48 @@ export default function Bidders() {
     if (!pendingCheckIn) return;
     
     if (addToReceipt) {
-      setIsAddingTicketToReceipt(true);
-      try {
-        if (!spreadsheetId) {
-          throw new Error("Bid Management Spreadsheet ID not configured correctly.");
+      const idempotencyKey = crypto.randomUUID();
+      const bidderId = pendingCheckIn.id;
+      const originalBidder = pendingCheckIn;
+
+      // Optimistic update of just the checkIn state (the component uses Context which holds bidders state, let's call the Context's optimistic method)
+      // Since checkInBidder already does optimistic checkin, we can just call it in parallel or do a separate sync
+      setProcessingId(bidderId);
+      
+      fetchWithRetry(`${getBaseUrl()}/api/auction/check-in-with-bid`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bidderId: originalBidder.id,
+          spreadsheetId,
+          bidManagementSheet,
+          bidderNumbersSheet,
+          bidValue: parseFloat(ticketPrice) || 35,
+          idempotencyKey
+        }),
+        credentials: "include"
+      })
+      .then(async (res) => {
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Transactional check-in failed");
         }
-        const sheetName = bidManagementSheet;
-
-        const data = await getSheetData(spreadsheetId, `${sheetName}!1:200`);
-        if (!data.values || data.values.length === 0) {
-          throw new Error("Bid Management sheet is empty or inaccessible.");
-        }
-
-        const header = data.values[0];
-        let colIndex = -1;
-        for (let j = 0; j < header.length; j += 2) {
-          if (header[j]?.toString() === pendingCheckIn.id) {
-            colIndex = j;
-            break;
-          }
-        }
-        if (colIndex === -1) throw new Error("Bidder column not found in Bid-Management sheet");
-
-        let rowIndex = -1;
-        for (let i = 3; i < data.values.length; i++) {
-          const row = data.values[i];
-          if (!row || !row[colIndex]) {
-            rowIndex = i + 1;
-            break;
-          }
-        }
-        if (rowIndex === -1) rowIndex = data.values.length + 1;
-        if (rowIndex < 4) rowIndex = 4;
-
-        const getColumnLetter = (index: number): string => {
-          let letter = "";
-          while (index >= 0) {
-            letter = String.fromCharCode((index % 26) + 65) + letter;
-            index = Math.floor(index / 26) - 1;
-          }
-          return letter;
-        };
-
-        const colLetter = getColumnLetter(colIndex);
-        const nextColLetter = getColumnLetter(colIndex + 1);
-
-        const currentTicketPrice = parseFloat(ticketPrice) || 35;
-
-        const attendee = attendees.find(a => 
-          a.firstName.trim().toLowerCase() === pendingCheckIn.firstName.trim().toLowerCase() &&
-          a.lastName.trim().toLowerCase() === pendingCheckIn.lastName.trim().toLowerCase()
-        );
-        let ticketsCount = attendee ? parseInt(attendee.ticketsPurchased) : 1;
-        if (isNaN(ticketsCount) || ticketsCount < 1) ticketsCount = 1;
-
-        const ticketRows = Array(ticketsCount).fill(["1606", currentTicketPrice]);
-        const endRowIndex = rowIndex + ticketsCount - 1;
-
-        await updateSheetData(spreadsheetId, `${sheetName}!${colLetter}${rowIndex}:${nextColLetter}${endRowIndex}`, ticketRows);
-
-        toast.success(`${ticketsCount} ticket(s) added to ${pendingCheckIn.firstName}'s receipt`);
-      } catch (e: any) {
-        toast.error(e.message || "Failed to add ticket to receipt");
-        setIsAddingTicketToReceipt(false);
-        return; // Don't check in if writing bid failed
-      }
-      setIsAddingTicketToReceipt(false);
+        toast.success(`Check-in complete and ticket added to ${originalBidder.firstName}'s receipt`);
+        fetchBidders();
+      })
+      .catch((e: any) => {
+        toast.error(`Failed to sync updates—retrying... local state reverted.`);
+        fetchBidders();
+      })
+      .finally(() => {
+        setProcessingId(null);
+      });
+      
+      setPendingCheckIn(null);
+    } else {
+      await handleConfirmCheckInClick(pendingCheckIn);
+      setPendingCheckIn(null);
     }
-    
-    await handleConfirmCheckInClick(pendingCheckIn);
-    setPendingCheckIn(null);
   };
 
   const handleConfirmCheckInClick = async (bidder: Bidder) => {
@@ -160,11 +145,36 @@ export default function Bidders() {
   };
 
   const filteredBidders = bidders
-    .filter(b =>
-      b.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      b.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      b.id.includes(searchTerm)
-    );
+    .filter(b => {
+      const matchesSearch = 
+        b.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        b.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        b.id.includes(searchTerm);
+      
+      const matchesStatus = 
+        statusFilter === "all" ||
+        (statusFilter === "checked-in" && b.checkedIn) ||
+        (statusFilter === "pending" && !b.checkedIn && !b.isProxy) ||
+        (statusFilter === "proxy" && b.isProxy);
+
+      const attendee = attendees.find(a => 
+        a.firstName.trim().toLowerCase() === b.firstName.trim().toLowerCase() &&
+        a.lastName.trim().toLowerCase() === b.lastName.trim().toLowerCase()
+      );
+
+      const matchesPayment = 
+        paymentFilter === "all" ||
+        (paymentFilter === "paid" && attendee?.paymentStatus.toLowerCase() === "paid") ||
+        (paymentFilter === "pending" && attendee?.paymentStatus.toLowerCase() === "pending");
+
+      const matchesSource = 
+        sourceFilter === "all" ||
+        (sourceFilter === "general" && (!attendee || attendee.sheet === "tickets")) ||
+        (sourceFilter === "sponsors" && attendee?.sheet === "sponsor tickets") ||
+        (sourceFilter === "staff" && attendee?.sheet === "staff tickets");
+
+      return matchesSearch && matchesStatus && matchesPayment && matchesSource;
+    });
 
   const sortedBidders = [...filteredBidders].sort((a, b) => {
     if (!sortConfig) return 0;
@@ -191,31 +201,9 @@ export default function Bidders() {
   });
 
   const markAsProxy = async (bidder: Bidder) => {
-    if (!bidder) return;
-    if (!spreadsheetId) {
-      toast.error("Spreadsheet ID not configured.");
-      return;
-    }
     setProcessingId(bidder.id);
-    try {
-      const sheetName = bidderNumbersSheet;
-
-      // Dynamically find the row to prevent sorting bugs
-      const data = await getSheetData(spreadsheetId, `${sheetName}!A:A`);
-      const rowIndex = data.values.findIndex((row: any) => row[0]?.toString() === bidder.id) + 1;
-
-      if (rowIndex > 1) {
-        await updateSheetData(spreadsheetId, `${sheetName}!F${rowIndex}`, [[true]]);
-        toast.success(`${bidder.firstName} ${bidder.lastName} marked as Proxy Bidder`);
-        fetchBidders();
-      } else {
-        throw new Error("Bidder not found in sheet.");
-      }
-    } catch (err) {
-      toast.error("Failed to mark as proxy");
-    } finally {
-      setProcessingId(null);
-    }
+    await markBidderAsProxy(bidder);
+    setProcessingId(null);
   };
 
   const handleWalkInSubmit = async (e: React.FormEvent) => {
@@ -226,12 +214,20 @@ export default function Bidders() {
     }
 
     setIsSubmittingWalkIn(true);
+    const idempotencyKey = crypto.randomUUID();
 
     try {
-      const res = await fetch(`${getBaseUrl()}/api/bidders/walk-in`, {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/bidders/walk-in`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...walkInForm, scriptId, spreadsheetId }),
+        body: JSON.stringify({ 
+          ...walkInForm, 
+          scriptId, 
+          spreadsheetId, 
+          ticketsSpreadsheetId, 
+          ticketPrice,
+          idempotencyKey 
+        }),
         credentials: "include"
       });
 
@@ -241,31 +237,17 @@ export default function Bidders() {
       }
 
       const result = await res.json();
-      toast.success(`Walk-in created: ${result.bidder.firstName} ${result.bidder.lastName}`);
+      toast.success(`Walk-in created: ${result.bidder.firstName} ${result.bidder.lastName} (Transaction Secure)`);
 
-      if (ticketsSpreadsheetId) {
-        try {
-          const rowValue = new Array(22).fill("");
-          rowValue[0] = walkInForm.firstName;
-          rowValue[1] = walkInForm.lastName;
-          rowValue[2] = walkInForm.email || "";
-          rowValue[4] = "1";
-          rowValue[5] = "FALSE";
-          rowValue[19] = "Auction Checkout"; 
-          rowValue[20] = "Pending";
-          rowValue[21] = `$${ticketPrice}`; 
-          
-          await appendSheetData(ticketsSpreadsheetId, "tickets!A:V", [rowValue]);
-          toast.success("Added walk-in to Auction Tickets");
-        } catch (err) {
-          console.error("Failed to append to auction tickets:", err);
-          toast.error("Failed to append walk-in to tickets spreadsheet");
-        }
+      if (ticketsSpreadsheetId && !result.ticketAppended) {
+        console.warn("[Walk-in] Append failed:", result.appendError);
+        toast.warning(`Bidder number created, but failed to append to Auction Tickets sheet: ${result.appendError || "Unknown sheet error"}. Staff should manually verify.`);
       }
 
       setIsWalkInOpen(false);
       setWalkInForm({ firstName: "", lastName: "", email: "" });
       fetchBidders();
+      fetchAttendees(); // Sync attendees too
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -275,18 +257,58 @@ export default function Bidders() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by last name..."
-            className="pl-9"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+        <div className="flex flex-col md:flex-row gap-4 w-full lg:max-w-4xl items-center">
+          <div className="relative w-full md:max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search bidders..."
+              className="pl-9 h-10"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-2 w-full md:w-auto">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-10 w-[150px]">
+                <Filter className="w-3.5 h-3.5 mr-2 opacity-70" />
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="checked-in">Checked In</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="proxy">Proxy</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+              <SelectTrigger className="h-10 w-[150px]">
+                <SelectValue placeholder="Payment" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Payments</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={sourceFilter} onValueChange={setSourceFilter}>
+              <SelectTrigger className="h-10 w-[150px]">
+                <SelectValue placeholder="Source" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Sources</SelectItem>
+                <SelectItem value="general">General</SelectItem>
+                <SelectItem value="sponsors">Sponsors</SelectItem>
+                <SelectItem value="staff">Staff</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 w-full md:w-auto">
           <Dialog open={isWalkInOpen} onOpenChange={setIsWalkInOpen}>
             <DialogTrigger
               render={
@@ -425,63 +447,82 @@ export default function Bidders() {
                     <TableRow key={i}><TableCell colSpan={5} className="h-12 animate-pulse" /></TableRow>
                   ))
                 ) : sortedBidders.length > 0 ? (
-                  sortedBidders.map((bidder) => (
-                    <TableRow key={bidder.id} className="group hover:bg-slate-50/50">
-                      <TableCell className="font-mono font-bold px-4">{bidder.id}</TableCell>
-                      <TableCell>
-                        <div className="font-medium whitespace-nowrap">{bidder.firstName} {bidder.lastName}</div>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-muted-foreground text-sm max-w-[200px] truncate">
-                        {bidder.email || "—"}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1 md:gap-2">
-                          {bidder.checkedIn ? (
-                            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 whitespace-nowrap">
-                              <CheckCircle className="w-3 h-3 mr-1 shrink-0" /> Checked In
-                            </Badge>
-                          ) : !bidder.isProxy ? (
-                            <Badge variant="outline" className="whitespace-nowrap">
-                              <Clock className="w-3 h-3 mr-1 shrink-0" /> Not Present
-                            </Badge>
-                          ) : null}
-                          {bidder.isProxy && (
-                            <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 whitespace-nowrap">
-                              Proxy
-                            </Badge>
+                  <AnimatePresence mode="popLayout">
+                    {sortedBidders.map((bidder) => (
+                      <motion.tr 
+                        layout
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        key={bidder.id} 
+                        className="group hover:bg-slate-50/50 border-b transition-colors"
+                      >
+                        <TableCell className="font-mono font-bold px-4">{bidder.id}</TableCell>
+                        <TableCell>
+                          <div className="font-medium whitespace-nowrap">{bidder.firstName} {bidder.lastName}</div>
+                          {attendees.find(a => a.firstName === bidder.firstName && a.lastName === bidder.lastName)?.sheet !== 'tickets' && (
+                             <div className="text-[10px] uppercase tracking-tighter text-muted-foreground font-bold">
+                               {attendees.find(a => a.firstName === bidder.firstName && a.lastName === bidder.lastName)?.sheet.replace(' tickets', '')}
+                             </div>
                           )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right px-4">
-                        <div className="flex justify-end gap-1.5 md:gap-2">
-                          {!bidder.checkedIn && (
-                            <Button
-                              size="sm"
-                              variant="default"
-                              onClick={() => handleCheckInAttempt(bidder)}
-                              disabled={processingId === bidder.id || isAddingTicketToReceipt}
-                              className="h-8 md:h-9"
-                            >
-                              <span className="hidden sm:inline">Check In</span>
-                              <UserCheck className="w-4 h-4 sm:hidden" />
-                            </Button>
-                          )}
-                          {!bidder.isProxy && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => markAsProxy(bidder)}
-                              disabled={processingId === bidder.id || isAddingTicketToReceipt}
-                              className="h-8 md:h-9"
-                            >
-                              <UserCheck className="w-4 h-4 md:mr-1.5" />
-                              <span className="hidden md:inline">Proxy</span>
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-muted-foreground text-sm max-w-[200px] truncate">
+                          {bidder.email || "—"}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1 md:gap-2">
+                            {bidder.checkedIn ? (
+                              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 whitespace-nowrap">
+                                <CheckCircle className="w-3 h-3 mr-1 shrink-0" /> Checked In
+                              </Badge>
+                            ) : !bidder.isProxy ? (
+                              <Badge variant="outline" className="whitespace-nowrap">
+                                <Clock className="w-3 h-3 mr-1 shrink-0" /> Not Present
+                              </Badge>
+                            ) : null}
+                            {bidder.isProxy && (
+                              <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 whitespace-nowrap">
+                                Proxy
+                              </Badge>
+                            )}
+                            {attendees.find(a => a.firstName === bidder.firstName && a.lastName === bidder.lastName)?.paymentStatus.toLowerCase() === 'paid' && (
+                              <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50 text-[10px] uppercase font-bold px-1.5 h-5">
+                                Paid
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right px-4">
+                          <div className="flex justify-end gap-1.5 md:gap-2">
+                            {!bidder.checkedIn && (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => handleCheckInAttempt(bidder)}
+                                disabled={processingId === bidder.id || isAddingTicketToReceipt}
+                                className="h-8 md:h-9"
+                              >
+                                <span className="hidden sm:inline">Check In</span>
+                                <UserCheck className="w-4 h-4 sm:hidden" />
+                              </Button>
+                            )}
+                            {!bidder.isProxy && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => markAsProxy(bidder)}
+                                disabled={processingId === bidder.id || isAddingTicketToReceipt}
+                                className="h-8 md:h-9"
+                              >
+                                <UserCheck className="w-4 h-4 md:mr-1.5" />
+                                <span className="hidden md:inline">Proxy</span>
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </motion.tr>
+                    ))}
+                  </AnimatePresence>
                 ) : (
                   <TableRow>
                     <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">

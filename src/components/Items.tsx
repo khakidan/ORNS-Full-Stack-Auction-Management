@@ -5,7 +5,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tag, Search } from "lucide-react";
-import { Toast } from "sonner"; // Unused now but can leave toast import in case
 import { toast } from "sonner";
 
 export default function Items() {

@@ -43,7 +43,7 @@ export default function Checkout() {
       }
 
       console.log("[Checkout] Starting batch print...");
-      const res = await fetch(`${getBaseUrl()}/api/receipts/generate-all`, {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/generate-all`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scriptId, spreadsheetId }),
@@ -72,7 +72,7 @@ export default function Checkout() {
       }
 
       console.log("[Checkout] Starting batch email...");
-      const res = await fetch(`${getBaseUrl()}/api/receipts/email-all`, {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/email-all`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scriptId, spreadsheetId }),
@@ -177,7 +177,7 @@ export default function Checkout() {
   const handleEmailReceipt = async (winner: any) => {
     setProcessingId(`${winner.bidder.id}-email`);
     try {
-      const res = await fetch(`${getBaseUrl()}/api/receipts/email-only`, {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/email-only`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -200,7 +200,7 @@ export default function Checkout() {
   const handlePrintReceipt = async (winner: any) => {
     setProcessingId(`${winner.bidder.id}-print`);
     try {
-      const res = await fetch(`${getBaseUrl()}/api/receipts/generate`, {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -239,38 +239,49 @@ export default function Checkout() {
       toast.error("Bid Management Spreadsheet ID not configured correctly.");
       return;
     }
-    setProcessingId(`${winner.bidder.id}-pay`);
-    try {
-      const sheetName = bidderNumbersSheet;
-      
-      // Dynamically find the row to prevent sorting bugs
-      const data = await getSheetData(spreadsheetId, `${sheetName}!A:A`);
-      const rowIndex = data.values.findIndex((row: any) => row[0]?.toString() === winner.bidder.id) + 1;
-      
-      if (rowIndex > 1) {
-        await updateSheetData(spreadsheetId, `${sheetName}!G${rowIndex}:H${rowIndex}`, [[true, true]]);
-        
-        // Also mark as paid in Auction Tickets if they're a walk-in or pending ticket buyer
-        if (ticketsSpreadsheetId && attendees.length > 0) {
-          const attendee = attendees.find(a => 
-            a.firstName.trim().toLowerCase() === winner.bidder.firstName.trim().toLowerCase() &&
-            a.lastName.trim().toLowerCase() === winner.bidder.lastName.trim().toLowerCase()
-          );
-          if (attendee && attendee.sheet === 'tickets') {
-            await updateSheetData(ticketsSpreadsheetId, `${attendee.sheet}!U${attendee.rowIndex}`, [["Paid"]]);
-          }
-        }
-        
-        toast.success(`${winner.bidder.firstName} marked as Paid & Checked Out`);
-        loadWinners();
-      } else {
-        throw new Error("Bidder not found in spreadsheet");
+    const previousWinners = [...winners];
+
+    // Perform optimistic update locally immediately
+    setWinners(prev => prev.map(w => {
+      if (w.bidder.id === winner.bidder.id) {
+        return { ...w, bidder: { ...w.bidder, isPaid: true, checkedOut: true } };
       }
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setProcessingId(null);
-    }
+      return w;
+    }));
+
+    const attendee = ticketsSpreadsheetId && attendees.find(a => 
+      a.firstName.trim().toLowerCase() === winner.bidder.firstName.trim().toLowerCase() &&
+      a.lastName.trim().toLowerCase() === winner.bidder.lastName.trim().toLowerCase()
+    );
+
+    const idempotencyKey = crypto.randomUUID();
+    
+    // Fire background sync
+    fetchWithRetry(`${getBaseUrl()}/api/auction/checkout-mark-paid`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bidderId: winner.bidder.id,
+        spreadsheetId,
+        ticketsSpreadsheetId,
+        bidderNumbersSheet,
+        attendeeInfo: attendee ? { sheet: attendee.sheet, rowIndex: attendee.rowIndex } : null,
+        idempotencyKey
+      }),
+      credentials: "include"
+    })
+    .then(async (res) => {
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to complete checkout transaction");
+      }
+      toast.success(`${winner.bidder.firstName} marked as Paid & Checked Out`);
+    })
+    .catch((error: any) => {
+      console.error("[Checkout] Sync error:", error);
+      setWinners(previousWinners);
+      toast.error(`Failed to sync updates—retrying... local state reverted.`);
+    });
   };
 
   return (

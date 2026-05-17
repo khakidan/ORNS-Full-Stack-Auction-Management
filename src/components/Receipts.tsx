@@ -29,7 +29,7 @@ export default function Receipts() {
     setDownloadingId(file.id);
     try {
       const url = `${getBaseUrl()}/api/drive/download/${file.id}`;
-      const response = await fetch(url, { credentials: "include" });
+      const response = await fetchWithRetry(url, { credentials: "include" });
       
       if (!response.ok) throw new Error("Download failed");
       
@@ -62,7 +62,7 @@ export default function Receipts() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${getBaseUrl()}/api/drive/files/${folderId}`, {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/drive/files/${folderId}`, {
         credentials: "include"
       });
       

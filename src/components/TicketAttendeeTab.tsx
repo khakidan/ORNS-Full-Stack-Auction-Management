@@ -53,10 +53,10 @@ const EditableCell = ({ value: initialValue, onSave, placeholder = "N/A" }: { va
           onChange={e => setValue(e.target.value)} 
           onKeyDown={handleKeyDown}
           disabled={saving}
-          className="h-7 min-w-[80px] text-xs px-2"
+          className="h-8 min-w-[100px] text-sm px-2"
         />
-        <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" onClick={handleSave} disabled={saving}>
-          {saving ? <Loader2 className="w-3 h-3 animate-spin"/> : <Check className="w-3 h-3" />}
+        <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={handleSave} disabled={saving}>
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Check className="w-3.5 h-3.5" />}
         </Button>
       </div>
     );
@@ -64,11 +64,11 @@ const EditableCell = ({ value: initialValue, onSave, placeholder = "N/A" }: { va
 
   return (
     <div className="group flex items-center gap-2">
-      <div className={`text-xs truncate ${!initialValue ? 'text-muted-foreground italic' : ''}`} title={initialValue || placeholder}>
+      <div className={`text-base truncate ${!initialValue ? 'text-muted-foreground italic' : ''}`} title={initialValue || placeholder}>
         {initialValue || placeholder}
       </div>
       <button onClick={() => setEditing(true)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-700 transition-opacity">
-        <Pencil className="w-3 h-3" />
+        <Pencil className="w-3.5 h-3.5" />
       </button>
     </div>
   );
@@ -120,38 +120,50 @@ export default function TicketAttendeeTab() {
     }
     if (field === 'phone') col = 'D';
 
-    try {
-      await updateSheetData(spreadsheetId, `${attendee.sheet}!${col}${attendee.rowIndex}`, [[newValue]]);
-      
-      setAttendees(prev => prev.map(a => {
-        if (a.id !== attendee.id) return a;
-        if (guestIndex === undefined) {
-          return { ...a, [field]: newValue };
-        } else {
-          return {
-            ...a,
-            guestsInfo: a.guestsInfo.map(g => g.guestIndex === guestIndex ? { ...g, email: newValue } : g)
-          };
-        }
-      }));
-      toast.success("Updated successfully");
-    } catch (e) {
-      console.error(e);
-      toast.error("Failed to update field");
-    }
+    const previousAttendees = [...attendees];
+
+    // Optimistic update
+    setAttendees(prev => prev.map(a => {
+      if (a.id !== attendee.id) return a;
+      if (guestIndex === undefined) {
+        return { ...a, [field]: newValue };
+      } else {
+        return {
+          ...a,
+          guestsInfo: a.guestsInfo.map(g => g.guestIndex === guestIndex ? { ...g, email: newValue } : g)
+        };
+      }
+    }));
+
+    // Background sync
+    updateSheetData(spreadsheetId, `${attendee.sheet}!${col}${attendee.rowIndex}`, [[newValue]])
+      .then(() => toast.success("Updated successfully"))
+      .catch(e => {
+        console.error(e);
+        // Rollback
+        setAttendees(previousAttendees);
+        toast.error("Failed to sync updates—rolling back...");
+      });
   };
 
   const updatePaymentStatus = async (attendee: Attendee, newStatus: string) => {
     if (!spreadsheetId) return;
-    try {
-      // Payment status is in column U for general
-      const col = attendee.sheet === 'tickets' ? 'U' : 'R'; // Just an estimate, might differ per sheet
-      await updateSheetData(spreadsheetId, `${attendee.sheet}!${col}${attendee.rowIndex}`, [[newStatus]]);
-      setAttendees(prev => prev.map(a => a.id === attendee.id ? { ...a, paymentStatus: newStatus } : a));
-      toast.success("Payment status updated");
-    } catch (e) {
-      toast.error("Failed to update payment status");
-    }
+
+    const previousAttendees = [...attendees];
+    
+    // Optimistic update
+    setAttendees(prev => prev.map(a => a.id === attendee.id ? { ...a, paymentStatus: newStatus } : a));
+
+    // Background sync
+    const col = attendee.sheet === 'tickets' ? 'U' : 'R'; // Just an estimate, might differ per sheet
+    updateSheetData(spreadsheetId, `${attendee.sheet}!${col}${attendee.rowIndex}`, [[newStatus]])
+      .then(() => toast.success("Payment status updated"))
+      .catch(e => {
+        console.error(e);
+        // Rollback
+        setAttendees(previousAttendees);
+        toast.error("Failed to sync updates—rolling back...");
+      });
   };
 
   const handleAddSubmit = async () => {
@@ -215,12 +227,14 @@ export default function TicketAttendeeTab() {
           </Button>
 
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 w-full md:w-auto">
-              <UserPlus className="w-4 h-4" />
-              Add Entry
-            </Button>
-          </DialogTrigger>
+          <DialogTrigger
+            render={
+              <Button className="gap-2 w-full md:w-auto">
+                <UserPlus className="w-4 h-4" />
+                Add Entry
+              </Button>
+            }
+          />
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add New Entry</DialogTitle>
@@ -315,23 +329,23 @@ export default function TicketAttendeeTab() {
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="outline" className="capitalize text-[10px] font-normal py-0">
+                          <Badge variant="outline" className="capitalize text-xs font-normal py-1">
                             {a.sheet.replace(' tickets', '').trim() || 'General'}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center">
-                          <div className="font-semibold mx-auto w-6 h-6 rounded-md bg-secondary text-secondary-foreground text-[11px] flex items-center justify-center">
+                          <div className="font-semibold mx-auto w-8 h-8 rounded-md bg-secondary text-secondary-foreground text-sm flex items-center justify-center">
                             {a.ticketsPurchased}
                           </div>
                         </TableCell>
-                        <TableCell className="text-xs">
+                        <TableCell className="text-base">
                           <div className="space-y-3">
                             {a.guestsInfo.map((g, idx) => (
                               <div key={idx} className="flex flex-col gap-0.5 pb-2 border-b border-slate-100 last:border-0 last:pb-0">
-                                <span className="font-medium text-slate-800 flex items-center gap-2">
+                                <span className="font-medium text-slate-800 flex items-center gap-2 text-base">
                                   {g.name || `Guest ${idx + 1}`}
                                   {g.ownBidderNumber?.toLowerCase() === 'yes' && (
-                                    <Badge variant="secondary" className="text-[9px] h-3 px-1 font-normal bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border-indigo-200">
+                                    <Badge variant="secondary" className="text-[11px] h-4 px-1 font-normal bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border-indigo-200">
                                       Own #
                                     </Badge>
                                   )}
@@ -339,13 +353,13 @@ export default function TicketAttendeeTab() {
                                 <EditableCell value={g.email} onSave={val => updateField(a, 'email', val, g.guestIndex)} placeholder="Guest Email" />
                               </div>
                             ))}
-                            {a.guestsInfo.length === 0 && <span className="text-muted-foreground italic text-[10px]">No guests listed</span>}
+                            {a.guestsInfo.length === 0 && <span className="text-muted-foreground italic text-sm">No guests listed</span>}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-col gap-1">
+                          <div className="flex flex-col gap-2">
                              <Select value={a.paymentStatus || 'Pending'} onValueChange={(val) => updatePaymentStatus(a, val)}>
-                               <SelectTrigger className={`h-7 text-[10px] ${a.paymentStatus?.toLowerCase() === 'paid' ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+                               <SelectTrigger className={`h-9 text-sm ${a.paymentStatus?.toLowerCase() === 'paid' ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
                                  <SelectValue />
                                </SelectTrigger>
                                <SelectContent>
@@ -354,9 +368,9 @@ export default function TicketAttendeeTab() {
                                </SelectContent>
                              </Select>
                              {a.paymentStatus?.toLowerCase() === 'paid' && a.totalPaid !== '$0' && (
-                               <span className="text-[10px] text-green-700 font-medium">Total: {a.totalPaid}</span>
+                               <span className="text-sm text-green-700 font-medium">Total: {a.totalPaid}</span>
                              )}
-                             <span className="text-[9px] text-muted-foreground">Source: {a.paymentMethod || (a.sheet.includes('staff') || a.sheet.includes('sponsor') ? 'Comp' : 'Unknown')}</span>
+                             <span className="text-xs text-muted-foreground">Source: {a.paymentMethod || (a.sheet.includes('staff') || a.sheet.includes('sponsor') ? 'Comp' : 'Unknown')}</span>
                           </div>
                         </TableCell>
                         <TableCell>

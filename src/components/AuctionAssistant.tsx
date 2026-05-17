@@ -50,20 +50,35 @@ export default function AuctionAssistant({ open, setOpen }: { open: boolean; set
         Help the user run the auction. You can answer questions about attendees, help find item numbers, or suggest improvements to the workflow.
       `;
 
-      const response = await fetch(`${getBaseUrl()}/api/assistant`, {
+      const response = await fetchWithRetry(`${getBaseUrl()}/api/assistant`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ context, message: userMsg }),
+        // Important: avoid passing the very first welcome message as it wastes tokens
+        body: JSON.stringify({ context, message: userMsg, history: messages.slice(1) }),
         credentials: "include"
       });
 
-      if (!response.ok) throw new Error("Assistant error");
+      if (!response.ok) {
+        let msg = "Assistant error";
+        try {
+          const data = await response.json();
+          if (data.fallback) {
+            msg = "I'm having trouble thinking right now. Please try again soon.";
+          }
+        } catch(e) {}
+        throw new Error(msg);
+      }
+      
       const data = await response.json();
       
+      if (data.fallback) {
+         throw new Error("I'm having trouble connecting to my brain right now.");
+      }
+      
       setMessages(prev => [...prev, { role: "model", text: data.text }]);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setMessages(prev => [...prev, { role: "model", text: "Error: I'm having trouble connecting to my brain right now." }]);
+      setMessages(prev => [...prev, { role: "model", text: `Error: ${error.message || "I'm having trouble connecting to my brain right now."}` }]);
     } finally {
       setLoading(false);
     }

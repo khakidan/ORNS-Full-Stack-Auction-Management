@@ -24,7 +24,7 @@ export default function DocumentCreationTab() {
     }
     setLoadingFiles(true);
     try {
-      const res = await fetch(`${getBaseUrl()}/api/drive/files/${forPrintFolderId}`);
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/drive/files/${forPrintFolderId}`);
       if (res.status === 404) {
         setFiles([]);
         return; // Silent fail on mount to avoid annoying toast if ID is wrong
@@ -54,7 +54,7 @@ export default function DocumentCreationTab() {
 
     try {
       toast.loading(`Running ${label}...`, { id: functionName });
-      const res = await fetch(`${getBaseUrl()}/api/script/run`, {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/script/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ functionName, parameters: [spreadsheetId, config.forPrintFolderId], scriptId })

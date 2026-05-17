@@ -29,19 +29,19 @@ interface ConfigContextType {
 }
 
 const defaultConfig: Config = {
-  auctionItemsSpreadsheetId: localStorage.getItem("auctionItemsSpreadsheetId") || "",
-  auctionTicketsSpreadsheetId: localStorage.getItem("auctionTicketsSpreadsheetId") || "",
-  bidManagementSpreadsheetId: localStorage.getItem("bidManagementSpreadsheetId") || localStorage.getItem("spreadsheetId") || "",
-  bidderNumbersSheet: localStorage.getItem("bidderNumbersSheet") || "Bidder-Numbers",
-  auctionItemsSheet: localStorage.getItem("auctionItemsSheet") || "Auction-Items",
-  bidManagementSheet: localStorage.getItem("bidManagementSheet") || "Bid-Management",
-  receiptFolderId: localStorage.getItem("receiptFolderId") || "",
-  forPrintFolderId: localStorage.getItem("forPrintFolderId") || "",
-  ornsLogoId: localStorage.getItem("ornsLogoId") || "",
-  ticketPrice: localStorage.getItem("ticketPrice") || "35",
-  auctionItemsScriptId: localStorage.getItem("auctionItemsScriptId") || "",
-  auctionTicketsScriptId: localStorage.getItem("auctionTicketsScriptId") || "",
-  bidManagementScriptId: localStorage.getItem("bidManagementScriptId") || localStorage.getItem("googleScriptId") || "",
+  auctionItemsSpreadsheetId: localStorage.getItem("auctionItemsSpreadsheetId") || import.meta.env.VITE_AUCTION_ITEMS_SPREADSHEET_ID || "",
+  auctionTicketsSpreadsheetId: localStorage.getItem("auctionTicketsSpreadsheetId") || import.meta.env.VITE_AUCTION_TICKETS_SPREADSHEET_ID || "",
+  bidManagementSpreadsheetId: localStorage.getItem("bidManagementSpreadsheetId") || localStorage.getItem("spreadsheetId") || import.meta.env.VITE_BID_MANAGEMENT_SPREADSHEET_ID || "",
+  bidderNumbersSheet: localStorage.getItem("bidderNumbersSheet") || import.meta.env.VITE_BIDDER_NUMBERS_SHEET || "Bidder-Numbers",
+  auctionItemsSheet: localStorage.getItem("auctionItemsSheet") || import.meta.env.VITE_AUCTION_ITEMS_SHEET || "Auction-Items",
+  bidManagementSheet: localStorage.getItem("bidManagementSheet") || import.meta.env.VITE_BID_MANAGEMENT_SHEET || "Bid-Management",
+  receiptFolderId: localStorage.getItem("receiptFolderId") || import.meta.env.VITE_RECEIPT_FOLDER_ID || "",
+  forPrintFolderId: localStorage.getItem("forPrintFolderId") || import.meta.env.VITE_FOR_PRINT_FOLDER_ID || "",
+  ornsLogoId: localStorage.getItem("ornsLogoId") || import.meta.env.VITE_ORNS_LOGO_ID || "",
+  ticketPrice: localStorage.getItem("ticketPrice") || import.meta.env.VITE_TICKET_PRICE || "35",
+  auctionItemsScriptId: localStorage.getItem("auctionItemsScriptId") || import.meta.env.VITE_AUCTION_ITEMS_SCRIPT_ID || "",
+  auctionTicketsScriptId: localStorage.getItem("auctionTicketsScriptId") || import.meta.env.VITE_AUCTION_TICKETS_SCRIPT_ID || "",
+  bidManagementScriptId: localStorage.getItem("bidManagementScriptId") || localStorage.getItem("googleScriptId") || import.meta.env.VITE_BID_MANAGEMENT_SCRIPT_ID || "",
 };
 
 const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
