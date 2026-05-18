@@ -94,6 +94,21 @@ export async function appendSheetData(spreadsheetId: string, range: string, valu
   return res.json();
 }
 
+export async function deleteAuctionItem(spreadsheetId: string, rowIndex: number) {
+  if (!spreadsheetId) throw new Error("Invalid Spreadsheet ID");
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/auction/delete-item`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ spreadsheetId, rowIndex }),
+    credentials: "include"
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to delete auction item");
+  }
+  return res.json();
+}
+
 export async function clearSheetData(spreadsheetId: string, range: string) {
   if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
     throw new Error("Invalid Spreadsheet ID");

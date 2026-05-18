@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuction } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
-import { getSheetData, updateSheetData, getBaseUrl } from "@/lib/google-api";
+import { fetchWithRetry, getSheetData, updateSheetData, getBaseUrl } from "@/lib/google-api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -31,6 +31,10 @@ export default function Checkout() {
   const [showPrintConfirm, setShowPrintConfirm] = useState(false);
   const [showEmailConfirm, setShowEmailConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<"pending" | "completed">("pending");
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [winnerToPay, setWinnerToPay] = useState<any>(null);
+  const [paymentMethod, setPaymentMethod] = useState<string>("");
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
 
   const startBatchPrint = async () => {
     setShowPrintConfirm(false);
@@ -234,17 +238,33 @@ export default function Checkout() {
     }
   };
 
-  const handleMarkPaid = async (winner: any) => {
+  const handleMarkPaid = (winner: any) => {
+    setWinnerToPay(winner);
+    setPaymentMethod("");
+    setShowPaymentDialog(true);
+  };
+
+  const confirmMarkPaid = async () => {
+    if (!winnerToPay || !paymentMethod) {
+      toast.error("Please select a payment method");
+      return;
+    }
+
     if (!spreadsheetId) {
       toast.error("Bid Management Spreadsheet ID not configured correctly.");
       return;
     }
+
+    setIsSubmittingPayment(true);
+    const winner = winnerToPay;
+    const method = paymentMethod;
+
     const previousWinners = [...winners];
 
     // Perform optimistic update locally immediately
     setWinners(prev => prev.map(w => {
       if (w.bidder.id === winner.bidder.id) {
-        return { ...w, bidder: { ...w.bidder, isPaid: true, checkedOut: true } };
+        return { ...w, bidder: { ...w.bidder, paid: true, checkedOut: true } };
       }
       return w;
     }));
@@ -256,6 +276,9 @@ export default function Checkout() {
 
     const idempotencyKey = crypto.randomUUID();
     
+    // Close dialog immediately
+    setShowPaymentDialog(false);
+
     // Fire background sync
     fetchWithRetry(`${getBaseUrl()}/api/auction/checkout-mark-paid`, {
       method: "POST",
@@ -265,7 +288,8 @@ export default function Checkout() {
         spreadsheetId,
         ticketsSpreadsheetId,
         bidderNumbersSheet,
-        attendeeInfo: attendee ? { sheet: attendee.sheet, rowIndex: attendee.rowIndex } : null,
+        attendeeInfo: attendee && attendee.sheet === 'tickets' ? { sheet: attendee.sheet, rowIndex: attendee.rowIndex } : null,
+        paymentMethod: method,
         idempotencyKey
       }),
       credentials: "include"
@@ -275,12 +299,17 @@ export default function Checkout() {
         const err = await res.json();
         throw new Error(err.error || "Failed to complete checkout transaction");
       }
-      toast.success(`${winner.bidder.firstName} marked as Paid & Checked Out`);
+      toast.success(`${winner.bidder.firstName} marked as Paid (${method})`);
+      fetchAllData(); // Refresh all data to ensure sync
     })
     .catch((error: any) => {
       console.error("[Checkout] Sync error:", error);
       setWinners(previousWinners);
       toast.error(`Failed to sync updates—retrying... local state reverted.`);
+    })
+    .finally(() => {
+      setIsSubmittingPayment(false);
+      setWinnerToPay(null);
     });
   };
 
@@ -410,6 +439,52 @@ export default function Checkout() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEmailConfirm(false)}>Cancel</Button>
             <Button onClick={startBatchEmail}>Yes, Email</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select Payment Method</DialogTitle>
+            <DialogDescription>
+              How is {winnerToPay?.bidder.firstName} {winnerToPay?.bidder.lastName} paying for their items today?
+              Total: <span className="font-bold text-[#e31b23]">${winnerToPay?.total.toFixed(2)}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-3 py-4">
+            <Button 
+              variant={paymentMethod === "Cash" ? "default" : "outline"} 
+              className={paymentMethod === "Cash" ? "bg-emerald-600 hover:bg-emerald-700" : ""}
+              onClick={() => setPaymentMethod("Cash")}
+            >
+              Cash
+            </Button>
+            <Button 
+              variant={paymentMethod === "Check" ? "default" : "outline"} 
+              className={paymentMethod === "Check" ? "bg-emerald-600 hover:bg-emerald-700" : ""}
+              onClick={() => setPaymentMethod("Check")}
+            >
+              Check
+            </Button>
+            <Button 
+              variant={paymentMethod === "Credit Card/PayPal" ? "default" : "outline"} 
+              className={paymentMethod === "Credit Card/PayPal" ? "bg-emerald-600 hover:bg-emerald-700" : ""}
+              onClick={() => setPaymentMethod("Credit Card/PayPal")}
+            >
+              Credit Card / PayPal
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPaymentDialog(false)}>Cancel</Button>
+            <Button 
+              onClick={confirmMarkPaid} 
+              disabled={!paymentMethod || isSubmittingPayment}
+              className="bg-[#e31b23] text-white hover:bg-[#e31b23]/90"
+            >
+              {isSubmittingPayment && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              Confirm Payment
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { getAuthStatus, getAuthUrl, logout, getBaseUrl } from "@/lib/google-api";
+import { getAuthStatus, getAuthUrl, logout, getBaseUrl, fetchWithRetry } from "@/lib/google-api";
 import { useConfig } from "@/context/ConfigContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

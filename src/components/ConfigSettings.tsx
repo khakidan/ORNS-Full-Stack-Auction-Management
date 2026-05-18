@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Save, AlertCircle, PlaySquare, Loader2, Copy, CheckSquare, RefreshCw, Cloud, CloudOff, LogIn } from "lucide-react";
-import { updateSheetData, appendSheetData, getSheetData, getBaseUrl } from "@/lib/google-api";
+import { fetchWithRetry, updateSheetData, appendSheetData, getSheetData, getBaseUrl } from "@/lib/google-api";
 import { useConfig, Config } from "@/context/ConfigContext";
 
 export default function ConfigSettings() {

@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { PlaySquare, Download, FileText, Loader2, ExternalLink, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { getBaseUrl } from "@/lib/google-api";
+import { fetchWithRetry, getBaseUrl } from "@/lib/google-api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 

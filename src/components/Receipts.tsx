@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getBaseUrl } from "@/lib/google-api";
+import { fetchWithRetry, getBaseUrl } from "@/lib/google-api";
 import { useConfig } from "@/context/ConfigContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";

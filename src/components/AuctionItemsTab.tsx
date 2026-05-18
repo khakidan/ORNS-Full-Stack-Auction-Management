@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useConfig } from "@/context/ConfigContext";
-import { getSheetData, updateSheetData, getBaseUrl, appendSheetData } from "@/lib/google-api";
+import { fetchWithRetry, getSheetData, updateSheetData, getBaseUrl, appendSheetData, deleteAuctionItem } from "@/lib/google-api";
 import { motion, AnimatePresence } from "motion/react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Edit2, Check, X, Plus, ArrowUpDown, ArrowDown, ArrowUp, Package, Wand2, Trash2, History, RotateCcw } from "lucide-react";
+import { Loader2, Edit2, Check, X, Plus, ArrowUpDown, ArrowDown, ArrowUp, Package, Wand2, Trash2, History, RotateCcw, Search, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -168,6 +168,11 @@ export default function AuctionItemsTab() {
   const [backups, setBackups] = useState<{title: string, sheetId: number}[]>([]);
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedItemType, setSelectedItemType] = useState("all");
+  const [itemToDelete, setItemToDelete] = useState<AuctionItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const selectedItemsCount = Object.values(selectedRows).filter(Boolean).length;
   const [newItem, setNewItem] = useState<Partial<AuctionItem>>({
@@ -715,6 +720,30 @@ export default function AuctionItemsTab() {
     setSortConfig({ key, direction });
   };
 
+  const handleDeleteItem = async () => {
+    if (!itemToDelete || !spreadsheetId) return;
+    
+    setIsDeleting(true);
+    const previousItems = [...items];
+    
+    try {
+      // Optimistic delete
+      setItems(prev => prev.filter(i => i.rowIndex !== itemToDelete.rowIndex));
+      
+      await deleteAuctionItem(spreadsheetId, itemToDelete.rowIndex);
+      toast.success("Item deleted successfully");
+      setItemToDelete(null);
+      // Resync to get canonical row indices
+      await fetchData();
+    } catch (e: any) {
+      console.error(e);
+      setItems(previousItems);
+      toast.error("Failed to delete item: " + e.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const SortIndicator = ({ columnKey }: { columnKey: keyof AuctionItem }) => {
     if (sortConfig.key !== columnKey) {
       return <ArrowUpDown className="ml-2 w-3 h-3 opacity-30 inline" />;
@@ -728,6 +757,23 @@ export default function AuctionItemsTab() {
 
   const sortedItems = useMemo(() => {
     let sortableItems = [...items];
+
+    // Filter items first
+    sortableItems = sortableItems.filter(item => {
+      const searchStr = searchTerm.toLowerCase();
+      const matchesSearch = !searchTerm || 
+        item.name.toLowerCase().includes(searchStr) ||
+        item.description.toLowerCase().includes(searchStr) ||
+        item.category.toLowerCase().includes(searchStr) ||
+        item.donor.toLowerCase().includes(searchStr) ||
+        item.itemType.toLowerCase().includes(searchStr);
+      
+      const matchesCategory = selectedCategory === "all" || item.category === selectedCategory;
+      const matchesType = selectedItemType === "all" || item.itemType === selectedItemType;
+
+      return matchesSearch && matchesCategory && matchesType;
+    });
+
     if (sortConfig.key !== null) {
       sortableItems.sort((a, b) => {
         let aVal = a[sortConfig.key!]?.toString() || "";
@@ -735,8 +781,8 @@ export default function AuctionItemsTab() {
         
         if (sortConfig.key === 'id') {
           return sortConfig.direction === 'asc' 
-            ? parseInt(aVal) - parseInt(bVal) 
-            : parseInt(bVal) - parseInt(aVal);
+            ? (parseInt(aVal) || 0) - (parseInt(bVal) || 0) 
+            : (parseInt(bVal) || 0) - (parseInt(aVal) || 0);
         }
         
         if (sortConfig.key === 'value' || sortConfig.key === 'openingBid' || sortConfig.key === 'minRaise') {
@@ -751,7 +797,7 @@ export default function AuctionItemsTab() {
       });
     }
     return sortableItems;
-  }, [items, sortConfig]);
+  }, [items, sortConfig, searchTerm, selectedCategory, selectedItemType]);
 
   if (!spreadsheetId) {
     return (
@@ -779,7 +825,7 @@ export default function AuctionItemsTab() {
           <div>
             <CardTitle>Auction Items Database</CardTitle>
             <CardDescription>
-              Showing {items.length} items from the Auction-Items spreadsheet. Click the edit icon to make changes.
+              Showing {sortedItems.length} of {items.length} items from the Auction-Items spreadsheet. Click the edit icon to make changes.
             </CardDescription>
           </div>
           <div className="flex gap-2">
@@ -791,6 +837,63 @@ export default function AuctionItemsTab() {
             </Button>
           </div>
         </CardHeader>
+        <div className="px-6 pb-6 flex flex-col md:flex-row gap-4 items-end border-b bg-slate-50/30">
+          <div className="flex-1 w-full space-y-1.5">
+            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 ml-1">
+              <Search className="w-3 h-3" /> Search Items
+            </Label>
+            <Input 
+              placeholder="Search by name, description, donor..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="bg-white h-10"
+            />
+          </div>
+          <div className="w-full md:w-[240px] space-y-1.5">
+            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 ml-1">
+              <Filter className="w-3 h-3" /> Category
+            </Label>
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger className="bg-white h-10">
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.sort().map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-full md:w-[180px] space-y-1.5">
+            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 ml-1">
+              <Filter className="w-3 h-3" /> Item Type
+            </Label>
+            <Select value={selectedItemType} onValueChange={setSelectedItemType}>
+              <SelectTrigger className="bg-white h-10">
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="Physical Item">Physical Item</SelectItem>
+                <SelectItem value="Certificate">Certificate</SelectItem>
+                <SelectItem value="Both">Both</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="pb-0.5">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-muted-foreground hover:text-foreground h-9 px-3 text-xs font-medium"
+              onClick={() => {
+                setSearchTerm("");
+                setSelectedCategory("all");
+                setSelectedItemType("all");
+              }}
+            >
+              Reset Filters
+            </Button>
+          </div>
+        </div>
         <CardContent className="p-0">
           <div className="rounded-md border overflow-x-auto pb-4">
             <Table className="w-full table-fixed">
@@ -816,6 +919,9 @@ export default function AuctionItemsTab() {
                 </TableHead>
                 <TableHead style={{ width: '15%' }} className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => requestSort('itemType')}>
                   Type <SortIndicator columnKey="itemType" />
+                </TableHead>
+                <TableHead style={{ width: '60px' }} className="text-center">
+                  Actions
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -922,6 +1028,16 @@ export default function AuctionItemsTab() {
                           Bundled?
                         </label>
                       </div>
+                    </TableCell>
+                    <TableCell className="align-top text-center px-2">
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover/row:opacity-100 transition-opacity"
+                        onClick={() => setItemToDelete(item)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </TableCell>
                     </motion.tr>
                   ))}
@@ -1288,6 +1404,32 @@ export default function AuctionItemsTab() {
           <Button onClick={handleAddItem} disabled={isSubmittingItem}>
             {isSubmittingItem ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
             Save Item
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-600 font-bold">
+            <Trash2 className="w-5 h-5" /> Confirm Deletion
+          </DialogTitle>
+          <DialogDescription>
+            Are you sure you want to permanently delete <strong>{itemToDelete?.name}</strong>? 
+            This action will remove the record from the database and cannot be undone easily.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="mt-4">
+          <Button variant="outline" onClick={() => setItemToDelete(null)}>Cancel</Button>
+          <Button 
+            variant="destructive" 
+            onClick={handleDeleteItem}
+            disabled={isDeleting}
+            className="flex items-center gap-2"
+          >
+            {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            Confirm Delete
           </Button>
         </DialogFooter>
       </DialogContent>

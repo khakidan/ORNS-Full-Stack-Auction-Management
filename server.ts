@@ -676,6 +676,7 @@ app.post("/api/auction/checkout-mark-paid", async (req, res) => {
     ticketsSpreadsheetId, 
     bidderNumbersSheet, 
     attendeeInfo,
+    paymentMethod,
     idempotencyKey 
   } = req.body;
 
@@ -706,12 +707,12 @@ app.post("/api/auction/checkout-mark-paid", async (req, res) => {
     // 2. Perform writes (Simulated Transaction)
     const operations: SheetOp[] = [];
 
-    // Write 1: Bidder Management Sheet (Mark Paid & Checked Out)
+    // Write 1: Bidder Management Sheet (Mark Paid & Checked Out & Payment Method)
     operations.push({
       type: 'UPDATE',
       spreadsheetId,
-      range: `${bidderNumbersSheet}!G${rowIndex}:H${rowIndex}`,
-      newValues: [[true, true]]
+      range: `${bidderNumbersSheet}!G${rowIndex}:I${rowIndex}`,
+      newValues: [[true, true, paymentMethod || "Unknown"]]
     });
 
     // Write 2: Auction Tickets Sheet (if applicable)
@@ -1251,10 +1252,54 @@ app.post("/api/settings/update", async (req, res) => {
 
     res.json({ success: true });
   } catch (error: any) {
-    console.error("Error updating setting:", error);
     if (error.code === 404) {
       return res.status(404).json({ error: "Spreadsheet or Settings tab not found. Please check your IDs." });
     }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete Auction Item Row
+app.post("/api/auction/delete-item", async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+  const { spreadsheetId, rowIndex } = req.body;
+  if (!spreadsheetId || !rowIndex) {
+    return res.status(400).json({ error: "Missing required parameters for deletion" });
+  }
+
+  try {
+    const client = getAuthenticatedClient(req.session.tokens);
+    const sheets = google.sheets({ version: "v4", auth: client });
+
+    // 1. Get sheetId for "Auction-Items"
+    const metadata = await sheets.spreadsheets.get({ spreadsheetId });
+    const auctionItemsSheet = metadata.data.sheets?.find(s => s.properties?.title === "Auction-Items");
+    if (!auctionItemsSheet) throw new Error("Target sheet 'Auction-Items' not found");
+    const sourceSheetId = auctionItemsSheet.properties?.sheetId;
+
+    if (sourceSheetId === undefined) throw new Error("Could not determine sheetId");
+
+    // 2. Delete the row
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId: sourceSheetId,
+              dimension: "ROWS",
+              startIndex: rowIndex - 1,
+              endIndex: rowIndex
+            }
+          }
+        }]
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("[Server Error] delete-item:", error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -8,10 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, UserPlus, CheckCircle, UserCheck, Clock, Loader2, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
+import { Search, UserPlus, CheckCircle, UserCheck, Clock, Loader2, ArrowUpDown, ChevronUp, ChevronDown, Ticket, Gavel, AlertCircle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { updateSheetData, getBaseUrl, getSheetData, appendSheetData } from "@/lib/google-api";
+import { fetchWithRetry, updateSheetData, getBaseUrl, getSheetData, appendSheetData } from "@/lib/google-api";
 import {
   Dialog,
   DialogContent,
@@ -470,26 +470,50 @@ export default function Bidders() {
                           {bidder.email || "—"}
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-wrap gap-1 md:gap-2">
-                            {bidder.checkedIn ? (
-                              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 whitespace-nowrap">
-                                <CheckCircle className="w-3 h-3 mr-1 shrink-0" /> Checked In
-                              </Badge>
-                            ) : !bidder.isProxy ? (
-                              <Badge variant="outline" className="whitespace-nowrap">
-                                <Clock className="w-3 h-3 mr-1 shrink-0" /> Not Present
-                              </Badge>
-                            ) : null}
-                            {bidder.isProxy && (
-                              <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 whitespace-nowrap">
-                                Proxy
-                              </Badge>
-                            )}
-                            {attendees.find(a => a.firstName === bidder.firstName && a.lastName === bidder.lastName)?.paymentStatus.toLowerCase() === 'paid' && (
-                              <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50 text-[10px] uppercase font-bold px-1.5 h-5">
-                                Paid
-                              </Badge>
-                            )}
+                          <div className="flex flex-col gap-2 min-w-[140px]">
+                            {/* Ticket Payment Status */}
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                                <Ticket className="w-2.5 h-2.5" /> Event Ticket
+                              </span>
+                              {attendees.find(a => a.firstName === bidder.firstName && a.lastName === bidder.lastName)?.paymentStatus.toLowerCase() === 'paid' ? (
+                                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50 w-fit text-[10px] h-5">
+                                  <CheckCircle className="w-3 h-3 mr-1" /> Ticket Paid
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 w-fit text-[10px] h-5">
+                                  <AlertCircle className="w-3 h-3 mr-1" /> Ticket Pending
+                                </Badge>
+                              )}
+                            </div>
+
+                            {/* Auction / Checkout Status */}
+                            <div className="flex flex-col gap-1 border-t pt-1 border-slate-100">
+                              <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                                <Gavel className="w-2.5 h-2.5" /> Auction Status
+                              </span>
+                              {bidder.checkedOut ? (
+                                <Badge className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50 w-fit text-[10px] h-5">
+                                  <CheckCircle className="w-3 h-3 mr-1" /> Full Checkout
+                                </Badge>
+                              ) : bidder.paid ? (
+                                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50 w-fit text-[10px] h-5">
+                                  <Clock className="w-3 h-3 mr-1" /> Paid (Not Out)
+                                </Badge>
+                              ) : bidder.checkedIn ? (
+                                <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 w-fit text-[10px] h-5">
+                                  <UserCheck className="w-3 h-3 mr-1" /> Checked-In
+                                </Badge>
+                              ) : bidder.isProxy ? (
+                                <Badge variant="outline" className="border-purple-200 text-purple-700 bg-purple-50 w-fit text-[10px] h-5">
+                                  Proxy
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-slate-400 bg-slate-50 w-fit text-[10px] h-5">
+                                  Pending
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-right px-4">

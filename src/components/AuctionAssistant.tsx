@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuction } from "@/context/AuctionContext";
-import { getBaseUrl } from "@/lib/google-api";
+import { fetchWithRetry, getBaseUrl } from "@/lib/google-api";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
