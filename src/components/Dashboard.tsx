@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuction } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -75,7 +75,12 @@ export default function Dashboard() {
 
     if (bidder?.checkedOut) {
       toast.warning("Checked Out Warning", {
-        description: `Warning: ${bidder.firstName} ${bidder.lastName} ("${giftCardWinnerId}") has already checked out.`
+        description: `Warning: ${bidder.firstName} ${bidder.lastName} won "$500 Amazon Gift Card" but has already checked out.`,
+        duration: Infinity,
+        action: {
+          label: "I have confirmed",
+          onClick: () => console.log("Confirmed checkout warning for gift card"),
+        },
       });
     }
 
@@ -104,7 +109,12 @@ export default function Dashboard() {
 
     if (bidder?.checkedOut) {
       toast.warning("Checked Out Warning", {
-        description: `Warning: ${bidder.firstName} ${bidder.lastName} ("${raffleWinnerId}") has already checked out.`
+        description: `Warning: ${bidder.firstName} ${bidder.lastName} won "50/50 Raffle" but has already checked out.`,
+        duration: Infinity,
+        action: {
+          label: "I have confirmed",
+          onClick: () => console.log("Confirmed checkout warning for raffle"),
+        },
       });
     }
 
@@ -125,9 +135,18 @@ export default function Dashboard() {
     return b ? `${b.firstName} ${b.lastName}` : "Bidder not found";
   };
 
+  const winningNames = useMemo(() => new Set(Object.values(winners)), [winners]);
+
   const checkedInCount = bidders.filter(b => b.checkedIn).length;
   const checkedOutCount = bidders.filter(b => b.checkedOut).length;
-  const pendingCheckoutCount = Math.max(0, checkedInCount - checkedOutCount);
+  const pendingCheckoutBidders = bidders.filter(b => {
+    if (b.checkedOut) return false;
+    if (b.checkedIn) return true;
+    const fullName = `${b.firstName} ${b.lastName}`;
+    if (b.isProxy && winningNames.has(fullName)) return true;
+    return false;
+  });
+  const pendingCheckoutCount = pendingCheckoutBidders.length;
   const totalBidders = bidders.length;
   const itemsCount = items.length;
 
@@ -177,13 +196,13 @@ export default function Dashboard() {
                       <Clock className="w-4 h-4" /> Still Need to Check Out
                     </h4>
                     <span className="text-xs font-medium px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full">
-                      {bidders.filter(b => b.checkedIn && !b.checkedOut).length} Total
+                      {pendingCheckoutBidders.length} Total
                     </span>
                   </div>
                   <ScrollArea className="h-[300px] rounded-md border bg-white p-4">
                     <div className="space-y-3">
-                      {bidders.filter(b => b.checkedIn && !b.checkedOut).length > 0 ? (
-                        bidders.filter(b => b.checkedIn && !b.checkedOut).map(b => (
+                      {pendingCheckoutBidders.length > 0 ? (
+                        pendingCheckoutBidders.map(b => (
                           <div key={b.id} className="flex items-center justify-between border-b pb-2 last:border-0">
                             <div>
                               <div className="font-bold text-sm">#{b.id} {b.firstName} {b.lastName}</div>

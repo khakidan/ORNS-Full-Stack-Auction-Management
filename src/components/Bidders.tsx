@@ -65,13 +65,30 @@ export default function Bidders() {
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
 
-  const handleCheckInAttempt = (bidder: Bidder) => {
-    const attendee = attendees.find(a => 
+  const getBidderAttendeeInfo = (bidder: Bidder) => {
+    const primary = attendees.find(a => 
       a.firstName.trim().toLowerCase() === bidder.firstName.trim().toLowerCase() &&
       a.lastName.trim().toLowerCase() === bidder.lastName.trim().toLowerCase()
     );
+    
+    if (primary) return { attendee: primary, isGuest: false };
 
-    if (attendee && attendee.paymentStatus.toLowerCase() === 'pending') {
+    const guestOf = attendees.find(a => 
+      a.guestsInfo.some(g => 
+        g.ownBidderNumber === bidder.id || 
+        (g.name && g.name.toLowerCase() === `${bidder.firstName} ${bidder.lastName}`.trim().toLowerCase())
+      )
+    );
+
+    if (guestOf) return { attendee: guestOf, isGuest: true };
+
+    return { attendee: undefined, isGuest: false };
+  };
+
+  const handleCheckInAttempt = (bidder: Bidder) => {
+    const { attendee, isGuest } = getBidderAttendeeInfo(bidder);
+
+    if (!isGuest && attendee && attendee.paymentStatus.toLowerCase() === 'pending') {
       setPendingCheckIn(bidder);
     } else {
       handleConfirmCheckInClick(bidder);
@@ -158,15 +175,14 @@ export default function Bidders() {
         (statusFilter === "pending" && !b.checkedIn && !b.isProxy) ||
         (statusFilter === "proxy" && b.isProxy);
 
-      const attendee = attendees.find(a => 
-        a.firstName.trim().toLowerCase() === b.firstName.trim().toLowerCase() &&
-        a.lastName.trim().toLowerCase() === b.lastName.trim().toLowerCase()
-      );
+      const { attendee, isGuest } = getBidderAttendeeInfo(b);
+      
+      const isPaid = isGuest || attendee?.paymentStatus.toLowerCase() === "paid";
 
       const matchesPayment = 
         paymentFilter === "all" ||
-        (paymentFilter === "paid" && attendee?.paymentStatus.toLowerCase() === "paid") ||
-        (paymentFilter === "pending" && attendee?.paymentStatus.toLowerCase() === "pending");
+        (paymentFilter === "paid" && isPaid) ||
+        (paymentFilter === "pending" && !isPaid && !!attendee);
 
       const matchesSource = 
         sourceFilter === "all" ||
@@ -468,11 +484,17 @@ export default function Bidders() {
                         <TableCell className="font-mono font-bold px-4">{bidder.id}</TableCell>
                         <TableCell>
                           <div className="font-medium whitespace-nowrap">{bidder.firstName} {bidder.lastName}</div>
-                          {attendees.find(a => a.firstName === bidder.firstName && a.lastName === bidder.lastName)?.sheet !== 'tickets' && (
-                             <div className="text-[10px] uppercase tracking-tighter text-muted-foreground font-bold">
-                               {attendees.find(a => a.firstName === bidder.firstName && a.lastName === bidder.lastName)?.sheet.replace(' tickets', '')}
-                             </div>
-                          )}
+                          {(() => {
+                            const { attendee, isGuest } = getBidderAttendeeInfo(bidder);
+                            if (!attendee) return null;
+                            const sheetInfo = attendee.sheet.replace(' tickets', '');
+                            if (sheetInfo === 'tickets' && !isGuest) return null;
+                            return (
+                              <div className="text-[10px] uppercase tracking-tighter text-muted-foreground font-bold">
+                                {sheetInfo} {isGuest ? '(GUEST)' : ''}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-muted-foreground text-sm max-w-[200px] truncate">
                           {bidder.email || "—"}
@@ -484,15 +506,22 @@ export default function Bidders() {
                               <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
                                 <Ticket className="w-2.5 h-2.5" /> Event Ticket
                               </span>
-                              {attendees.find(a => a.firstName === bidder.firstName && a.lastName === bidder.lastName)?.paymentStatus.toLowerCase() === 'paid' ? (
-                                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50 w-fit text-[10px] h-5">
-                                  <CheckCircle className="w-3 h-3 mr-1" /> Ticket Paid
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 w-fit text-[10px] h-5">
-                                  <AlertCircle className="w-3 h-3 mr-1" /> Ticket Pending
-                                </Badge>
-                              )}
+                              {(() => {
+                                const { attendee, isGuest } = getBidderAttendeeInfo(bidder);
+                                const isPaidStatus = isGuest || attendee?.paymentStatus.toLowerCase() === 'paid';
+                                if (isPaidStatus) {
+                                  return (
+                                    <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50 w-fit text-[10px] h-5">
+                                      <CheckCircle className="w-3 h-3 mr-1" /> Ticket Paid {isGuest ? '*' : ''}
+                                    </Badge>
+                                  );
+                                }
+                                return (
+                                  <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 w-fit text-[10px] h-5">
+                                    <AlertCircle className="w-3 h-3 mr-1" /> Ticket Pending
+                                  </Badge>
+                                );
+                              })()}
                             </div>
 
                             {/* Auction / Checkout Status */}

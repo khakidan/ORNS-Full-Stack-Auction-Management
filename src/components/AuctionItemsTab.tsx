@@ -207,8 +207,7 @@ export default function AuctionItemsTab() {
     openingBid: "",
     minRaise: "",
     donor: "",
-    itemType: "",
-    bundled: ""
+    itemType: ""
   });
   const [isSubmittingItem, setIsSubmittingItem] = useState(false);
 
@@ -363,8 +362,7 @@ export default function AuctionItemsTab() {
       donor: mergedDonor,
       openingBid: opening,
       minRaise: raise,
-      itemType: selectedItems[0].itemType,
-      bundled: "yes"
+      itemType: selectedItems[0].itemType
     });
     setAiSuggestions([]);
     setIsBundling(true);
@@ -1343,21 +1341,6 @@ export default function AuctionItemsTab() {
                   <SelectItem value="Both">Both</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <div className="col-start-2 col-span-3 flex items-center space-x-2">
-              <Checkbox 
-                id="bundled-new" 
-                checked={newItem.bundled === 'yes'}
-                onCheckedChange={(checked) => setNewItem({...newItem, bundled: checked ? 'yes' : ''})}
-              />
-              <label 
-                htmlFor="bundled-new" 
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-              >
-                Bundled?
-              </label>
             </div>
           </div>
         </div>

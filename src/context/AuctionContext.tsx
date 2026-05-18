@@ -56,12 +56,32 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   const closeAuction = async () => {
     if (!spreadsheetId) return;
     try {
-      await updateSheetData(spreadsheetId, "Auction-Status!A2", [[false]]);
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/auction/close-and-cleanup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          spreadsheetId,
+          bidderNumbersSheet: config.bidderNumbersSheet,
+          bidManagementSheet: config.bidManagementSheet
+        }),
+        credentials: "include"
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to close auction and cleanup");
+      }
+
+      const data = await res.json();
       setIsAuctionClosed(true);
-      toast.success("Auction closed successfully. Records are now read-only where applicable.");
-    } catch (e) {
+      toast.success("Auction closed successfully.");
+      if (data.count > 0) {
+        toast.info(`Automatically checked out ${data.count} non-winning bidders.`);
+      }
+      fetchAllData();
+    } catch (e: any) {
       console.error("Error closing auction:", e);
-      toast.error("Failed to close auction.");
+      toast.error("Failed to close auction: " + e.message);
     }
   };
 

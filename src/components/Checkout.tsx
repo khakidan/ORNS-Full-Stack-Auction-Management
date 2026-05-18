@@ -270,7 +270,7 @@ export default function Checkout() {
       const itemNames = alertItems.map(i => i.name).join(" and ");
       toast.warning(`High-Value Alert: ${itemNames}`, {
         description: `Ensure this bidder has received their ${itemNames} prize before completing checkout.`,
-        duration: 10000,
+        duration: Infinity,
         action: {
           label: "I have confirmed",
           onClick: () => {

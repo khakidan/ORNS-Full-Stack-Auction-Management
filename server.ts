@@ -69,14 +69,15 @@ app.use(
       retries: 0,
     }),
     secret: process.env.SESSION_SECRET || "auction-pro-secret",
-    resave: false,
     saveUninitialized: true,
     cookie: {
       secure: process.env.NODE_ENV === "production" && !process.env.APP_URL?.includes("localhost"),
       sameSite: (process.env.NODE_ENV === "production" && !process.env.APP_URL?.includes("localhost")) ? "none" : "lax",
       httpOnly: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days for local persistence
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
     },
+    rolling: true,
+    resave: true,
   })
 );
 
@@ -867,9 +868,88 @@ app.post("/api/auction/checkout-mark-paid", async (req, res) => {
     const result = { success: true, attendeeUpdated };
     saveIdempotency(idempotencyKey, result);
     res.json(result);
-
   } catch (error: any) {
     console.error("[Transaction Error] checkout-mark-paid:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/auction/close-and-cleanup", async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+  const { spreadsheetId, bidderNumbersSheet, bidManagementSheet } = req.body;
+
+  try {
+    const client = getAuthenticatedClient(req.session.tokens);
+    const sheets = google.sheets({ version: "v4", auth: client });
+
+    // 1. Close Auction
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "Auction-Status!A2",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [[false]] }
+    });
+
+    // 2. Read Bidders
+    const biddersRes = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${bidderNumbersSheet}!A:H`
+    });
+    const bidderRows = biddersRes.data.values || [];
+
+    // 3. Read Winners (to find out who won anything)
+    const bidRes = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${bidManagementSheet}!A:ZZ`
+    });
+    const bidRows = bidRes.data.values || [];
+    
+    const winnersSet = new Set<string>();
+    if (bidRows.length > 0) {
+      const header = bidRows[0];
+      for (let j = 0; j < header.length; j += 2) {
+        const bidderId = header[j];
+        if (!bidderId) continue;
+        
+        let hasWins = false;
+        for (let i = 3; i < bidRows.length; i++) {
+          if (bidRows[i] && bidRows[i][j]) {
+            hasWins = true;
+            break;
+          }
+        }
+        if (hasWins) winnersSet.add(bidderId.toString());
+      }
+    }
+
+    // 4. Update Bidders
+    const updates: any[] = [];
+    for (let i = 1; i < bidderRows.length; i++) {
+      const id = bidderRows[i][0]?.toString();
+      const checkedOut = bidderRows[i][6] === "TRUE" || bidderRows[i][6] === "true";
+      
+      if (id && !checkedOut && !winnersSet.has(id)) {
+        updates.push({
+          range: `${bidderNumbersSheet}!G${i + 1}:H${i + 1}`,
+          values: [[true, true]] 
+        });
+      }
+    }
+
+    if (updates.length > 0) {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          data: updates,
+          valueInputOption: "USER_ENTERED"
+        }
+      });
+    }
+
+    res.json({ success: true, count: updates.length });
+  } catch (error: any) {
+    console.error("[Auction Close Error]:", error);
     res.status(500).json({ error: error.message });
   }
 });
