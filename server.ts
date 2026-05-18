@@ -1254,17 +1254,15 @@ app.post("/api/backups/restore", async (req, res) => {
   }
 });
 
-// Execute Bundling Workflow
-app.post("/api/bundle/execute", async (req, res) => {
+// Bundling & Restoration Workflow Endpoints
+app.post("/api/bundle/process", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
 
-  const { spreadsheetId, bundleRow, sourceRowIndices, idempotencyKey } = req.body;
-  
-  // Idempotency check
+  const { spreadsheetId, targetIds, newName, newDescription, targetCategory, timestamp, idempotencyKey } = req.body;
   const cached = checkIdempotency(req, res, idempotencyKey);
   if (cached) return;
 
-  if (!spreadsheetId || !bundleRow || !sourceRowIndices || sourceRowIndices.length === 0) {
+  if (!spreadsheetId || !targetIds || !targetIds.length || !newName || !targetCategory) {
     return res.status(400).json({ error: "Missing required bundling parameters" });
   }
 
@@ -1272,68 +1270,217 @@ app.post("/api/bundle/execute", async (req, res) => {
     const client = getAuthenticatedClient(req.session.tokens);
     const sheets = google.sheets({ version: "v4", auth: client });
 
-    // 1. Transaction Simulation: Pre-verification
     const metadata = await sheets.spreadsheets.get({ spreadsheetId });
     const auctionItemsSheet = metadata.data.sheets?.find(s => s.properties?.title === "Auction-Items");
     if (!auctionItemsSheet) throw new Error("Target sheet 'Auction-Items' not found");
-    const sourceSheetId = auctionItemsSheet.properties?.sheetId;
 
-    // 2. Atomic Step: Create Backup (this is our 'safeguard')
-    const dateStr = new Date().toLocaleString().replace(/[\/:]/g, '-');
+    const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Categories!A:C" });
+    const baseNumbers: Record<string, number> = {};
+    (catSearch.data.values || []).slice(1).forEach(row => {
+      if (row[0] && row[2]) baseNumbers[row[0].trim()] = parseInt(row[2], 10) || 0;
+    });
+
+    const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:L" });
+    const values = dataRes.data.values || [];
+    const ts = timestamp || new Date().toLocaleString('en-US', { hour12: false }).replace(/\//g, '-');
+    const bundleEventToken = "BND-" + ts.replace(/[^0-9]/g, '');
     
-    if (sourceSheetId !== undefined) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: {
-          requests: [{
-            duplicateSheet: {
-              sourceSheetId,
-              newSheetName: `Auction-Items Back Up (${dateStr})`,
-              insertSheetIndex: 1
-            }
-          }]
-        }
-      });
+    const rowsToUpdate: any[] = [];
+    const originalNames: string[] = [];
+    let totalValue = 0;
+    const originalDonors: string[] = [];
+    const originalItemTypes: string[] = [];
+
+    const targetSet = new Set(targetIds.map((id: string) => id.toString()));
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i] || [];
+      const id = row[0]?.toString();
+      if (id && targetSet.has(id)) {
+        originalNames.push(row[2] || "Unknown");
+        totalValue += parseFloat((row[4] || "0").replace(/[^0-9.-]+/g, "")) || 0;
+        if (row[7]) originalDonors.push(row[7]);
+        if (row[8]) originalItemTypes.push(row[8]);
+        
+        row[0] = ""; 
+        row[9] = "Inactive"; 
+        row[10] = bundleEventToken;
+        row[11] = ts;
+      }
     }
 
-    // 3. Commit Step: Append new bundled row and Delete old rows in a single batch if possible
-    // Note: Append and DeleteDimension are different types, but we can do DeleteDimension in a batch.
-    // For simplicity and safety, we execute them sequentially but verify the state.
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range: "Auction-Items!A:J",
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values: [bundleRow]
+    let nextId = baseNumbers[targetCategory] > 0 ? baseNumbers[targetCategory] : 1;
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i] || [];
+      if (row[1] === targetCategory && row[9] === "Active") {
+        const idNum = parseInt(row[0], 10);
+        if (!isNaN(idNum) && idNum >= nextId) nextId = idNum + 1;
       }
-    });
+    }
+    const tempBundleId = nextId.toString();
 
-    const sortedIndices = [...sourceRowIndices].sort((a, b) => b - a);
-    const deleteRequests = sortedIndices.map(idx => ({
-      deleteDimension: {
-        range: {
-          sheetId: sourceSheetId,
-          dimension: "ROWS",
-          startIndex: idx - 1,
-          endIndex: idx
+    const donorString = Array.from(new Set(originalDonors)).join(" / ");
+    
+    // Type logic
+    const uniqueTypes = Array.from(new Set(originalItemTypes));
+    let finalType = "Both";
+    if (uniqueTypes.length === 1) finalType = uniqueTypes[0];
+
+    const openingBid = "$" + (Math.ceil((totalValue * 0.4) / 5) * 5).toFixed(0);
+    const minRaise = "$" + (Math.ceil((totalValue * 0.1) / 5) * 5).toFixed(0);
+    const valString = "$" + totalValue.toFixed(0);
+
+    const newRow = [
+      tempBundleId, targetCategory, newName, newDescription, valString, openingBid, minRaise, donorString, finalType, "Active", bundleEventToken, ""
+    ];
+    values.push(newRow);
+
+    const affectedCategories = new Set<string>();
+    affectedCategories.add(targetCategory);
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i] || [];
+      if (row[10] === bundleEventToken && row[9] === "Inactive") {
+        affectedCategories.add(row[1]);
+      }
+    }
+
+    for (const cat of affectedCategories) {
+      const rowMapping: {origIndex: number, row: any[]}[] = [];
+      for (let i = 1; i < values.length; i++) {
+        const row = values[i] || [];
+        if (row[1] === cat && row[9] === "Active" && row[0] !== "") {
+          rowMapping.push({ origIndex: i, row });
         }
       }
-    }));
+      rowMapping.sort((a, b) => {
+        const idA = parseInt(a.row[0]) || 999999;
+        const idB = parseInt(b.row[0]) || 999999;
+        return idA - idB;
+      });
+      let startNum = baseNumbers[cat] > 0 ? baseNumbers[cat] : 1;
+      rowMapping.forEach(item => { item.row[0] = startNum.toString(); startNum++; });
+    }
 
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        requests: deleteRequests
-      }
+    await sheets.spreadsheets.values.update({
+      spreadsheetId, range: "Auction-Items!A1:L", valueInputOption: "USER_ENTERED", requestBody: { values }
     });
 
-    const result = { success: true };
-    saveIdempotency(idempotencyKey, result);
-    res.json(result);
-  } catch (error: any) {
-    console.error("[Transaction Error] bundle/execute:", error);
-    res.status(500).json({ error: error.message });
+    const responsePayload = {
+      action_executed: "BUNDLE_ITEMS",
+      affected_categories: Array.from(affectedCategories),
+      ui_history_log: { 
+        bundle_token: bundleEventToken, 
+        timestamp: ts, 
+        bundle_item_name: newName, 
+        original_item_names: originalNames 
+      },
+      rows_to_update: values.map((row, i) => ({
+        row_index: i + 1,
+        column_updates: { A: row[0], J: row[9], K: row[10], L: row[11] }
+      }))
+    };
+    saveIdempotency(idempotencyKey, responsePayload);
+    res.json(responsePayload);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/bundle/restore", async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+  const { spreadsheetId, targetBundleToken, idempotencyKey } = req.body;
+  const cached = checkIdempotency(req, res, idempotencyKey);
+  if (cached) return;
+
+  if (!spreadsheetId || !targetBundleToken) return res.status(400).json({ error: "Missing required parameters (targetBundleToken)" });
+
+  try {
+    const client = getAuthenticatedClient(req.session.tokens);
+    const sheets = google.sheets({ version: "v4", auth: client });
+
+    const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Categories!A:C" });
+    const baseNumbers: Record<string, number> = {};
+    (catSearch.data.values || []).slice(1).forEach(row => {
+      if (row[0] && row[2]) baseNumbers[row[0].trim()] = parseInt(row[2], 10) || 0;
+    });
+
+    const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:L" });
+    const values = dataRes.data.values || [];
+    
+    let bundleName = "Unknown Bundle";
+    const originalNames: string[] = [];
+    const affectedCategories = new Set<string>();
+    let bundleRowFound = false;
+
+    // 1. Identify and Remove the Active Bundle
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i] || [];
+      if (row[10]?.toString() === targetBundleToken?.toString() && row[9] === "Active") {
+        bundleName = row[2] || "Unknown Bundle";
+        affectedCategories.add(row[1]);
+        // Remove row from active sequence by setting to inactive and clearing ID
+        row[0] = "";
+        row[9] = "Inactive";
+        row[10] = ""; // Clear token so it's not restored again
+        bundleRowFound = true;
+        break; 
+      }
+    }
+
+    if (!bundleRowFound) return res.status(404).json({ error: "Active bundle with provided token not found" });
+
+    // 2. Restore Original Items
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i] || [];
+      if (row[10]?.toString() === targetBundleToken?.toString() && row[9] === "Inactive") {
+        originalNames.push(row[2]);
+        affectedCategories.add(row[1]);
+        row[9] = "Active"; 
+        row[10] = "";       
+        row[11] = "";       
+      }
+    }
+
+    // 3. Run Re-Sequencing Cleanup
+    for (const cat of affectedCategories) {
+      const rowMapping: {origIndex: number, row: any[]}[] = [];
+      for (let i = 1; i < values.length; i++) {
+        const row = values[i] || [];
+        if (row[1] === cat && row[9] === "Active") {
+          rowMapping.push({ origIndex: i, row });
+        }
+      }
+      rowMapping.sort((a, b) => {
+        const idA = parseInt(a.row[0]) || 999999;
+        const idB = parseInt(b.row[0]) || 999999;
+        return idA - idB;
+      });
+      let startNum = baseNumbers[cat] > 0 ? baseNumbers[cat] : 1;
+      rowMapping.forEach(item => { item.row[0] = startNum.toString(); startNum++; });
+    }
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId, range: "Auction-Items!A1:L", valueInputOption: "USER_ENTERED", requestBody: { values }
+    });
+
+    const responsePayload = {
+      action_executed: "RESTORE_BUNDLE",
+      affected_categories: Array.from(affectedCategories),
+      ui_history_log: { 
+        bundle_token: targetBundleToken, 
+        timestamp: new Date().toISOString(), 
+        bundle_item_name: bundleName, 
+        original_item_names: originalNames 
+      },
+      rows_to_update: values.map((row, i) => ({
+        row_index: i + 1,
+        column_updates: { A: row[0], J: row[9], K: row[10], L: row[11] }
+      }))
+    };
+    saveIdempotency(idempotencyKey, responsePayload);
+    res.json(responsePayload);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

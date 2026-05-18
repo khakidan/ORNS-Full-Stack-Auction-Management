@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Edit2, Check, X, Plus, ArrowUpDown, ArrowDown, ArrowUp, Package, Wand2, Trash2, History, RotateCcw, Search, Filter } from "lucide-react";
+import { Loader2, Edit2, Check, X, Plus, ArrowUpDown, ArrowDown, ArrowUp, Package, Wand2, Trash2, RotateCcw, Search, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -149,6 +149,40 @@ export default function AuctionItemsTab() {
   const [selectedRows, setSelectedRows] = useState<BundlingSelection>({});
   const [isBundling, setIsBundling] = useState(false);
   const [bundleDetails, setBundleDetails] = useState<Partial<AuctionItem>>({});
+  const [restoreBundleId, setRestoreBundleId] = useState("");
+  const [isExecutingRestore, setIsExecutingRestore] = useState(false);
+
+  const handleRestoreBundle = async (tokenToRestore: string = restoreBundleId) => {
+    if (!tokenToRestore) return;
+    setRestoreBundleId(tokenToRestore); // Keep UI synced
+    setIsExecutingRestore(true);
+    const idempotencyKey = crypto.randomUUID?.() || Math.random().toString(36).substring(2);
+
+    try {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/bundle/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          spreadsheetId,
+          targetBundleToken: tokenToRestore,
+          idempotencyKey
+        })
+      });
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      toast.success(`Bundle restored! Items: ${data.ui_history_log.original_item_names.join(', ')}`);
+      setRestoreBundleId("");
+      fetchData();
+    } catch (e: any) {
+      console.error(e);
+      toast.error("Failed to restore bundle: " + e.message);
+    } finally {
+      setIsExecutingRestore(false);
+    }
+  };
+
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [loadingDescription, setLoadingDescription] = useState(false);
@@ -158,10 +192,6 @@ export default function AuctionItemsTab() {
   const [bulkValue, setBulkValue] = useState("");
   const [isExecutingBulk, setIsExecutingBulk] = useState(false);
   const [isAddingItem, setIsAddingItem] = useState(false);
-  const [isRestoreOpen, setIsRestoreOpen] = useState(false);
-  const [backups, setBackups] = useState<{title: string, sheetId: number}[]>([]);
-  const [loadingBackups, setLoadingBackups] = useState(false);
-  const [isRestoring, setIsRestoring] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedItemType, setSelectedItemType] = useState("all");
@@ -228,21 +258,23 @@ export default function AuctionItemsTab() {
       return;
     }
     try {
-      const data = await getSheetData(spreadsheetId, "Auction-Items!A:J");
+      const data = await getSheetData(spreadsheetId, "Auction-Items!A:L");
       if (data.values && data.values.length > 1) {
         const rows = data.values.slice(1).map((row: any[], index: number) => {
           return {
             rowIndex: index + 2, // 1 for 1-based index, +1 for header row
             id: row[0]?.toString() || "",
             category: row[1]?.toString() || "",
-            bundled: row[2]?.toString() || "",
-            name: row[3]?.toString() || "",
-            description: row[4]?.toString() || "",
-            value: row[5]?.toString() || "",
-            openingBid: row[6]?.toString() || "",
-            minRaise: row[7]?.toString() || "",
-            donor: row[8]?.toString() || "",
-            itemType: row[9]?.toString() || "",
+            name: row[2]?.toString() || "",
+            description: row[3]?.toString() || "",
+            value: row[4]?.toString() || "",
+            openingBid: row[5]?.toString() || "",
+            minRaise: row[6]?.toString() || "",
+            donor: row[7]?.toString() || "",
+            itemType: row[8]?.toString() || "",
+            status: row[9]?.toString() || "",
+            bundleId: row[10]?.toString() || "",
+            bundledDateTime: row[11]?.toString() || "",
           };
         }).filter((item: any) => item.id && item.name);
         setItems(rows);
@@ -398,43 +430,6 @@ export default function AuctionItemsTab() {
     }
   };
 
-  const fetchBackups = async () => {
-    if (!spreadsheetId) return;
-    setLoadingBackups(true);
-    try {
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/backups/list/${spreadsheetId}`);
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setBackups(data);
-    } catch (e: any) {
-      toast.error("Failed to load backups: " + e.message);
-    } finally {
-      setLoadingBackups(false);
-    }
-  };
-
-  const executeRestore = async (backupName: string) => {
-    if (!spreadsheetId) return;
-    if (!confirm(`Are you sure you want to restore "${backupName}"? This will replace the current Auction-Items tab.`)) return;
-
-    setIsRestoring(true);
-    try {
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/backups/restore`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spreadsheetId, backupSheetName: backupName })
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      toast.success("Backup restored successfully!");
-      setIsRestoreOpen(false);
-      await fetchData();
-    } catch (e: any) {
-      toast.error("Restore failed: " + e.message);
-    } finally {
-      setIsRestoring(false);
-    }
-  };
 
   const executeBundle = async () => {
     if (!bundleDetails.name || !bundleDetails.category) {
@@ -450,17 +445,8 @@ export default function AuctionItemsTab() {
       const selectedItems = items.filter(i => selectedRows[i.rowIndex]);
       const sourceRowIndices = selectedItems.map(i => i.rowIndex);
       
-      // Calculate ID
-      const catBase = categoriesWithBase.find(c => c.name === bundleDetails.category)?.base || 0;
-      const itemsInCat = items.filter(i => {
-        const idNum = parseInt(i.id, 10);
-        return i.category === bundleDetails.category || (!isNaN(idNum) && catBase > 0 && idNum >= catBase && idNum < catBase + 100);
-      });
-      let nextId = catBase > 0 ? catBase + 1 : 1;
-      const validIds = itemsInCat.map(i => parseInt(i.id, 10)).filter(num => !isNaN(num) && (catBase === 0 || (num >= catBase && num < catBase + 100)));
-      if (validIds.length > 0) nextId = Math.max(...validIds) + 1;
-
-      const optimisticId = nextId.toString();
+      // Calculate nextId pessimistically just for UI immediate update
+      const optimisticId = "Bundling...";
 
       // Optimistic Update: Hide original items, add new bundle
       setItems(prev => {
@@ -469,7 +455,9 @@ export default function AuctionItemsTab() {
           rowIndex: 9999, // Temporary
           id: optimisticId,
           category: bundleDetails.category!,
-          bundled: "yes",
+          status: "Active",
+          bundleId: "",
+          bundledDateTime: "",
           name: bundleDetails.name!,
           description: bundleDetails.description || "",
           value: bundleDetails.value || "",
@@ -481,27 +469,16 @@ export default function AuctionItemsTab() {
         return [...remaining, newBundle];
       });
 
-      const bundleRow = [
-        optimisticId,
-        bundleDetails.category,
-        "yes",
-        bundleDetails.name,
-        bundleDetails.description,
-        bundleDetails.value,
-        bundleDetails.openingBid,
-        bundleDetails.minRaise,
-        bundleDetails.donor,
-        bundleDetails.itemType
-      ];
-
       // Background sync
-      fetchWithRetry(`${getBaseUrl()}/api/bundle/execute`, {
+      fetchWithRetry(`${getBaseUrl()}/api/bundle/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           spreadsheetId,
-          bundleRow,
-          sourceRowIndices,
+          targetIds: selectedItems.map(i => i.id),
+          newName: bundleDetails.name,
+          newDescription: bundleDetails.description,
+          targetCategory: bundleDetails.category,
           idempotencyKey
         })
       })
@@ -509,11 +486,13 @@ export default function AuctionItemsTab() {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
 
-        toast.success("Items bundled successfully! Backup created.");
-        fetchData(); // Resync to get real row indices
+        toast.success(`Items bundled into "${data.ui_history_log.bundle_item_name}" successfully! Token: ${data.ui_history_log.bundle_token}`);
+        setBundleDetails({});
+        setSelectedRows({});
+        fetchData(); // Resync to get real row indices and IDs
       })
       .catch((e: any) => {
-        console.error(e);
+        console.error("Bundle Error", e);
         setItems(previousItems);
         toast.error("Failed to sync updates—retrying... local state reverted.");
       });
@@ -656,7 +635,9 @@ export default function AuctionItemsTab() {
         rowIndex: items.length > 0 ? Math.max(...items.map(i => i.rowIndex)) + 1 : 2,
         id: newIdString,
         category: newItem.category!,
-        bundled: newItem.bundled || "",
+        status: "Active",
+        bundleId: "",
+        bundledDateTime: "",
         name: newItem.name!,
         description: newItem.description || "",
         value: newItem.value || "",
@@ -672,17 +653,19 @@ export default function AuctionItemsTab() {
       const submitRow = [
         newIdString,
         newItem.category || "",
-        newItem.bundled || "",
         newItem.name || "",
         newItem.description || "",
         newItem.value || "",
         finalOpeningBid,
         finalMinRaise,
         newItem.donor || "",
-        newItem.itemType || ""
+        newItem.itemType || "",
+        "Active",
+        "",
+        ""
       ];
 
-      await appendSheetData(spreadsheetId, "Auction-Items!A:J", [submitRow]);
+      await appendSheetData(spreadsheetId, "Auction-Items!A:L", [submitRow]);
       
       toast.success(`Item added successfully with ID ${newIdString}`);
       await fetchData(); // Full resync to confirm row indices
@@ -696,7 +679,9 @@ export default function AuctionItemsTab() {
         minRaise: "",
         donor: "",
         itemType: "",
-        bundled: ""
+        status: "",
+        bundleId: "",
+        bundledDateTime: ""
       });
       setIsAddingItem(false);
     } catch (e) {
@@ -754,6 +739,8 @@ export default function AuctionItemsTab() {
 
     // Filter items first
     sortableItems = sortableItems.filter(item => {
+      if (item.status === "Inactive") return false;
+
       const searchStr = searchTerm.toLowerCase();
       const matchesSearch = !searchTerm || 
         item.name.toLowerCase().includes(searchStr) ||
@@ -824,14 +811,9 @@ export default function AuctionItemsTab() {
           </div>
           <div className="flex gap-2">
             {!isAuctionClosed && (
-              <>
-                <Button variant="outline" size="sm" onClick={() => { setIsRestoreOpen(true); fetchBackups(); }} className="flex items-center gap-2">
-                  <History className="w-4 h-4" /> Restore Backup
-                </Button>
-                <Button onClick={() => setIsAddingItem(true)} className="flex items-center gap-2">
-                  <Plus className="w-4 h-4" /> Add New Item
-                </Button>
-              </>
+              <Button onClick={() => setIsAddingItem(true)} className="flex items-center gap-2">
+                <Plus className="w-4 h-4" /> Add New Item
+              </Button>
             )}
             {isAuctionClosed && (
               <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 py-1.5 px-3">
@@ -961,7 +943,7 @@ export default function AuctionItemsTab() {
                         <div className="font-medium text-base text-foreground">
                           <EditableCell 
                             value={item.name} 
-                            onSave={(val) => handleUpdate(item.rowIndex, 'name', 'D', val)} 
+                            onSave={(val) => handleUpdate(item.rowIndex, 'name', 'C', val)} 
                             disabled={isAuctionClosed}
                           />
                         </div>
@@ -969,7 +951,7 @@ export default function AuctionItemsTab() {
                           <EditableCell 
                             type="textarea"
                             value={item.description} 
-                            onSave={(val) => handleUpdate(item.rowIndex, 'description', 'E', val)} 
+                            onSave={(val) => handleUpdate(item.rowIndex, 'description', 'D', val)} 
                             disabled={isAuctionClosed}
                           />
                         </div>
@@ -989,7 +971,7 @@ export default function AuctionItemsTab() {
                         <span className="text-muted-foreground w-12 shrink-0">Value:</span> 
                         <EditableCell 
                           value={item.value} 
-                          onSave={(val) => handleUpdate(item.rowIndex, 'value', 'F', val)} 
+                          onSave={(val) => handleUpdate(item.rowIndex, 'value', 'E', val)} 
                           disabled={isAuctionClosed}
                         />
                       </div>
@@ -997,7 +979,7 @@ export default function AuctionItemsTab() {
                         <span className="text-muted-foreground w-12 shrink-0">Open:</span>
                         <EditableCell 
                           value={item.openingBid} 
-                          onSave={(val) => handleUpdate(item.rowIndex, 'openingBid', 'G', val)} 
+                          onSave={(val) => handleUpdate(item.rowIndex, 'openingBid', 'F', val)} 
                           disabled={isAuctionClosed}
                         />
                       </div>
@@ -1005,7 +987,7 @@ export default function AuctionItemsTab() {
                         <span className="text-muted-foreground w-12 shrink-0">Raise:</span>
                         <EditableCell 
                           value={item.minRaise} 
-                          onSave={(val) => handleUpdate(item.rowIndex, 'minRaise', 'H', val)} 
+                          onSave={(val) => handleUpdate(item.rowIndex, 'minRaise', 'G', val)} 
                           disabled={isAuctionClosed}
                         />
                       </div>
@@ -1013,35 +995,43 @@ export default function AuctionItemsTab() {
                     <TableCell className="align-top text-sm">
                       <EditableCell 
                         value={item.donor} 
-                        onSave={(val) => handleUpdate(item.rowIndex, 'donor', 'I', val)} 
+                        onSave={(val) => handleUpdate(item.rowIndex, 'donor', 'H', val)} 
                         disabled={isAuctionClosed}
                       />
                     </TableCell>
-                    <TableCell className="align-top text-sm">
-                      <EditableCell 
-                        type="select"
-                        options={['Physical Item', 'Certificate', 'Both']}
-                        value={item.itemType} 
-                        onSave={(val) => handleUpdate(item.rowIndex, 'itemType', 'J', val)} 
-                        disabled={isAuctionClosed}
-                      />
-                      <div className="flex items-center space-x-2 mt-4 ml-1">
-                        <Checkbox 
-                          id={`bundled-${item.rowIndex}`} 
-                          checked={item.bundled.toLowerCase() === 'yes' || item.bundled === '☑️' || item.bundled === 'true'} 
+                      <TableCell className="align-top text-sm">
+                        <EditableCell 
+                          type="select"
+                          options={['Physical Item', 'Certificate', 'Both']}
+                          value={item.itemType} 
+                          onSave={(val) => handleUpdate(item.rowIndex, 'itemType', 'I', val)} 
                           disabled={isAuctionClosed}
-                          onCheckedChange={(checked) => {
-                            handleUpdate(item.rowIndex, 'bundled', 'C', checked ? 'yes' : '');
-                          }}
                         />
-                        <label 
-                          htmlFor={`bundled-${item.rowIndex}`} 
-                          className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-muted-foreground cursor-pointer"
-                        >
-                          Bundled?
-                        </label>
-                      </div>
-                    </TableCell>
+                        {item.bundleId && item.status === "Active" && (
+                          <div className="mt-4 flex flex-col gap-2">
+                            <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-100 w-fit">
+                              <Package className="w-3 h-3 mr-1" />
+                              Bundle
+                            </Badge>
+                            {!isAuctionClosed && (
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="h-7 text-[10px] gap-1 px-2 border-purple-200 text-purple-700 hover:bg-purple-200 hover:text-purple-800 transition-colors w-fit"
+                                disabled={isExecutingRestore}
+                                onClick={() => handleRestoreBundle(item.bundleId)}
+                              >
+                                {isExecutingRestore && restoreBundleId === item.bundleId ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <RotateCcw className="w-3 h-3" />
+                                )}
+                                Restore Items
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
                     <TableCell className="align-top text-center px-2">
                       {!isAuctionClosed && (
                         <Button 
@@ -1251,49 +1241,6 @@ export default function AuctionItemsTab() {
       </DialogContent>
     </Dialog>
 
-    <Dialog open={isRestoreOpen} onOpenChange={setIsRestoreOpen}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><History className="w-5 h-5 text-primary" /> Restore Backup</DialogTitle>
-          <DialogDescription>
-            Choose a previous version of the Auction Items spreadsheet to restore. 
-            This will archive your current version before replacing it.
-          </DialogDescription>
-        </DialogHeader>
-        
-        <div className="py-4">
-          {loadingBackups ? (
-            <div className="flex justify-center p-8">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            </div>
-          ) : backups.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No backups found in this spreadsheet.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {backups.map((b) => (
-                <div key={b.sheetId} className="flex items-center justify-between p-3 rounded-lg border hover:bg-slate-50 transition-colors">
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">{b.title}</span>
-                  </div>
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    className="text-primary hover:text-primary hover:bg-primary/10"
-                    onClick={() => executeRestore(b.title)}
-                    disabled={isRestoring}
-                  >
-                    {isRestoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-                    <span className="ml-2">Restore</span>
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
 
     <Dialog open={isAddingItem} onOpenChange={setIsAddingItem}>
       <DialogContent className="sm:max-w-[600px] overflow-y-auto max-h-[90vh]">

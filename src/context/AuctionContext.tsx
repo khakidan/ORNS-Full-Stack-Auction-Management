@@ -97,21 +97,23 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     if (!spreadsheetId) return;
     try {
       const sheetName = config.auctionItemsSheet;
-      const data = await getSheetData(spreadsheetId, `${sheetName}!A:C`);
+      const data = await getSheetData(spreadsheetId, `${sheetName}!A:L`);
       if (data.values?.length > 1) {
-        const itemsList = data.values.slice(1).map((row: string[]) => ({
+        const itemsList = data.values.slice(1).map((row: string[], i: number) => ({
           id: row[0]?.toString() || "",
-          name: row[1]?.toString() || "",
-          category: row[2]?.toString() || "",
-          bundled: "",
-          description: "",
-          value: "",
-          openingBid: "",
-          minRaise: "",
-          donor: "",
-          itemType: "",
-          rowIndex: 0 // Not relevant for basic fetch
-        }));
+          category: row[1]?.toString() || "",
+          name: row[2]?.toString() || "",
+          description: row[3]?.toString() || "",
+          value: row[4]?.toString() || "",
+          openingBid: row[5]?.toString() || "",
+          minRaise: row[6]?.toString() || "",
+          donor: row[7]?.toString() || "",
+          itemType: row[8]?.toString() || "",
+          status: row[9]?.toString() || "Active",
+          bundleId: row[10]?.toString() || "",
+          bundledDateTime: row[11]?.toString() || "",
+          rowIndex: i + 2
+        })).filter((item: any) => item.name);
         setItems(itemsList);
       }
     } catch (e) {

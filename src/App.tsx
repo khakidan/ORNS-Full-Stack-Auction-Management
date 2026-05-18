@@ -337,40 +337,40 @@ export default function App() {
                         Everything you need to run the auction!
                       </p>
                     </div>
-                    {config.bidManagementSpreadsheetId && (
-                      <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
-                        {isAuctionClosed && (
-                          <div className="flex items-center gap-2 px-3 py-1 bg-amber-100 text-amber-700 border border-amber-200 rounded-md font-bold text-xs uppercase tracking-wider animate-pulse whitespace-nowrap order-first sm:order-none mb-2 sm:mb-0">
+                    <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+                      {isAuctionClosed && (
+                        <div className="flex items-center gap-2 px-3 py-1 bg-amber-100 text-amber-700 border border-amber-200 rounded-md font-bold text-xs uppercase tracking-wider animate-pulse whitespace-nowrap order-first sm:order-none mb-2 sm:mb-0">
+                          <AlertCircle className="w-4 h-4" />
+                          Auction Closed
+                        </div>
+                      )}
+                      {!isAuctionClosed && (
+                        <>
+                          <Button
+                            onClick={() => {
+                              if (window.confirm("Are you sure you want to CLOSE the auction? This will disable further bid entries.")) {
+                                closeAuction();
+                              }
+                            }}
+                            size="sm"
+                            variant="destructive"
+                            className="gap-2 w-full sm:w-auto shrink-0"
+                          >
                             <AlertCircle className="w-4 h-4" />
-                            Auction Closed
-                          </div>
-                        )}
-                        {!isAuctionClosed && (
-                          <>
-                            <Button
-                              onClick={() => {
-                                if (window.confirm("Are you sure you want to CLOSE the auction? This will disable further bid entries.")) {
-                                  closeAuction();
-                                }
-                              }}
-                              size="sm"
-                              variant="destructive"
-                              className="gap-2 w-full sm:w-auto shrink-0"
-                            >
-                              <AlertCircle className="w-4 h-4" />
-                              Close Auction
-                            </Button>
-                            <Button
-                              onClick={handleSyncBidders}
-                              disabled={isSyncing}
-                              size="sm"
-                              className="gap-2 w-full sm:w-auto shrink-0 bg-slate-900 text-slate-50 hover:bg-slate-900/90"
-                            >
-                              {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                              {isSyncing ? "Setting up..." : "Set Up Bid Management App"}
-                            </Button>
-                          </>
-                        )}
+                            Close Auction
+                          </Button>
+                          <Button
+                            onClick={handleSyncBidders}
+                            disabled={isSyncing}
+                            size="sm"
+                            className="gap-2 w-full sm:w-auto shrink-0 bg-slate-900 text-slate-50 hover:bg-slate-900/90"
+                          >
+                            {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                            {isSyncing ? "Setting up..." : "Set Up Bid Management App"}
+                          </Button>
+                        </>
+                      )}
+                      {config.bidManagementSpreadsheetId && (
                         <Button 
                           variant="outline" 
                           size="sm"
@@ -387,8 +387,8 @@ export default function App() {
                           <ExternalLink className="w-4 h-4" />
                           Open Spreadsheet
                         </Button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                   
                   <Tabs value={activeBidTab} onValueChange={setActiveBidTab} className="space-y-6">

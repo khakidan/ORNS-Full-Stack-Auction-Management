@@ -14,13 +14,15 @@ export interface AuctionItem {
   id: string;
   name: string;
   category: string;
-  bundled: string;
   description: string;
   value: string;
   openingBid: string;
   minRaise: string;
   donor: string;
   itemType: string;
+  status: string;
+  bundleId: string;
+  bundledDateTime: string;
   rowIndex: number;
 }
 
