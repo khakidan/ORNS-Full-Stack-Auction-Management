@@ -208,8 +208,9 @@ export default function Dashboard() {
                                <div className="font-bold text-sm">#{rec[0]} {getBidderName(rec[0])}</div>
                                <div className="text-xs text-muted-foreground font-medium text-blue-600">Won Item: {rec[1]}</div>
                             </div>
-                            <div className="font-mono text-xs font-bold text-slate-600">
-                              {rec[2]}
+                            <div>
+                              <div className="font-bold text-sm">Still Due</div>
+                              <div className="text-xs text-muted-foreground font-medium text-blue-600">${rec[2]}</div>
                             </div>
                           </div>
                         ))
