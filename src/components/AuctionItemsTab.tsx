@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useConfig } from "@/context/ConfigContext";
+import { useAuction } from "@/context/AuctionContext";
 import { fetchWithRetry, getSheetData, updateSheetData, getBaseUrl, appendSheetData, deleteAuctionItem } from "@/lib/google-api";
 import { motion, AnimatePresence } from "motion/react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -50,12 +51,14 @@ function EditableCell({
   value, 
   onSave, 
   type = "text",
-  options = []
+  options = [],
+  disabled = false
 }: { 
   value: string; 
   onSave: (val: string) => void; 
   type?: "text" | "textarea" | "select";
   options?: string[];
+  disabled?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState(value);
@@ -130,20 +133,23 @@ function EditableCell({
       <span className="whitespace-pre-wrap break-words overflow-hidden text-ellipsis line-clamp-6">
         {value || <span className="text-muted-foreground italic">Empty</span>}
       </span>
-      <Button 
-        size="icon" 
-        variant="ghost" 
-        className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" 
-        onClick={() => setIsEditing(true)}
-      >
-        <Edit2 className="h-3 w-3" />
-      </Button>
+      {!disabled && (
+        <Button 
+          size="icon" 
+          variant="ghost" 
+          className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" 
+          onClick={() => setIsEditing(true)}
+        >
+          <Edit2 className="h-3 w-3" />
+        </Button>
+      )}
     </div>
   );
 }
 
 export default function AuctionItemsTab() {
   const { config } = useConfig();
+  const { isAuctionClosed } = useAuction();
   const spreadsheetId = config.auctionItemsSpreadsheetId;
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<AuctionItem[]>([]);
@@ -829,12 +835,21 @@ export default function AuctionItemsTab() {
             </CardDescription>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setIsRestoreOpen(true); fetchBackups(); }} className="flex items-center gap-2">
-              <History className="w-4 h-4" /> Restore Backup
-            </Button>
-            <Button onClick={() => setIsAddingItem(true)} className="flex items-center gap-2">
-              <Plus className="w-4 h-4" /> Add New Item
-            </Button>
+            {!isAuctionClosed && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => { setIsRestoreOpen(true); fetchBackups(); }} className="flex items-center gap-2">
+                  <History className="w-4 h-4" /> Restore Backup
+                </Button>
+                <Button onClick={() => setIsAddingItem(true)} className="flex items-center gap-2">
+                  <Plus className="w-4 h-4" /> Add New Item
+                </Button>
+              </>
+            )}
+            {isAuctionClosed && (
+              <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 py-1.5 px-3">
+                Auction Closed (Read Only)
+              </Badge>
+            )}
           </div>
         </CardHeader>
         <div className="px-6 pb-6 flex flex-col md:flex-row gap-4 items-end border-b bg-slate-50/30">
@@ -950,6 +965,7 @@ export default function AuctionItemsTab() {
                       <EditableCell 
                         value={item.id} 
                         onSave={(val) => handleUpdate(item.rowIndex, 'id', 'A', val)} 
+                        disabled={isAuctionClosed}
                       />
                     </TableCell>
                     <TableCell className="align-top">
@@ -958,6 +974,7 @@ export default function AuctionItemsTab() {
                           <EditableCell 
                             value={item.name} 
                             onSave={(val) => handleUpdate(item.rowIndex, 'name', 'D', val)} 
+                            disabled={isAuctionClosed}
                           />
                         </div>
                         <div className="text-sm text-muted-foreground">
@@ -965,6 +982,7 @@ export default function AuctionItemsTab() {
                             type="textarea"
                             value={item.description} 
                             onSave={(val) => handleUpdate(item.rowIndex, 'description', 'E', val)} 
+                            disabled={isAuctionClosed}
                           />
                         </div>
                       </div>
@@ -975,6 +993,7 @@ export default function AuctionItemsTab() {
                         options={categories}
                         value={item.category} 
                         onSave={(val) => handleUpdate(item.rowIndex, 'category', 'B', val)} 
+                        disabled={isAuctionClosed}
                       />
                     </TableCell>
                     <TableCell className="align-top text-sm space-y-2">
@@ -983,6 +1002,7 @@ export default function AuctionItemsTab() {
                         <EditableCell 
                           value={item.value} 
                           onSave={(val) => handleUpdate(item.rowIndex, 'value', 'F', val)} 
+                          disabled={isAuctionClosed}
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -990,6 +1010,7 @@ export default function AuctionItemsTab() {
                         <EditableCell 
                           value={item.openingBid} 
                           onSave={(val) => handleUpdate(item.rowIndex, 'openingBid', 'G', val)} 
+                          disabled={isAuctionClosed}
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -997,6 +1018,7 @@ export default function AuctionItemsTab() {
                         <EditableCell 
                           value={item.minRaise} 
                           onSave={(val) => handleUpdate(item.rowIndex, 'minRaise', 'H', val)} 
+                          disabled={isAuctionClosed}
                         />
                       </div>
                     </TableCell>
@@ -1004,6 +1026,7 @@ export default function AuctionItemsTab() {
                       <EditableCell 
                         value={item.donor} 
                         onSave={(val) => handleUpdate(item.rowIndex, 'donor', 'I', val)} 
+                        disabled={isAuctionClosed}
                       />
                     </TableCell>
                     <TableCell className="align-top text-sm">
@@ -1012,11 +1035,13 @@ export default function AuctionItemsTab() {
                         options={['Physical Item', 'Certificate', 'Both']}
                         value={item.itemType} 
                         onSave={(val) => handleUpdate(item.rowIndex, 'itemType', 'J', val)} 
+                        disabled={isAuctionClosed}
                       />
                       <div className="flex items-center space-x-2 mt-4 ml-1">
                         <Checkbox 
                           id={`bundled-${item.rowIndex}`} 
                           checked={item.bundled.toLowerCase() === 'yes' || item.bundled === '☑️' || item.bundled === 'true'} 
+                          disabled={isAuctionClosed}
                           onCheckedChange={(checked) => {
                             handleUpdate(item.rowIndex, 'bundled', 'C', checked ? 'yes' : '');
                           }}
@@ -1030,14 +1055,16 @@ export default function AuctionItemsTab() {
                       </div>
                     </TableCell>
                     <TableCell className="align-top text-center px-2">
-                      <Button 
-                        size="icon" 
-                        variant="ghost" 
-                        className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover/row:opacity-100 transition-opacity"
-                        onClick={() => setItemToDelete(item)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {!isAuctionClosed && (
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover/row:opacity-100 transition-opacity"
+                          onClick={() => setItemToDelete(item)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </TableCell>
                     </motion.tr>
                   ))}

@@ -22,6 +22,7 @@ import ConfigSettings from "./components/ConfigSettings";
 import Receipts from "./components/Receipts";
 import AuctionTicketsWorkflow from "./components/AuctionTicketsWorkflow";
 import AuctionItemsWorkflow from "./components/AuctionItemsWorkflow";
+import { useAuction } from "./context/AuctionContext";
 
 type WorkflowType = 'tickets' | 'items' | 'bids' | 'settings';
 
@@ -60,6 +61,7 @@ function BackToTop() {
 
 export default function App() {
   const { config } = useConfig();
+  const { isAuctionClosed, closeAuction } = useAuction();
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [activeWorkflow, setActiveWorkflow] = useState<WorkflowType>('settings');
   const [activeBidTab, setActiveBidTab] = useState("dashboard");
@@ -336,16 +338,39 @@ export default function App() {
                       </p>
                     </div>
                     {config.bidManagementSpreadsheetId && (
-                      <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                        <Button
-                          onClick={handleSyncBidders}
-                          disabled={isSyncing}
-                          size="sm"
-                          className="gap-2 w-full sm:w-auto shrink-0 bg-slate-900 text-slate-50 hover:bg-slate-900/90"
-                        >
-                          {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                          {isSyncing ? "Setting up..." : "Set Up Bid Management App"}
-                        </Button>
+                      <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+                        {isAuctionClosed && (
+                          <div className="flex items-center gap-2 px-3 py-1 bg-amber-100 text-amber-700 border border-amber-200 rounded-md font-bold text-xs uppercase tracking-wider animate-pulse whitespace-nowrap order-first sm:order-none mb-2 sm:mb-0">
+                            <AlertCircle className="w-4 h-4" />
+                            Auction Closed
+                          </div>
+                        )}
+                        {!isAuctionClosed && (
+                          <>
+                            <Button
+                              onClick={() => {
+                                if (window.confirm("Are you sure you want to CLOSE the auction? This will disable further bid entries.")) {
+                                  closeAuction();
+                                }
+                              }}
+                              size="sm"
+                              variant="destructive"
+                              className="gap-2 w-full sm:w-auto shrink-0"
+                            >
+                              <AlertCircle className="w-4 h-4" />
+                              Close Auction
+                            </Button>
+                            <Button
+                              onClick={handleSyncBidders}
+                              disabled={isSyncing}
+                              size="sm"
+                              className="gap-2 w-full sm:w-auto shrink-0 bg-slate-900 text-slate-50 hover:bg-slate-900/90"
+                            >
+                              {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                              {isSyncing ? "Setting up..." : "Set Up Bid Management App"}
+                            </Button>
+                          </>
+                        )}
                         <Button 
                           variant="outline" 
                           size="sm"
@@ -381,10 +406,12 @@ export default function App() {
                           <ShoppingBag className="w-4 h-4" />
                           <span className="hidden sm:inline">Items</span>
                         </TabsTrigger>
-                        <TabsTrigger value="bids" className="gap-2 px-4 py-2">
-                          <CreditCard className="w-4 h-4" />
-                          <span className="hidden sm:inline">Bid Entry</span>
-                        </TabsTrigger>
+                        {!isAuctionClosed && (
+                          <TabsTrigger value="bids" className="gap-2 px-4 py-2">
+                            <CreditCard className="w-4 h-4" />
+                            <span className="hidden sm:inline">Bid Entry</span>
+                          </TabsTrigger>
+                        )}
                         <TabsTrigger value="checkout" className="gap-2 px-4 py-2">
                           <Handshake className="w-4 h-4" />
                           <span className="hidden sm:inline">Checkout</span>

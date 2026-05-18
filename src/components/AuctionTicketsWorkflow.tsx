@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useConfig } from "@/context/ConfigContext";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, AlertCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import TicketAttendeeTab from "./TicketAttendeeTab";
 import TicketDocumentCreationTab from "./TicketDocumentCreationTab";
+import { useAuction } from "@/context/AuctionContext";
 
 export default function AuctionTicketsWorkflow() {
   const { config } = useConfig();
+  const { isAuctionClosed } = useAuction();
   const spreadsheetId = config.auctionTicketsSpreadsheetId;
   const [activeTab, setActiveTab] = useState("auction_tickets");
 
@@ -20,17 +22,25 @@ export default function AuctionTicketsWorkflow() {
             Manage bidders, check-ins, and prepare bidder documents for the day of the auction.
           </p>
         </div>
-        {spreadsheetId && (
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => window.open(`https://docs.google.com/spreadsheets/d/${spreadsheetId}`, "_blank")}
-            className="w-full sm:w-auto"
-          >
-            <ExternalLink className="w-4 h-4 mr-2" />
-            Open Spreadsheet
-          </Button>
-        )}
+        <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+          {isAuctionClosed && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-amber-100 text-amber-700 border border-amber-200 rounded-md font-bold text-xs uppercase tracking-wider animate-pulse whitespace-nowrap order-first sm:order-none mb-2 sm:mb-0">
+              <AlertCircle className="w-4 h-4" />
+              Auction Closed
+            </div>
+          )}
+          {spreadsheetId && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => window.open(`https://docs.google.com/spreadsheets/d/${spreadsheetId}`, "_blank")}
+              className="w-full sm:w-auto"
+            >
+              <ExternalLink className="w-4 h-4 mr-2" />
+              Open Spreadsheet
+            </Button>
+          )}
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

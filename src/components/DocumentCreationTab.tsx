@@ -8,7 +8,10 @@ import { fetchWithRetry, getBaseUrl } from "@/lib/google-api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
+import { useAuction } from "@/context/AuctionContext";
+
 export default function DocumentCreationTab() {
+  const { isAuctionClosed } = useAuction();
   const { config } = useConfig();
   const spreadsheetId = config.auctionItemsSpreadsheetId;
   const scriptId = config.auctionItemsScriptId;
@@ -91,6 +94,7 @@ export default function DocumentCreationTab() {
               className="w-full justify-start gap-2" 
               variant="secondary" 
               onClick={() => runScript('apiCreateBundlingDoc', 'Create Bundling Meeting Doc')}
+              disabled={isAuctionClosed}
             >
               <FileText className="w-4 h-4" />
               Create Bundling Meeting Doc
@@ -99,6 +103,7 @@ export default function DocumentCreationTab() {
               className="w-full justify-start gap-2" 
               variant="secondary" 
               onClick={() => runScript('apiCreateItemLabels', 'Create Item Labels')}
+              disabled={isAuctionClosed}
             >
               <FileText className="w-4 h-4" />
               Create Item Labels Document
@@ -107,6 +112,7 @@ export default function DocumentCreationTab() {
               className="w-full justify-start gap-2" 
               variant="secondary" 
               onClick={() => runScript('apiCreateBiddingGuideCoverPage', 'Bidding Guide Cover Page')}
+              disabled={isAuctionClosed}
             >
               <FileText className="w-4 h-4" />
               Create Bidding Guide Cover Page
@@ -115,6 +121,7 @@ export default function DocumentCreationTab() {
               className="w-full justify-start gap-2" 
               variant="secondary" 
               onClick={() => runScript('apiCreateBiddingGuideInnerPages', 'Bidding Guide Inner Pages')}
+              disabled={isAuctionClosed}
             >
               <FileText className="w-4 h-4" />
               Create Bidding Guide Inner Pages
@@ -123,6 +130,7 @@ export default function DocumentCreationTab() {
               className="w-full justify-start gap-2" 
               variant="secondary" 
               onClick={() => runScript('apiCreateBidSheets', 'Bid Sheets')}
+              disabled={isAuctionClosed}
             >
               <FileText className="w-4 h-4" />
               Create Bid Sheets Doc (A5)
@@ -131,6 +139,7 @@ export default function DocumentCreationTab() {
               className="w-full justify-start gap-2" 
               variant="secondary" 
               onClick={() => runScript('apiCreateCatalog', 'Auction Catalog')}
+              disabled={isAuctionClosed}
             >
               <FileText className="w-4 h-4" />
               Create Auction Catalog Doc
@@ -139,6 +148,7 @@ export default function DocumentCreationTab() {
               className="w-full justify-start gap-2" 
               variant="secondary" 
               onClick={() => runScript('apiCreateTableTents', 'Table Tents')}
+              disabled={isAuctionClosed}
             >
               <FileText className="w-4 h-4" />
               Create Table Tents Doc
@@ -147,10 +157,18 @@ export default function DocumentCreationTab() {
               className="w-full justify-start gap-2" 
               variant="secondary" 
               onClick={() => runScript('apiCreateSlideshow', 'Create Slideshow')}
+              disabled={isAuctionClosed}
             >
               <PlaySquare className="w-4 h-4" />
               Create Live Auction Slideshow
             </Button>
+
+            {isAuctionClosed && (
+              <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-100 flex items-center gap-2 mt-4">
+                <Loader2 className="w-3 h-3 animate-pulse" />
+                Auction Closed: Creation tools disabled.
+              </p>
+            )}
             
             <p className="text-[10px] text-muted-foreground mt-4 px-1 italic">
               Note: Documents will be placed in your For Print folder.

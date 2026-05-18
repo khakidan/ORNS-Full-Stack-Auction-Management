@@ -7,7 +7,10 @@ import { fetchWithRetry, getBaseUrl } from "@/lib/google-api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
+import { useAuction } from "@/context/AuctionContext";
+
 export default function TicketDocumentCreationTab() {
+  const { isAuctionClosed } = useAuction();
   const spreadsheetId = localStorage.getItem("auctionTicketsSpreadsheetId");
   const scriptId = localStorage.getItem("auctionTicketsScriptId");
   const forPrintFolderId = localStorage.getItem("forPrintFolderId");
@@ -87,10 +90,18 @@ export default function TicketDocumentCreationTab() {
               className="w-full justify-start gap-2" 
               variant="secondary" 
               onClick={() => runScript('apiCreateBidderLabels', 'Create Bidder Labels')}
+              disabled={isAuctionClosed}
             >
               <PlaySquare className="w-4 h-4 text-emerald-600" />
               Create Bidder Labels Doc
             </Button>
+            
+            {isAuctionClosed && (
+              <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-100 flex items-center gap-2">
+                <Loader2 className="w-3 h-3 animate-pulse" />
+                Auction Closed: Creation tools disabled.
+              </p>
+            )}
             
             <p className="text-[10px] text-muted-foreground mt-4 px-1 italic">
               Note: Documents will be placed in your For Print folder.

@@ -63,6 +63,8 @@ interface AuctionContextType {
   addAttendee: (sheet: string, data: any[]) => Promise<void>;
   removeAttendee: (attendee: Attendee) => Promise<void>;
   recordWinningBid: (bidderId: string, itemId: string, price: number) => Promise<void>;
+  isAuctionClosed: boolean;
+  closeAuction: () => Promise<void>;
 }
 
 const AuctionContext = createContext<AuctionContextType | undefined>(undefined);
@@ -77,6 +79,32 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   const [winners, setWinners] = useState<Record<string, string>>({});
   const [totalRaised, setTotalRaised] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [isAuctionClosed, setIsAuctionClosed] = useState(false);
+
+  const fetchAuctionStatus = useCallback(async () => {
+    if (!spreadsheetId) return;
+    try {
+      const data = await getSheetData(spreadsheetId, "Auction-Status!A2");
+      if (data.values && data.values[0]) {
+        const val = data.values[0][0];
+        setIsAuctionClosed(val === false || val === "FALSE");
+      }
+    } catch (e) {
+      console.error("Error fetching auction status:", e);
+    }
+  }, [spreadsheetId]);
+
+  const closeAuction = async () => {
+    if (!spreadsheetId) return;
+    try {
+      await updateSheetData(spreadsheetId, "Auction-Status!A2", [[false]]);
+      setIsAuctionClosed(true);
+      toast.success("Auction closed successfully. Records are now read-only where applicable.");
+    } catch (e) {
+      console.error("Error closing auction:", e);
+      toast.error("Failed to close auction.");
+    }
+  };
 
   const fetchBidders = useCallback(async () => {
     if (!spreadsheetId) return;
@@ -284,8 +312,8 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
 
   const fetchAllData = useCallback(async () => {
     setLoading(true);
-    await Promise.all([fetchBidders(), fetchItems(), fetchAttendees()]);
-  }, [fetchBidders, fetchItems, fetchAttendees]);
+    await Promise.all([fetchBidders(), fetchItems(), fetchAttendees(), fetchAuctionStatus()]);
+  }, [fetchBidders, fetchItems, fetchAttendees, fetchAuctionStatus]);
 
   const checkInBidder = async (bidder: Bidder) => {
     if (!spreadsheetId) return;
@@ -437,7 +465,9 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     setAttendees,
     addAttendee,
     removeAttendee,
-    recordWinningBid
+    recordWinningBid,
+    isAuctionClosed,
+    closeAuction
   };
 
   return (

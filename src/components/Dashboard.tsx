@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuction } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Users, ShoppingBag, TrendingUp, UserCheck, Trophy, Loader2 } from "lucide-react";
+import { Users, ShoppingBag, TrendingUp, UserCheck, Trophy, Loader2, AlertCircle, Clock, ExternalLink, RefreshCw } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getSheetData, updateSheetData } from "@/lib/google-api";
@@ -10,11 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 
 export default function Dashboard() {
-  const { bidders, items, totalRaised, loading } = useAuction();
+  const { bidders, items, totalRaised, loading, isAuctionClosed, winners } = useAuction();
   const { config } = useConfig();
   const spreadsheetId = config.bidManagementSpreadsheetId;
+  const [followUpRecords, setFollowUpRecords] = useState<any[]>([]);
+  const [loadingFollowUp, setLoadingFollowUp] = useState(false);
 
   const [giftCardWinnerId, setGiftCardWinnerId] = useState("");
   const [raffleWinnerId, setRaffleWinnerId] = useState("");
@@ -36,7 +39,25 @@ export default function Dashboard() {
       }
     };
     fetchSpecialWinners();
-  }, [spreadsheetId]);
+
+    if (isAuctionClosed && spreadsheetId) {
+      fetchFollowUpRecords();
+    }
+  }, [spreadsheetId, isAuctionClosed]);
+
+  const fetchFollowUpRecords = async () => {
+    setLoadingFollowUp(true);
+    try {
+      const data = await getSheetData(spreadsheetId, "Follow-Up!A:C");
+      if (data.values && data.values.length > 1) {
+        setFollowUpRecords(data.values.slice(1));
+      }
+    } catch (err) {
+      console.error("Failed to fetch follow-up records", err);
+    } finally {
+      setLoadingFollowUp(false);
+    }
+  };
 
   const saveGiftCardWinner = async () => {
     if (!spreadsheetId) {
@@ -116,7 +137,97 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-left">
+      {isAuctionClosed && (
+        <div className="grid grid-cols-1 gap-6">
+          <Card className="border-amber-200 bg-amber-50/20 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-amber-800 flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5" />
+                  Post-Auction Follow-Up
+                </CardTitle>
+                <CardDescription className="text-amber-700/80">
+                  Critical actions to take after the auction has closed.
+                </CardDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={fetchFollowUpRecords} disabled={loadingFollowUp}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${loadingFollowUp ? 'animate-spin' : ''}`} />
+                Refresh Lists
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Pending Checkouts */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-sm uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                      <Clock className="w-4 h-4" /> Still Need to Check Out
+                    </h4>
+                    <span className="text-xs font-medium px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full">
+                      {bidders.filter(b => b.checkedIn && !b.checkedOut).length} Total
+                    </span>
+                  </div>
+                  <ScrollArea className="h-[300px] rounded-md border bg-white p-4">
+                    <div className="space-y-3">
+                      {bidders.filter(b => b.checkedIn && !b.checkedOut).length > 0 ? (
+                        bidders.filter(b => b.checkedIn && !b.checkedOut).map(b => (
+                          <div key={b.id} className="flex items-center justify-between border-b pb-2 last:border-0">
+                            <div>
+                              <div className="font-bold text-sm">#{b.id} {b.firstName} {b.lastName}</div>
+                              <div className="text-xs text-muted-foreground">{b.email}</div>
+                            </div>
+                            <Badge variant={b.paid ? "success" : "warning"}>
+                              {b.paid ? "Paid" : "Unpaid"}
+                            </Badge>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-12 text-muted-foreground italic">All present bidders have checked out.</div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
+
+                {/* Follow-Up Sheet Records */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-sm uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                       <ExternalLink className="w-4 h-4" /> Post-Checkout Item Wins
+                    </h4>
+                    <span className="text-xs font-medium px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                      {followUpRecords.length} Records
+                    </span>
+                  </div>
+                  <ScrollArea className="h-[300px] rounded-md border bg-white p-4">
+                    <div className="space-y-3">
+                      {followUpRecords.length > 0 ? (
+                        followUpRecords.map((rec, i) => (
+                          <div key={i} className="flex items-center justify-between border-b pb-2 last:border-0">
+                            <div>
+                               <div className="font-bold text-sm">#{rec[0]} {getBidderName(rec[0])}</div>
+                               <div className="text-xs text-muted-foreground font-medium text-blue-600">Won Item: {rec[1]}</div>
+                            </div>
+                            <div className="font-mono text-xs font-bold text-slate-600">
+                              {rec[2]}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-12 text-muted-foreground italic">No items have been assigned to checked-out bidders yet.</div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                  <p className="text-[10px] text-muted-foreground italic mt-2">
+                    Note: These records are created automatically when an item is assigned to someone who already checked out.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="hover:shadow-md transition-shadow">
@@ -176,7 +287,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Main Widgets Row */}
+      {/* Special Winners Widget Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Attendance Overview */}
         <Card>
@@ -316,6 +427,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
     </div>
   );
 }

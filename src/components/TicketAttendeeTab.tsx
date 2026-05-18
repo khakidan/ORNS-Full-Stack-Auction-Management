@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { useAuction, Attendee } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
 
-const EditableCell = ({ value: initialValue, onSave, placeholder = "N/A" }: { value: string, onSave: (newVal: string) => Promise<void>, placeholder?: string }) => {
+const EditableCell = ({ value: initialValue, onSave, placeholder = "N/A", disabled = false }: { value: string, onSave: (newVal: string) => Promise<void>, placeholder?: string, disabled?: boolean }) => {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(initialValue);
   const [saving, setSaving] = useState(false);
@@ -67,9 +67,11 @@ const EditableCell = ({ value: initialValue, onSave, placeholder = "N/A" }: { va
       <div className={`text-base truncate ${!initialValue ? 'text-muted-foreground italic' : ''}`} title={initialValue || placeholder}>
         {initialValue || placeholder}
       </div>
-      <button onClick={() => setEditing(true)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-700 transition-opacity">
-        <Pencil className="w-3.5 h-3.5" />
-      </button>
+      {!disabled && (
+        <button onClick={() => setEditing(true)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-700 transition-opacity">
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+      )}
     </div>
   );
 };
@@ -77,7 +79,7 @@ const EditableCell = ({ value: initialValue, onSave, placeholder = "N/A" }: { va
 export default function TicketAttendeeTab() {
   const { config } = useConfig();
   const spreadsheetId = config.auctionTicketsSpreadsheetId;
-  const { attendees, setAttendees, loading, addAttendee, removeAttendee, fetchAttendees } = useAuction();
+  const { attendees, setAttendees, loading, addAttendee, removeAttendee, fetchAttendees, isAuctionClosed } = useAuction();
 
   const [filterSource, setFilterSource] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -226,60 +228,67 @@ export default function TicketAttendeeTab() {
             Refresh
           </Button>
 
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger
-            render={
-              <Button className="gap-2 w-full md:w-auto">
-                <UserPlus className="w-4 h-4" />
-                Add Entry
-              </Button>
-            }
-          />
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Entry</DialogTitle>
-              <DialogDescription>Manually add a sponsor, staff member, or offline ticket buyer.</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">Name</Label>
-                <div className="col-span-3 flex gap-2">
-                  <Input placeholder="First" value={newEntry.firstName} onChange={e => setNewEntry({...newEntry, firstName: e.target.value})} />
-                  <Input placeholder="Last" value={newEntry.lastName} onChange={e => setNewEntry({...newEntry, lastName: e.target.value})} />
+          {!isAuctionClosed && (
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger
+                render={
+                  <Button className="gap-2 w-full md:w-auto">
+                    <UserPlus className="w-4 h-4" />
+                    Add Entry
+                  </Button>
+                }
+              />
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add New Entry</DialogTitle>
+                  <DialogDescription>Manually add a sponsor, staff member, or offline ticket buyer.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label className="text-right">Name</Label>
+                    <div className="col-span-3 flex gap-2">
+                      <Input placeholder="First" value={newEntry.firstName} onChange={e => setNewEntry({...newEntry, firstName: e.target.value})} />
+                      <Input placeholder="Last" value={newEntry.lastName} onChange={e => setNewEntry({...newEntry, lastName: e.target.value})} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label className="text-right">Email</Label>
+                    <Input className="col-span-3" value={newEntry.email} onChange={e => setNewEntry({...newEntry, email: e.target.value})} />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label className="text-right">Phone</Label>
+                    <Input className="col-span-3" value={newEntry.phone} onChange={e => setNewEntry({...newEntry, phone: e.target.value})} />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label className="text-right">Source</Label>
+                    <Select value={newEntry.source} onValueChange={v => setNewEntry({...newEntry, source: v})}>
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="tickets">General Tickets</SelectItem>
+                        <SelectItem value="sponsor tickets">Sponsor</SelectItem>
+                        <SelectItem value="staff tickets">Staff</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label className="text-right">Tickets</Label>
+                    <Input type="number" className="col-span-3" value={newEntry.tickets} onChange={e => setNewEntry({...newEntry, tickets: e.target.value})} />
+                  </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">Email</Label>
-                <Input className="col-span-3" value={newEntry.email} onChange={e => setNewEntry({...newEntry, email: e.target.value})} />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">Phone</Label>
-                <Input className="col-span-3" value={newEntry.phone} onChange={e => setNewEntry({...newEntry, phone: e.target.value})} />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">Source</Label>
-                <Select value={newEntry.source} onValueChange={v => setNewEntry({...newEntry, source: v})}>
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="tickets">General Tickets</SelectItem>
-                    <SelectItem value="sponsor tickets">Sponsor</SelectItem>
-                    <SelectItem value="staff tickets">Staff</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">Tickets</Label>
-                <Input type="number" className="col-span-3" value={newEntry.tickets} onChange={e => setNewEntry({...newEntry, tickets: e.target.value})} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleAddSubmit}>Save Entry</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleAddSubmit}>Save Entry</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+          {isAuctionClosed && (
+            <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 h-10 px-4">
+              Auction Closed (Read Only)
+            </Badge>
+          )}
       </div>
     </div>
 
@@ -321,11 +330,11 @@ export default function TicketAttendeeTab() {
                         <TableCell>
                           <div className="flex flex-col gap-1.5">
                             <div className="flex gap-1">
-                               <EditableCell value={a.firstName} onSave={val => updateField(a, 'firstName', val)} placeholder="First" />
-                               <EditableCell value={a.lastName} onSave={val => updateField(a, 'lastName', val)} placeholder="Last" />
+                               <EditableCell value={a.firstName} onSave={val => updateField(a, 'firstName', val)} placeholder="First" disabled={isAuctionClosed} />
+                               <EditableCell value={a.lastName} onSave={val => updateField(a, 'lastName', val)} placeholder="Last" disabled={isAuctionClosed} />
                             </div>
-                            <EditableCell value={a.email} onSave={val => updateField(a, 'email', val)} placeholder="Email" />
-                            <EditableCell value={a.phone} onSave={val => updateField(a, 'phone', val)} placeholder="Phone" />
+                            <EditableCell value={a.email} onSave={val => updateField(a, 'email', val)} placeholder="Email" disabled={isAuctionClosed} />
+                            <EditableCell value={a.phone} onSave={val => updateField(a, 'phone', val)} placeholder="Phone" disabled={isAuctionClosed} />
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
@@ -350,7 +359,7 @@ export default function TicketAttendeeTab() {
                                     </Badge>
                                   )}
                                 </span>
-                                <EditableCell value={g.email} onSave={val => updateField(a, 'email', val, g.guestIndex)} placeholder="Guest Email" />
+                                <EditableCell value={g.email} onSave={val => updateField(a, 'email', val, g.guestIndex)} placeholder="Guest Email" disabled={isAuctionClosed} />
                               </div>
                             ))}
                             {a.guestsInfo.length === 0 && <span className="text-muted-foreground italic text-sm">No guests listed</span>}
@@ -358,14 +367,14 @@ export default function TicketAttendeeTab() {
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-2">
-                             <Select value={a.paymentStatus || 'Pending'} onValueChange={(val) => updatePaymentStatus(a, val)}>
+                             <Select value={a.paymentStatus || 'Pending'} onValueChange={(val) => updatePaymentStatus(a, val)} disabled={isAuctionClosed}>
                                <SelectTrigger className={`h-9 text-sm ${a.paymentStatus?.toLowerCase() === 'paid' ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
                                  <SelectValue />
                                </SelectTrigger>
                                <SelectContent>
                                  <SelectItem value="Paid">Paid</SelectItem>
                                  <SelectItem value="Pending">Pending</SelectItem>
-                               </SelectContent>
+                                </SelectContent>
                              </Select>
                              {a.paymentStatus?.toLowerCase() === 'paid' && a.totalPaid !== '$0' && (
                                <span className="text-sm text-green-700 font-medium">Total: {a.totalPaid}</span>
@@ -374,18 +383,20 @@ export default function TicketAttendeeTab() {
                           </div>
                         </TableCell>
                         <TableCell>
-                           <Button 
-                             size="icon" 
-                             variant="ghost" 
-                             className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                             onClick={() => {
-                               if (window.confirm("Are you sure you want to clear this entry?")) {
-                                 removeAttendee(a);
-                               }
-                             }}
-                           >
-                             <Trash2 className="w-3.5 h-3.5" />
-                           </Button>
+                           {!isAuctionClosed && (
+                             <Button 
+                               size="icon" 
+                               variant="ghost" 
+                               className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                               onClick={() => {
+                                 if (window.confirm("Are you sure you want to clear this entry?")) {
+                                   removeAttendee(a);
+                                 }
+                               }}
+                             >
+                               <Trash2 className="w-3.5 h-3.5" />
+                             </Button>
+                           )}
                         </TableCell>
                       </TableRow>
                     ))

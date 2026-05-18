@@ -42,7 +42,7 @@ import {
 import { Filter } from "lucide-react";
 
 export default function Bidders() {
-  const { bidders, loading, checkInBidder, markBidderAsProxy, fetchBidders, fetchAttendees, attendees } = useAuction();
+  const { bidders, loading, checkInBidder, markBidderAsProxy, fetchBidders, fetchAttendees, attendees, isAuctionClosed } = useAuction();
   const { config } = useConfig();
   const spreadsheetId = config.bidManagementSpreadsheetId;
   const ticketsSpreadsheetId = config.auctionTicketsSpreadsheetId;
@@ -309,80 +309,87 @@ export default function Bidders() {
         </div>
 
         <div className="flex gap-2 w-full md:w-auto">
-          <Dialog open={isWalkInOpen} onOpenChange={setIsWalkInOpen}>
-            <DialogTrigger
-              render={
-                <Button className="gap-2">
-                  <UserPlus className="w-4 h-4" />
-                  New Walk-In Ticket
-                </Button>
-              }
-            />
-          <DialogContent>
-            <form onSubmit={handleWalkInSubmit}>
-              <DialogHeader>
-                <DialogTitle>New Walk-In Ticket</DialogTitle>
-                <DialogDescription>
-                  Enter the details for a new walk-in bidder. This will create a new bidder number and mark them as checked in.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="firstName" className="text-right">
-                    First Name
-                  </Label>
-                  <Input
-                    id="firstName"
-                    value={walkInForm.firstName}
-                    onChange={(e) => setWalkInForm(prev => ({ ...prev, firstName: e.target.value }))}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="lastName" className="text-right">
-                    Last Name
-                  </Label>
-                  <Input
-                    id="lastName"
-                    value={walkInForm.lastName}
-                    onChange={(e) => setWalkInForm(prev => ({ ...prev, lastName: e.target.value }))}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="email" className="text-right">
-                    Email
-                  </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="Optional"
-                    value={walkInForm.email}
-                    onChange={(e) => setWalkInForm(prev => ({ ...prev, email: e.target.value }))}
-                    className="col-span-3"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsWalkInOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isSubmittingWalkIn}>
-                  {isSubmittingWalkIn ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    "Create Ticket"
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+          {!isAuctionClosed && (
+            <Dialog open={isWalkInOpen} onOpenChange={setIsWalkInOpen}>
+              <DialogTrigger
+                render={
+                  <Button className="gap-2">
+                    <UserPlus className="w-4 h-4" />
+                    New Walk-In Ticket
+                  </Button>
+                }
+              />
+              <DialogContent>
+                <form onSubmit={handleWalkInSubmit}>
+                  <DialogHeader>
+                    <DialogTitle>New Walk-In Ticket</DialogTitle>
+                    <DialogDescription>
+                      Enter the details for a new walk-in bidder. This will create a new bidder number and mark them as checked in.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="firstName" className="text-right">
+                        First Name
+                      </Label>
+                      <Input
+                        id="firstName"
+                        value={walkInForm.firstName}
+                        onChange={(e) => setWalkInForm(prev => ({ ...prev, firstName: e.target.value }))}
+                        className="col-span-3"
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="lastName" className="text-right">
+                        Last Name
+                      </Label>
+                      <Input
+                        id="lastName"
+                        value={walkInForm.lastName}
+                        onChange={(e) => setWalkInForm(prev => ({ ...prev, lastName: e.target.value }))}
+                        className="col-span-3"
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="email" className="text-right">
+                        Email
+                      </Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="Optional"
+                        value={walkInForm.email}
+                        onChange={(e) => setWalkInForm(prev => ({ ...prev, email: e.target.value }))}
+                        className="col-span-3"
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsWalkInOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={isSubmittingWalkIn}>
+                      {isSubmittingWalkIn ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        "Create Ticket"
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
+          {isAuctionClosed && (
+            <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 px-4 h-10">
+              Auction Closed (Read Only)
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -518,29 +525,35 @@ export default function Bidders() {
                         </TableCell>
                         <TableCell className="text-right px-4">
                           <div className="flex justify-end gap-1.5 md:gap-2">
-                            {!bidder.checkedIn && (
-                              <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => handleCheckInAttempt(bidder)}
-                                disabled={processingId === bidder.id || isAddingTicketToReceipt}
-                                className="h-8 md:h-9"
-                              >
-                                <span className="hidden sm:inline">Check In</span>
-                                <UserCheck className="w-4 h-4 sm:hidden" />
-                              </Button>
-                            )}
-                            {!bidder.isProxy && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => markAsProxy(bidder)}
-                                disabled={processingId === bidder.id || isAddingTicketToReceipt}
-                                className="h-8 md:h-9"
-                              >
-                                <UserCheck className="w-4 h-4 md:mr-1.5" />
-                                <span className="hidden md:inline">Proxy</span>
-                              </Button>
+                            {isAuctionClosed ? (
+                              <span className="text-xs text-muted-foreground italic">Read Only</span>
+                            ) : (
+                              <>
+                                {!bidder.checkedIn && (
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    onClick={() => handleCheckInAttempt(bidder)}
+                                    disabled={processingId === bidder.id || isAddingTicketToReceipt}
+                                    className="h-8 md:h-9"
+                                  >
+                                    <span className="hidden sm:inline">Check In</span>
+                                    <UserCheck className="w-4 h-4 sm:hidden" />
+                                  </Button>
+                                )}
+                                {!bidder.isProxy && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => markAsProxy(bidder)}
+                                    disabled={processingId === bidder.id || isAddingTicketToReceipt}
+                                    className="h-8 md:h-9"
+                                  >
+                                    <UserCheck className="w-4 h-4 md:mr-1.5" />
+                                    <span className="hidden md:inline">Proxy</span>
+                                  </Button>
+                                )}
+                              </>
                             )}
                           </div>
                         </TableCell>
