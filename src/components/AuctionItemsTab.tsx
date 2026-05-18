@@ -144,7 +144,7 @@ export default function AuctionItemsTab() {
   const [categories, setCategories] = useState<string[]>([]);
   const [categoriesWithBase, setCategoriesWithBase] = useState<{name: string, base: number}[]>([]);
   const [valueCalculations, setValueCalculations] = useState<{minRange: number, minRaise: number}[]>([]);
-  const [sortConfig, setSortConfig] = useState<{key: keyof AuctionItem | null, direction: 'asc' | 'desc'}>({ key: null, direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState<{key: keyof AuctionItem | null, direction: 'asc' | 'desc'}>({ key: 'id', direction: 'asc' });
   
   const [selectedRows, setSelectedRows] = useState<BundlingSelection>({});
   const [isBundling, setIsBundling] = useState(false);
