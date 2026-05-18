@@ -462,6 +462,141 @@ app.post("/api/receipts/email-only", async (req, res) => {
   }
 });
 
+// Record winning bid with follow-up logic
+app.post("/api/auction/record-winning-bid", async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+  const { 
+    bidderId, 
+    itemId, 
+    price, 
+    spreadsheetId, 
+    bidManagementSheet, 
+    bidderNumbersSheet,
+    idempotencyKey 
+  } = req.body;
+
+  const cached = checkIdempotency(req, res, idempotencyKey);
+  if (cached) return;
+
+  try {
+    const client = getAuthenticatedClient(req.session.tokens);
+    const sheets = google.sheets({ version: "v4", auth: client });
+
+    // 1. Get Bidder Info (to check if already checked out)
+    const bidderSearch = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${bidderNumbersSheet}!A:G`,
+    });
+    const biddersRows = bidderSearch.data.values || [];
+    const bidderRow = biddersRows.find((row: any) => row[0]?.toString() === bidderId);
+    
+    if (!bidderRow) {
+      throw new Error(`Bidder ${bidderId} not found.`);
+    }
+
+    const isCheckedOut = bidderRow[6] === true || bidderRow[6] === "TRUE";
+
+    // 2. Add Bid to Bid-Management Sheet
+    const dataRes = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${bidManagementSheet}!1:300`,
+    });
+    const values = dataRes.data.values || [];
+    if (values.length === 0) throw new Error("Bid sheet is empty");
+
+    const header = values[0];
+    let colIndex = -1;
+    for (let j = 0; j < header.length; j += 2) {
+      if (header[j]?.toString() === bidderId) {
+        colIndex = j;
+        break;
+      }
+    }
+    if (colIndex === -1) throw new Error("Bidder column not found in Bid Management sheet");
+
+    let rowIndex = -1;
+    for (let i = 3; i < values.length; i++) {
+      if (!values[i] || !values[i][colIndex]) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+    if (rowIndex === -1) rowIndex = values.length + 1;
+    if (rowIndex < 4) rowIndex = 4;
+
+    const getColumnLetter = (index: number): string => {
+      let letter = "";
+      while (index >= 0) {
+        letter = String.fromCharCode((index % 26) + 65) + letter;
+        index = Math.floor(index / 26) - 1;
+      }
+      return letter;
+    };
+
+    const colLetter = getColumnLetter(colIndex);
+    const nextColLetter = getColumnLetter(colIndex + 1);
+
+    const operations: SheetOp[] = [];
+
+    // Operation 1: Write the bid
+    operations.push({
+      type: 'UPDATE',
+      spreadsheetId,
+      range: `${bidManagementSheet}!${colLetter}${rowIndex}:${nextColLetter}${rowIndex}`,
+      newValues: [[itemId, price]]
+    });
+
+    // Operation 2: Follow-Up logic if already checked out
+    let followUpAdded = false;
+    if (isCheckedOut) {
+      // 3. Ensure Follow-Up sheet exists (optional but helpful)
+      const metadata = await sheets.spreadsheets.get({ spreadsheetId });
+      const followUpSheet = metadata.data.sheets?.find(s => s.properties?.title === "Follow-Up");
+      
+      if (!followUpSheet) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [{
+              addSheet: {
+                properties: { title: "Follow-Up" }
+              }
+            }]
+          }
+        });
+        // Add header if new
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: "Follow-Up!A1:C1",
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: [["Bidder ID", "Item ID", "Amount"]]
+          }
+        });
+      }
+
+      operations.push({
+        type: 'APPEND',
+        spreadsheetId,
+        range: `Follow-Up!A:C`,
+        newValues: [[bidderId, itemId, price]]
+      });
+      followUpAdded = true;
+    }
+
+    await executeGoogleSheetsTransaction(sheets, operations);
+
+    const result = { success: true, followUpAdded };
+    saveIdempotency(idempotencyKey, result);
+    res.json(result);
+
+  } catch (error: any) {
+    console.error("[Transaction Error] record-winning-bid:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Generic endpoint to run any Apps Script function
 app.post("/api/script/run", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });

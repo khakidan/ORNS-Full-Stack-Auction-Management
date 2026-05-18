@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { getSheetData, updateSheetData, appendSheetData, clearSheetData } from "@/lib/google-api";
+import { getSheetData, updateSheetData, appendSheetData, clearSheetData, fetchWithRetry, getBaseUrl } from "@/lib/google-api";
 import { toast } from "sonner";
 import { useConfig } from "./ConfigContext";
 
@@ -142,51 +142,35 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     setTotalRaised(prev => prev + price);
 
     // 3. Background Sync
-    const sheetName = config.bidManagementSheet;
-    getSheetData(spreadsheetId, `${sheetName}!1:200`)
-      .then(data => {
-        if (!data.values || data.values.length === 0) {
-          throw new Error("Bid Management sheet is empty or inaccessible.");
+    const idempotencyKey = crypto.randomUUID();
+    
+    fetchWithRetry(`${getBaseUrl()}/api/auction/record-winning-bid`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bidderId,
+        itemId,
+        price,
+        spreadsheetId,
+        bidManagementSheet: config.bidManagementSheet,
+        bidderNumbersSheet: config.bidderNumbersSheet,
+        idempotencyKey
+      }),
+      credentials: "include"
+    })
+      .then(async res => {
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Failed to sync bid");
         }
-
-        const header = data.values[0];
-        let colIndex = -1;
-        for (let j = 0; j < header.length; j += 2) {
-          if (header[j]?.toString() === bidderId) {
-            colIndex = j;
-            break;
-          }
-        }
-        if (colIndex === -1) throw new Error("Bidder column not found in management sheet");
-
-        let rowIndex = -1;
-        for (let i = 3; i < data.values.length; i++) {
-          const row = data.values[i];
-          if (!row || !row[colIndex]) {
-            rowIndex = i + 1;
-            break;
-          }
-        }
-        if (rowIndex === -1) rowIndex = data.values.length + 1;
-        if (rowIndex < 4) rowIndex = 4;
-
-        const getColumnLetter = (index: number): string => {
-          let letter = "";
-          while (index >= 0) {
-            letter = String.fromCharCode((index % 26) + 65) + letter;
-            index = Math.floor(index / 26) - 1;
-          }
-          return letter;
-        };
-
-        const colLetter = getColumnLetter(colIndex);
-        const nextColLetter = getColumnLetter(colIndex + 1);
-
-        return updateSheetData(spreadsheetId, `${sheetName}!${colLetter}${rowIndex}:${nextColLetter}${rowIndex}`, [
-          [itemId, price]
-        ]);
+        return res.json();
       })
-      .then(() => toast.success(`Synced bid: ${bidderName} — ${itemId} — $${price}`))
+      .then((data) => {
+        toast.success(`Synced bid: ${bidderName} — ${itemId} — $${price}`);
+        if (data.followUpAdded) {
+          toast.info("Bidder was already checked out. Added to Follow-Up sheet.", { duration: 5000 });
+        }
+      })
       .catch(e => {
         console.error("Bid sync failed", e);
         // 4. Rollback

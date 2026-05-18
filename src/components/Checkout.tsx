@@ -35,6 +35,7 @@ export default function Checkout() {
   const [winnerToPay, setWinnerToPay] = useState<any>(null);
   const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+  const [specialWinners, setSpecialWinners] = useState<{name: string, bidderId: string}[]>([]);
 
   const startBatchPrint = async () => {
     setShowPrintConfirm(false);
@@ -99,6 +100,15 @@ export default function Checkout() {
 
     setFetchingWinners(true);
     try {
+      // Fetch special winners for alerts
+      const specialData = await getSheetData(spreadsheetId, "Special-Winners!A2:B3");
+      if (specialData.values) {
+        setSpecialWinners(specialData.values.map((row: any) => ({
+          name: row[0],
+          bidderId: row[1]?.toString() || ""
+        })));
+      }
+
       const sheetName = bidManagementSheet;
       const data = await getSheetData(spreadsheetId, `${sheetName}!1:100`);
 
@@ -239,6 +249,26 @@ export default function Checkout() {
   };
 
   const handleMarkPaid = (winner: any) => {
+    // Check for high-value items in Special-Winners sheet
+    const alertItems = specialWinners.filter(sw => sw.bidderId === winner.bidder.id);
+
+    if (alertItems.length > 0) {
+      const itemNames = alertItems.map(i => i.name).join(" and ");
+      toast.warning(`High-Value Alert: ${itemNames}`, {
+        description: `Ensure this bidder has received their ${itemNames} prize before completing checkout.`,
+        duration: 10000,
+        action: {
+          label: "I have confirmed",
+          onClick: () => {
+            setWinnerToPay(winner);
+            setPaymentMethod("");
+            setShowPaymentDialog(true);
+          }
+        }
+      });
+      return;
+    }
+
     setWinnerToPay(winner);
     setPaymentMethod("");
     setShowPaymentDialog(true);

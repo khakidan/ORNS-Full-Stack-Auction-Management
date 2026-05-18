@@ -43,6 +43,14 @@ export default function Dashboard() {
       toast.error("Spreadsheet ID not configured.");
       return;
     }
+
+    const bidder = bidders.find(b => b.id === giftCardWinnerId);
+    if (bidder?.checkedOut) {
+      toast.warning("Checked Out Warning", {
+        description: `Warning: ${bidder.firstName} ${bidder.lastName} has already checked out. Please make a manual note to deliver their $500 Amazon Gift Card prize.`
+      });
+    }
+
     setSavingGiftCard(true);
     try {
       await updateSheetData(spreadsheetId, "Special-Winners!B2", [[giftCardWinnerId]]);
@@ -59,6 +67,14 @@ export default function Dashboard() {
       toast.error("Spreadsheet ID not configured.");
       return;
     }
+
+    const bidder = bidders.find(b => b.id === raffleWinnerId);
+    if (bidder?.checkedOut) {
+      toast.warning("Checked Out Warning", {
+        description: `Warning: ${bidder.firstName} ${bidder.lastName} has already checked out. Please make a manual note to deliver their 50/50 Raffle prize.`
+      });
+    }
+
     setSavingRaffle(true);
     try {
       await updateSheetData(spreadsheetId, "Special-Winners!B3", [[raffleWinnerId]]);
