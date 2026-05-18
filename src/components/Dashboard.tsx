@@ -12,11 +12,13 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 
+import { Bidder } from "@/types";
+
 export default function Dashboard() {
   const { bidders, items, totalRaised, loading, isAuctionClosed, winners } = useAuction();
   const { config } = useConfig();
   const spreadsheetId = config.bidManagementSpreadsheetId;
-  const [followUpRecords, setFollowUpRecords] = useState<any[]>([]);
+  const [followUpRecords, setFollowUpRecords] = useState<string[][]>([]);
   const [loadingFollowUp, setLoadingFollowUp] = useState(false);
 
   const [giftCardWinnerId, setGiftCardWinnerId] = useState("");
@@ -66,9 +68,14 @@ export default function Dashboard() {
     }
 
     const bidder = bidders.find(b => b.id === giftCardWinnerId);
+    if (!bidder && giftCardWinnerId) {
+      toast.error("Bidder ID not found");
+      return;
+    }
+
     if (bidder?.checkedOut) {
       toast.warning("Checked Out Warning", {
-        description: `Warning: ${bidder.firstName} ${bidder.lastName} has already checked out. Please make a manual note to deliver their $500 Amazon Gift Card prize.`
+        description: `Warning: ${bidder.firstName} ${bidder.lastName} ("${giftCardWinnerId}") has already checked out.`
       });
     }
 
@@ -76,8 +83,8 @@ export default function Dashboard() {
     try {
       await updateSheetData(spreadsheetId, "Special-Winners!B2", [[giftCardWinnerId]]);
       toast.success("Updated $500 Amazon Gift Card winner");
-    } catch (err) {
-      toast.error("Failed to save winner");
+    } catch (err: any) {
+      toast.error("Failed to save winner: " + (err.message || "Unknown error"));
     } finally {
       setSavingGiftCard(false);
     }
@@ -90,9 +97,14 @@ export default function Dashboard() {
     }
 
     const bidder = bidders.find(b => b.id === raffleWinnerId);
+    if (!bidder && raffleWinnerId) {
+      toast.error("Bidder ID not found");
+      return;
+    }
+
     if (bidder?.checkedOut) {
       toast.warning("Checked Out Warning", {
-        description: `Warning: ${bidder.firstName} ${bidder.lastName} has already checked out. Please make a manual note to deliver their 50/50 Raffle prize.`
+        description: `Warning: ${bidder.firstName} ${bidder.lastName} ("${raffleWinnerId}") has already checked out.`
       });
     }
 
@@ -100,8 +112,8 @@ export default function Dashboard() {
     try {
       await updateSheetData(spreadsheetId, "Special-Winners!B3", [[raffleWinnerId]]);
       toast.success("Updated 50/50 Raffle winner");
-    } catch (err) {
-      toast.error("Failed to save winner");
+    } catch (err: any) {
+      toast.error("Failed to save winner: " + (err.message || "Unknown error"));
     } finally {
       setSavingRaffle(false);
     }
@@ -177,7 +189,7 @@ export default function Dashboard() {
                               <div className="font-bold text-sm">#{b.id} {b.firstName} {b.lastName}</div>
                               <div className="text-xs text-muted-foreground">{b.email}</div>
                             </div>
-                            <Badge variant={b.paid ? "success" : "warning"}>
+                            <Badge variant="outline" className={b.paid ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}>
                               {b.paid ? "Paid" : "Unpaid"}
                             </Badge>
                           </div>
@@ -378,6 +390,7 @@ export default function Dashboard() {
                     value={giftCardWinnerId}
                     onChange={(e) => setGiftCardWinnerId(e.target.value)}
                     className="w-32"
+                    disabled={savingGiftCard || isAuctionClosed}
                   />
                   <Button 
                     onClick={saveGiftCardWinner} 
@@ -408,6 +421,7 @@ export default function Dashboard() {
                     value={raffleWinnerId}
                     onChange={(e) => setRaffleWinnerId(e.target.value)}
                     className="w-32"
+                    disabled={savingRaffle || isAuctionClosed}
                   />
                   <Button 
                     onClick={saveRaffleWinner} 

@@ -1,7 +1,8 @@
 // src/components/Bidders.tsx
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { useAuction, Bidder } from "@/context/AuctionContext";
+import { useAuction } from "@/context/AuctionContext";
+import { Bidder, Attendee } from "@/types";
 import { useConfig } from "@/context/ConfigContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -85,40 +86,40 @@ export default function Bidders() {
       const bidderId = pendingCheckIn.id;
       const originalBidder = pendingCheckIn;
 
-      // Optimistic update of just the checkIn state (the component uses Context which holds bidders state, let's call the Context's optimistic method)
-      // Since checkInBidder already does optimistic checkin, we can just call it in parallel or do a separate sync
       setProcessingId(bidderId);
+      setIsAddingTicketToReceipt(true);
       
-      fetchWithRetry(`${getBaseUrl()}/api/auction/check-in-with-bid`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bidderId: originalBidder.id,
-          spreadsheetId,
-          bidManagementSheet,
-          bidderNumbersSheet,
-          bidValue: parseFloat(ticketPrice) || 35,
-          idempotencyKey
-        }),
-        credentials: "include"
-      })
-      .then(async (res) => {
+      try {
+        const res = await fetchWithRetry(`${getBaseUrl()}/api/auction/check-in-with-bid`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bidderId: originalBidder.id,
+            spreadsheetId,
+            bidManagementSheet,
+            bidderNumbersSheet,
+            bidValue: parseFloat(ticketPrice) || 35,
+            idempotencyKey
+          }),
+          credentials: "include"
+        });
+
         if (!res.ok) {
           const err = await res.json();
           throw new Error(err.error || "Transactional check-in failed");
         }
+        
         toast.success(`Check-in complete and ticket added to ${originalBidder.firstName}'s receipt`);
-        fetchBidders();
-      })
-      .catch((e: any) => {
-        toast.error(`Failed to sync updates—retrying... local state reverted.`);
-        fetchBidders();
-      })
-      .finally(() => {
+        await fetchBidders();
+      } catch (err: any) {
+        console.error("Check-in error:", err);
+        toast.error("Failed to sync updates—retrying... local state reverted.");
+        await fetchBidders();
+      } finally {
         setProcessingId(null);
-      });
-      
-      setPendingCheckIn(null);
+        setIsAddingTicketToReceipt(false);
+        setPendingCheckIn(null);
+      }
     } else {
       await handleConfirmCheckInClick(pendingCheckIn);
       setPendingCheckIn(null);
@@ -529,7 +530,7 @@ export default function Bidders() {
                               <span className="text-xs text-muted-foreground italic">Read Only</span>
                             ) : (
                               <>
-                                {!bidder.checkedIn && (
+                                {!bidder.checkedIn && !bidder.isProxy && (
                                   <Button
                                     size="sm"
                                     variant="default"
@@ -541,7 +542,7 @@ export default function Bidders() {
                                     <UserCheck className="w-4 h-4 sm:hidden" />
                                   </Button>
                                 )}
-                                {!bidder.isProxy && (
+                                {!bidder.isProxy && !bidder.checkedIn && (
                                   <Button
                                     size="sm"
                                     variant="outline"

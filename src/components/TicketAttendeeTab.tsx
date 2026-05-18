@@ -10,8 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { useAuction, Attendee } from "@/context/AuctionContext";
+import { useAuction } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
+import { Attendee, Guest } from "@/types";
 
 const EditableCell = ({ value: initialValue, onSave, placeholder = "N/A", disabled = false }: { value: string, onSave: (newVal: string) => Promise<void>, placeholder?: string, disabled?: boolean }) => {
   const [editing, setEditing] = useState(false);
@@ -84,6 +85,8 @@ export default function TicketAttendeeTab() {
   const [filterSource, setFilterSource] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [attendeeToDelete, setAttendeeToDelete] = useState<Attendee | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [newEntry, setNewEntry] = useState({
     firstName: "",
     lastName: "",
@@ -388,11 +391,7 @@ export default function TicketAttendeeTab() {
                                size="icon" 
                                variant="ghost" 
                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                               onClick={() => {
-                                 if (window.confirm("Are you sure you want to clear this entry?")) {
-                                   removeAttendee(a);
-                                 }
-                               }}
+                               onClick={() => setAttendeeToDelete(a)}
                              >
                                <Trash2 className="w-3.5 h-3.5" />
                              </Button>
@@ -407,6 +406,41 @@ export default function TicketAttendeeTab() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!attendeeToDelete} onOpenChange={(open) => !open && setAttendeeToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600 font-bold">
+              <Trash2 className="w-5 h-5" /> Confirm Deletion
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently clear <strong>{attendeeToDelete?.firstName} {attendeeToDelete?.lastName}</strong>'s entry? 
+              This action will remove the record from the database and cannot be undone easily.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setAttendeeToDelete(null)}>Cancel</Button>
+            <Button 
+              variant="destructive" 
+              onClick={async () => {
+                if (!attendeeToDelete) return;
+                setIsDeleting(true);
+                try {
+                  await removeAttendee(attendeeToDelete);
+                } finally {
+                  setIsDeleting(false);
+                  setAttendeeToDelete(null);
+                }
+              }}
+              disabled={isDeleting}
+              className="flex items-center gap-2"
+            >
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Confirm Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -4,21 +4,7 @@ import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/fires
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { toast } from 'sonner';
 
-export interface Config {
-  auctionItemsSpreadsheetId: string;
-  auctionTicketsSpreadsheetId: string;
-  bidManagementSpreadsheetId: string;
-  bidderNumbersSheet: string;
-  auctionItemsSheet: string;
-  bidManagementSheet: string;
-  receiptFolderId: string;
-  forPrintFolderId: string;
-  ornsLogoId: string;
-  ticketPrice: string;
-  auctionItemsScriptId: string;
-  auctionTicketsScriptId: string;
-  bidManagementScriptId: string;
-}
+import { Config } from '@/types';
 
 interface ConfigContextType {
   config: Config;

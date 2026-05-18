@@ -82,6 +82,7 @@ export default function BidEntry() {
                 value={itemId}
                 onChange={e => setItemId(e.target.value)}
                 autoFocus
+                disabled={submitting}
               />
             </div>
             {selectedItem && <p className="text-sm text-green-600 mt-1">{selectedItem.name}</p>}
@@ -92,7 +93,7 @@ export default function BidEntry() {
             <Label>Bidder ID</Label>
             <div className="relative">
               <User className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-              <Input className="pl-10" placeholder="e.g. 142" value={bidderId} onChange={e => setBidderId(e.target.value)} />
+              <Input className="pl-10" placeholder="e.g. 142" value={bidderId} onChange={e => setBidderId(e.target.value)} disabled={submitting} />
             </div>
             {selectedBidder && (
               <p className={`text-sm mt-1 ${selectedBidder.checkedIn ? 'text-green-600' : 'text-amber-600'}`}>
@@ -105,7 +106,7 @@ export default function BidEntry() {
           {/* Price */}
           <div>
             <Label>Winning Bid ($)</Label>
-            <Input type="number" step="0.01" placeholder="150.00" value={price} onChange={e => setPrice(e.target.value)} />
+            <Input type="number" step="0.01" placeholder="150.00" value={price} onChange={e => setPrice(e.target.value)} disabled={submitting} />
           </div>
 
           <Button type="submit" className="w-full h-12 text-lg" disabled={submitting}>

@@ -1,49 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { getSheetData, updateSheetData, appendSheetData, clearSheetData, fetchWithRetry, getBaseUrl } from "@/lib/google-api";
+import { getSheetData, updateSheetData, clearSheetData, fetchWithRetry, getBaseUrl, appendSheetData } from "@/lib/google-api";
 import { toast } from "sonner";
 import { useConfig } from "./ConfigContext";
-
-export interface Bidder {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  checkedIn: boolean;
-  isProxy: boolean;
-  checkedOut: boolean;
-  paid: boolean;
-  rowIndex: number;
-}
-
-export interface AuctionItem {
-  id: string;
-  name: string;
-  type?: string;
-  description?: string;
-}
-
-export interface Guest {
-  name: string;
-  email: string;
-  guestIndex: number;
-  ownBidderNumber: string;
-}
-
-export interface Attendee {
-  id: string;
-  sheet: string;
-  rowIndex: number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  ticketsPurchased: string;
-  hasGuests: string;
-  guestsInfo: Guest[];
-  paymentMethod: string;
-  paymentStatus: string;
-  totalPaid: string;
-}
+import { Bidder, AuctionItem, Attendee, Guest } from "@/types";
 
 interface AuctionContextType {
   bidders: Bidder[];
@@ -114,15 +73,15 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
       const data = await getSheetData(spreadsheetId, `${sheetName}!A:H`);
 
       if (data.values?.length > 1) {
-        const biddersList: Bidder[] = data.values.slice(1).map((row: any[], idx: number) => ({
+        const biddersList: Bidder[] = data.values.slice(1).map((row: string[], idx: number) => ({
           id: row[0]?.toString() || "",
           firstName: row[1]?.toString() || "",
           lastName: row[2]?.toString() || "",
           email: row[3]?.toString() || "",
-          checkedIn: row[4] === true || row[4] === "TRUE",
-          isProxy: row[5] === true || row[5] === "TRUE",
-          checkedOut: row[6] === true || row[6] === "TRUE",
-          paid: row[7] === true || row[7] === "TRUE",
+          checkedIn: row[4] === "TRUE" || row[4] === "true",
+          isProxy: row[5] === "TRUE" || row[5] === "true",
+          checkedOut: row[6] === "TRUE" || row[6] === "true",
+          paid: row[7] === "TRUE" || row[7] === "true",
           rowIndex: idx + 2,
         })).filter(b => b.id);
         setBidders(biddersList);
@@ -140,10 +99,18 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
       const sheetName = config.auctionItemsSheet;
       const data = await getSheetData(spreadsheetId, `${sheetName}!A:C`);
       if (data.values?.length > 1) {
-        const itemsList = data.values.slice(1).map((row: any[]) => ({
+        const itemsList = data.values.slice(1).map((row: string[]) => ({
           id: row[0]?.toString() || "",
           name: row[1]?.toString() || "",
-          type: row[2]?.toString() || "",
+          category: row[2]?.toString() || "",
+          bundled: "",
+          description: "",
+          value: "",
+          openingBid: "",
+          minRaise: "",
+          donor: "",
+          itemType: "",
+          rowIndex: 0 // Not relevant for basic fetch
         }));
         setItems(itemsList);
       }
@@ -218,7 +185,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         try {
           const data = await getSheetData(ticketsSpreadsheetId, `${sheetName}!A:Z`);
           if (data.values && data.values.length > 1) {
-            const rows = data.values.slice(1).map((row: any[], i: number) => {
+            const rows = data.values.slice(1).map((row: string[], i: number) => {
               const guests: Guest[] = [];
               const isGeneral = sheetName === 'tickets';
 

@@ -72,7 +72,7 @@ export default function Items() {
                     <TableRow key={item.id}>
                       <TableCell className="w-[15%] font-mono font-bold text-primary whitespace-normal break-words">{item.id}</TableCell>
                       <TableCell className="w-[35%] font-medium whitespace-normal break-words">{item.name}</TableCell>
-                      <TableCell className="w-[25%] text-xs uppercase text-muted-foreground font-semibold whitespace-normal break-words">{item.type || "—"}</TableCell>
+                      <TableCell className="w-[25%] text-xs uppercase text-muted-foreground font-semibold whitespace-normal break-words">{item.category || "—"}</TableCell>
                       <TableCell className="w-[25%] whitespace-normal break-words">
                         {winners[item.id] ? (
                           <span className="font-semibold text-emerald-600">{winners[item.id]}</span>

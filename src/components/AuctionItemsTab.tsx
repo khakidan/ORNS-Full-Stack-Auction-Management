@@ -29,19 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 
-interface AuctionItem {
-  rowIndex: number;
-  id: string;
-  category: string;
-  bundled: string;
-  name: string;
-  description: string;
-  value: string;
-  openingBid: string;
-  minRaise: string;
-  donor: string;
-  itemType: string;
-}
+import { Bidder, AuctionItem, Attendee, Guest } from "@/types";
 
 interface BundlingSelection {
   [rowIndex: number]: boolean;

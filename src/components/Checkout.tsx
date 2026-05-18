@@ -11,6 +11,17 @@ import { toast } from "sonner";
 import { Handshake, Receipt, Mail, CheckCircle2, Loader2, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
+import { Bidder, AuctionItem, Attendee } from "@/types";
+
+interface WinnerRecord {
+  bidderId: string;
+  name: string;
+  total: number;
+  items: { id: string, name: string, price: number }[];
+  paid: boolean;
+  paymentMethod: string;
+}
+
 export default function Checkout() {
   const { bidders, items, loading, fetchAllData, attendees } = useAuction();
   const { config } = useConfig();
@@ -22,7 +33,7 @@ export default function Checkout() {
   const folderId = config.receiptFolderId;
   const ornsLogoId = config.ornsLogoId;
 
-  const [winners, setWinners] = useState<any[]>([]);
+  const [winners, setWinners] = useState<WinnerRecord[]>([]);
   const [fetchingWinners, setFetchingWinners] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -32,7 +43,7 @@ export default function Checkout() {
   const [showEmailConfirm, setShowEmailConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<"pending" | "completed">("pending");
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
-  const [winnerToPay, setWinnerToPay] = useState<any>(null);
+  const [winnerToPay, setWinnerToPay] = useState<WinnerRecord | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [specialWinners, setSpecialWinners] = useState<{name: string, bidderId: string}[]>([]);
@@ -117,21 +128,22 @@ export default function Checkout() {
         return;
       }
 
-      const header = data.values[0];
-      const itemsList: any[] = [];
+      const header = data.values[0] as string[];
+      const itemsList: WinnerRecord[] = [];
 
       for (let j = 0; j < header.length; j += 2) {
         const bidderId = header[j]?.toString();
         if (!bidderId) continue;
 
-        const wonItems = [];
+        const wonItems: { id: string, name: string, price: number }[] = [];
         let total = 0;
 
         for (let i = 3; i < data.values.length; i++) {
           const row = data.values[i];
           if (row && row[j] && row[j + 1]) {
             const itemId = row[j].toString();
-            const price = parseFloat(row[j + 1]) || 0;
+            const priceVal = row[j + 1]?.toString().replace(/[^0-9.]/g, "") || "0";
+            const price = parseFloat(priceVal) || 0;
             const itemInfo = items.find(it => it.id === itemId);
             wonItems.push({ id: itemId, name: itemInfo?.name || "Unknown Item", price });
             total += price;
@@ -141,9 +153,12 @@ export default function Checkout() {
         if (wonItems.length > 0) {
           const bidderInfo = bidders.find(b => b.id === bidderId);
           itemsList.push({
-            bidder: bidderInfo || { id: bidderId, firstName: "Unknown", lastName: "Bidder", email: "" },
-            wonItems,
-            total
+            bidderId,
+            name: bidderInfo ? `${bidderInfo.firstName} ${bidderInfo.lastName}` : `Bidder ${bidderId}`,
+            total,
+            items: wonItems,
+            paid: bidderInfo?.paid || false,
+            paymentMethod: "" // Will be determined from bidders/attendees if needed
           });
         }
       }
@@ -169,33 +184,31 @@ export default function Checkout() {
   }, [bidders, items, loadWinners]);
 
   const pendingWinners = winners.filter(w => {
-    const bidder = bidders.find(b => b.id === w.bidder.id);
+    const bidder = bidders.find(b => b.id === w.bidderId);
     return !bidder?.checkedOut;
   });
 
   const completedWinners = winners.filter(w => {
-    const bidder = bidders.find(b => b.id === w.bidder.id);
+    const bidder = bidders.find(b => b.id === w.bidderId);
     return bidder?.checkedOut === true;
   });
 
   const displayedWinners = activeTab === "pending" ? pendingWinners : completedWinners;
 
   const filteredWinners = displayedWinners.filter(w => {
-    const nameMatch = `${w.bidder.firstName} ${w.bidder.lastName}`
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    const idMatch = w.bidder.id.includes(searchTerm);
+    const nameMatch = w.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const idMatch = w.bidderId.includes(searchTerm);
     return nameMatch || idMatch;
   });
   
-  const handleEmailReceipt = async (winner: any) => {
-    setProcessingId(`${winner.bidder.id}-email`);
+  const handleEmailReceipt = async (winner: WinnerRecord) => {
+    setProcessingId(`${winner.bidderId}-email`);
     try {
       const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/email-only`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          bidderId: winner.bidder.id,
+          bidderId: winner.bidderId,
           scriptId,
           spreadsheetId
         }),
@@ -203,7 +216,7 @@ export default function Checkout() {
       });
 
       if (!res.ok) throw new Error("Failed to send email");
-      toast.success(`Receipt emailed to ${winner.bidder.firstName}`);
+      toast.success(`Receipt emailed to ${winner.name}`);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -211,15 +224,16 @@ export default function Checkout() {
     }
   };
 
-  const handlePrintReceipt = async (winner: any) => {
-    setProcessingId(`${winner.bidder.id}-print`);
+  const handlePrintReceipt = async (winner: WinnerRecord) => {
+    setProcessingId(`${winner.bidderId}-print`);
+    const bidderInfo = bidders.find(b => b.id === winner.bidderId);
     try {
       const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          bidder: winner.bidder,
-          items: winner.wonItems,
+          bidder: bidderInfo || { id: winner.bidderId, firstName: winner.name, lastName: "", email: "" },
+          items: winner.items,
           total: winner.total,
           folderId,
           ornsLogoId,
@@ -248,9 +262,9 @@ export default function Checkout() {
     }
   };
 
-  const handleMarkPaid = (winner: any) => {
+  const handleMarkPaid = (winner: WinnerRecord) => {
     // Check for high-value items in Special-Winners sheet
-    const alertItems = specialWinners.filter(sw => sw.bidderId === winner.bidder.id);
+    const alertItems = specialWinners.filter(sw => sw.bidderId === winner.bidderId);
 
     if (alertItems.length > 0) {
       const itemNames = alertItems.map(i => i.name).join(" and ");
@@ -290,18 +304,20 @@ export default function Checkout() {
     const method = paymentMethod;
 
     const previousWinners = [...winners];
+    const bidderInfo = bidders.find(b => b.id === winner.bidderId);
 
     // Perform optimistic update locally immediately
     setWinners(prev => prev.map(w => {
-      if (w.bidder.id === winner.bidder.id) {
-        return { ...w, bidder: { ...w.bidder, paid: true, checkedOut: true } };
+      if (w.bidderId === winner.bidderId) {
+        return { ...w, paid: true };
       }
       return w;
     }));
 
     const attendee = ticketsSpreadsheetId && attendees.find(a => 
-      a.firstName.trim().toLowerCase() === winner.bidder.firstName.trim().toLowerCase() &&
-      a.lastName.trim().toLowerCase() === winner.bidder.lastName.trim().toLowerCase()
+      bidderInfo &&
+      a.firstName.trim().toLowerCase() === bidderInfo.firstName.trim().toLowerCase() &&
+      a.lastName.trim().toLowerCase() === bidderInfo.lastName.trim().toLowerCase()
     );
 
     const idempotencyKey = crypto.randomUUID();
@@ -310,28 +326,29 @@ export default function Checkout() {
     setShowPaymentDialog(false);
 
     // Fire background sync
-    fetchWithRetry(`${getBaseUrl()}/api/auction/checkout-mark-paid`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        bidderId: winner.bidder.id,
-        spreadsheetId,
-        ticketsSpreadsheetId,
-        bidderNumbersSheet,
-        attendeeInfo: attendee && attendee.sheet === 'tickets' ? { sheet: attendee.sheet, rowIndex: attendee.rowIndex } : null,
-        paymentMethod: method,
-        idempotencyKey
-      }),
-      credentials: "include"
-    })
-    .then(async (res) => {
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to complete checkout transaction");
-      }
-      toast.success(`${winner.bidder.firstName} marked as Paid (${method})`);
-      fetchAllData(); // Refresh all data to ensure sync
-    })
+      fetchWithRetry(`${getBaseUrl()}/api/auction/checkout-mark-paid`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bidderId: winner.bidderId,
+          spreadsheetId,
+          ticketsSpreadsheetId,
+          bidderNumbersSheet,
+          attendeeInfo: attendee && attendee.sheet === 'tickets' ? { sheet: attendee.sheet, rowIndex: attendee.rowIndex } : null,
+          paymentMethod: method,
+          idempotencyKey
+        }),
+        credentials: "include"
+      })
+      .then(async (res) => {
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Failed to complete checkout transaction");
+        }
+        const bidderName = bidderInfo ? `${bidderInfo.firstName} ${bidderInfo.lastName}` : `Bidder ${winner.bidderId}`;
+        toast.success(`${bidderName} marked as Paid (${method})`);
+        fetchAllData(); // Refresh all data to ensure sync
+      })
     .catch((error: any) => {
       console.error("[Checkout] Sync error:", error);
       setWinners(previousWinners);
@@ -405,7 +422,7 @@ export default function Checkout() {
             ) : filteredWinners.length > 0 ? (
               filteredWinners.map((winner) => (
                 <WinnerCard 
-                  key={winner.bidder.id} 
+                  key={winner.bidderId} 
                   winner={winner} 
                   processingId={processingId}
                   handleEmailReceipt={handleEmailReceipt}
@@ -428,7 +445,7 @@ export default function Checkout() {
             ) : filteredWinners.length > 0 ? (
               filteredWinners.map((winner) => (
                 <WinnerCard 
-                  key={winner.bidder.id} 
+                  key={winner.bidderId} 
                   winner={winner} 
                   processingId={processingId}
                   handleEmailReceipt={handleEmailReceipt}
@@ -478,7 +495,7 @@ export default function Checkout() {
           <DialogHeader>
             <DialogTitle>Select Payment Method</DialogTitle>
             <DialogDescription>
-              How is {winnerToPay?.bidder.firstName} {winnerToPay?.bidder.lastName} paying for their items today?
+              How is {winnerToPay?.name} paying for their items today?
               Total: <span className="font-bold text-[#e31b23]">${winnerToPay?.total.toFixed(2)}</span>
             </DialogDescription>
           </DialogHeader>
@@ -522,24 +539,30 @@ export default function Checkout() {
   );
 }
 
-function WinnerCard({ winner, processingId, handleEmailReceipt, handlePrintReceipt, handleMarkPaid }: any) {
+function WinnerCard({ winner, processingId, handleEmailReceipt, handlePrintReceipt, handleMarkPaid }: { 
+  winner: WinnerRecord, 
+  processingId: string | null,
+  handleEmailReceipt: (w: WinnerRecord) => void,
+  handlePrintReceipt: (w: WinnerRecord) => void,
+  handleMarkPaid: (w: WinnerRecord) => void
+}) {
   return (
     <Card className="flex flex-col h-full shadow-sm hover:shadow-md transition-shadow">
       <CardHeader className="pb-2 border-b">
         <div className="flex justify-between items-start">
           <div>
-            <CardTitle className="text-xl">{winner.bidder.firstName} {winner.bidder.lastName}</CardTitle>
-            <CardDescription>Bidder #{winner.bidder.id}</CardDescription>
+            <CardTitle className="text-xl">{winner.name}</CardTitle>
+            <CardDescription>Bidder #{winner.bidderId}</CardDescription>
           </div>
           <div className="text-right">
             <div className="text-2xl font-bold text-primary">${winner.total.toFixed(2)}</div>
-            <div className="text-xs text-muted-foreground">{winner.wonItems.length} items won</div>
+            <div className="text-xs text-muted-foreground">{winner.items.length} items won</div>
           </div>
         </div>
       </CardHeader>
       <CardContent className="flex-1 py-4">
         <ul className="space-y-2">
-          {winner.wonItems.map((item: any, i: number) => (
+          {winner.items.map((item, i: number) => (
             <li key={i} className="flex justify-between text-sm">
               <span className="text-muted-foreground max-w-[70%] truncate">{item.name}</span>
               <span className="font-medium">${item.price.toFixed(2)}</span>
@@ -553,34 +576,33 @@ function WinnerCard({ winner, processingId, handleEmailReceipt, handlePrintRecei
           size="sm"
           className="flex-1 min-w-[100px] gap-2"
           onClick={() => handleEmailReceipt(winner)}
-          disabled={(!!processingId && processingId.startsWith(`${winner.bidder.id}-`)) || !winner.bidder.email}
-          title={!winner.bidder.email ? "No email address on file" : ""}
+          disabled={!!processingId && processingId.startsWith(`${winner.bidderId}-`)}
         >
-          {processingId === `${winner.bidder.id}-email` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-          {processingId === `${winner.bidder.id}-email` ? "Sending..." : "Email Receipt"}
+          {processingId === `${winner.bidderId}-email` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+          {processingId === `${winner.bidderId}-email` ? "Sending..." : "Email Receipt"}
         </Button>
         <Button
           variant="outline"
           size="sm"
           className="flex-1 min-w-[100px] gap-2"
           onClick={() => handlePrintReceipt(winner)}
-          disabled={!!processingId && processingId.startsWith(`${winner.bidder.id}-`)}
+          disabled={!!processingId && processingId.startsWith(`${winner.bidderId}-`)}
         >
-          {processingId === `${winner.bidder.id}-print` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Receipt className="w-4 h-4" />}
-          {processingId === `${winner.bidder.id}-print` ? "Printing..." : "Print Receipt"}
+          {processingId === `${winner.bidderId}-print` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Receipt className="w-4 h-4" />}
+          {processingId === `${winner.bidderId}-print` ? "Printing..." : "Print Receipt"}
         </Button>
-        {winner.bidder.checkedOut ? (
+        {winner.paid ? (
           <div className="w-full py-2 text-center text-emerald-600 font-medium flex items-center justify-center gap-2">
-            <CheckCircle2 className="w-4 h-4" /> Checked Out
+            <CheckCircle2 className="w-4 h-4" /> Paid
           </div>
         ) : (
           <Button
             size="sm"
             className="w-full gap-2"
             onClick={() => handleMarkPaid(winner)}
-            disabled={!!processingId && processingId.startsWith(`${winner.bidder.id}-`)}
+            disabled={!!processingId && processingId.startsWith(`${winner.bidderId}-`)}
           >
-            {processingId === `${winner.bidder.id}-pay` ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+            {processingId === `${winner.bidderId}-pay` ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
             Mark Paid
           </Button>
         )}

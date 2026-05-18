@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Save, AlertCircle, PlaySquare, Loader2, Copy, CheckSquare, RefreshCw, Cloud, CloudOff, LogIn } from "lucide-react";
 import { fetchWithRetry, updateSheetData, appendSheetData, getSheetData, getBaseUrl } from "@/lib/google-api";
-import { useConfig, Config } from "@/context/ConfigContext";
+import { useConfig } from "@/context/ConfigContext";
+import { Config } from "@/types";
 
 export default function ConfigSettings() {
   const { config: remoteConfig, saveConfig, firebaseUser, loginToFirebase, loading: configLoading } = useConfig();
