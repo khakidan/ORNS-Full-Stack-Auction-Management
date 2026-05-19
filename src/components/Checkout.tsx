@@ -232,13 +232,8 @@ export default function Checkout() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          bidder: bidderInfo || { id: winner.bidderId, firstName: winner.name, lastName: "", email: "" },
-          items: winner.items,
-          total: winner.total,
-          folderId,
-          ornsLogoId,
+          bidderId: winner.bidderId,
           emailReceipt: false,
-          createDoc: true,
           scriptId,
           spreadsheetId
         }),
@@ -251,9 +246,12 @@ export default function Checkout() {
       }
 
       const data = await res.json();
-      toast.success(`Receipt Doc created!`);
-      if (data.documentId) {
-        window.open(`https://docs.google.com/document/d/${data.documentId}/edit`, '_blank');
+      toast.success(`Receipt Doc created! Subtotal: $${data.subtotal}`);
+      if (data.paymentUrl) {
+        console.log(`Payment URL: ${data.paymentUrl}`);
+      }
+      if (data.docId) {
+        window.open(`https://docs.google.com/document/d/${data.docId}/edit`, '_blank');
       }
     } catch (error: any) {
       toast.error(error.message);
@@ -301,6 +299,12 @@ export default function Checkout() {
 
     setIsSubmittingPayment(true);
     const winner = winnerToPay;
+
+    let mappedMethod = "UNKNOWN";
+    if (paymentMethod === "Cash") mappedMethod = "CASH";
+    else if (paymentMethod === "Check") mappedMethod = "CHECK";
+    else if (paymentMethod === "Credit Card/PayPal") mappedMethod = "PAYPAL";
+
     const method = paymentMethod;
 
     const previousWinners = [...winners];
@@ -333,9 +337,11 @@ export default function Checkout() {
           bidderId: winner.bidderId,
           spreadsheetId,
           ticketsSpreadsheetId,
+          scriptId,
           bidderNumbersSheet,
           attendeeInfo: attendee && attendee.sheet === 'tickets' ? { sheet: attendee.sheet, rowIndex: attendee.rowIndex } : null,
-          paymentMethod: method,
+          paymentMethod: mappedMethod,
+          amount: winner.total,
           idempotencyKey
         }),
         credentials: "include"

@@ -266,7 +266,7 @@ function getAuthenticatedClient(tokens: any) {
 app.post("/api/receipts/generate", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
 
-  const { bidder, emailReceipt, scriptId: bodyScriptId, spreadsheetId } = req.body;
+  const { bidderId, emailReceipt, scriptId: bodyScriptId, spreadsheetId } = req.body;
   const scriptId = bodyScriptId || process.env.GOOGLE_SCRIPT_ID;
   
   if (!scriptId) {
@@ -279,13 +279,13 @@ app.post("/api/receipts/generate", async (req, res) => {
     const client = getAuthenticatedClient(req.session.tokens);
     const script = google.script({ version: "v1", auth: client });
 
-    console.log(`[Script API] Calling bridge function 'apiCreateIndividualReceipt' for Bidder ${bidder.id}`);
+    console.log(`[Script API] Calling bridge function 'apiCreateIndividualReceipt' for Bidder ${bidderId}`);
 
     const response = await script.scripts.run({
       scriptId: scriptId,
       requestBody: {
         function: "apiCreateIndividualReceipt",
-        parameters: spreadsheetId ? [bidder.id, !!emailReceipt, spreadsheetId] : [bidder.id, !!emailReceipt],
+        parameters: [String(bidderId), !!emailReceipt],
         devMode: true, // Uses the latest saved version
       },
     });
@@ -306,8 +306,9 @@ app.post("/api/receipts/generate", async (req, res) => {
 
     res.json({
       success: true,
-      documentId: result?.docId,
-      total: result?.total
+      docId: result?.docId,
+      subtotal: result?.subtotal || 0,
+      paymentUrl: result?.paymentUrl || ""
     });
 
   } catch (error: any) {
@@ -334,7 +335,7 @@ app.post("/api/receipts/generate-all", async (req, res) => {
       scriptId: scriptId,
       requestBody: {
         function: "apiCreateAllReceipts",
-        parameters: spreadsheetId ? [spreadsheetId] : [],
+        parameters: [],
         devMode: true,
       },
     });
@@ -369,7 +370,7 @@ app.post("/api/receipts/email-all", async (req, res) => {
       scriptId: scriptId,
       requestBody: {
         function: "apiSendAllEmails",
-        parameters: spreadsheetId ? [spreadsheetId] : [],
+        parameters: [],
         devMode: true,
       },
     });
@@ -444,7 +445,7 @@ app.post("/api/receipts/email-only", async (req, res) => {
       scriptId: scriptId,
       requestBody: {
         function: "apiSendReceiptEmail",
-        parameters: spreadsheetId ? [bidderId, spreadsheetId] : [bidderId],
+        parameters: [String(bidderId)],
         devMode: true,
       },
     });
@@ -812,7 +813,9 @@ app.post("/api/auction/checkout-mark-paid", async (req, res) => {
     ticketsSpreadsheetId, 
     bidderNumbersSheet, 
     attendeeInfo,
+    scriptId: bodyScriptId,
     paymentMethod,
+    amount,
     idempotencyKey 
   } = req.body;
 
@@ -823,47 +826,58 @@ app.post("/api/auction/checkout-mark-paid", async (req, res) => {
     return res.status(400).json({ error: "Missing required parameters for checkout" });
   }
 
+  const scriptId = bodyScriptId || process.env.GOOGLE_SCRIPT_ID;
+  if (!scriptId) {
+    return res.status(500).json({
+      error: "GOOGLE_SCRIPT_ID is not configured. Please add it to the Settings tab in the app."
+    });
+  }
+
   try {
     const client = getAuthenticatedClient(req.session.tokens);
-    const sheets = google.sheets({ version: "v4", auth: client });
+    
+    // Call Apps Script bridge function apiRecordPayment
+    const script = google.script({ version: "v1", auth: client });
+    console.log(`[Script API] Calling bridge function 'apiRecordPayment' for Bidder ${bidderId}`);
+    
+    const parsedAmount = typeof amount === "string" ? parseFloat(amount.replace(/[^0-9.]/g, "")) : Number(amount);
 
-    // 1. Find bidder row
-    const bidderSearch = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${bidderNumbersSheet}!A:A`,
+    const scriptResponse = await script.scripts.run({
+      scriptId: scriptId,
+      requestBody: {
+        function: "apiRecordPayment",
+        parameters: [String(bidderId), paymentMethod || "CASH", parsedAmount || 0],
+        devMode: true,
+      },
     });
     
-    const biddersRows = bidderSearch.data.values || [];
-    const rowIndex = biddersRows.findIndex((row: any) => row[0]?.toString() === bidderId) + 1;
-
-    if (rowIndex <= 1) {
-      throw new Error(`Bidder ${bidderId} not found in management sheet.`);
+    if (scriptResponse.data.error) {
+      const eData = scriptResponse.data.error.details?.[0] as any;
+      throw new Error(eData?.errorMessage || "Unknown Apps Script execution error");
     }
 
-    // 2. Perform writes (Simulated Transaction)
-    const operations: SheetOp[] = [];
+    const { response } = scriptResponse.data;
+    if (response?.result && typeof response.result === 'object') {
+      const resultObj = response.result as any;
+      if (resultObj.success === false) {
+        throw new Error(resultObj.error || "Failed to record payment in Google Apps Script");
+      }
+    }
 
-    // Write 1: Bidder Management Sheet (Mark Paid & Checked Out & Payment Method)
-    operations.push({
-      type: 'UPDATE',
-      spreadsheetId,
-      range: `${bidderNumbersSheet}!G${rowIndex}:I${rowIndex}`,
-      newValues: [[true, true, paymentMethod || "Unknown"]]
-    });
-
-    // Write 2: Auction Tickets Sheet (if applicable)
+    // Optional: Write 2: Auction Tickets Sheet (if applicable)
     let attendeeUpdated = false;
     if (ticketsSpreadsheetId && attendeeInfo && attendeeInfo.sheet && attendeeInfo.rowIndex) {
+      const sheets = google.sheets({ version: "v4", auth: client });
+      const operations: SheetOp[] = [];
       operations.push({
         type: 'UPDATE',
         spreadsheetId: ticketsSpreadsheetId,
         range: `${attendeeInfo.sheet}!U${attendeeInfo.rowIndex}`,
         newValues: [["Paid"]]
       });
+      await executeGoogleSheetsTransaction(sheets, operations);
       attendeeUpdated = true;
     }
-
-    await executeGoogleSheetsTransaction(sheets, operations);
 
     const result = { success: true, attendeeUpdated };
     saveIdempotency(idempotencyKey, result);
@@ -1001,7 +1015,7 @@ app.post("/api/bidders/walk-in", async (req, res) => {
       scriptId: scriptId,
       requestBody: {
         function: "apiCreateWalkInTicket",
-        parameters: spreadsheetId ? [firstName, lastName, email, spreadsheetId] : [firstName, lastName, email],
+        parameters: [firstName, lastName, email],
         devMode: true,
       },
     });
