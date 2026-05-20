@@ -757,7 +757,7 @@ export default function AuctionItemsTab() {
 
     // Filter items first
     sortableItems = sortableItems.filter(item => {
-      if (item.status === "Inactive") return false;
+      if (item.status === "Inactive" || item.status === "Deleted") return false;
 
       const searchStr = searchTerm.toLowerCase();
       const matchesSearch = !searchTerm || 

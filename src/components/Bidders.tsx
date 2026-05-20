@@ -232,6 +232,11 @@ export default function Bidders() {
 
     setIsSubmittingWalkIn(true);
     const idempotencyKey = crypto.randomUUID();
+    
+    const loadingToastId = toast.loading(
+      "Connecting to Google Sheets database... calculating new Bidder ID and modifying sheet structures.", 
+      { duration: Infinity }
+    );
 
     try {
       const res = await fetchWithRetry(`${getBaseUrl()}/api/bidders/walk-in`, {
@@ -242,7 +247,9 @@ export default function Bidders() {
           scriptId, 
           spreadsheetId, 
           ticketsSpreadsheetId, 
-          ticketPrice,
+          ticketPrice: ticketPrice,
+          bidderNumbersSheet: config?.bidderNumbersSheet,
+          bidManagementSheet: config?.bidManagementSheet,
           idempotencyKey 
         }),
         credentials: "include"
@@ -254,7 +261,10 @@ export default function Bidders() {
       }
 
       const result = await res.json();
-      toast.success(`Walk-in created: ${result.bidder.firstName} ${result.bidder.lastName} (Transaction Secure)`);
+      toast.success(
+        `Success! Recorded Walk-In transaction in Google Sheets for ${result.bidder.firstName} ${result.bidder.lastName}.`,
+        { id: loadingToastId, duration: 5000 }
+      );
 
       if (ticketsSpreadsheetId && !result.ticketAppended) {
         console.warn("[Walk-in] Append failed:", result.appendError);
@@ -266,7 +276,7 @@ export default function Bidders() {
       fetchBidders();
       fetchAttendees(); // Sync attendees too
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(`Error: ${error.message}`, { id: loadingToastId });
     } finally {
       setIsSubmittingWalkIn(false);
     }

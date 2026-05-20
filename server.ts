@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import { google } from "googleapis";
 import { GoogleGenAI } from "@google/genai";
+import { processEmail, performSheetSync } from "./email-helpers.js";
 import session from "express-session";
 
 // Global resilient retry matrix for API calls (Exponential backoff & jitter is handled by gaxios internally)
@@ -358,31 +359,31 @@ app.post("/api/receipts/generate-all", async (req, res) => {
 app.post("/api/receipts/email-all", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
 
-  const { scriptId: bodyScriptId, spreadsheetId } = req.body;
-  const scriptId = bodyScriptId || process.env.GOOGLE_SCRIPT_ID;
-  if (!scriptId) return res.status(500).json({ error: "GOOGLE_SCRIPT_ID not configured. Please set it in Settings." });
+  const { spreadsheetId } = req.body;
+  if (!spreadsheetId) {
+    return res.status(400).json({ error: "spreadsheetId is required" });
+  }
 
   try {
     const client = getAuthenticatedClient(req.session.tokens);
-    const script = google.script({ version: "v1", auth: client });
-
-    const response = await script.scripts.run({
-      scriptId: scriptId,
-      requestBody: {
-        function: "apiSendAllEmails",
-        parameters: [],
-        devMode: true,
-      },
-    });
-
-    if (response.data.error) throw new Error(response.data.error.message);
+    const sheets = google.sheets({ version: "v4", auth: client });
     
-    const result: any = response.data.response?.result;
-    if (result && result.success === false) {
-      return res.status(400).json({ error: result.error || "Batch email failed" });
+    // Find all bidders with emails who won items
+    const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Bidder-Numbers!A:L" });
+    const numData = bNum.data.values || [];
+    let sentCount = 0;
+    
+    for (let i = 1; i < numData.length; i++) {
+      const id = String(numData[i][0] || "").trim();
+      const email = String(numData[i][3] || "").trim();
+      if (id && email) {
+        // try to process their email
+        const r = await processEmail(client, spreadsheetId, id);
+        if (r.success) sentCount++;
+      }
     }
 
-    res.json({ success: true, result });
+    res.json({ success: true, sentCount });
   } catch (error: any) {
     console.error("[Server Error] email-all:", error);
     res.status(500).json({ error: error.message });
@@ -393,39 +394,25 @@ app.post("/api/receipts/email-all", async (req, res) => {
 // app.post("/api/bidders/walk-in", ...);
 // Removing this duplicate to ensure the transactional version at line 672 is used.
 
-// Sync bidders via Apps Script
+// Sync bidders via Node.js Google Sheets integration (migrated from apiSyncBidders Apps Script)
 app.post("/api/bidders/sync", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
 
-  const { scriptId: bodyScriptId } = req.body;
-  const scriptId = bodyScriptId || process.env.GOOGLE_SCRIPT_ID;
-  if (!scriptId) return res.status(500).json({ error: "GOOGLE_SCRIPT_ID not configured. Please set it in Settings." });
+  const { spreadsheetId } = req.body;
+  if (!spreadsheetId) {
+    return res.status(400).json({ error: "spreadsheetId is required to sync and setup bid management." });
+  }
 
   try {
     const client = getAuthenticatedClient(req.session.tokens);
-    const script = google.script({ version: "v1", auth: client });
-
-    const response = await script.scripts.run({
-      scriptId: scriptId,
-      requestBody: {
-        function: "apiSyncBidders",
-        parameters: [],
-        devMode: true,
-      },
-    });
-
-    if (response.data.error) {
-      throw new Error(response.data.error.details?.[0]?.errorMessage || response.data.error.message);
-    }
-
-    const result: any = response.data.response?.result;
-    if (result && result.success === false) {
-      return res.status(400).json({ error: result.error });
-    }
-
+    console.log(`[Sync Route] Initiating Native Node.js sheet setup for spreadsheet: ${spreadsheetId}...`);
+    
+    const result = await performSheetSync(client, spreadsheetId);
+    
     res.json({ success: true, result });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error(`[Sync Route Error] Native synchronization flow failed:`, error);
+    res.status(500).json({ error: error.message || "An error occurred during sheet synchronization." });
   }
 });
 
@@ -433,27 +420,16 @@ app.post("/api/bidders/sync", async (req, res) => {
 app.post("/api/receipts/email-only", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
 
-  const { bidderId, scriptId: bodyScriptId, spreadsheetId } = req.body;
-  const scriptId = bodyScriptId || process.env.GOOGLE_SCRIPT_ID;
-  if (!scriptId) return res.status(500).json({ error: "GOOGLE_SCRIPT_ID not configured. Please set it in Settings." });
+  const { bidderId, spreadsheetId } = req.body;
+  if (!spreadsheetId) {
+    return res.status(400).json({ error: "spreadsheetId is required" });
+  }
 
   try {
     const client = getAuthenticatedClient(req.session.tokens);
-    const script = google.script({ version: "v1", auth: client });
+    const result = await processEmail(client, spreadsheetId, String(bidderId));
 
-    const response = await script.scripts.run({
-      scriptId: scriptId,
-      requestBody: {
-        function: "apiSendReceiptEmail",
-        parameters: [String(bidderId)],
-        devMode: true,
-      },
-    });
-
-    if (response.data.error) throw new Error(response.data.error.message);
-    
-    const result: any = response.data.response?.result;
-    if (result && result.success === false) {
+    if (!result.success) {
       return res.status(400).json({ error: result.error || "Email sending failed" });
     }
 
@@ -980,6 +956,8 @@ app.post("/api/bidders/walk-in", async (req, res) => {
     spreadsheetId, 
     ticketsSpreadsheetId,
     ticketPrice,
+    bidderNumbersSheet,
+    bidManagementSheet,
     idempotencyKey 
   } = req.body;
 
@@ -989,9 +967,12 @@ app.post("/api/bidders/walk-in", async (req, res) => {
   const scriptId = bodyScriptId || process.env.GOOGLE_SCRIPT_ID;
   if (!scriptId) return res.status(500).json({ error: "GOOGLE_SCRIPT_ID missing" });
 
+  if (!bidderNumbersSheet || !bidManagementSheet) {
+     return res.status(400).json({ error: "Missing required sheet names for walk-in." });
+  }
+
   try {
     const client = getAuthenticatedClient(req.session.tokens);
-    const script = google.script({ version: "v1", auth: client });
     const sheets = google.sheets({ version: "v4", auth: client });
 
     // Step 0: Pre-verify Tickets Sheet if provided (Staging to prevent mismatched states)
@@ -1010,19 +991,163 @@ app.post("/api/bidders/walk-in", async (req, res) => {
       });
     }
 
-    // Step 1: Apps Script call (Creates bidder number)
-    const scriptResponse = await script.scripts.run({
-      scriptId: scriptId,
-      requestBody: {
-        function: "apiCreateWalkInTicket",
-        parameters: [firstName, lastName, email],
-        devMode: true,
-      },
+    console.log("[Walk-In] Fetching metadata for Spreadsheet IDs to perform native Google Sheet integration...");
+
+    // NATIVE REPLACEMENT FOR Apps Script "apiCreateWalkInTicket"
+    // Step A: Fetch Sheet IDs for insertDimension
+    const metadata = await sheets.spreadsheets.get({ spreadsheetId });
+    const bdSheet = metadata.data.sheets?.find(s => s.properties?.title === bidderNumbersSheet);
+    const bmSheet = metadata.data.sheets?.find(s => s.properties?.title === bidManagementSheet);
+    
+    if (!bdSheet || !bmSheet) {
+      throw new Error("[Walk-In] Could not find Bidder-Numbers or Bid-Management sheet IDs. Please verify settings.");
+    }
+
+    console.log("[Walk-In] Fetching current bidders to calculate new bidder ID...");
+    // Step B: Calculate new Bidder ID
+    const bdData = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${bidderNumbersSheet}!A:A`
+    });
+    const bdRows = bdData.data.values || [];
+    const formatName = (str: string) => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : '';
+    const formattedFirst = formatName(firstName);
+    const formattedLastName = formatName(lastName);
+    const formattedEmail = (email || "").trim();
+
+    const maxId = bdRows.slice(1).reduce((max: number, row: any) => Math.max(max, parseInt(row[0]) || 0), 100);
+    const newId = maxId + 1;
+    
+    console.log(`[Walk-In] New Bidder ID calculated: ${newId}. Attempting to create bid management columns...`);
+
+    // Step C: Find last column in Bid-Management
+    const bmData = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${bidManagementSheet}!1:5`
+    });
+    
+    let maxCols = 0;
+    (bmData.data.values || []).forEach((row: any[]) => {
+      maxCols = Math.max(maxCols, row.length);
+    });
+    
+    let lastColIndex = maxCols;
+    
+    // Ensure we start on an even column boundary (0-indexed, if 2 cols per bidder)
+    if (lastColIndex % 2 !== 0) {
+      lastColIndex += 1;
+    }
+    
+    const totalCols = bmSheet.properties?.gridProperties?.columnCount || 0;
+    if (totalCols <= lastColIndex + 2) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              appendDimension: {
+                sheetId: bmSheet.properties?.sheetId,
+                dimension: "COLUMNS",
+                length: Math.max(2, (lastColIndex + 2) - totalCols + 2)
+              }
+            }
+          ]
+        }
+      });
+      console.log(`[Walk-In] Successfully appended columns to Bid-Management.`);
+    }
+
+    // Step D: Write new data to both sheets
+    const getColumnLetter = (index: number): string => {
+      let letter = "";
+      while (index >= 0) {
+        letter = String.fromCharCode((index % 26) + 65) + letter;
+        index = Math.floor(index / 26) - 1;
+      }
+      return letter;
+    };
+
+    const newColLetter = getColumnLetter(lastColIndex);
+    const nextColLetter = getColumnLetter(lastColIndex + 1);
+    
+    const operations: any[] = [];
+    
+    // Bidder-Numbers append
+    operations.push({
+      type: 'APPEND',
+      spreadsheetId,
+      range: `${bidderNumbersSheet}!A:H`,
+      newValues: [[newId, formattedFirst, formattedLastName, formattedEmail, true, false, false, false]]
     });
 
-    if (scriptResponse.data.error) throw new Error(scriptResponse.data.error.message);
-    const scriptResult: any = scriptResponse.data.response?.result;
-    if (scriptResult && scriptResult.success === false) throw new Error(scriptResult.error);
+    // Bid-Management header formatting
+    operations.push({
+      type: 'UPDATE',
+      spreadsheetId,
+      range: `${bidManagementSheet}!${newColLetter}1:${nextColLetter}4`,
+      newValues: [
+        [newId, ""],
+        [formattedFirst, formattedLastName],
+        ['Item #:', 'Price:'],
+        ['Walk-In Ticket', ticketPrice || 35]
+      ]
+    });
+
+    console.log(`[Walk-In] Executing Google Sheets transaction to apply Walk-in data...`);
+    await executeGoogleSheetsTransaction(sheets, operations);
+
+    console.log(`[Walk-In] Applying rich formatting to Bid-Management...`);
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            mergeCells: {
+              range: {
+                sheetId: bmSheet.properties?.sheetId,
+                startRowIndex: 0,
+                endRowIndex: 1,
+                startColumnIndex: lastColIndex,
+                endColumnIndex: lastColIndex + 2
+              },
+              mergeType: "MERGE_ALL"
+            }
+          },
+          {
+            repeatCell: {
+              range: {
+                sheetId: bmSheet.properties?.sheetId,
+                startRowIndex: 0,
+                endRowIndex: 1,
+                startColumnIndex: lastColIndex,
+                endColumnIndex: lastColIndex + 2
+              },
+              cell: { userEnteredFormat: { horizontalAlignment: "CENTER" } },
+              fields: "userEnteredFormat.horizontalAlignment"
+            }
+          },
+          {
+            repeatCell: {
+              range: {
+                sheetId: bmSheet.properties?.sheetId,
+                startRowIndex: 1,
+                endRowIndex: 2,
+                startColumnIndex: lastColIndex,
+                endColumnIndex: lastColIndex + 2
+              },
+              cell: { userEnteredFormat: { textFormat: { bold: true } } },
+              fields: "userEnteredFormat.textFormat.bold"
+            }
+          }
+        ]
+      }
+    });
+    console.log(`[Walk-In] Successfully completed Bid-Management column formatting.`);
+
+    const scriptResult = {
+      success: true,
+      bidder: { id: newId, firstName: formattedFirst, lastName: formattedLastName }
+    };
 
     // Step 2: Write to Tickets Spreadsheet if provided
     let ticketAppended = false;
@@ -1648,29 +1773,59 @@ app.post("/api/auction/delete-item", async (req, res) => {
     const client = getAuthenticatedClient(req.session.tokens);
     const sheets = google.sheets({ version: "v4", auth: client });
 
-    // 1. Get sheetId for "Auction-Items"
-    const metadata = await sheets.spreadsheets.get({ spreadsheetId });
-    const auctionItemsSheet = metadata.data.sheets?.find(s => s.properties?.title === "Auction-Items");
-    if (!auctionItemsSheet) throw new Error("Target sheet 'Auction-Items' not found");
-    const sourceSheetId = auctionItemsSheet.properties?.sheetId;
+    // 1. Fetch categories for safe resequencing
+    const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Categories!A:C" });
+    const baseNumbers: Record<string, number> = {};
+    (catSearch.data.values || []).slice(1).forEach(row => {
+      if (row[0] && row[2]) baseNumbers[row[0].trim()] = parseInt(row[2], 10) || 0;
+    });
 
-    if (sourceSheetId === undefined) throw new Error("Could not determine sheetId");
+    // 2. Fetch the current sheet data
+    const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:L" });
+    const values = dataRes.data.values || [];
 
-    // 2. Delete the row
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        requests: [{
-          deleteDimension: {
-            range: {
-              sheetId: sourceSheetId,
-              dimension: "ROWS",
-              startIndex: rowIndex - 1,
-              endIndex: rowIndex
-            }
+    // 3. Mark the specified item as deleted
+    // Ensure the array reaches the requested rowIndex
+    if (!values[rowIndex - 1]) {
+      throw new Error(`Row ${rowIndex} not found in the spreadsheet.`);
+    }
+
+    const row = values[rowIndex - 1];
+    const category = row[1]; // Category is in Column B (index 1)
+
+    // Soft delete: clear ID (Column A) and set status to "Deleted" (Column J)
+    row[0] = "";
+    row[9] = "Deleted";
+
+    // 4. Run Re-Sequencing Cleanup for the affected category
+    if (category) {
+      const affectedCategories = new Set<string>();
+      affectedCategories.add(category);
+
+      for (const cat of affectedCategories) {
+        const rowMapping: {origIndex: number, row: any[]}[] = [];
+        for (let i = 1; i < values.length; i++) {
+          const r = values[i] || [];
+          if (r[1] === cat && r[9] === "Active") {
+            rowMapping.push({ origIndex: i, row: r });
           }
-        }]
+        }
+        rowMapping.sort((a, b) => {
+          const idA = parseInt(a.row[0]) || 999999;
+          const idB = parseInt(b.row[0]) || 999999;
+          return idA - idB;
+        });
+        let startNum = baseNumbers[cat] > 0 ? baseNumbers[cat] : 1;
+        rowMapping.forEach(item => { item.row[0] = startNum.toString(); startNum++; });
       }
+    }
+
+    // 5. Update the spreadsheet with the modified row and any re-sequenced items
+    await sheets.spreadsheets.values.update({
+      spreadsheetId, 
+      range: "Auction-Items!A1:L", 
+      valueInputOption: "USER_ENTERED", 
+      requestBody: { values }
     });
 
     res.json({ success: true });

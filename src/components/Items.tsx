@@ -12,8 +12,9 @@ export default function Items() {
   const [searchTerm, setSearchTerm] = useState("");
 
   const filteredItems = items.filter(item =>
-    item.id.toString().includes(searchTerm) ||
-    item.name.toLowerCase().includes(searchTerm.toLowerCase())
+    item.status === "Active" &&
+    (item.id.toString().includes(searchTerm) ||
+    item.name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (

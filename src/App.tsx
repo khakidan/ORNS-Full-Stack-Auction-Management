@@ -63,32 +63,52 @@ export default function App() {
   const { config } = useConfig();
   const { isAuctionClosed, closeAuction } = useAuction();
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
-  const [activeWorkflow, setActiveWorkflow] = useState<WorkflowType>('settings');
-  const [activeBidTab, setActiveBidTab] = useState("dashboard");
+  const [activeWorkflow, setActiveWorkflow] = useState<WorkflowType>(() => {
+    const saved = localStorage.getItem("activeWorkflow");
+    return (saved as WorkflowType) || 'settings';
+  });
+  const [activeBidTab, setActiveBidTab] = useState(() => {
+    return localStorage.getItem("activeBidTab") || "dashboard";
+  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  useEffect(() => {
+    localStorage.setItem("activeWorkflow", activeWorkflow);
+  }, [activeWorkflow]);
+
+  useEffect(() => {
+    localStorage.setItem("activeBidTab", activeBidTab);
+  }, [activeBidTab]);
+
   const handleSyncBidders = async () => {
     setIsSyncing(true);
     const scriptId = config.bidManagementScriptId;
+    const spreadsheetId = config.bidManagementSpreadsheetId;
+    
+    const toastId = toast.loading("Checking credentials and backing up existing Bid-Management layers...");
     
     try {
+      console.log("[Sync] Triggering native Node.js Google Sheets migration...");
       const res = await fetchWithRetry(`${getBaseUrl()}/api/bidders/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scriptId }),
+        body: JSON.stringify({ scriptId, spreadsheetId }),
         credentials: "include"
       });
       
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Failed to setup bid management app");
       
-      toast.success("Bidders synced and sheets reset via Apps Script");
-      window.location.reload();
+      toast.success("Successfully synchronized and re-sequenced all bidders, imported ticket sales, and generated full bid sheets!", { id: toastId });
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
     } catch (e: any) {
-      console.error("Failed to setup bid management app:", e);
-      toast.error(e.message || "Failed to setup bid management app");
+      console.error("[Sync Error] Failed to setup bid management app:", e);
+      toast.error(e.message || "Failed to setup bid management app", { id: toastId });
     } finally {
       setIsSyncing(false);
     }
