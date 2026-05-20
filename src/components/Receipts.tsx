@@ -23,36 +23,6 @@ export default function Receipts() {
 
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
-
-  const downloadFile = async (file: DriveFile) => {
-    setDownloadingId(file.id);
-    try {
-      const url = `${getBaseUrl()}/api/drive/download/${file.id}`;
-      const response = await fetchWithRetry(url, { credentials: "include" });
-      
-      if (!response.ok) throw new Error("Download failed");
-      
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      const filename = file.name.toLowerCase().endsWith(".pdf") ? file.name : `${file.name}.pdf`;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      
-      window.URL.revokeObjectURL(blobUrl);
-      toast.success(`Started download for ${file.name}`);
-    } catch (error) {
-      console.error("Download error:", error);
-      toast.error(`Failed to download ${file.name}`);
-    } finally {
-      setDownloadingId(null);
-    }
-  };
 
   const fetchFiles = async () => {
     if (isInvalidId) {
@@ -159,21 +129,12 @@ export default function Receipts() {
                     <TableCell className="text-right">
                       <Button 
                         variant="ghost" 
-                        size="sm"
-                        disabled={downloadingId !== null}
-                        className="h-8 px-3 gap-1.5"
-                        onClick={() => downloadFile(file)}
+                        size="sm" 
+                        className="h-8 gap-1"
+                        onClick={() => window.open(file.webViewLink, "_blank")}
                       >
-                        {downloadingId === file.id ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            Downloading...
-                          </>
-                        ) : (
-                          <>
-                            Download PDF <ExternalLink className="w-3 h-3" />
-                          </>
-                        )}
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Open
                       </Button>
                     </TableCell>
                   </TableRow>
