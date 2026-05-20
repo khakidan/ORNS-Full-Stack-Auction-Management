@@ -117,23 +117,43 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     if (!spreadsheetId) return;
     try {
       const sheetName = config.auctionItemsSheet;
-      const data = await getSheetData(spreadsheetId, `${sheetName}!A:L`);
+      const data = await getSheetData(spreadsheetId, `${sheetName}!A:Z`);
       if (data.values?.length > 1) {
+        const headers = data.values[0].map((h: string) => (h || "").toString().toLowerCase().trim());
+        
+        const getCol = (names: string[], defaultIdx: number) => {
+          const idx = headers.findIndex((h: string) => names.some(n => h === n || h.includes(n)));
+          return idx !== -1 ? idx : defaultIdx;
+        };
+
+        const idIdx = getCol(["item number", "number", "id"], 0);
+        const categoryIdx = getCol(["category"], 1);
+        const nameIdx = getCol(["item name", "name"], 2);
+        const descIdx = getCol(["description", "desc"], 3);
+        const valIdx = getCol(["value", "fair market"], 4);
+        const openIdx = getCol(["opening bid", "starting bid"], 5);
+        const minIdx = getCol(["min raise", "increment"], 6);
+        const donorIdx = getCol(["donor"], 7);
+        const typeIdx = getCol(["item type", "type"], 8);
+        const statusIdx = getCol(["status"], 9);
+        const bundleIdIdx = getCol(["bundle id", "bundled with"], 10);
+        const bundledIdx = getCol(["bundled datetime", "bundled"], 11);
+
         const itemsList = data.values.slice(1).map((row: string[], i: number) => ({
-          id: row[0]?.toString() || "",
-          category: row[1]?.toString() || "",
-          name: row[2]?.toString() || "",
-          description: row[3]?.toString() || "",
-          value: row[4]?.toString() || "",
-          openingBid: row[5]?.toString() || "",
-          minRaise: row[6]?.toString() || "",
-          donor: row[7]?.toString() || "",
-          itemType: row[8]?.toString() || "",
-          status: row[9]?.toString() || "Active",
-          bundleId: row[10]?.toString() || "",
-          bundledDateTime: row[11]?.toString() || "",
+          id: row[idIdx]?.toString() || "",
+          category: row[categoryIdx]?.toString() || "",
+          name: row[nameIdx]?.toString() || "",
+          description: row[descIdx]?.toString() || "",
+          value: row[valIdx]?.toString() || "",
+          openingBid: row[openIdx]?.toString() || "",
+          minRaise: row[minIdx]?.toString() || "",
+          donor: row[donorIdx]?.toString() || "",
+          itemType: row[typeIdx]?.toString() || "",
+          status: row[statusIdx]?.toString() || "Active",
+          bundleId: row[bundleIdIdx]?.toString() || "",
+          bundledDateTime: row[bundledIdx]?.toString() || "",
           rowIndex: i + 2
-        })).filter((item: any) => item.name);
+        })).filter((item: any) => item.id || item.name);
         setItems(itemsList);
       }
     } catch (e) {
