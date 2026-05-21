@@ -10,55 +10,11 @@
  * matching the rest of the auction management system architecture.
  */
 class GoogleAIStudio {
-	constructor() {
-		// Initialization hook ready for future instance contexts
-	}
-
-  /**
-   * Triggers batch emailing for all winners.
-   * Generates/Fetches invoices, updates the sheet, and emails the results out.
-   * @returns {{success: boolean, error?: string}}
-   */
-  sendAllEmails() {
-    const mgr = new ReceiptManager();
-    mgr.shouldSendEmails = true;
-    
-    const bidderSheet = mgr.activeSpreadSheet.getSheetByName(mgr.bidNumbersString);
-    const allData = bidderSheet.getDataRange().getValues();
-    
-    // Iterate through all rows skipping header
-    for (let i = 1; i < allData.length; i++) {
-      const rawBidderId = allData[i][0];
-      
-      // NULL PROTECTION: If the cell is blank, empty, or undefined, skip this row entirely
-      if (rawBidderId === null || rawBidderId === undefined || rawBidderId.toString().trim() === "") {
-        continue;
-      }
-      
-      const bidderId = rawBidderId.toString().trim();
-      const col = mgr.findBidderColInBidSheet_(bidderId);
-      if (col === -1) continue; // Bidder skipped or not in matrix
-      
-      // CRITICAL FIX: Set the ID into the manager BEFORE calling buildReceipt_
-      mgr.currentBidId = bidderId;
-      
-      const receipt = mgr.buildReceipt_(col);
-      if (!receipt.hasWinningItems()) continue; // Skip if no items won
-      
-      // Ensure invoice is generated and get URL
-      const paymentUrl = mgr.getOrCreateInvoiceUrl(bidderId, receipt);
-      
-      // Inject paymentUrl into manager scope for email content formatting injection
-      mgr.customPaymentUrl = paymentUrl; 
-      mgr.currentReceipt = receipt;
-      
-      // Dispatch email
-      mgr.handleEmailDispatch_();
-    }
-    return { success: true };
+  constructor() {
+    // Initialization hook ready for future instance contexts
   }
 
-	/**
+  /**
 	 * Triggers batch printing layout receipts.
 	 * Uses the original processBatch_ workflow to limit file creation to 2 documents.
 	 * Bidders are sorted alphabetically by last name in memory — the sheet is not modified.
@@ -123,112 +79,6 @@ class GoogleAIStudio {
       subtotal: mgr.currentReceipt.totalCost, 
       paymentUrl: paymentUrl 
     };
-  }
-
-  /**
-   * Individual target endpoint for single email pushes.
-   * @param {string|number} bidderId
-   * @returns {{success: boolean, error?: string}}
-   */
-  sendReceiptEmail(bidderId) {
-    if (bidderId === null || bidderId === undefined || bidderId.toString().trim() === "") {
-      return { success: false, error: "Provided Bidder ID is empty or invalid." };
-    }
-    
-    const sanitizedId = bidderId.toString().trim();
-    const mgr = new ReceiptManager();
-    mgr.currentBidId = sanitizedId;
-    mgr.shouldSendEmails = true;
-    
-    const col = mgr.findBidderColInBidSheet_(sanitizedId);
-    if (col === -1) throw new Error("Bidder column not found in Bid-Management");
-    
-    mgr.currentReceipt = mgr.buildReceipt_(col);
-    if (!mgr.currentReceipt.hasWinningItems()) throw new Error("No items won for this bidder");
-    
-    // Ensure invoice exists and pass URL to internal email template compiler
-    mgr.customPaymentUrl = mgr.getOrCreateInvoiceUrl(sanitizedId, mgr.currentReceipt);
-    
-    mgr.handleEmailDispatch_();
-    return { success: true };
-  }
-
-  /**
-   * Bridge function to create a walk-in ticket from the external app.
-   * @param {string} firstName
-   * @param {string} lastName
-   * @param {string} email
-   * @returns {{success: boolean, bidder?: {id: number, firstName: string, lastName: string}, error?: string}}
-   */
-  createWalkInTicket(firstName, lastName, email) {
-    const mgr = new CheckInManager();
-    const bidderSheet  = mgr.bidderManager.bidders.sheet;
-    const bidMgmtSheet = mgr.bidManagement.sheet;
-    const data         = bidderSheet.getDataRange().getValues();
-
-    const formatName        = str => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : '';
-    const formattedFirst    = formatName(firstName);
-    const formattedLastName = formatName(lastName);
-    const formattedEmail    = (email || "").trim();
-
-    // Calculate new ID
-    const maxId  = data.slice(1).reduce((max, row) => Math.max(max, parseInt(row[0]) || 0), 100);
-    const newId  = maxId + 1;
-    const newRow = bidderSheet.getLastRow() + 1;
-
-    // 1. Add to Bidder-Numbers (mark as checked-in)
-    bidderSheet.getRange(newRow, 1, 1, 4).setValues([[newId, formattedFirst, formattedLastName, formattedEmail]]);
-    bidderSheet.getRange(newRow, 5, 1, 4).insertCheckboxes();
-    bidderSheet.getRange(newRow, 5).setValue(true);
-
-    // 2. Add to Bid-Management
-    const lastCol = bidMgmtSheet.getLastColumn();
-    bidMgmtSheet.insertColumnsAfter(lastCol, 2);
-    const newCol = lastCol + 1;
-
-    bidMgmtSheet.getRange(1, newCol).setValue(newId);
-    bidMgmtSheet.getRange(2, newCol, 1, 2).setValues([[formattedFirst, formattedLastName]]).setFontWeight('bold');
-    bidMgmtSheet.getRange(3, newCol, 1, 2).setValues([['Item #:', 'Price:']]);
-    bidMgmtSheet.getRange(1, newCol, 1, 2).mergeAcross().setHorizontalAlignment('center');
-    
-    // Add Walk-In Ticket Item
-    bidMgmtSheet.getRange(4, newCol, 1, 2).setValues([[mgr.walkInTicketItemId, mgr.walkInTicketPrice]]);
-
-    return { 
-      success: true, 
-      bidder: { id: newId, firstName: formattedFirst, lastName: formattedLastName } 
-    };
-  }
-
-  /**
-   * Backs up existing sheets and runs the setup over again.
-   * @returns {{success: boolean, error?: string}}
-   */
-  syncBidders() {
-    const activeSpreadSheet = SpreadsheetApp.getActiveSpreadsheet();
-    
-    // Create timestamp for backups
-    const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
-    
-    // Backup Bid-Management sheet
-    const bidMgmtSheet = activeSpreadSheet.getSheetByName('Bid-Management');
-    if (bidMgmtSheet) {
-      bidMgmtSheet.setName(`Bid-Management (Backup ${timestamp})`);
-      bidMgmtSheet.hideSheet();
-    }
-    
-    // Backup Bidder-Numbers sheet
-    const bidderNumbersSheet = activeSpreadSheet.getSheetByName('Bidder-Numbers');
-    if (bidderNumbersSheet) {
-      bidderNumbersSheet.setName(`Bidder-Numbers (Backup ${timestamp})`);
-      bidderNumbersSheet.hideSheet();
-    }
-
-    // Run the setup classes natively directly from your Apps Script infrastructure
-    setupBiddersSheet();
-    createBidMgmtSheet();
-
-    return { success: true };
   }
 
   /**
@@ -338,14 +188,6 @@ class GoogleAIStudio {
   }
 }
 
-function apiSendAllEmails() {
-  try {
-    return new GoogleAIStudio().sendAllEmails();
-  } catch (e) {
-    return { success: false, error: e.toString() };
-  }
-}
-
 function apiCreateAllReceipts() {
   try {
     return new GoogleAIStudio().createAllReceipts();
@@ -357,30 +199,6 @@ function apiCreateAllReceipts() {
 function apiCreateIndividualReceipt(bidderId, emailReceipt) {
   try {
     return new GoogleAIStudio().createIndividualReceipt(bidderId, emailReceipt);
-  } catch (e) {
-    return { success: false, error: e.toString() };
-  }
-}
-
-function apiSendReceiptEmail(bidderId) {
-  try {
-    return new GoogleAIStudio().sendReceiptEmail(bidderId);
-  } catch (e) {
-    return { success: false, error: e.toString() };
-  }
-}
-
-function apiCreateWalkInTicket(firstName, lastName, email) {
-  try {
-    return new GoogleAIStudio().createWalkInTicket(firstName, lastName, email);
-  } catch (e) {
-    return { success: false, error: e.toString() };
-  }
-}
-
-function apiSyncBidders() {
-  try {
-    return new GoogleAIStudio().syncBidders();
   } catch (e) {
     return { success: false, error: e.toString() };
   }

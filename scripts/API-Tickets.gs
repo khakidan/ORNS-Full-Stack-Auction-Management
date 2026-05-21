@@ -40,6 +40,9 @@ class GoogleAIStudio {
     }
 }
 
+// ── Public-facing bridge functions ────────────────────────────────────────────
+// These wrapper names must remain stable — they are called directly by Google AI Studio.
+
 function apiCreateBidderLabels(spreadsheetId) {
     try {
         return new GoogleAIStudio().createBidderLabels();
