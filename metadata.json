@@ -1,10 +1,7 @@
 {
   "name": "Full-Stack ORNS Auction Dashboard Manager",
   "description": "A graphical interface for managing charity auctions, integrated with Google Sheets, Drive, and AI-powered assistance for bid entry and reporting.",
-  "requestFramePermissions": [
-    "clipboard-read",
-    "clipboard-write"
-  ],
+  "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]

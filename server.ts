@@ -4,7 +4,7 @@ import fs from "fs";
 import { google } from "googleapis";
 import { GoogleGenAI } from "@google/genai";
 import { processEmail, performSheetSync } from "./email-helpers.js";
-import session from "express-session";
+import cookieSession from "cookie-session";
 
 // Global resilient retry matrix for API calls (Exponential backoff & jitter is handled by gaxios internally)
 google.options({
@@ -15,16 +15,15 @@ google.options({
     statusCodesToRetry: [[100, 199], [429, 429], [500, 599]],
   }
 });
-import sessionFileStore from "session-file-store";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import cors from "cors";
 
-const FileStore = sessionFileStore(session);
-
-declare module "express-session" {
-  interface SessionData {
-    tokens: any;
+declare global {
+  namespace Express {
+    interface Request {
+      session: { tokens?: any } | null;
+    }
   }
 }
 
@@ -60,25 +59,15 @@ app.use(cors({
 app.use(express.json());
 app.set("trust proxy", 1);
 const DATA_DIR = process.env.APP_DATA_DIR || process.cwd();
-const SESSIONS_DIR = path.join(DATA_DIR, "sessions");
 
 app.use(
-  session({
+  cookieSession({
     name: "__session", // Required for Firebase Hosting
-    store: new FileStore({
-      path: SESSIONS_DIR,
-      retries: 0,
-    }),
-    secret: process.env.SESSION_SECRET || "auction-pro-secret",
-    saveUninitialized: true,
-    cookie: {
-      secure: process.env.NODE_ENV === "production" && !process.env.APP_URL?.includes("localhost"),
-      sameSite: (process.env.NODE_ENV === "production" && !process.env.APP_URL?.includes("localhost")) ? "none" : "lax",
-      httpOnly: true,
-      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
-    },
-    rolling: true,
-    resave: true,
+    keys: [process.env.SESSION_SECRET || "auction-pro-secret"],
+    secure: process.env.NODE_ENV === "production" && !process.env.APP_URL?.includes("localhost"),
+    sameSite: (process.env.NODE_ENV === "production" && !process.env.APP_URL?.includes("localhost")) ? "none" : "lax",
+    httpOnly: true,
+    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
   })
 );
 
@@ -202,12 +191,13 @@ app.get("/auth/callback", async (req, res) => {
       `);
     }
 
-    req.session.tokens = tokens;
-    req.session.save((err) => {
-      if (err) console.error("Session save error:", err);
-      res.send(`
-        <html>
-          <body style="background: #f8fafc;">
+    if (req.session) {
+      req.session.tokens = tokens;
+    }
+    
+    res.send(`
+      <html>
+        <body style="background: #f8fafc;">
             <div style="font-family: sans-serif; text-align: center; padding-top: 100px; color: #1e293b;">
               <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); display: inline-block; max-width: 400px;">
                 <h2 style="margin-top: 0;">Authentication Successful</h2>
@@ -226,7 +216,6 @@ app.get("/auth/callback", async (req, res) => {
           </body>
         </html>
       `);
-    });
   } catch (error: any) {
     const errorDetails = error.response?.data || error.message;
     console.error("Error getting tokens during callback:", errorDetails);
@@ -245,15 +234,13 @@ app.get("/api/auth/callback", (req, res) => {
 });
 
 app.get("/api/auth/status", (req, res) => {
-  res.json({ authenticated: !!req.session.tokens });
+  res.json({ authenticated: req.session && !!req.session.tokens });
 });
 
 app.post("/api/auth/logout", (req, res) => {
-  req.session.destroy((err) => {
-    if (err) return res.status(500).json({ error: "Logout failed" });
-    res.clearCookie('__session');
-    res.json({ success: true });
-  });
+  req.session = null;
+  res.clearCookie('__session');
+  res.json({ success: true });
 });
 
 // Helper to get authenticated client
