@@ -26,6 +26,22 @@ import { useAuction } from "./context/AuctionContext";
 
 type WorkflowType = 'tickets' | 'items' | 'bids' | 'settings';
 
+const WORKFLOW_PATHS: Record<WorkflowType, string> = {
+  items: "/AuctionItemsWorkflow",
+  tickets: "/AuctionTicketsWorkflow",
+  bids: "/BidManagement",
+  settings: "/Configuration"
+};
+
+const getWorkflowFromPath = (path: string): WorkflowType | null => {
+  const cleanPath = path.toLowerCase();
+  if (cleanPath.includes("items")) return "items";
+  if (cleanPath.includes("tickets")) return "tickets";
+  if (cleanPath.includes("bid")) return "bids";
+  if (cleanPath.includes("config") || cleanPath.includes("settings") || cleanPath.includes("configuration")) return "settings";
+  return null;
+};
+
 function BackToTop() {
   const [visible, setVisible] = useState(false);
 
@@ -64,6 +80,8 @@ export default function App() {
   const { isAuctionClosed, closeAuction } = useAuction();
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [activeWorkflow, setActiveWorkflow] = useState<WorkflowType>(() => {
+    const pathWorkflow = getWorkflowFromPath(window.location.pathname);
+    if (pathWorkflow) return pathWorkflow;
     const saved = localStorage.getItem("activeWorkflow");
     return (saved as WorkflowType) || 'settings';
   });
@@ -74,9 +92,26 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Sync state to URL and localStorage
   useEffect(() => {
     localStorage.setItem("activeWorkflow", activeWorkflow);
+    const targetPath = WORKFLOW_PATHS[activeWorkflow];
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState(null, "", targetPath);
+    }
   }, [activeWorkflow]);
+
+  // Sync browser back/forward mechanics
+  useEffect(() => {
+    const handlePopState = () => {
+      const pathWorkflow = getWorkflowFromPath(window.location.pathname);
+      if (pathWorkflow) {
+        setActiveWorkflow(pathWorkflow);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("activeBidTab", activeBidTab);
@@ -124,24 +159,41 @@ export default function App() {
     checkAuth();
     
     const handleAuthSuccess = (event: MessageEvent) => {
+      console.log("[Auth] Received message:", event.data?.type);
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        if (event.data.tokens) {
+          console.log("[Auth] Tokens received safely");
+          try {
+            localStorage.setItem('google_tokens', JSON.stringify(event.data.tokens));
+            console.log("[Auth] Tokens saved to localStorage");
+          } catch (e) {
+            console.warn("[Auth] localStorage failed, storing in memory:", e);
+            (window as any)._fallbackTokens = JSON.stringify(event.data.tokens);
+          }
+        } else {
+          console.error("[Auth] No tokens contained in postMessage!");
+        }
         checkAuth();
       }
     };
+    
     window.addEventListener('message', handleAuthSuccess);
 
-    // Polling fallback
+    // low-frequency fallback poll (every 5 seconds), only if not authenticated
     const interval = setInterval(() => {
-      if (authenticated === false) {
-        checkAuth();
-      }
-    }, 3000);
+      setAuthenticated((prev) => {
+        if (!prev) {
+          checkAuth();
+        }
+        return prev;
+      });
+    }, 5000);
 
     return () => {
       window.removeEventListener('message', handleAuthSuccess);
       clearInterval(interval);
     };
-  }, [authenticated]);
+  }, []);
 
   const checkAuth = async () => {
     try {
@@ -153,28 +205,48 @@ export default function App() {
   };
 
   const handleLogin = async () => {
+    // Check if we are inside an iframe (like the AI Studio preview environment)
+    const isIframe = window.self !== window.top;
+
+    if (!isIframe) {
+      try {
+        sessionStorage.setItem('post_auth_redirect_path', window.location.pathname);
+      } catch (e) {
+        console.warn("sessionStorage failed:", e);
+      }
+    }
+
+    let popup: Window | null = null;
+    if (isIframe) {
+      // Open popup immediately so standard browser doesn't block it as a non-user action (losing click context in awaits)
+      popup = window.open("about:blank", "oauth_popup", "width=600,height=700");
+      if (!popup) {
+        toast.error("Popup blocked! Please allow popups for this site in your browser settings.");
+        return;
+      }
+    }
+
     try {
       console.log("Handle login clicked, fetching auth URL...");
       const response = await getAuthUrl();
       
-      if (response.error) {
-        console.error("Server returned auth error:", response.error);
-        toast.error(`Auth Error: ${response.error}`);
+      if (response.error || !response.url) {
+        console.error("Server returned auth error:", response?.error || "Unknown error");
+        toast.error("Auth server did not return a valid login URL.");
+        if (popup) popup.close();
         return;
       }
       
-      if (!response.url) {
-        console.error("Server returned no URL:", response);
-        toast.error("Auth server did not return a login URL.");
-        return;
-      }
-
       console.log("Redirecting to:", response.url.substring(0, 50) + "...");
-      // Using window.open for OAuth because Google blocks their login page in iframes
-      window.open(response.url, "oauth_popup", "width=600,height=700");
+      if (isIframe && popup) {
+        popup.location.href = response.url;
+      } else {
+        window.location.href = response.url;
+      }
     } catch (error) {
       console.error("Login failed with fetch error:", error);
-      toast.error("Could not reach auth server. Please check the console for details.");
+      toast.error("Could not reach auth server.");
+      if (popup) popup.close();
     }
   };
 

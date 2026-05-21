@@ -62,7 +62,7 @@ export default function Checkout() {
       const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/generate-all`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scriptId, spreadsheetId }),
+        body: JSON.stringify({ scriptId, spreadsheetId, receiptFolderId: folderId }),
         credentials: "include"
       });
       
@@ -235,7 +235,8 @@ export default function Checkout() {
           bidderId: winner.bidderId,
           emailReceipt: false,
           scriptId,
-          spreadsheetId
+          spreadsheetId,
+          receiptFolderId: folderId
         }),
         credentials: "include"
       });

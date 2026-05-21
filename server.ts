@@ -42,6 +42,56 @@ const genAI = new GoogleGenAI({
   }
 });
 
+function getCategoryBase(categoryName: string): number {
+  if (!categoryName) return 1;
+  const clean = categoryName.toLowerCase().replace(/&/g, "and").trim().replace(/\s+/g, " ");
+  
+  if (clean.includes("classroom art")) return 101;
+  if (clean.includes("arts, crafts and jewelry") || clean.includes("arts, crafts & jewelry") || clean.includes("jewelry")) return 201;
+  if (clean.includes("health & beauty") || clean.includes("health and beauty") || clean.includes("health") || clean.includes("beauty")) return 301;
+  if (clean.includes("fitness")) return 401;
+  if (clean.includes("kids activities") || clean.includes("kids activity") || clean.includes("kids")) return 501;
+  if (clean.includes("retail")) return 601;
+  if (clean.includes("entertainment") || clean.includes("experience")) return 701;
+  if (clean.includes("food")) return 801;
+  if (clean.includes("service")) return 901;
+  if (clean.includes("classroom baskets") || clean.includes("classroom basket")) return 1001;
+  if (clean.includes("travel")) return 1101;
+  if (clean.includes("sports") || clean.includes("sports memorabilia") || clean.includes("ticket")) {
+    if (clean.includes("raffle")) return 1501;
+    return 1201;
+  }
+  if (clean.includes("live")) return 1301;
+  if (clean.includes("movie")) return 1401;
+  if (clean.includes("raffle")) return 1501;
+  if (clean.includes("open appeal") || clean.includes("appeal")) return 1601;
+
+  // Exact fallback matches
+  const exactMatches: Record<string, number> = {
+    "classroom art": 101,
+    "arts, crafts and jewelry": 201,
+    "arts, crafts & jewelry": 201,
+    "health & beauty": 301,
+    "health and beauty": 301,
+    "fitness": 401,
+    "kids activities": 501,
+    "retail": 601,
+    "entertainment & experiences": 701,
+    "entertainment and experiences": 701,
+    "food": 801,
+    "services": 901,
+    "classroom baskets": 1001,
+    "travel": 1101,
+    "sports memorabilia & tickets": 1201,
+    "sports memorabilia and tickets": 1201,
+    "live": 1301,
+    "movie night": 1401,
+    "raffle tickets": 1501,
+    "open appeal": 1601
+  };
+  return exactMatches[clean] || 1;
+}
+
 // CORS configuration to allow Tauri app to talk to local server
 app.use(cors({
   origin: (origin, callback) => {
@@ -52,11 +102,21 @@ app.use(cors({
       callback(null, true); // Be permissive for local development for now
     }
   },
-  credentials: true
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-google-tokens']
 }));
 
 // Middleware
 app.use(express.json());
+
+// Global middleware to prevent caching (required for Firebase Hosting to preserve Set-Cookie)
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/') || req.path.startsWith('/auth/')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  }
+  next();
+});
+
 app.set("trust proxy", 1);
 const DATA_DIR = process.env.APP_DATA_DIR || process.cwd();
 
@@ -70,6 +130,43 @@ app.use(
     maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
   })
 );
+
+// Dynamic cookie settings middleware for proper iframe (AI Studio build site) and top-level tab sameSite settings
+app.use((req, res, next) => {
+  if (req.sessionOptions) {
+    const host = req.get("host") || "";
+    const isIframe = req.get("sec-fetch-dest") === "iframe" || host.includes("ais-dev-") || host.includes("ais-pre-");
+    
+    if (process.env.NODE_ENV === "production" && !host.includes("localhost")) {
+      req.sessionOptions.secure = true;
+      req.sessionOptions.sameSite = isIframe ? "none" : "lax";
+    } else {
+      req.sessionOptions.secure = false;
+      req.sessionOptions.sameSite = "lax";
+    }
+  }
+  next();
+});
+
+// Restore session tokens if present in client headers, bypassing cookie block restrictions
+app.use((req, res, next) => {
+  const tokenHeader = req.headers['x-google-tokens'];
+  if (tokenHeader && typeof tokenHeader === 'string') {
+    try {
+      const parsed = JSON.parse(tokenHeader);
+      if (parsed) {
+        if (!req.session) {
+          req.session = {};
+        }
+        req.session.tokens = parsed;
+        console.log(`[Token Restorer] Successfully restored tokens for ${req.path}`);
+      }
+    } catch (e) {
+      console.error("[Token Restorer] Failed to parse custom token header:", e);
+    }
+  }
+  next();
+});
 
 // Scopes for Google Workspace APIs
 const SCOPES = [
@@ -191,9 +288,26 @@ app.get("/auth/callback", async (req, res) => {
       `);
     }
 
-    if (req.session) {
-      req.session.tokens = tokens;
+    if (!req.session) {
+      req.session = { tokens: null };
     }
+    
+    if (req.session) {
+      const slimTokens = { ...tokens };
+      delete slimTokens.id_token;
+      
+      // We don't strictly need to store scopes either if we know what they are,
+      // but if the credential object strictly checks for it, we can leave it.
+      // Better to delete it to further reduce cookie size.
+      delete slimTokens.scope;
+      
+      req.session.tokens = slimTokens;
+    }
+    
+    // Create a safe-to-serialize token backup
+    const messageTokens = { ...tokens };
+    delete messageTokens.id_token;
+    delete messageTokens.scope;
     
     res.send(`
       <html>
@@ -206,11 +320,68 @@ app.get("/auth/callback", async (req, res) => {
                 <button onclick="window.close()" style="background: #0f172a; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600;">Close Window</button>
               </div>
               <script>
-                if (window.opener) {
-                  window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*');
-                  // Give a slight delay before closing to ensure message is sent
-                  setTimeout(() => window.close(), 1500);
-                }
+                (function() {
+                  var tokens = ${JSON.stringify(messageTokens)};
+                  
+                  // Save tokens to localStorage in the browser so that the main app receives them immediately
+                  try {
+                    localStorage.setItem('google_tokens', JSON.stringify(tokens));
+                    console.log("Successfully cached tokens in localStorage from callback");
+                  } catch (e) {
+                    console.warn("localStorage failed in callback script:", e);
+                  }
+
+                  var isPopup = false;
+                  try {
+                    if (window.name === 'oauth_popup') {
+                      isPopup = true;
+                    }
+                  } catch (e) {}
+
+                  if (isPopup) {
+                    var hasOpener = false;
+                    try {
+                      if (window.opener && window.opener !== window) {
+                        hasOpener = true;
+                      }
+                    } catch (e) {}
+
+                    if (hasOpener) {
+                      try {
+                        console.log("Sending successful auth tokens to main window opener...");
+                        window.opener.postMessage({ 
+                          type: 'OAUTH_AUTH_SUCCESS',
+                          tokens: tokens
+                        }, '*');
+                        
+                        var p = document.querySelector('p');
+                        if (p) {
+                          p.textContent = "Authenticated successfully with your ORNS account. This window will close automatically.";
+                        }
+                        
+                        setTimeout(function() {
+                          window.close();
+                        }, 1000);
+                        return;
+                      } catch (e) {
+                        console.error("Failed to post message to main window:", e);
+                      }
+                    }
+                  }
+
+                  // Non-popup flow (or fallback): redirect the main tab to the saved path or root
+                  var redirectPath = '/';
+                  try {
+                    var savedPath = sessionStorage.getItem('post_auth_redirect_path');
+                    if (savedPath && savedPath.slice(0, 1) === '/') {
+                      redirectPath = savedPath;
+                      sessionStorage.removeItem('post_auth_redirect_path');
+                    }
+                  } catch (e) {}
+
+                  console.log("Redirecting to: " + redirectPath);
+                  window.location.href = redirectPath;
+                })();
               </script>
             </div>
           </body>
@@ -254,7 +425,7 @@ function getAuthenticatedClient(tokens: any) {
 app.post("/api/receipts/generate", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
 
-  const { bidderId, emailReceipt, scriptId: bodyScriptId, spreadsheetId } = req.body;
+  const { bidderId, emailReceipt, scriptId: bodyScriptId, spreadsheetId, receiptFolderId } = req.body;
   const scriptId = bodyScriptId || process.env.GOOGLE_SCRIPT_ID;
   
   if (!scriptId) {
@@ -267,13 +438,13 @@ app.post("/api/receipts/generate", async (req, res) => {
     const client = getAuthenticatedClient(req.session.tokens);
     const script = google.script({ version: "v1", auth: client });
 
-    console.log(`[Script API] Calling bridge function 'apiCreateIndividualReceipt' for Bidder ${bidderId}`);
+    console.log(`[Script API] Calling bridge function 'apiCreateIndividualReceipt' for Bidder ${bidderId} with folder ${receiptFolderId}`);
 
     const response = await script.scripts.run({
       scriptId: scriptId,
       requestBody: {
         function: "apiCreateIndividualReceipt",
-        parameters: [String(bidderId), !!emailReceipt],
+        parameters: [String(bidderId), !!emailReceipt, receiptFolderId || ""],
         devMode: true, // Uses the latest saved version
       },
     });
@@ -311,7 +482,7 @@ app.post("/api/receipts/generate", async (req, res) => {
 app.post("/api/receipts/generate-all", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
 
-  const { scriptId: bodyScriptId, spreadsheetId } = req.body;
+  const { scriptId: bodyScriptId, spreadsheetId, receiptFolderId } = req.body;
   const scriptId = bodyScriptId || process.env.GOOGLE_SCRIPT_ID;
   if (!scriptId) return res.status(500).json({ error: "GOOGLE_SCRIPT_ID not configured. Please set it in Settings." });
 
@@ -323,7 +494,7 @@ app.post("/api/receipts/generate-all", async (req, res) => {
       scriptId: scriptId,
       requestBody: {
         function: "apiCreateAllReceipts",
-        parameters: [],
+        parameters: [receiptFolderId || ""],
         devMode: true,
       },
     });
@@ -1055,7 +1226,7 @@ app.post("/api/auction/checkout-mark-paid", async (req, res) => {
       scriptId: scriptId,
       requestBody: {
         function: "apiRecordPayment",
-        parameters: [String(bidderId), paymentMethod || "CASH", parsedAmount || 0],
+        parameters: [String(bidderId), paymentMethod || "CASH"],
         devMode: true,
       },
     });
@@ -1729,7 +1900,11 @@ app.post("/api/bundle/process", async (req, res) => {
     const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Categories!A:C" });
     const baseNumbers: Record<string, number> = {};
     (catSearch.data.values || []).slice(1).forEach(row => {
-      if (row[0] && row[2]) baseNumbers[row[0].trim()] = parseInt(row[2], 10) || 0;
+      const catName = (row[0] || "").toString().trim();
+      const catBase = parseInt(row[1] || row[2] || "0", 10) || 0;
+      if (catName) {
+        baseNumbers[catName] = catBase || getCategoryBase(catName);
+      }
     });
 
     const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:L" });
@@ -1760,7 +1935,8 @@ app.post("/api/bundle/process", async (req, res) => {
       }
     }
 
-    let nextId = baseNumbers[targetCategory] > 0 ? baseNumbers[targetCategory] : 1;
+    const startBase = baseNumbers[targetCategory] || getCategoryBase(targetCategory);
+    let nextId = startBase;
     for (let i = 1; i < values.length; i++) {
       const row = values[i] || [];
       if (row[1] === targetCategory && row[9] === "Active") {
@@ -1808,8 +1984,9 @@ app.post("/api/bundle/process", async (req, res) => {
         const idB = parseInt(b.row[0]) || 999999;
         return idA - idB;
       });
-      let startNum = baseNumbers[cat] > 0 ? baseNumbers[cat] : 1;
-      rowMapping.forEach(item => { item.row[0] = startNum.toString(); startNum++; });
+      const startNum = baseNumbers[cat] || getCategoryBase(cat);
+      let runningNum = startNum;
+      rowMapping.forEach(item => { item.row[0] = runningNum.toString(); runningNum++; });
     }
 
     await sheets.spreadsheets.values.update({
@@ -1853,7 +2030,11 @@ app.post("/api/bundle/restore", async (req, res) => {
     const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Categories!A:C" });
     const baseNumbers: Record<string, number> = {};
     (catSearch.data.values || []).slice(1).forEach(row => {
-      if (row[0] && row[2]) baseNumbers[row[0].trim()] = parseInt(row[2], 10) || 0;
+      const catName = (row[0] || "").toString().trim();
+      const catBase = parseInt(row[1] || row[2] || "0", 10) || 0;
+      if (catName) {
+        baseNumbers[catName] = catBase || getCategoryBase(catName);
+      }
     });
 
     const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:L" });
@@ -1907,8 +2088,9 @@ app.post("/api/bundle/restore", async (req, res) => {
         const idB = parseInt(b.row[0]) || 999999;
         return idA - idB;
       });
-      let startNum = baseNumbers[cat] > 0 ? baseNumbers[cat] : 1;
-      rowMapping.forEach(item => { item.row[0] = startNum.toString(); startNum++; });
+      const startNum = baseNumbers[cat] || getCategoryBase(cat);
+      let runningNum = startNum;
+      rowMapping.forEach(item => { item.row[0] = runningNum.toString(); runningNum++; });
     }
 
     await sheets.spreadsheets.values.update({
@@ -1993,6 +2175,105 @@ app.post("/api/settings/update", async (req, res) => {
   }
 });
 
+// Add Auction Item and resequence
+app.post("/api/auction/add-item", async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+  const { spreadsheetId, category, name, description, value, openingBid, minRaise, donor, itemType } = req.body;
+  if (!spreadsheetId || !category || !name) {
+    return res.status(400).json({ error: "Missing required parameters for adding item" });
+  }
+
+  try {
+    const client = getAuthenticatedClient(req.session.tokens);
+    const sheets = google.sheets({ version: "v4", auth: client });
+
+    // 1. Fetch categories for safe resequencing bases
+    const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Categories!A:C" });
+    const baseNumbers: Record<string, number> = {};
+    (catSearch.data.values || []).slice(1).forEach(row => {
+      const catName = (row[0] || "").toString().trim();
+      const catBase = parseInt(row[1] || row[2] || "0", 10) || 0;
+      if (catName) {
+        baseNumbers[catName] = catBase || getCategoryBase(catName);
+      }
+    });
+
+    // 2. Fetch the current sheet data
+    const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:L" });
+    const values = dataRes.data.values || [];
+
+    if (values.length === 0) {
+      values.push([
+        "Auction Item ID", "Category", "Item Name", "Description", "Value", 
+        "Opening Bid", "Min Raise Amount", "Donated By", 
+        "Physical Item, Certificate, or Both?", "Status", "Bundle ID", "Bundled Date/Time"
+      ]);
+    }
+
+    // 3. Construct and append the new item (temporary ID "TEMP")
+    const newRow = [
+      "TEMP",
+      category,
+      name,
+      description || "",
+      value || "",
+      openingBid || "",
+      minRaise || "",
+      donor || "",
+      itemType || "",
+      "Active",
+      "",
+      ""
+    ];
+    values.push(newRow);
+
+    // 4. Run Re-Sequencing Cleanup for the affected category to compute and guarantee correct ID
+    const rowMapping: {origIndex: number, row: any[]}[] = [];
+    for (let i = 1; i < values.length; i++) {
+      const r = values[i] || [];
+      if (r[1] === category && r[9] === "Active") {
+        rowMapping.push({ origIndex: i, row: r });
+      }
+    }
+
+    rowMapping.sort((a, b) => {
+      const idA = a.row[0] === "TEMP" ? 999999 : (parseInt(a.row[0]) || 999999);
+      const idB = b.row[0] === "TEMP" ? 999999 : (parseInt(b.row[0]) || 999999);
+      if (idA !== idB) return idA - idB;
+      return a.origIndex - b.origIndex;
+    });
+
+    const startNum = baseNumbers[category] || getCategoryBase(category);
+    let runningNum = startNum;
+    rowMapping.forEach(item => {
+      item.row[0] = runningNum.toString();
+      runningNum++;
+    });
+
+    // 5. Update the entire sheet range to persist the new row and correct/gap-free IDs
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "Auction-Items!A1:L",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values }
+    });
+
+    // Invalidate cache for this spreadsheet
+    for (const key of sheetCache.keys()) {
+      if (key.startsWith(`${spreadsheetId}:`)) {
+        sheetCache.delete(key);
+      }
+    }
+
+    const assignedId = newRow[0];
+    res.json({ success: true, assigned_id: assignedId, rowIndex: values.length });
+  } catch (error: any) {
+    console.error("[Server Error] add-item:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete Auction Item Row
 app.post("/api/auction/delete-item", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
@@ -2010,7 +2291,11 @@ app.post("/api/auction/delete-item", async (req, res) => {
     const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Categories!A:C" });
     const baseNumbers: Record<string, number> = {};
     (catSearch.data.values || []).slice(1).forEach(row => {
-      if (row[0] && row[2]) baseNumbers[row[0].trim()] = parseInt(row[2], 10) || 0;
+      const catName = (row[0] || "").toString().trim();
+      const catBase = parseInt(row[1] || row[2] || "0", 10) || 0;
+      if (catName) {
+        baseNumbers[catName] = catBase || getCategoryBase(catName);
+      }
     });
 
     // 2. Fetch the current sheet data
@@ -2039,7 +2324,7 @@ app.post("/api/auction/delete-item", async (req, res) => {
         const rowMapping: {origIndex: number, row: any[]}[] = [];
         for (let i = 1; i < values.length; i++) {
           const r = values[i] || [];
-          if (r[1] === cat && r[9] === "Active") {
+          if (r[1] === r[1] && r[1] === cat && r[9] === "Active") {
             rowMapping.push({ origIndex: i, row: r });
           }
         }
@@ -2048,8 +2333,9 @@ app.post("/api/auction/delete-item", async (req, res) => {
           const idB = parseInt(b.row[0]) || 999999;
           return idA - idB;
         });
-        let startNum = baseNumbers[cat] > 0 ? baseNumbers[cat] : 1;
-        rowMapping.forEach(item => { item.row[0] = startNum.toString(); startNum++; });
+        const startNum = baseNumbers[cat] || getCategoryBase(cat);
+        let runningNum = startNum;
+        rowMapping.forEach(item => { item.row[0] = runningNum.toString(); runningNum++; });
       }
     }
 
@@ -2064,6 +2350,216 @@ app.post("/api/auction/delete-item", async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error("[Server Error] delete-item:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update Auction Item Row & Manage Sequencing on Change
+app.post("/api/auction/update-item", async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+  const { spreadsheetId, rowIndex, field, value } = req.body;
+  if (!spreadsheetId || !rowIndex || !field) {
+    return res.status(400).json({ error: "Missing required parameters" });
+  }
+
+  try {
+    const client = getAuthenticatedClient(req.session.tokens);
+    const sheets = google.sheets({ version: "v4", auth: client });
+
+    // 1. Fetch categories for safe resequencing
+    const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Categories!A:C" });
+    const baseNumbers: Record<string, number> = {};
+    (catSearch.data.values || []).slice(1).forEach(row => {
+      const catName = (row[0] || "").toString().trim();
+      const catBase = parseInt(row[1] || row[2] || "0", 10) || 0;
+      if (catName) {
+        baseNumbers[catName] = catBase || getCategoryBase(catName);
+      }
+    });
+
+    // 2. Fetch current items
+    const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:L" });
+    const values = dataRes.data.values || [];
+
+    if (!values[rowIndex - 1]) {
+      throw new Error(`Row ${rowIndex} not found`);
+    }
+
+    const row = values[rowIndex - 1];
+    const oldCategory = row[1];
+
+    // Field mapping to index
+    const fieldMapping: Record<string, number> = {
+      id: 0,
+      category: 1,
+      name: 2,
+      description: 3,
+      value: 4,
+      openingBid: 5,
+      minRaise: 6,
+      donor: 7,
+      itemType: 8,
+      status: 9,
+      bundleId: 10,
+      bundledDateTime: 11
+    };
+
+    const colIdx = fieldMapping[field];
+    if (colIdx === undefined) throw new Error(`Invalid field: ${field}`);
+
+    // Update the field
+    row[colIdx] = value;
+
+    // Track affected categories for re-sequencing
+    const affectedCategories = new Set<string>();
+    if (field === 'category') {
+      if (oldCategory) affectedCategories.add(oldCategory);
+      if (value) affectedCategories.add(value);
+    } else if (field === 'status') {
+      const category = row[1];
+      if (category) affectedCategories.add(category);
+    }
+
+    // Run Re-Sequencing Cleanup for affected categories
+    for (const cat of affectedCategories) {
+      if (!cat) continue;
+      const rowMapping: {origIndex: number, row: any[]}[] = [];
+      for (let i = 1; i < values.length; i++) {
+        const r = values[i] || [];
+        if (r[1] === cat && r[9] === "Active") {
+          rowMapping.push({ origIndex: i, row: r });
+        }
+      }
+      // Sort them by their original numerical ID or rowIndex if ID is missing / empty
+      rowMapping.sort((a, b) => {
+        const idA = parseInt(a.row[0]) || 999999;
+        const idB = parseInt(b.row[0]) || 999999;
+        if (idA !== idB) return idA - idB;
+        return a.origIndex - b.origIndex;
+      });
+      
+      const startNum = baseNumbers[cat] || getCategoryBase(cat);
+      let runningNum = startNum;
+      rowMapping.forEach(item => {
+        item.row[0] = runningNum.toString();
+        runningNum++;
+      });
+    }
+
+    // Update the spreadsheet with the modified rows
+    await sheets.spreadsheets.values.update({
+      spreadsheetId, 
+      range: "Auction-Items!A1:L", 
+      valueInputOption: "USER_ENTERED", 
+      requestBody: { values }
+    });
+
+    res.json({ success: true, affected_categories: Array.from(affectedCategories) });
+  } catch (error: any) {
+    console.error("[Server Error] update-item:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Bulk Update Auction Item Rows & Manage Sequencing on Change
+app.post("/api/auction/bulk-update-items", async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+  const { spreadsheetId, rowIndices, field, value } = req.body;
+  if (!spreadsheetId || !rowIndices || !rowIndices.length || !field) {
+    return res.status(400).json({ error: "Missing required bulk update parameters" });
+  }
+
+  try {
+    const client = getAuthenticatedClient(req.session.tokens);
+    const sheets = google.sheets({ version: "v4", auth: client });
+
+    // Fetch categories and base numbers
+    const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Categories!A:C" });
+    const baseNumbers: Record<string, number> = {};
+    (catSearch.data.values || []).slice(1).forEach(row => {
+      const catName = (row[0] || "").toString().trim();
+      const catBase = parseInt(row[1] || row[2] || "0", 10) || 0;
+      if (catName) {
+        baseNumbers[catName] = catBase || getCategoryBase(catName);
+      }
+    });
+
+    const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:L" });
+    const values = dataRes.data.values || [];
+
+    const fieldMapping: Record<string, number> = {
+      id: 0,
+      category: 1,
+      name: 2,
+      description: 3,
+      value: 4,
+      openingBid: 5,
+      minRaise: 6,
+      donor: 7,
+      itemType: 8,
+      status: 9,
+      bundleId: 10,
+      bundledDateTime: 11
+    };
+
+    const colIdx = fieldMapping[field];
+    if (colIdx === undefined) throw new Error(`Invalid field: ${field}`);
+
+    const affectedCategories = new Set<string>();
+
+    for (const rowIndex of rowIndices) {
+      if (!values[rowIndex - 1]) continue;
+      const row = values[rowIndex - 1];
+      const oldCategory = row[1];
+      
+      row[colIdx] = value;
+
+      if (field === 'category') {
+        if (oldCategory) affectedCategories.add(oldCategory);
+        if (value) affectedCategories.add(value);
+      } else if (field === 'status') {
+        const category = row[1];
+        if (category) affectedCategories.add(category);
+      }
+    }
+
+    // Run Re-Sequencing Cleanup
+    for (const cat of affectedCategories) {
+      if (!cat) continue;
+      const rowMapping: {origIndex: number, row: any[]}[] = [];
+      for (let i = 1; i < values.length; i++) {
+        const r = values[i] || [];
+        if (r[1] === cat && r[9] === "Active") {
+          rowMapping.push({ origIndex: i, row: r });
+        }
+      }
+      rowMapping.sort((a, b) => {
+        const idA = parseInt(a.row[0]) || 999999;
+        const idB = parseInt(b.row[0]) || 999999;
+        if (idA !== idB) return idA - idB;
+        return a.origIndex - b.origIndex;
+      });
+      
+      const startNum = baseNumbers[cat] || getCategoryBase(cat);
+      let runningNum = startNum;
+      rowMapping.forEach(item => {
+        item.row[0] = runningNum.toString();
+        runningNum++;
+      });
+    }
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId, 
+      range: "Auction-Items!A1:L", 
+      valueInputOption: "USER_ENTERED", 
+      requestBody: { values }
+    });
+
+    res.json({ success: true, affected_categories: Array.from(affectedCategories) });
+  } catch (error: any) {
+    console.error("[Server Error] bulk-update-items:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -2105,6 +2601,9 @@ app.get("/api/sheets/:spreadsheetId/:range", async (req, res) => {
     }
     if (error.code === 404) {
       return res.status(404).json({ error: "Spreadsheet not found. Please check the Spreadsheet ID in Settings." });
+    }
+    if (error.code === 400 || (error.message && error.message.includes("Unable to parse range"))) {
+      return res.status(400).json({ error: error.message, isRangeError: true });
     }
     res.status(500).json({ error: error.message });
   }

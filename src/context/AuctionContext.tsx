@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { getSheetData, updateSheetData, clearSheetData, fetchWithRetry, getBaseUrl, appendSheetData } from "@/lib/google-api";
+import { getSheetData, updateSheetData, clearSheetData, fetchWithRetry, getBaseUrl, appendSheetData, getAuthStatus } from "@/lib/google-api";
 import { toast } from "sonner";
 import { useConfig } from "./ConfigContext";
 import { Bidder, AuctionItem, Attendee, Guest } from "@/types";
@@ -39,6 +39,31 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   const [totalRaised, setTotalRaised] = useState(0);
   const [loading, setLoading] = useState(false);
   const [isAuctionClosed, setIsAuctionClosed] = useState(false);
+  const [isApiAuthenticated, setIsApiAuthenticated] = useState<boolean | null>(null);
+
+  const checkProviderAuth = useCallback(async () => {
+    try {
+      const status = await getAuthStatus();
+      setIsApiAuthenticated(status.authenticated);
+    } catch {
+      setIsApiAuthenticated(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkProviderAuth();
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        if (event.data.tokens) {
+          localStorage.setItem('google_tokens', JSON.stringify(event.data.tokens));
+        }
+        checkProviderAuth();
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [checkProviderAuth]);
 
   const fetchAuctionStatus = useCallback(async () => {
     if (!spreadsheetId) return;
@@ -92,7 +117,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
       const sheetName = config.bidderNumbersSheet;
       const data = await getSheetData(spreadsheetId, `${sheetName}!A:H`);
 
-      if (data.values?.length > 1) {
+      if (data && data.values?.length > 1) {
         const biddersList: Bidder[] = data.values.slice(1).map((row: string[], idx: number) => ({
           id: row[0]?.toString() || "",
           firstName: row[1]?.toString() || "",
@@ -105,9 +130,12 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
           rowIndex: idx + 2,
         })).filter(b => b.id);
         setBidders(biddersList);
+      } else {
+        setBidders([]);
       }
     } catch (e) {
       console.error(e);
+      setBidders([]);
     } finally {
       setLoading(false);
     }
@@ -118,7 +146,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     try {
       const sheetName = config.auctionItemsSheet;
       const data = await getSheetData(spreadsheetId, `${sheetName}!A:Z`);
-      if (data.values?.length > 1) {
+      if (data && data.values?.length > 1) {
         const headers = data.values[0].map((h: string) => (h || "").toString().toLowerCase().trim());
         
         const getCol = (names: string[], defaultIdx: number) => {
@@ -155,9 +183,12 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
           rowIndex: i + 2
         })).filter((item: any) => item.id || item.name);
         setItems(itemsList);
+      } else {
+        setItems([]);
       }
     } catch (e) {
       console.error(e);
+      setItems([]);
     }
   }, [spreadsheetId, config.auctionItemsSheet]);
 
@@ -281,7 +312,11 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
       const sheetName = config.bidManagementSheet;
       const data = await getSheetData(spreadsheetId, `${sheetName}!A:ZZ`);
       
-      if (!data.values || data.values.length < 4) return;
+      if (!data || !data.values || data.values.length < 4) {
+        setWinners({});
+        setTotalRaised(0);
+        return;
+      }
 
       const header = data.values[0];
       const newWinners: Record<string, string> = {};
@@ -440,22 +475,23 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    if (spreadsheetId) {
+    // Only attempt to fetch auction data when authenticated
+    if (isApiAuthenticated && spreadsheetId) {
       fetchAllData();
     }
-  }, [spreadsheetId, fetchAllData]);
+  }, [isApiAuthenticated, spreadsheetId, fetchAllData]);
 
   useEffect(() => {
-    if (ticketsSpreadsheetId) {
+    if (isApiAuthenticated && ticketsSpreadsheetId) {
       fetchAttendees();
     }
-  }, [ticketsSpreadsheetId, fetchAttendees]);
+  }, [isApiAuthenticated, ticketsSpreadsheetId, fetchAttendees]);
 
   useEffect(() => {
-    if (bidders.length > 0) {
+    if (isApiAuthenticated && bidders.length > 0) {
       fetchWinners();
     }
-  }, [bidders.length, fetchWinners]);
+  }, [isApiAuthenticated, bidders.length, fetchWinners]);
 
   const value = {
     bidders,

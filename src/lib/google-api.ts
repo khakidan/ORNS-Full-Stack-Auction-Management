@@ -7,6 +7,37 @@ const BASE_DELAY = 1000;
 
 export async function fetchWithRetry(url: string | URL | Request, options: RequestInit = {}, retries = MAX_RETRIES): Promise<Response> {
   let attempt = 0;
+
+  // Inject Google OAuth tokens from localStorage to bypassed cookie limits in cross-origin iframes
+  let savedTokensStr = null;
+  try {
+    savedTokensStr = typeof window !== "undefined" ? localStorage.getItem("google_tokens") : null;
+  } catch (e) {
+    console.warn("[google-api] Could not read localStorage for tokens");
+  }
+  if (!savedTokensStr && typeof window !== "undefined") {
+    savedTokensStr = (window as any)._fallbackTokens;
+    if (savedTokensStr) {
+      console.log("[google-api] Using fallback tokens from memory");
+    }
+  }
+
+  if (savedTokensStr) {
+    console.log(`[google-api] Token string present for ${url.toString()}, injecting x-google-tokens`);
+    if (!options.headers) {
+      options.headers = {};
+    }
+    if (options.headers instanceof Headers) {
+      options.headers.set("x-google-tokens", savedTokensStr);
+    } else if (Array.isArray(options.headers)) {
+      // Find and remove existing if any to avoid duplicates
+      options.headers = options.headers.filter(h => h[0] !== "x-google-tokens");
+      options.headers.push(["x-google-tokens", savedTokensStr]);
+    } else {
+      (options.headers as any)["x-google-tokens"] = savedTokensStr;
+    }
+  }
+
   while (attempt < retries) {
     try {
       const response = await fetch(url, options);
@@ -44,6 +75,9 @@ export async function getAuthStatus() {
 }
 
 export async function logout() {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("google_tokens");
+  }
   const res = await fetchWithRetry(`${getBaseUrl()}/api/auth/logout`, { method: "POST", credentials: "include" });
   return res.json();
 }
@@ -55,6 +89,10 @@ export async function getSheetData(spreadsheetId: string, range: string) {
   const res = await fetchWithRetry(`${getBaseUrl()}/api/sheets/${spreadsheetId}/${encodeURIComponent(range)}`, { credentials: "include" });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
+    if (res.status === 400 && (errorData.isRangeError || errorData.error?.includes("range"))) {
+      console.warn(`[Google API Workspace] Sheet range/tab does not exist. It may need to be initialized in Settings: ${range}`);
+      return { values: [] };
+    }
     throw new Error(errorData.error || "Failed to fetch sheet data");
   }
   return res.json();

@@ -8,12 +8,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 
 import { useAuction } from "@/context/AuctionContext";
+import { useConfig } from "@/context/ConfigContext";
 
 export default function TicketDocumentCreationTab() {
   const { isAuctionClosed } = useAuction();
-  const spreadsheetId = localStorage.getItem("auctionTicketsSpreadsheetId");
-  const scriptId = localStorage.getItem("auctionTicketsScriptId");
-  const forPrintFolderId = localStorage.getItem("forPrintFolderId");
+  const { config } = useConfig();
+  const spreadsheetId = config.auctionTicketsSpreadsheetId;
+  const scriptId = config.auctionTicketsScriptId;
+  const forPrintFolderId = config.forPrintFolderId;
   
   const [files, setFiles] = useState<any[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
@@ -58,7 +60,7 @@ export default function TicketDocumentCreationTab() {
       const res = await fetchWithRetry(`${getBaseUrl()}/api/script/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ functionName, parameters: [spreadsheetId], scriptId })
+        body: JSON.stringify({ functionName, parameters: [forPrintFolderId], scriptId })
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);

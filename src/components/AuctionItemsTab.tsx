@@ -31,6 +31,56 @@ import { Label } from "@/components/ui/label";
 
 import { Bidder, AuctionItem, Attendee, Guest } from "@/types";
 
+function getCategoryBase(categoryName: string): number {
+  if (!categoryName) return 1;
+  const clean = categoryName.toLowerCase().replace(/&/g, "and").trim().replace(/\s+/g, " ");
+  
+  if (clean.includes("classroom art")) return 101;
+  if (clean.includes("arts, crafts and jewelry") || clean.includes("arts, crafts & jewelry") || clean.includes("jewelry")) return 201;
+  if (clean.includes("health & beauty") || clean.includes("health and beauty") || clean.includes("health") || clean.includes("beauty")) return 301;
+  if (clean.includes("fitness")) return 401;
+  if (clean.includes("kids activities") || clean.includes("kids activity") || clean.includes("kids")) return 501;
+  if (clean.includes("retail")) return 601;
+  if (clean.includes("entertainment") || clean.includes("experience")) return 701;
+  if (clean.includes("food")) return 801;
+  if (clean.includes("service")) return 901;
+  if (clean.includes("classroom baskets") || clean.includes("classroom basket")) return 1001;
+  if (clean.includes("travel")) return 1101;
+  if (clean.includes("sports") || clean.includes("sports memorabilia") || clean.includes("ticket")) {
+    if (clean.includes("raffle")) return 1501;
+    return 1201;
+  }
+  if (clean.includes("live")) return 1301;
+  if (clean.includes("movie")) return 1401;
+  if (clean.includes("raffle")) return 1501;
+  if (clean.includes("open appeal") || clean.includes("appeal")) return 1601;
+
+  // Exact fallback matches
+  const exactMatches: Record<string, number> = {
+    "classroom art": 101,
+    "arts, crafts and jewelry": 201,
+    "arts, crafts & jewelry": 201,
+    "health & beauty": 301,
+    "health and beauty": 301,
+    "fitness": 401,
+    "kids activities": 501,
+    "retail": 601,
+    "entertainment & experiences": 701,
+    "entertainment and experiences": 701,
+    "food": 801,
+    "services": 901,
+    "classroom baskets": 1001,
+    "travel": 1101,
+    "sports memorabilia & tickets": 1201,
+    "sports memorabilia and tickets": 1201,
+    "live": 1301,
+    "movie night": 1401,
+    "raffle tickets": 1501,
+    "open appeal": 1601
+  };
+  return exactMatches[clean] || 1;
+}
+
 interface BundlingSelection {
   [rowIndex: number]: boolean;
 }
@@ -239,10 +289,14 @@ export default function AuctionItemsTab() {
       const data = await getSheetData(spreadsheetId, "Categories!A:B");
       if (data.values && data.values.length > 1) {
         // Skip header, filter out empty
-        const catsWithBase = data.values.slice(1).map((row: any[]) => ({
-          name: row[0]?.toString() || "",
-          base: parseInt(row[1]?.toString() || "0", 10) || 0
-        })).filter((c: any) => c.name);
+        const catsWithBase = data.values.slice(1).map((row: any[]) => {
+          const catName = row[0]?.toString() || "";
+          const parsedBase = parseInt(row[1]?.toString() || "0", 10) || 0;
+          return {
+            name: catName,
+            base: parsedBase || getCategoryBase(catName)
+          };
+        }).filter((c: any) => c.name);
         setCategoriesWithBase(catsWithBase);
         setCategories(catsWithBase.map((c: any) => c.name));
       }
@@ -538,7 +592,37 @@ export default function AuctionItemsTab() {
       selectedIndices.includes(item.rowIndex) ? { ...item, [bulkField]: bulkValue } : item
     ));
 
-    const colLetter = bulkField === 'category' ? 'B' : 'J';
+    if (bulkField === 'category') {
+      try {
+        const response = await fetchWithRetry(`${getBaseUrl()}/api/auction/bulk-update-items`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            spreadsheetId,
+            rowIndices: selectedIndices,
+            field: bulkField,
+            value: bulkValue
+          })
+        });
+        const resData = await response.json();
+        if (resData.error) throw new Error(resData.error);
+        toast.success("Bulk categories updated and re-sequenced successfully!");
+        setSelectedRows({});
+        setIsBulkEditing(false);
+        setBulkField(null);
+        setBulkValue("");
+        fetchData();
+      } catch (e: any) {
+        console.error("Bulk category update failed:", e);
+        setItems(previousItems);
+        toast.error("Failed to bulk update categories: " + e.message);
+      } finally {
+        setIsExecutingBulk(false);
+      }
+      return;
+    }
+
+    const colLetter = bulkField === 'itemType' ? 'I' : 'J';
     const updatePromises = selectedIndices.map(idx => 
       updateSheetData(spreadsheetId, `Auction-Items!${colLetter}${idx}`, [[bulkValue]])
     );
@@ -600,6 +684,30 @@ export default function AuctionItemsTab() {
       }
     }
 
+    if (field === 'category') {
+      try {
+        const response = await fetchWithRetry(`${getBaseUrl()}/api/auction/update-item`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            spreadsheetId,
+            rowIndex,
+            field,
+            value
+          })
+        });
+        const resData = await response.json();
+        if (resData.error) throw new Error(resData.error);
+        toast.success("Category updated and re-sequenced successfully!");
+        fetchData();
+      } catch (e: any) {
+        console.error("Failed to sync category update", e);
+        setItems(previousItems);
+        toast.error("Failed to update category: " + e.message);
+      }
+      return;
+    }
+
     // Background sync
     const syncOperations = [updateSheetData(spreadsheetId, `Auction-Items!${colLetter}${rowIndex}`, [[value]])];
     if (updateOpening) {
@@ -630,16 +738,6 @@ export default function AuctionItemsTab() {
     const previousItems = [...items];
 
     try {
-      // Determine new ID (simplified for optimistic)
-      const catBase = categoriesWithBase.find(c => c.name === newItem.category)?.base || 0;
-      const itemsInCat = items.filter(i => i.category === newItem.category);
-      let nextVal = catBase > 0 ? catBase + 1 : 1;
-      if (itemsInCat.length > 0) {
-        const itemIds = itemsInCat.map(i => parseInt(i.id, 10)).filter(num => !isNaN(num));
-        if (itemIds.length > 0) nextVal = Math.max(...itemIds) + 1;
-      }
-      
-      const newIdString = nextVal.toString();
       let finalOpeningBid = newItem.openingBid || "";
       let finalMinRaise = newItem.minRaise || "";
 
@@ -649,44 +747,29 @@ export default function AuctionItemsTab() {
         if (!finalMinRaise) finalMinRaise = raise;
       }
 
-      const optimisticItem: AuctionItem = {
-        rowIndex: items.length > 0 ? Math.max(...items.map(i => i.rowIndex)) + 1 : 2,
-        id: newIdString,
-        category: newItem.category!,
-        status: "Active",
-        bundleId: "",
-        bundledDateTime: "",
-        name: newItem.name!,
-        description: newItem.description || "",
-        value: newItem.value || "",
-        openingBid: finalOpeningBid,
-        minRaise: finalMinRaise,
-        donor: newItem.donor || "",
-        itemType: newItem.itemType || ""
-      };
+      // Call server endpoint to handle add + transactional resequencing
+      const response = await fetchWithRetry(`${getBaseUrl()}/api/auction/add-item`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          spreadsheetId,
+          category: newItem.category,
+          name: newItem.name,
+          description: newItem.description || "",
+          value: newItem.value || "",
+          openingBid: finalOpeningBid,
+          minRaise: finalMinRaise,
+          donor: newItem.donor || "",
+          itemType: newItem.itemType || ""
+        })
+      });
 
-      // Optimistic update
-      setItems(prev => [...prev, optimisticItem]);
+      const resData = await response.json();
+      if (resData.error) throw new Error(resData.error);
 
-      const submitRow = [
-        newIdString,
-        newItem.category || "",
-        newItem.name || "",
-        newItem.description || "",
-        newItem.value || "",
-        finalOpeningBid,
-        finalMinRaise,
-        newItem.donor || "",
-        newItem.itemType || "",
-        "Active",
-        "",
-        ""
-      ];
-
-      await appendSheetData(spreadsheetId, "Auction-Items!A:L", [submitRow]);
-      
-      toast.success(`Item added successfully with ID ${newIdString}`);
-      await fetchData(); // Full resync to confirm row indices
+      const assignedId = resData.assigned_id;
+      toast.success(`Item added and sequenced successfully with ID ${assignedId}`);
+      await fetchData(); // Full resync to confirm and load all auction items with their proper IDs
 
       setNewItem({
         category: "",
@@ -702,10 +785,10 @@ export default function AuctionItemsTab() {
         bundledDateTime: ""
       });
       setIsAddingItem(false);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       setItems(previousItems);
-      toast.error("Failed to add item. Reverting UI state.");
+      toast.error("Failed to add item: " + e.message);
     } finally {
       setIsSubmittingItem(false);
     }
