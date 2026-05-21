@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Save, AlertCircle, PlaySquare, Loader2, Copy, CheckSquare, RefreshCw, Cloud, CloudOff, LogIn } from "lucide-react";
+import { Save, AlertCircle, PlaySquare, Loader2, Copy, CheckSquare, RefreshCw, Cloud, CloudOff, LogIn, ChevronDown, ChevronUp } from "lucide-react";
 import { fetchWithRetry, updateSheetData, appendSheetData, getSheetData, getBaseUrl } from "@/lib/google-api";
 import { useConfig } from "@/context/ConfigContext";
 import { Config } from "@/types";
@@ -24,6 +24,8 @@ export default function ConfigSettings() {
   const [isSettingUpNewAuction, setIsSettingUpNewAuction] = useState(false);
   const [showManualCopyDialog, setShowManualCopyDialog] = useState(false);
   const [auctionYear, setAuctionYear] = useState<number | null>(null);
+  const [isAuctionConfigOpen, setIsAuctionConfigOpen] = useState(false);
+  const [isSetupNewAuctionOpen, setIsSetupNewAuctionOpen] = useState(false);
 
   const redirectUri = `${window.location.origin}/auth/callback`;
 
@@ -361,7 +363,7 @@ export default function ConfigSettings() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="hidden">
         <CardHeader>
           <CardTitle>Google OAuth Helper</CardTitle>
           <CardDescription>
@@ -382,12 +384,21 @@ export default function ConfigSettings() {
       </Card>
 
       <Card className="border border-blue-200">
-        <CardHeader className="bg-blue-50/50 border-b border-blue-100">
-          <CardTitle className="text-blue-900">Setup New Auction Year</CardTitle>
-          <CardDescription>
-            Automate folder archiving, new year setup, and master spreadsheet cleanup. Only run this when starting a new auction year.
-          </CardDescription>
+        <CardHeader 
+          className="bg-blue-50/50 border-b border-blue-100 cursor-pointer hover:bg-blue-100/50 transition-colors rounded-t-lg"
+          onClick={() => setIsSetupNewAuctionOpen(!isSetupNewAuctionOpen)}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-blue-900">Setup New Auction Year</CardTitle>
+              <CardDescription>
+                Automate folder archiving, new year setup, and master spreadsheet cleanup. Only run this when starting a new auction year.
+              </CardDescription>
+            </div>
+            {isSetupNewAuctionOpen ? <ChevronUp className="w-5 h-5 text-blue-900/70" /> : <ChevronDown className="w-5 h-5 text-blue-900/70" />}
+          </div>
         </CardHeader>
+        {isSetupNewAuctionOpen && (
         <CardContent className="pt-6">
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
@@ -404,16 +415,26 @@ export default function ConfigSettings() {
             </Button>
           </div>
         </CardContent>
+        )}
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Auction Configuration</CardTitle>
-          <CardDescription>
-            Configure the Google Sheet IDs for your different workflows.
-          </CardDescription>
+        <CardHeader 
+          className="cursor-pointer hover:bg-slate-50 transition-colors rounded-t-lg" 
+          onClick={() => setIsAuctionConfigOpen(!isAuctionConfigOpen)}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Auction Configuration</CardTitle>
+              <CardDescription>
+                Configure the Google Sheet IDs for your different workflows.
+              </CardDescription>
+            </div>
+            {isAuctionConfigOpen ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
+          </div>
         </CardHeader>
-        <CardContent className="space-y-6">
+        {isAuctionConfigOpen && (
+        <CardContent className="space-y-6 pt-0">
           <div className="grid gap-6">
             
             <div className="space-y-4 border rounded-lg p-4 bg-slate-50/50">
@@ -453,114 +474,77 @@ export default function ConfigSettings() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-4 border rounded-lg p-4 bg-slate-50/50">
+              <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Google Apps Script Workflows</h3>
               <div className="space-y-2">
-                <Label htmlFor="bidderNumbersSheet">Bidder Numbers Sheet Name</Label>
+                <Label htmlFor="auctionItemsScriptId">1. Auction Item Data Entry Script ID</Label>
                 <Input
-                  id="bidderNumbersSheet"
-                  value={config.bidderNumbersSheet}
-                  onChange={(e) => setConfig({ ...config, bidderNumbersSheet: e.target.value })}
+                  id="auctionItemsScriptId"
+                  placeholder="Paste script URL or ID"
+                  value={config.auctionItemsScriptId}
+                  onChange={(e) => setConfig({ ...config, auctionItemsScriptId: extractId(e.target.value) })}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="auctionItemsSheet">Auction Items Sheet Name</Label>
+                <Label htmlFor="auctionTicketsScriptId">2. Auction Tickets Script ID</Label>
                 <Input
-                  id="auctionItemsSheet"
-                  value={config.auctionItemsSheet}
-                  onChange={(e) => setConfig({ ...config, auctionItemsSheet: e.target.value })}
+                  id="auctionTicketsScriptId"
+                  placeholder="Paste script URL or ID"
+                  value={config.auctionTicketsScriptId}
+                  onChange={(e) => setConfig({ ...config, auctionTicketsScriptId: extractId(e.target.value) })}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="bidManagementSheet">Bid Management Sheet Name</Label>
+                <Label htmlFor="bidManagementScriptId">3. Bid Management Script ID</Label>
                 <Input
-                  id="bidManagementSheet"
-                  value={config.bidManagementSheet}
-                  onChange={(e) => setConfig({ ...config, bidManagementSheet: e.target.value })}
-                />
-              </div>
-              <div className="col-span-1 md:col-span-2 mt-4 space-y-4">
-                <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground border-b pb-2">Google Apps Script IDs</h3>
-                <div className="space-y-2">
-                  <Label htmlFor="auctionItemsScriptId">1. Auction Item Data Entry Script ID</Label>
-                  <Input
-                    id="auctionItemsScriptId"
-                    placeholder="Paste script URL or ID"
-                    value={config.auctionItemsScriptId}
-                    onChange={(e) => setConfig({ ...config, auctionItemsScriptId: extractId(e.target.value) })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="auctionTicketsScriptId">2. Auction Tickets Script ID</Label>
-                  <Input
-                    id="auctionTicketsScriptId"
-                    placeholder="Paste script URL or ID"
-                    value={config.auctionTicketsScriptId}
-                    onChange={(e) => setConfig({ ...config, auctionTicketsScriptId: extractId(e.target.value) })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="bidManagementScriptId">3. Bid Management Script ID</Label>
-                  <Input
-                    id="bidManagementScriptId"
-                    placeholder="Paste script URL or ID"
-                    value={config.bidManagementScriptId}
-                    onChange={(e) => setConfig({ ...config, bidManagementScriptId: extractId(e.target.value) })}
-                  />
-                </div>
-              </div>
-
-              <div className="col-span-1 md:col-span-2 mt-4 space-y-4">
-                <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground border-b pb-2">Styling & Files</h3>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="receiptFolderId">Receipts Folder ID</Label>
-                <Input
-                  id="receiptFolderId"
-                  placeholder="Paste folder URL or ID"
-                  value={config.receiptFolderId}
-                  onChange={(e) => setConfig({ ...config, receiptFolderId: extractId(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="forPrintFolderId">For Print Folder ID</Label>
-                <Input
-                  id="forPrintFolderId"
-                  placeholder="Paste folder URL or ID"
-                  value={config.forPrintFolderId}
-                  onChange={(e) => setConfig({ ...config, forPrintFolderId: extractId(e.target.value) })}
-                />
-                <p className="text-xs text-muted-foreground">Folder where generated documents and presentations are stored.</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ornsLogoId">ORNS Logo File ID</Label>
-                <Input
-                  id="ornsLogoId"
-                  placeholder="Paste image URL or ID"
-                  value={config.ornsLogoId}
-                  onChange={(e) => setConfig({ ...config, ornsLogoId: extractId(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ticketPrice">Walk-In Ticket Price ($)</Label>
-                <Input
-                  id="ticketPrice"
-                  type="number"
-                  placeholder="35"
-                  value={config.ticketPrice}
-                  onChange={(e) => setConfig({ ...config, ticketPrice: e.target.value })}
+                  id="bidManagementScriptId"
+                  placeholder="Paste script URL or ID"
+                  value={config.bidManagementScriptId}
+                  onChange={(e) => setConfig({ ...config, bidManagementScriptId: extractId(e.target.value) })}
                 />
               </div>
             </div>
-          </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button onClick={handleSave} disabled={savingSettings} className="flex-1 gap-2 h-12">
-              {savingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Save Configuration
-            </Button>
+            {/* Hidden Fields kept for state management */}
+            <div className="hidden">
+              <Input value={config.bidderNumbersSheet} onChange={(e) => setConfig({ ...config, bidderNumbersSheet: e.target.value })} />
+              <Input value={config.auctionItemsSheet} onChange={(e) => setConfig({ ...config, auctionItemsSheet: e.target.value })} />
+              <Input value={config.bidManagementSheet} onChange={(e) => setConfig({ ...config, bidManagementSheet: e.target.value })} />
+              <Input value={config.receiptFolderId} onChange={(e) => setConfig({ ...config, receiptFolderId: extractId(e.target.value) })} />
+              <Input value={config.forPrintFolderId} onChange={(e) => setConfig({ ...config, forPrintFolderId: extractId(e.target.value) })} />
+              <Input value={config.ornsLogoId} onChange={(e) => setConfig({ ...config, ornsLogoId: extractId(e.target.value) })} />
+            </div>
+
+          </div>
+        </CardContent>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ticket Pricing</CardTitle>
+          <CardDescription>Configure the standard walk-in ticket price for the event.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 max-w-sm">
+            <Label htmlFor="ticketPrice">Walk-In Ticket Price ($)</Label>
+            <Input
+              id="ticketPrice"
+              type="number"
+              placeholder="35"
+              value={config.ticketPrice}
+              onChange={(e) => setConfig({ ...config, ticketPrice: e.target.value })}
+            />
           </div>
         </CardContent>
       </Card>
+
+      <div className="flex flex-col sm:flex-row gap-3 pt-6 pb-6">
+        <Button onClick={handleSave} disabled={savingSettings} className="flex-1 gap-2 h-12 text-md">
+          {savingSettings ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+          Save Configuration
+        </Button>
+      </div>
       
       <Dialog open={showManualCopyDialog} onOpenChange={setShowManualCopyDialog}>
         <DialogContent>
