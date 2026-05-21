@@ -8,6 +8,7 @@ import { Save, AlertCircle, PlaySquare, Loader2, Copy, CheckSquare, RefreshCw, C
 import { fetchWithRetry, updateSheetData, appendSheetData, getSheetData, getBaseUrl } from "@/lib/google-api";
 import { useConfig } from "@/context/ConfigContext";
 import { Config } from "@/types";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function ConfigSettings() {
   const { config: remoteConfig, saveConfig, firebaseUser, loginToFirebase, loading: configLoading } = useConfig();
@@ -20,8 +21,113 @@ export default function ConfigSettings() {
   const [initializing, setInitializing] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isSettingUpNewAuction, setIsSettingUpNewAuction] = useState(false);
+  const [showManualCopyDialog, setShowManualCopyDialog] = useState(false);
+  const [auctionYear, setAuctionYear] = useState<number | null>(null);
 
   const redirectUri = `${window.location.origin}/auth/callback`;
+
+  const handleSetupNewAuction = async () => {
+    if (!window.confirm("Are you SURE you want to create a new auction instance? This will clear all data in the master spreadsheets!")) {
+      return;
+    }
+    
+    setIsSettingUpNewAuction(true);
+    const toastId = toast.loading("Setting up new auction folder structure and backing up data. This may take a minute or two...", { duration: Infinity });
+    
+    try {
+      const bidMgtId = extractId(config.bidManagementSpreadsheetId);
+      const auctionItemsId = extractId(config.auctionItemsSpreadsheetId);
+      const auctionTicketsId = extractId(config.auctionTicketsSpreadsheetId);
+      
+      const response = await fetchWithRetry(`${getBaseUrl()}/api/auction/setup-new`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticketsSpreadsheetId: auctionTicketsId,
+          itemEntrySpreadsheetId: auctionItemsId,
+          bidManagementSpreadsheetId: bidMgtId
+        }),
+      });
+      
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      
+      let data: any = null;
+
+      if (reader) {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                const msg = JSON.parse(line);
+                if (msg.log) {
+                  toast.loading(msg.log, { id: toastId });
+                } else {
+                  // If it has success or error, it's the final payload
+                  data = msg;
+                }
+              } catch(e) {}
+            }
+          }
+        }
+      }
+
+      if (!data) {
+        throw new Error("Failed to receive valid response from server");
+      }
+      
+      if (data.logs && Array.isArray(data.logs)) {
+        console.group("New Auction Setup Logs");
+        data.logs.forEach((logMsg: string) => console.log(logMsg));
+        console.groupEnd();
+      }
+
+      if (data.success) {
+        toast.dismiss(toastId);
+        
+        // Auto-assign new folder IDs
+        const newReceipts = data.bidderReceiptsFolderId || config.receiptFolderId;
+        const newPrint = data.forPrintFolderId || config.forPrintFolderId;
+        
+        const updatedConfig = {
+          ...config,
+          receiptFolderId: newReceipts,
+          forPrintFolderId: newPrint
+        };
+
+        setConfig(updatedConfig);
+        
+        try {
+          await saveConfig(updatedConfig);
+          localStorage.setItem("receiptFolderId", newReceipts);
+          localStorage.setItem("forPrintFolderId", newPrint);
+        } catch (e) {
+          console.error("Auto-save failed", e);
+        }
+        
+        // Show success and open dialog
+        toast.success(`Success! New folders created. IDs updated.`, { duration: 5000 });
+        setAuctionYear(data.auctionYear);
+        setShowManualCopyDialog(true);
+      } else {
+        toast.error(data.error || "Failed to setup new auction", { id: toastId, duration: 5000 });
+      }
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "An error occurred", { id: toastId, duration: 5000 });
+    } finally {
+      setIsSettingUpNewAuction(false);
+    }
+  };
 
   const copyToClipboard = async () => {
     try {
@@ -275,6 +381,31 @@ export default function ConfigSettings() {
         </CardContent>
       </Card>
 
+      <Card className="border border-blue-200">
+        <CardHeader className="bg-blue-50/50 border-b border-blue-100">
+          <CardTitle className="text-blue-900">Setup New Auction Year</CardTitle>
+          <CardDescription>
+            Automate folder archiving, new year setup, and master spreadsheet cleanup. Only run this when starting a new auction year.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              This workflow will back up your current master spreadsheets to last year's folder, create the new year's folder structure, and automatically clear the rows in your data sheets so that they are completely empty and ready to be populated for the upcoming auction.
+            </p>
+            <Button
+              variant="destructive"
+              disabled={isSettingUpNewAuction}
+              onClick={handleSetupNewAuction}
+              className="gap-2"
+            >
+              {isSettingUpNewAuction ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              {isSettingUpNewAuction ? "Setting Up..." : "Run New Auction Setup"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Auction Configuration</CardTitle>
@@ -431,6 +562,25 @@ export default function ConfigSettings() {
         </CardContent>
       </Card>
       
+      <Dialog open={showManualCopyDialog} onOpenChange={setShowManualCopyDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Manual Copy Required</DialogTitle>
+            <DialogDescription>
+              Because these files require custom historical data, they are not auto-copied. Once your new folder is generated, please manually copy the following from last year's folder:
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <ul className="list-disc pl-6 space-y-2 text-sm text-foreground font-medium">
+              <li>Auction Donation List {auctionYear}</li>
+              <li>Auction {auctionYear} Ideas</li>
+            </ul>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowManualCopyDialog(false)}>I have confirmed</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
