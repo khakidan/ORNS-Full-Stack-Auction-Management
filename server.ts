@@ -18,6 +18,8 @@ google.options({
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import cors from "cors";
+import healthRouter from './server/routes/health';
+import { errorHandler } from './server/middleware/errorHandler';
 
 declare global {
   namespace Express {
@@ -108,6 +110,8 @@ app.use(cors({
 
 // Middleware
 app.use(express.json());
+
+app.use("/api/health", healthRouter);
 
 // Global middleware to prevent caching (required for Firebase Hosting to preserve Set-Cookie)
 app.use((req, res, next) => {
@@ -2902,6 +2906,7 @@ async function startServer() {
     });
   }
 
+  app.use(errorHandler);
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running at http://localhost:${PORT}`);
   });
