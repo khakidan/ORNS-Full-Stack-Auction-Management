@@ -655,14 +655,18 @@ export async function performSheetSync(client: any, spreadsheetId: string, custo
       h === "name" || 
       h === "item"
     );
-    const typeCol = headerLower.findIndex(h => 
+    let typeCol = headerLower.findIndex(h => 
       h === "type" || 
       h === "item type" || 
       h.includes("item type") || 
-      h.includes("itemtype") || 
-      h === "category" || 
-      h.includes("category")
+      h.includes("itemtype")
     );
+    if (typeCol === -1) {
+      typeCol = headerLower.findIndex(h => 
+        h === "category" || 
+        h.includes("category")
+      );
+    }
     const statusCol = headerLower.findIndex(h => 
       h === "status" || 
       h.includes("status")

@@ -548,10 +548,6 @@ app.post("/api/receipts/email-all", async (req, res) => {
   }
 });
 
-// Create walk-in ticket via Apps Script (DEPRECATED: Use the transactional one below)
-// app.post("/api/bidders/walk-in", ...);
-// Removing this duplicate to ensure the transactional version at line 672 is used.
-
 app.post("/api/auction/setup-new", async (req, res) => {
   if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
 
@@ -1493,7 +1489,7 @@ app.post("/api/bidders/walk-in", async (req, res) => {
         [newId, ""],
         [formattedFirst, formattedLastName],
         ['Item #:', 'Price:'],
-        ['Walk-In Ticket', ticketPrice || 35]
+        [1606, ticketPrice || 35]
       ]
     });
 

@@ -427,16 +427,21 @@ export default function Checkout() {
                 <Card key={i} className="animate-pulse bg-slate-100 h-[250px]" />
               ))
             ) : filteredWinners.length > 0 ? (
-              filteredWinners.map((winner) => (
-                <WinnerCard 
-                  key={winner.bidderId} 
-                  winner={winner} 
-                  processingId={processingId}
-                  handleEmailReceipt={handleEmailReceipt}
-                  handlePrintReceipt={handlePrintReceipt}
-                  handleMarkPaid={handleMarkPaid}
-                />
-              ))
+              filteredWinners.map((winner) => {
+                const bidderInfo = bidders.find(b => b.id === winner.bidderId);
+                const hasEmail = !!bidderInfo?.email && bidderInfo.email.trim() !== "";
+                return (
+                  <WinnerCard 
+                    key={winner.bidderId} 
+                    winner={winner} 
+                    hasEmail={hasEmail}
+                    processingId={processingId}
+                    handleEmailReceipt={handleEmailReceipt}
+                    handlePrintReceipt={handlePrintReceipt}
+                    handleMarkPaid={handleMarkPaid}
+                  />
+                );
+              })
             ) : (
               <EmptyWinnersState />
             )}
@@ -450,16 +455,21 @@ export default function Checkout() {
                 <Card key={i} className="animate-pulse bg-slate-100 h-[250px]" />
               ))
             ) : filteredWinners.length > 0 ? (
-              filteredWinners.map((winner) => (
-                <WinnerCard 
-                  key={winner.bidderId} 
-                  winner={winner} 
-                  processingId={processingId}
-                  handleEmailReceipt={handleEmailReceipt}
-                  handlePrintReceipt={handlePrintReceipt}
-                  handleMarkPaid={handleMarkPaid}
-                />
-              ))
+              filteredWinners.map((winner) => {
+                const bidderInfo = bidders.find(b => b.id === winner.bidderId);
+                const hasEmail = !!bidderInfo?.email && bidderInfo.email.trim() !== "";
+                return (
+                  <WinnerCard 
+                    key={winner.bidderId} 
+                    winner={winner} 
+                    hasEmail={hasEmail}
+                    processingId={processingId}
+                    handleEmailReceipt={handleEmailReceipt}
+                    handlePrintReceipt={handlePrintReceipt}
+                    handleMarkPaid={handleMarkPaid}
+                  />
+                );
+              })
             ) : (
               <EmptyWinnersState />
             )}
@@ -546,8 +556,9 @@ export default function Checkout() {
   );
 }
 
-function WinnerCard({ winner, processingId, handleEmailReceipt, handlePrintReceipt, handleMarkPaid }: { 
+function WinnerCard({ winner, hasEmail, processingId, handleEmailReceipt, handlePrintReceipt, handleMarkPaid }: { 
   winner: WinnerRecord, 
+  hasEmail: boolean,
   processingId: string | null,
   handleEmailReceipt: (w: WinnerRecord) => void,
   handlePrintReceipt: (w: WinnerRecord) => void,
@@ -581,9 +592,10 @@ function WinnerCard({ winner, processingId, handleEmailReceipt, handlePrintRecei
         <Button
           variant="outline"
           size="sm"
-          className="flex-1 min-w-[100px] gap-2"
+          className="flex-1 min-w-[100px] gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => handleEmailReceipt(winner)}
-          disabled={!!processingId && processingId.startsWith(`${winner.bidderId}-`)}
+          disabled={!hasEmail || (!!processingId && processingId.startsWith(`${winner.bidderId}-`))}
+          title={!hasEmail ? "No email on file for this bidder" : ""}
         >
           {processingId === `${winner.bidderId}-email` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
           {processingId === `${winner.bidderId}-email` ? "Sending..." : "Email Receipt"}
