@@ -210,7 +210,7 @@ export async function processEmail(client: any, spreadsheetId: string, bidderId:
   return { success: true };
 }
 
-export async function performSheetSync(client: any, spreadsheetId: string) {
+export async function performSheetSync(client: any, spreadsheetId: string, customAuctionImportSheetID?: string, customAuctionTicketSheetsID?: string) {
   const sheets = google.sheets({ version: "v4", auth: client });
 
   console.log(`[Sync] --- STARTING INTEGRATED NODE.JS SHEET SYNC TRANSITION ---`);
@@ -221,7 +221,7 @@ export async function performSheetSync(client: any, spreadsheetId: string) {
   const settingsRes = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: "_Settings!A:C"
-  });
+  }).catch(() => ({ data: { values: [] } }));
   const settingsRows = settingsRes.data.values || [];
   const settingsMap: Record<string, string> = {};
   for (const row of settingsRows) {
@@ -230,8 +230,8 @@ export async function performSheetSync(client: any, spreadsheetId: string) {
     }
   }
 
-  const auctionImportSheetID = settingsMap["auctionImportSheetID"];
-  const auctionTicketSheetsID = settingsMap["auctionTicketSheetsID"];
+  const auctionImportSheetID = customAuctionImportSheetID || settingsMap["auctionImportSheetID"];
+  const auctionTicketSheetsID = customAuctionTicketSheetsID || settingsMap["auctionTicketSheetsID"];
   const ticketPriceVal = parseFloat(settingsMap["ticketPrice"] || "35") || 35;
 
   console.log(`[Sync Config] Master Ticket sales file ID: ${auctionTicketSheetsID}`);
@@ -252,9 +252,10 @@ export async function performSheetSync(client: any, spreadsheetId: string) {
   const pad = (n: number) => String(n).padStart(2, "0");
   const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
 
-  // Find sheet ID for "Bid-Management" and "Bidder-Numbers"
+  // Find sheet ID for "Bid-Management", "Bidder-Numbers", and "Auction-Items"
   const bidMgmtSheet = existingSheets.find(s => s.properties?.title === "Bid-Management");
   const bidderNumSheet = existingSheets.find(s => s.properties?.title === "Bidder-Numbers");
+  const auctionItemsSheet = existingSheets.find(s => s.properties?.title === "Auction-Items");
 
   // Step 3: Archive and Backup existing sheets if present
   if (bidMgmtSheet) {
@@ -285,8 +286,22 @@ export async function performSheetSync(client: any, spreadsheetId: string) {
     });
   }
 
+  if (auctionItemsSheet) {
+    const backupTitle = `Auction-Items (Backup ${timestamp})`;
+    console.log(`[Sync Step 3] Staging archiving of Auction-Items to: "${backupTitle}"...`);
+    requests.push({
+      updateSheetProperties: {
+         properties: {
+           sheetId: auctionItemsSheet.properties?.sheetId,
+           title: backupTitle
+         },
+         fields: "title"
+      }
+    });
+  }
+
   // Create clean sheet placeholders
-  console.log(`[Sync Step 4] Appending fresh "Bidder-Numbers" and "Bid-Management" sheets...`);
+  console.log(`[Sync Step 4] Appending fresh "Bidder-Numbers", "Bid-Management", and "Auction-Items" sheets...`);
   requests.push({
     addSheet: {
       properties: {
@@ -298,6 +313,13 @@ export async function performSheetSync(client: any, spreadsheetId: string) {
     addSheet: {
       properties: {
         title: "Bid-Management"
+      }
+    }
+  });
+  requests.push({
+    addSheet: {
+      properties: {
+        title: "Auction-Items"
       }
     }
   });
@@ -315,13 +337,15 @@ export async function performSheetSync(client: any, spreadsheetId: string) {
   
   const newBidderNumSheet = updatedSheets.find(s => s.properties?.title === "Bidder-Numbers");
   const newBidMgmtSheet = updatedSheets.find(s => s.properties?.title === "Bid-Management");
+  const newAuctionItemsSheet = updatedSheets.find(s => s.properties?.title === "Auction-Items");
 
-  if (!newBidderNumSheet || !newBidMgmtSheet) {
+  if (!newBidderNumSheet || !newBidMgmtSheet || !newAuctionItemsSheet) {
     throw new Error("Sheet creation verification failed.");
   }
 
   const bnSheetId = newBidderNumSheet.properties?.sheetId;
   const bmSheetId = newBidMgmtSheet.properties?.sheetId;
+  const aiSheetId = newAuctionItemsSheet.properties?.sheetId;
 
   // Step 4: Loading external ticket lists
   console.log(`[Sync Step 5] Extracting external ticket registrants and staff check-ins from sheet ID: ${auctionTicketSheetsID}...`);
@@ -586,115 +610,134 @@ export async function performSheetSync(client: any, spreadsheetId: string) {
     requestBody: { requests: bmFormattingRequests }
   });
 
-  // Step 7: Load and merge Auction-Items catalog locally if missing
-  const hasAuctionItemsSheet = updatedSheets.some(s => s.properties?.title === "Auction-Items");
-  if (!hasAuctionItemsSheet && auctionImportSheetID) {
+  // Step 7: Load and merge Auction-Items catalog
+  console.log(`[Sync Step 7] Copying master Auction Catalog items...`);
+  let importRows: any[][] = [];
+  if (auctionImportSheetID) {
     console.log(`[Sync Step 7] Copying master Auction Catalog items from ${auctionImportSheetID}...`);
-    let importRows: any[][] = [];
     try {
       const impSpread = await sheets.spreadsheets.get({ spreadsheetId: auctionImportSheetID });
-      const firstSheetName = impSpread.data.sheets?.[0]?.properties?.title || "";
-      if (firstSheetName) {
+      const sheetsList = impSpread.data.sheets || [];
+      const targetSheet = sheetsList.find(s => s.properties?.title === "Auction-Items") || sheetsList[0];
+      const targetSheetName = targetSheet?.properties?.title || "";
+      if (targetSheetName) {
+        console.log(`[Sync Step 7] Reading sheet "${targetSheetName}" from master catalog...`);
         const impData = await sheets.spreadsheets.values.get({
           spreadsheetId: auctionImportSheetID,
-          range: `${firstSheetName}!A:Z`
+          range: `${targetSheetName}!A:Z`
         });
         importRows = impData.data.values || [];
       }
     } catch (e) {
       console.error("[Sync Item Catalog] Failed to retrieve external master catalog details:", e);
     }
+  }
 
-    if (importRows.length > 0) {
-      // Map columns: A is ID, B is item Name, and C can contain original category or notes
-      const headerRow = importRows[0];
-      const headerLower = headerRow.map(h => String(h || "").toLowerCase().trim());
-      
-      const itemIdCol = headerLower.indexOf("id");
-      const itemNameCol = headerLower.findIndex(h => h.includes("item name") || h === "name");
-      const categoryCol = headerLower.indexOf("category");
+  const mappedCatalog: any[][] = [];
+  if (importRows.length > 0) {
+    const headerRow = importRows[0];
+    const headerLower = headerRow.map(h => String(h || "").toLowerCase().trim());
+    
+    // Support multiple variations for ID, Item Name, and Type
+    const itemIdCol = headerLower.findIndex(h => 
+      h === "id" || 
+      h.includes("item id") || 
+      h.includes("itemid") || 
+      h.includes("item number") || 
+      h.includes("auction item id") ||
+      h.includes("auctionitemid") ||
+      h === "number"
+    );
+    const itemNameCol = headerLower.findIndex(h => 
+      h === "item name" || 
+      h.includes("item name") || 
+      h.includes("itemname") || 
+      h === "name" || 
+      h === "item"
+    );
+    const typeCol = headerLower.findIndex(h => 
+      h === "type" || 
+      h === "item type" || 
+      h.includes("item type") || 
+      h.includes("itemtype") || 
+      h === "category" || 
+      h.includes("category")
+    );
+    const statusCol = headerLower.findIndex(h => 
+      h === "status" || 
+      h.includes("status")
+    );
 
-      const mappedCatalog: any[][] = [];
-      for (let j = 1; j < importRows.length; j++) {
-        const row = importRows[j];
-        if (row && row.length > 1) {
-          const itemId = String(row[itemIdCol !== -1 ? itemIdCol : 0] || "").trim();
-          const itemName = String(row[itemNameCol !== -1 ? itemNameCol : 2] || "").trim();
-          const category = categoryCol !== -1 ? String(row[categoryCol] || "").trim() : "";
-          if (itemId && itemName) {
-            mappedCatalog.push([parseFloat(itemId) || itemId, itemName, category]);
+    console.log(`[Sync Item Catalog Map] Columns detected: itemIdCol=${itemIdCol}, itemNameCol=${itemNameCol}, typeCol=${typeCol}, statusCol=${statusCol}`);
+
+    for (let j = 1; j < importRows.length; j++) {
+      const row = importRows[j];
+      if (row && row.length > 0) {
+        const itemId = itemIdCol !== -1 && row[itemIdCol] !== undefined ? String(row[itemIdCol]).trim() : "";
+        const itemName = itemNameCol !== -1 && row[itemNameCol] !== undefined ? String(row[itemNameCol]).trim() : "";
+        const itemType = typeCol !== -1 && row[typeCol] !== undefined ? String(row[typeCol]).trim() : "";
+        const itemStatus = statusCol !== -1 && row[statusCol] !== undefined ? String(row[statusCol]).trim() : "";
+        
+        if (itemId && itemName) {
+          // Verify status filter is Active
+          const isStatusActive = statusCol !== -1 && itemStatus ? (itemStatus.toLowerCase() === "active") : true;
+          if (isStatusActive) {
+            mappedCatalog.push([parseFloat(itemId) || itemId, itemName, itemType]);
           }
         }
-      }
-
-      // Merge standard items
-      const standardItems = [
-        [1401, 'A Night with the ORNS Staff', ''],
-        [1501, 'One Raffle Ticket for a $500 Amazon Gift Card', ''],
-        [1502, 'Five Raffle Tickets for a $500 Amazon Gift Card', ''],
-        [1503, 'Ten Raffle Tickets for a $500 Amazon Gift Card', ''],
-        [1504, 'One 50/50 Raffle Ticket $20', ''],
-        [1601, 'Open Appeal for $500', ''],
-        [1602, 'Open Appeal for $250', ''],
-        [1603, 'Open Appeal for $100', ''],
-        [1604, 'Open Appeal for $50', ''],
-        [1605, 'Open Appeal for $25', ''],
-        [1606, 'Auction Tickets', '']
-      ];
-
-      const localItemsValues = [
-        ["Item ID", "Item Name", "Category"],
-        ...mappedCatalog,
-        ...standardItems
-      ];
-
-      console.log(`[Sync] Creating local Auction-Items tab and populating master items...`);
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: {
-          requests: [
-            {
-              addSheet: {
-                properties: {
-                  title: "Auction-Items"
-                }
-              }
-            }
-          ]
-        }
-      });
-
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: "Auction-Items!A1",
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: localItemsValues }
-      });
-
-      // Freezing row = 1
-      const localUpdatedMeta = await sheets.spreadsheets.get({ spreadsheetId });
-      const localItemsSheet = localUpdatedMeta.data.sheets?.find(s => s.properties?.title === "Auction-Items");
-      if (localItemsSheet) {
-        await sheets.spreadsheets.batchUpdate({
-          spreadsheetId,
-          requestBody: {
-            requests: [
-              {
-                updateSheetProperties: {
-                  properties: {
-                    sheetId: localItemsSheet.properties?.sheetId,
-                    gridProperties: {
-                      frozenRowCount: 1
-                    }
-                  },
-                  fields: "gridProperties.frozenRowCount"
-                }
-              }
-            ]
-          }
-        });
       }
     }
+  }
+
+  // Standard items to append afterwards
+  const standardItems = [
+    [1401, 'A Night with the ORNS Staff', ''],
+    [1501, 'One Raffle Ticket for a $500 Amazon Gift Card', ''],
+    [1502, 'Five Raffle Tickets for a $500 Amazon Gift Card', ''],
+    [1503, 'Ten Raffle Tickets for a $500 Amazon Gift Card', ''],
+    [1504, 'One 50/50 Raffle Ticket $20', ''],
+    [1601, 'Open Appeal for $500', ''],
+    [1602, 'Open Appeal for $250', ''],
+    [1603, 'Open Appeal for $100', ''],
+    [1604, 'Open Appeal for $50', ''],
+    [1605, 'Open Appeal for $25', ''],
+    [1606, 'Auction Tickets', '']
+  ];
+
+  const localItemsValues = [
+    ["ID", "Item Name", "Type"],
+    ...mappedCatalog,
+    ...standardItems
+  ];
+
+  console.log(`[Sync] Populating Auction-Items sheet...`);
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: "Auction-Items!A1",
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: localItemsValues }
+  });
+
+  // Freezing row = 1
+  if (aiSheetId) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            updateSheetProperties: {
+              properties: {
+                sheetId: aiSheetId,
+                gridProperties: {
+                  frozenRowCount: 1
+                }
+              },
+              fields: "gridProperties.frozenRowCount"
+            }
+          }
+        ]
+      }
+    });
   }
 
   console.log(`[Sync] --- SYNC TRANSITION WORKFLOW SUCCESSFULLY COMPLETED ---`);

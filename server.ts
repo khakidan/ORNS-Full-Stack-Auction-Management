@@ -802,7 +802,7 @@ app.post("/api/auction/setup-new", async (req, res) => {
 app.post("/api/bidders/sync", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
 
-  const { spreadsheetId } = req.body;
+  const { spreadsheetId, auctionImportSheetID, auctionTicketSheetsID } = req.body;
   if (!spreadsheetId) {
     return res.status(400).json({ error: "spreadsheetId is required to sync and setup bid management." });
   }
@@ -811,7 +811,7 @@ app.post("/api/bidders/sync", async (req, res) => {
     const client = getAuthenticatedClient(req.session.tokens);
     console.log(`[Sync Route] Initiating Native Node.js sheet setup for spreadsheet: ${spreadsheetId}...`);
     
-    const result = await performSheetSync(client, spreadsheetId);
+    const result = await performSheetSync(client, spreadsheetId, auctionImportSheetID, auctionTicketSheetsID);
     
     res.json({ success: true, result });
   } catch (error: any) {
