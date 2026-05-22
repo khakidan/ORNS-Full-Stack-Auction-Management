@@ -9,7 +9,8 @@
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -31,6 +32,7 @@
     "googleapis": "^171.4.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
+    "msw": "^2.14.6",
     "next-themes": "^0.4.6",
     "nodemailer": "^8.0.7",
     "react": "^19.0.1",
@@ -52,11 +54,14 @@
     "@types/node": "^22.14.0",
     "@types/nodemailer": "^8.0.0",
     "@types/session-file-store": "^1.2.6",
+    "@types/supertest": "^7.2.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.28.0",
+    "supertest": "^7.2.2",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "vitest": "^4.1.7"
   }
 }

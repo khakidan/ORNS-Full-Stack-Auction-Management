@@ -38,7 +38,7 @@ export default function createBidRouter() {
       const bidderRow = biddersRows.find((row: any) => row[0]?.toString() === bidderId);
       
       if (!bidderRow) {
-        throw new Error(`Bidder ${bidderId} not found.`);
+        return res.status(400).json({ error: `Bidder ${bidderId} not found.` });
       }
 
       const isCheckedOut = bidderRow[6] === true || bidderRow[6] === "TRUE";
@@ -238,6 +238,9 @@ export default function createBidRouter() {
     if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
 
     const { spreadsheetId, bidderNumbersSheet, bidManagementSheet } = req.body;
+    if (!spreadsheetId || !bidderNumbersSheet || !bidManagementSheet) {
+      return res.status(400).json({ error: "Missing required spreadsheet parameters for cleanup." });
+    }
 
     try {
       const client = getAuthenticatedClient(req.session.tokens);
@@ -573,6 +576,10 @@ export default function createBidRouter() {
       bidValue,
       idempotencyKey 
     } = req.body;
+
+    if (!bidderId || !spreadsheetId || !bidManagementSheet || !bidderNumbersSheet || !bidValue) {
+      return res.status(400).json({ error: "Missing required parameters for check-in with bid." });
+    }
 
     const cached = checkIdempotency(req, res, idempotencyKey);
     if (cached) return;

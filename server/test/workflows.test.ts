@@ -1,0 +1,371 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import request from "supertest";
+import { app } from "../app";
+import { server } from "./setup";
+import { http, HttpResponse } from "msw";
+
+/**
+ * COVERAGE MAP:
+ * 
+ * setupRoutes.ts:
+ * - POST /api/auction/setup-new (Tested Happy Path & Negatives: invalid body, existing folder)
+ * 
+ * bidRoutes.ts:
+ * - POST /api/auction/record-winning-bid (Tested Happy Path & Negatives: idempotency, missing bidder)
+ * - POST /api/auction/checkout-mark-paid (Tested Happy Path with Apps Script bridge)
+ * - POST /api/auction/close-and-cleanup (Tested Happy Path & Negatives: missing params)
+ * - POST /api/bidders/walk-in (Tested Happy Path & Negatives: missing sheet names)
+ * - POST /api/auction/check-in-with-bid (Tested Happy Path & Negatives: missing params)
+ */
+
+describe("Workflow Integration Tests", () => {
+  const mockTokens = {
+    access_token: "workflow-mock-token",
+    refresh_token: "workflow-mock-refresh",
+    expiry_date: Date.now() + 3600000
+  };
+
+  const authHeader = { "x-google-tokens": JSON.stringify(mockTokens) };
+
+  describe("setupRoutes - /api/auction/setup-new", () => {
+    it("returns 401 when unauthenticated", async () => {
+      const response = await request(app).post("/api/auction/setup-new");
+      expect(response.status).toBe(401);
+    });
+
+    it("handles the happy path: full auction setup setup", async () => {
+      // setup-new returns a stream of NDJSON
+      const response = await request(app)
+        .post("/api/auction/setup-new")
+        .set(authHeader)
+        .send({
+          ticketsSpreadsheetId: "s1",
+          itemEntrySpreadsheetId: "s2",
+          bidManagementSpreadsheetId: "s3"
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.get("Content-Type")).toContain("application/x-ndjson");
+
+      // Parse NDJSON response
+      const lines = response.text.trim().split("\n");
+      const results = lines.map(line => JSON.parse(line));
+
+      expect(results).toContainEqual(expect.objectContaining({ log: expect.stringContaining("Starting setup") }));
+      expect(results).toContainEqual(expect.objectContaining({ success: true }));
+    });
+
+    it("returns 400 for missing required spreadsheet IDs", async () => {
+      const response = await request(app)
+        .post("/api/auction/setup-new")
+        .set(authHeader)
+        .send({}); // Empty body
+
+      expect(response.status).toBe(400);
+      // We parse the text since it might stay NDJSON
+      const body = response.body.error ? response.body : JSON.parse(response.text);
+      expect(body.error).toContain("Missing required spreadsheet IDs");
+    });
+
+    it("halts if the auction folder already exists", async () => {
+      // Use fake timers to control Date
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-12-01T00:00:00Z")); // Dec 2026 -> setup for 2027
+
+      // Override Drive List to show existing folder for 2027
+      server.use(
+        http.get('https://www.googleapis.com/drive/v3/files', () => {
+          return HttpResponse.json({
+            files: [{ id: "existing-id", name: "2027 Auction", mimeType: "application/vnd.google-apps.folder" }]
+          });
+        })
+      );
+
+      const response = await request(app)
+        .post("/api/auction/setup-new")
+        .set(authHeader)
+        .send({
+          ticketsSpreadsheetId: "s1",
+          itemEntrySpreadsheetId: "s2",
+          bidManagementSpreadsheetId: "s3"
+        });
+
+      const lines = response.text.trim().split("\n");
+      const results = lines.map(line => JSON.parse(line));
+      
+      expect(results).toContainEqual(expect.objectContaining({ 
+        error: expect.stringContaining("already exists") 
+      }));
+
+      vi.useRealTimers();
+    });
+  });
+
+  describe("bidRoutes - /api/auction/record-winning-bid", () => {
+    const validBody = {
+      bidderId: "1001",
+      itemId: "I01",
+      price: 100,
+      spreadsheetId: "ss-id",
+      bidManagementSheet: "Bid-Management",
+      bidderNumbersSheet: "Bidder-Numbers",
+      idempotencyKey: "unique-key-1"
+    };
+
+    // Shared mock generator for bidRoutes tests
+    const setupBidMocks = () => {
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+          const url = new URL(request.url);
+          const range = url.pathname.split('/').pop() || "";
+          
+          if (range.includes("Bidder-Numbers")) {
+            return HttpResponse.json({
+              values: [
+                ["ID", "Name", "", "", "", "", "Checked Out"],
+                ["1001", "Test User", "", "", "", "", false]
+              ]
+            });
+          }
+          if (range.includes("Bid-Management")) {
+            return HttpResponse.json({
+              values: [
+                ["1001", "Price", "1002", "Price"],
+                ["Total", "", "", ""],
+                ["", "", "", ""],
+                ["", "", "", ""] // Row 4
+              ]
+            });
+          }
+          return HttpResponse.json({ values: [] });
+        })
+      );
+    };
+
+    it("records a winning bid successfully", async () => {
+      setupBidMocks();
+
+      const response = await request(app)
+        .post("/api/auction/record-winning-bid")
+        .set(authHeader)
+        .send({ ...validBody, idempotencyKey: "success-key-workflow" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+    });
+
+    it("returns cached response for duplicate idempotency key", async () => {
+      setupBidMocks();
+      const key = "dup-key-workflow";
+      
+      // First request
+      await request(app)
+        .post("/api/auction/record-winning-bid")
+        .set(authHeader)
+        .send({ ...validBody, idempotencyKey: key });
+
+      // Second request
+      const response = await request(app)
+        .post("/api/auction/record-winning-bid")
+        .set(authHeader)
+        .send({ ...validBody, idempotencyKey: key });
+
+      expect(response.status).toBe(200);
+      expect(response.body.duplicated).toBe(true);
+    });
+
+    it("returns 400 if bidder is not found", async () => {
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', () => {
+          return HttpResponse.json({ values: [["Header"], ["9999", "Other"]] });
+        })
+      );
+
+      const response = await request(app)
+        .post("/api/auction/record-winning-bid")
+        .set(authHeader)
+        .send({ ...validBody, idempotencyKey: "not-found-key-workflow" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain("Bidder 1001 not found");
+    });
+  });
+
+  describe("bidRoutes - /api/auction/checkout-mark-paid", () => {
+    it("calls Apps Script with correct parameters", async () => {
+      let capturedBody: any = null;
+      
+      const scriptId = "mock-script-id";
+      process.env.SCRIPT_ID_BID_MANAGEMENT = scriptId;
+
+      server.use(
+        http.post(`https://script.googleapis.com/v1/scripts/${scriptId}\\:run`, async ({ request }) => {
+          capturedBody = await request.json();
+          return HttpResponse.json({
+            response: { result: { success: true } }
+          });
+        })
+      );
+
+      const response = await request(app)
+        .post("/api/auction/checkout-mark-paid")
+        .set(authHeader)
+        .send({
+          bidderId: "1001",
+          spreadsheetId: "ss-id",
+          bidderNumbersSheet: "Bidder-Numbers",
+          paymentMethod: "CREDIT_CARD",
+          amount: 105.50,
+          idempotencyKey: "checkout-key-1"
+        });
+
+      expect(response.status).toBe(200);
+      expect(capturedBody.function).toBe("apiRecordPayment");
+      expect(capturedBody.parameters).toEqual(["1001", "CREDIT_CARD"]);
+    });
+  });
+
+  describe("bidRoutes - /api/bidders/walk-in", () => {
+    it("performs walk-in successfully", async () => {
+      const response = await request(app)
+        .post("/api/bidders/walk-in")
+        .set(authHeader)
+        .send({
+          firstName: "John",
+          lastName: "Doe",
+          email: "john@example.com",
+          spreadsheetId: "ss-id",
+          bidderNumbersSheet: "Bidder-Numbers",
+          bidManagementSheet: "Bid-Management",
+          idempotencyKey: "walkin-key-1"
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.bidder.firstName).toBe("John");
+    });
+
+    it("returns 400 for missing required sheet names", async () => {
+      const response = await request(app)
+        .post("/api/bidders/walk-in")
+        .set(authHeader)
+        .send({
+          firstName: "John",
+          lastName: "Doe",
+          spreadsheetId: "ss-id",
+          idempotencyKey: "walkin-key-bad"
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain("Missing required sheet names");
+    });
+  });
+
+  describe("bidRoutes - /api/auction/close-and-cleanup", () => {
+    it("closes auction and calculates winners successfully", async () => {
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+          const url = new URL(request.url);
+          const range = url.pathname.split('/').pop() || "";
+          if (range.includes("Bidder-Numbers")) {
+            return HttpResponse.json({
+              values: [
+                ["ID", "Name", "", "", "Checked In", "", "Checked Out"],
+                ["1001", "Winner", "", "", "TRUE", "", "FALSE"],
+                ["1002", "Non-Winner", "", "", "TRUE", "", "FALSE"]
+              ]
+            });
+          }
+          if (range.includes("Bid-Management")) {
+             return HttpResponse.json({
+              values: [
+                ["1001", "Price", "1002", "Price"],
+                ["Total", "", "", ""],
+                ["", "", "", ""],
+                ["", "100", "", ""] // 1001 won something
+              ]
+            });
+          }
+          return HttpResponse.json({ values: [] });
+        })
+      );
+
+      const response = await request(app)
+        .post("/api/auction/close-and-cleanup")
+        .set(authHeader)
+        .send({
+          spreadsheetId: "ss-id",
+          bidderNumbersSheet: "Bidder-Numbers",
+          bidManagementSheet: "Bid-Management"
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+    });
+
+    it("returns 400 for missing parameters", async () => {
+      const response = await request(app)
+        .post("/api/auction/close-and-cleanup")
+        .set(authHeader)
+        .send({ spreadsheetId: "ss-id" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain("Missing required spreadsheet parameters");
+    });
+  });
+
+  describe("bidRoutes - /api/auction/check-in-with-bid", () => {
+    const validCheckInBody = {
+      bidderId: "1001",
+      spreadsheetId: "ss-id",
+      bidManagementSheet: "Bid-Management",
+      bidderNumbersSheet: "Bidder-Numbers",
+      bidValue: 50,
+      idempotencyKey: "checkin-unique-1"
+    };
+
+    it("checks in a bidder and adds a bid successfully", async () => {
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+          const url = new URL(request.url);
+          const range = url.pathname.split('/').pop() || "";
+          if (range.includes("Bidder-Numbers")) {
+            return HttpResponse.json({
+              values: [["ID"], ["1001"]]
+            });
+          }
+          if (range.includes("Bid-Management")) {
+            return HttpResponse.json({
+              values: [
+                ["1001", "Price"],
+                ["Total", ""],
+                ["", ""],
+                ["", ""]
+              ]
+            });
+          }
+          return HttpResponse.json({ values: [] });
+        })
+      );
+
+      const response = await request(app)
+        .post("/api/auction/check-in-with-bid")
+        .set(authHeader)
+        .send(validCheckInBody);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.bidAdded).toBe(true);
+    });
+
+    it("returns 400 for missing parameters", async () => {
+      const response = await request(app)
+        .post("/api/auction/check-in-with-bid")
+        .set(authHeader)
+        .send({ bidderId: "1001" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain("Missing required parameters");
+    });
+  });
+});

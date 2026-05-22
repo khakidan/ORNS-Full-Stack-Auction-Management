@@ -27,13 +27,17 @@ export default function createSetupRouter() {
       const parentFolderId = "0AFy4DQDukQdYUk9PVA";
       const archivedFolderId = "1J8fuh60tHdG_AAsl9fY8vpvstdXtxd-I";
       
-      const { 
-        ticketsSpreadsheetId, 
-        itemEntrySpreadsheetId, 
-        bidManagementSpreadsheetId 
-      } = req.body;
-      
-      // 1. Calculate dates
+    const { 
+      ticketsSpreadsheetId, 
+      itemEntrySpreadsheetId, 
+      bidManagementSpreadsheetId 
+    } = req.body;
+
+    if (!ticketsSpreadsheetId || !itemEntrySpreadsheetId || !bidManagementSpreadsheetId) {
+      return res.status(400).json({ error: "Missing required spreadsheet IDs for auction setup." });
+    }
+    
+    // 1. Calculate dates
       const today = new Date();
       let auctionYear = today.getFullYear();
       if (today.getMonth() > 3) {
