@@ -10,7 +10,7 @@ setInterval(() => {
       processedRequests.delete(key);
     }
   }
-}, 3600000);
+}, 600000);
 
 export function checkIdempotency(req: express.Request, res: express.Response, key: string) {
   if (key && processedRequests.has(key)) {

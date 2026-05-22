@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../utils/auth';
-import { processEmail } from '../../email-helpers'; // Assuming helper module
+import { processEmail } from '../services/emailService';
 
 export default function createReceiptsRouter() {
   const router = Router();

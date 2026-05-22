@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { google } from 'googleapis';
+import { GoogleGenAI } from '@google/genai';
 import { getAuthenticatedClient } from '../utils/auth';
 import { getCategoryBase } from '../utils/categoryHelpers';
 import { checkIdempotency, saveIdempotency } from '../utils/idempotency';
 
-export default function createBundleRouter(genAI: any) {
+export default function createBundleRouter(genAI: GoogleGenAI) {
   const router = Router();
 
   router.post("/suggest-names", async (req, res, next) => {

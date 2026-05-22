@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../utils/auth';
 
-export default function createAuctionRouter() {
+export default function createSetupRouter() {
   const router = Router();
 
   router.post("/setup-new", async (req: Request, res: Response, next: NextFunction) => {
