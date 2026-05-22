@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useAuction } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Users, ShoppingBag, TrendingUp, UserCheck, Trophy, Loader2, AlertCircle, Clock, ExternalLink, RefreshCw } from "lucide-react";
+import { Users, ShoppingBag, TrendingUp, UserCheck, Trophy, Loader2, AlertCircle, Clock, ExternalLink, RefreshCw, UserX } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getSheetData, updateSheetData, appendSheetData } from "@/lib/google-api";
@@ -158,6 +158,16 @@ export default function Dashboard() {
   const totalBidders = bidders.length;
   const itemsCount = items.length;
 
+  const unattendedBidders = useMemo(() => {
+    return bidders
+      .filter(b => !b.checkedIn && !b.isProxy)
+      .sort((a, b) => {
+        const idA = parseInt(a.id, 10) || 0;
+        const idB = parseInt(b.id, 10) || 0;
+        return idA - idB;
+      });
+  }, [bidders]);
+
   const proxyBidders = bidders
     .filter(b => b.isProxy)
     .sort((a, b) => parseInt(a.id) - parseInt(b.id));
@@ -196,7 +206,7 @@ export default function Dashboard() {
               </Button>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Pending Checkouts */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -260,6 +270,40 @@ export default function Dashboard() {
                   </ScrollArea>
                   <p className="text-[10px] text-muted-foreground italic mt-2">
                     Note: These records are created automatically when an item is assigned to someone who already checked out.
+                  </p>
+                </div>
+
+                {/* Unattended Bidders (No Shows) */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-sm uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                       <UserX className="w-4 h-4" /> No Shows (Never Checked In)
+                    </h4>
+                    <span className="text-xs font-medium px-2 py-0.5 bg-red-100 text-red-700 rounded-full">
+                      {unattendedBidders.length} Total
+                    </span>
+                  </div>
+                  <ScrollArea className="h-[300px] rounded-md border bg-white p-4">
+                    <div className="space-y-3">
+                      {unattendedBidders.length > 0 ? (
+                        unattendedBidders.map(b => (
+                          <div key={b.id} className="flex items-center justify-between border-b pb-2 last:border-0">
+                            <div>
+                              <div className="font-bold text-sm">#{b.id} {b.firstName} {b.lastName}</div>
+                              <div className="text-xs text-muted-foreground">{b.email}</div>
+                            </div>
+                            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-100">
+                              No Show
+                            </Badge>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-12 text-muted-foreground italic">Everyone checked in successfully!</div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                  <p className="text-[10px] text-muted-foreground italic mt-2">
+                    Note: These registered bidders never checked in, and are left with blank checkout/payment statuses.
                   </p>
                 </div>
               </div>

@@ -553,6 +553,10 @@ export default function Bidders() {
                                 <Badge variant="outline" className="border-purple-200 text-purple-700 bg-purple-50 w-fit text-[10px] h-5">
                                   Proxy
                                 </Badge>
+                              ) : isAuctionClosed ? (
+                                <Badge variant="outline" className="text-red-600 bg-red-50 border-red-100 w-fit text-[10px] h-5 font-bold">
+                                  No Show
+                                </Badge>
                               ) : (
                                 <Badge variant="outline" className="text-slate-400 bg-slate-50 w-fit text-[10px] h-5">
                                   Pending

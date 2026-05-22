@@ -287,9 +287,10 @@ export default function createBidRouter() {
       const updates: any[] = [];
       for (let i = 1; i < bidderRows.length; i++) {
         const id = bidderRows[i][0]?.toString();
+        const checkedIn = bidderRows[i][4] === "TRUE" || bidderRows[i][4] === "true";
         const checkedOut = bidderRows[i][6] === "TRUE" || bidderRows[i][6] === "true";
         
-        if (id && !checkedOut && !winnersSet.has(id)) {
+        if (id && checkedIn && !checkedOut && !winnersSet.has(id)) {
           updates.push({
             range: `'${bidderNumbersSheet}'!G${i + 1}:H${i + 1}`,
             values: [[true, true]] 
