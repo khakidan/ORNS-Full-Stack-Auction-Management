@@ -65,12 +65,12 @@ export async function fetchWithRetry(url: string | URL | Request, options: Reque
 
 
 export async function getAuthUrl() {
-  const res = await fetchWithRetry(`${getBaseUrl()}/api/auth/url`, { credentials: "include" });
+  const res = await fetchWithRetry(`${getBaseUrl()}/auth/url`, { credentials: "include" });
   return res.json();
 }
 
 export async function getAuthStatus() {
-  const res = await fetchWithRetry(`${getBaseUrl()}/api/auth/status`, { credentials: "include" });
+  const res = await fetchWithRetry(`${getBaseUrl()}/auth/status`, { credentials: "include" });
   return res.json();
 }
 
@@ -78,7 +78,7 @@ export async function logout() {
   if (typeof window !== "undefined") {
     localStorage.removeItem("google_tokens");
   }
-  const res = await fetchWithRetry(`${getBaseUrl()}/api/auth/logout`, { method: "POST", credentials: "include" });
+  const res = await fetchWithRetry(`${getBaseUrl()}/auth/logout`, { method: "POST", credentials: "include" });
   return res.json();
 }
 

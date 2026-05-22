@@ -19,7 +19,14 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import cors from "cors";
 import healthRouter from './server/routes/health';
+import authRoutes from './server/routes/authRoutes';
+import createReceiptsRouter from './server/routes/receiptRoutes';
+import createBundleRouter from './server/routes/bundleRoutes';
+import { SheetOp, executeGoogleSheetsTransaction } from './server/services/sheetsService';
+import { getOAuthClient, getAuthenticatedClient } from './server/utils/auth';
+import { checkIdempotency, saveIdempotency } from './server/utils/idempotency';
 import { errorHandler } from './server/middleware/errorHandler';
+import createAuctionRouter from './server/routes/auctionRoutes';
 
 declare global {
   namespace Express {
@@ -111,8 +118,6 @@ app.use(cors({
 // Middleware
 app.use(express.json());
 
-app.use("/api/health", healthRouter);
-
 // Global middleware to prevent caching (required for Firebase Hosting to preserve Set-Cookie)
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/') || req.path.startsWith('/auth/')) {
@@ -122,7 +127,6 @@ app.use((req, res, next) => {
 });
 
 app.set("trust proxy", 1);
-const DATA_DIR = process.env.APP_DATA_DIR || process.cwd();
 
 app.use(
   cookieSession({
@@ -172,258 +176,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// Scopes for Google Workspace APIs
-const SCOPES = [
-  "https://www.googleapis.com/auth/spreadsheets",
-  "https://www.googleapis.com/auth/drive",
-  "https://www.googleapis.com/auth/documents",
-  "https://www.googleapis.com/auth/presentations",
-  "https://www.googleapis.com/auth/gmail.send",
-  "https://www.googleapis.com/auth/script.projects",
-  "https://www.googleapis.com/auth/script.external_request",
-  "openid",
-  "https://www.googleapis.com/auth/userinfo.email"
-];
+app.use("/api/health", healthRouter);
+app.use(authRoutes);
+app.use("/api/receipts", createReceiptsRouter());
+app.use("/api/auction", createAuctionRouter());
+app.use("/api/bundle", createBundleRouter(genAI));
 
-const getOAuthClient = (req?: express.Request) => {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
-  if (!clientId || !clientSecret) {
-    throw new Error("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing from environment. Please check the Secrets panel in AI Studio.");
-  }
-
-  let baseUrl = "";
-  if (req) {
-    let protocol = req.get("x-forwarded-proto") || req.protocol;
-    const host = req.get("x-forwarded-host") || req.get("host");
-
-    if (host && (host.includes("run.app") || host.includes("ais-") || host.includes("aistudio") || host.includes("orns.org"))) {
-      protocol = "https";
-    }
-
-    baseUrl = `${protocol}://${host}`;
-  } else {
-    baseUrl = process.env.APP_URL || "http://localhost:3000";
-    if ((baseUrl.includes("run.app") || baseUrl.includes("ais-") || baseUrl.includes("orns.org")) && baseUrl.startsWith("http:")) {
-      baseUrl = baseUrl.replace("http:", "https:");
-    }
-  }
-
-  const cleanBaseUrl = baseUrl.replace(/\/+$/, "");
-  const redirectUri = `${cleanBaseUrl}/auth/callback`;
-
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
-};
-
-// Auth Routes
-app.post("/api/log", (req, res) => {
-  console.log(`[CLIENT LOG] ${new Date().toISOString()}:`, JSON.stringify(req.body, null, 2));
-  res.status(200).end();
-});
-
-app.get("/api/auth/url", (req, res) => {
-  try {
-    console.log(`[Server] Auth URL request from host: ${req.get("host")}`);
-    const client = getOAuthClient(req);
-    const url = client.generateAuthUrl({
-      access_type: "offline",
-      scope: SCOPES,
-      prompt: "select_account consent",
-      hd: "orns.org",
-    });
-    console.log(`[Server] Generated Auth URL (starts with): ${url.substring(0, 50)}...`);
-    res.json({ url });
-  } catch (error: any) {
-    console.error("[Server] Error generating Auth URL:", error.message);
-    res.status(500).json({ error: error.message || "Internal Server Error" });
-  }
-});
-
-app.get("/auth/callback", async (req, res) => {
-  const { code } = req.query;
-  try {
-    const client = getOAuthClient(req);
-    const { tokens } = await client.getToken(code as string);
-    client.setCredentials(tokens);
-
-    // Verify user domain
-    const oauth2 = google.oauth2({ version: 'v2', auth: client });
-    const userInfo = await oauth2.userinfo.get();
-    const email = userInfo.data.email || "";
-
-    if (!email.endsWith("@orns.org")) {
-      console.warn(`[Auth] User ${email} rejected: Not an orns.org account`);
-      return res.status(403).send(`
-        <html>
-          <body style="background: #f8fafc; font-family: sans-serif;">
-            <div style="text-align: center; padding-top: 100px; color: #1e293b;">
-              <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); display: inline-block; max-width: 450px;">
-                <div style="background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-weight: 500;">
-                  Access Restricted
-                </div>
-                <h2 style="margin-top: 0; font-size: 20px;">@orns.org Account Required</h2>
-                <p style="color: #64748b; margin-bottom: 24px; line-height: 1.5;">
-                  You signed in with <strong>${email}</strong>. 
-                  Unfortunately, this app is restricted to users within the <strong>@orns.org</strong> domain.
-                </p>
-                <div style="display: flex; flex-direction: column; gap: 12px;">
-                  <button onclick="window.location.href='/api/auth/url?retry=true'" style="background: #0f172a; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">
-                    Sign in with a different account
-                  </button>
-                  <button onclick="window.close()" style="background: transparent; color: #64748b; border: 1px solid #e2e8f0; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-            <script>
-              // If directed here from another endpoint, handle the URL gen
-              if (window.location.search.includes('retry=true')) {
-                fetch('/api/auth/url')
-                  .then(r => r.json())
-                  .then(data => {
-                    if (data.url) window.location.href = data.url;
-                  });
-              }
-            </script>
-          </body>
-        </html>
-      `);
-    }
-
-    if (!req.session) {
-      req.session = { tokens: null };
-    }
-    
-    if (req.session) {
-      const slimTokens = { ...tokens };
-      delete slimTokens.id_token;
-      
-      // We don't strictly need to store scopes either if we know what they are,
-      // but if the credential object strictly checks for it, we can leave it.
-      // Better to delete it to further reduce cookie size.
-      delete slimTokens.scope;
-      
-      req.session.tokens = slimTokens;
-    }
-    
-    // Create a safe-to-serialize token backup
-    const messageTokens = { ...tokens };
-    delete messageTokens.id_token;
-    delete messageTokens.scope;
-    
-    res.send(`
-      <html>
-        <body style="background: #f8fafc;">
-            <div style="font-family: sans-serif; text-align: center; padding-top: 100px; color: #1e293b;">
-              <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); display: inline-block; max-width: 400px;">
-                <h2 style="margin-top: 0;">Authentication Successful</h2>
-                <p style="color: #64748b;">You have successfully signed in with your ORNS account (${email}).</p>
-                <p style="font-weight: 500; margin-bottom: 20px;">You can now close this window and return to the auction app.</p>
-                <button onclick="window.close()" style="background: #0f172a; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600;">Close Window</button>
-              </div>
-              <script>
-                (function() {
-                  var tokens = ${JSON.stringify(messageTokens)};
-                  
-                  // Save tokens to localStorage in the browser so that the main app receives them immediately
-                  try {
-                    localStorage.setItem('google_tokens', JSON.stringify(tokens));
-                    console.log("Successfully cached tokens in localStorage from callback");
-                  } catch (e) {
-                    console.warn("localStorage failed in callback script:", e);
-                  }
-
-                  var isPopup = false;
-                  try {
-                    if (window.name === 'oauth_popup') {
-                      isPopup = true;
-                    }
-                  } catch (e) {}
-
-                  if (isPopup) {
-                    var hasOpener = false;
-                    try {
-                      if (window.opener && window.opener !== window) {
-                        hasOpener = true;
-                      }
-                    } catch (e) {}
-
-                    if (hasOpener) {
-                      try {
-                        console.log("Sending successful auth tokens to main window opener...");
-                        window.opener.postMessage({ 
-                          type: 'OAUTH_AUTH_SUCCESS',
-                          tokens: tokens
-                        }, '*');
-                        
-                        var p = document.querySelector('p');
-                        if (p) {
-                          p.textContent = "Authenticated successfully with your ORNS account. This window will close automatically.";
-                        }
-                        
-                        setTimeout(function() {
-                          window.close();
-                        }, 1000);
-                        return;
-                      } catch (e) {
-                        console.error("Failed to post message to main window:", e);
-                      }
-                    }
-                  }
-
-                  // Non-popup flow (or fallback): redirect the main tab to the saved path or root
-                  var redirectPath = '/';
-                  try {
-                    var savedPath = sessionStorage.getItem('post_auth_redirect_path');
-                    if (savedPath && savedPath.slice(0, 1) === '/') {
-                      redirectPath = savedPath;
-                      sessionStorage.removeItem('post_auth_redirect_path');
-                    }
-                  } catch (e) {}
-
-                  console.log("Redirecting to: " + redirectPath);
-                  window.location.href = redirectPath;
-                })();
-              </script>
-            </div>
-          </body>
-        </html>
-      `);
-  } catch (error: any) {
-    const errorDetails = error.response?.data || error.message;
-    console.error("Error getting tokens during callback:", errorDetails);
-    res.status(500).send(`Authentication failed: ${JSON.stringify(errorDetails)}`);
-  }
-});
-
-app.get("/api/auth/callback", (req, res) => {
-  // Redirect to the main callback
-  const code = req.query.code;
-  if (code) {
-    res.redirect(`/auth/callback?code=${code}`);
-  } else {
-    res.status(404).send("Auth callback missing code");
-  }
-});
-
-app.get("/api/auth/status", (req, res) => {
-  res.json({ authenticated: req.session && !!req.session.tokens });
-});
-
-app.post("/api/auth/logout", (req, res) => {
-  req.session = null;
-  res.clearCookie('__session');
-  res.json({ success: true });
-});
-
-// Helper to get authenticated client
-function getAuthenticatedClient(tokens: any) {
-  const client = getOAuthClient();
-  client.setCredentials(tokens);
-  return client;
-}
+// Helper to get authenticated client removed (use ./server/utils/auth.ts)
 
 // Receipt Generation Endpoint
 app.post("/api/receipts/generate", async (req, res) => {
@@ -552,251 +312,6 @@ app.post("/api/receipts/email-all", async (req, res) => {
   }
 });
 
-app.post("/api/auction/setup-new", async (req, res) => {
-  if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
-  res.setHeader('Content-Type', 'application/x-ndjson');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-
-  const logs: string[] = [];
-  const log = (msg: string) => {
-    console.log(`[Auction Setup] ${msg}`);
-    logs.push(msg);
-    res.write(JSON.stringify({ log: msg }) + "\n");
-  };
-
-  try {
-    const parentFolderId = "0AFy4DQDukQdYUk9PVA";
-    const archivedFolderId = "1J8fuh60tHdG_AAsl9fY8vpvstdXtxd-I";
-    
-    const { 
-      ticketsSpreadsheetId, 
-      itemEntrySpreadsheetId, 
-      bidManagementSpreadsheetId 
-    } = req.body;
-    
-    const client = getAuthenticatedClient(req.session.tokens);
-    const drive = google.drive({ version: "v3", auth: client });
-    const sheets = google.sheets({ version: "v4", auth: client });
-    
-    // 1. Calculate dates
-    const today = new Date();
-    let auctionYear = today.getFullYear();
-    // Month is 0-indexed. April is 3. "Greater than April" means current month > 3
-    if (today.getMonth() > 3) {
-      auctionYear += 1;
-    }
-    const lastYear = auctionYear - 1;
-    const maxArchiveYear = auctionYear - 2;
-    const baseFolderName = `${auctionYear} Auction`;
-
-    log(`Starting setup for auction year: ${auctionYear}`);
-
-    // 2. Archive old folders && check for new folder existence
-    log(`Scanning parent directory for existing folders...`);
-    const folderRes = await drive.files.list({
-      q: `'${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-      fields: "files(id, name, parents)",
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true
-    });
-    
-    log(`Found ${folderRes.data.files?.length || 0} existing folders in parent directory.`);
-    
-    const folders = folderRes.data.files || [];
-    let lastYearFolderId: string | undefined;
-    
-    for (const folder of folders) {
-      if (folder.name === baseFolderName) {
-        log(`Error: Folder '${baseFolderName}' already exists.`);
-        res.write(JSON.stringify({ error: `The '${baseFolderName}' folder already exists. Automation cancelled to prevent duplicates.` }) + "\n");
-        return res.end();
-      }
-      
-      const match = folder.name?.match(/^(\d{4}) Auction$/);
-      if (match) {
-        const folderYear = parseInt(match[1], 10);
-        if (folderYear === lastYear) {
-          lastYearFolderId = folder.id!;
-        }
-        if (folderYear <= maxArchiveYear) {
-          // move to archive
-          log(`Archiving old folder: ${folder.name}`);
-          await drive.files.update({
-            fileId: folder.id!,
-            addParents: archivedFolderId,
-            removeParents: parentFolderId,
-            fields: 'id',
-            supportsAllDrives: true
-          });
-        }
-      }
-    }
-    
-    // 3. Create new folder and subfolders
-    log(`Creating new base folder: ${baseFolderName}`);
-    const createFolder = async (name: string, parentId: string) => {
-      const resp = await drive.files.create({
-        requestBody: { name, mimeType: "application/vnd.google-apps.folder", parents: [parentId] },
-        fields: "id",
-        supportsAllDrives: true
-      });
-      return resp.data.id!;
-    };
-    
-    const newBaseFolderId = await createFolder(baseFolderName, parentFolderId);
-    log(`Creating internal folders...`);
-    const forPrintFolderId = await createFolder("For Print", newBaseFolderId);
-    const bidderReceiptsFolderId = await createFolder("Bidder Receipts", newBaseFolderId);
-    await createFolder("Software Development", newBaseFolderId);
-    const volunteerDocsFolderId = await createFolder("Helpful Volunteer Documents", newBaseFolderId);
-    
-    // 4. Copy specific template files
-    log(`Copying template files...`);
-    const templateFiles = [  
-      { id: "1GO-DvXuFfJLRyGgl9uavQl2Psn3kOPW9KkD8N9GQsvk", parent: volunteerDocsFolderId }, 
-      { id: "1VSCNOc9f_usm0cNlUUyoT9TmKKouTJIOM0IQPSG21UU", parent: volunteerDocsFolderId }, 
-      { id: "1rKooSWG2CxyAGowhjPpgw7-mZs8oklkYGVSpRsAYkyU", parent: newBaseFolderId },      
-      { id: "1qQKGSIZxLK5OuE7uuXs6hQpDQIDc_IFOwP0nr3fXTYc", parent: newBaseFolderId },      
-      { id: "1eA_7adFmclf8e5_PT-dTGgwfsDcNF8GjsA-wnxOFiyU", parent: newBaseFolderId },      
-      { id: "1ON6sSUpQQdmpVsVPPCju-gKk-2Cf97RF2MM-t11Lfac", parent: newBaseFolderId },      
-      { id: "10XqwqwSdjNv0PQfYTYgyCQ8WZBG5EXS-p75vm5lHLFs", parent: newBaseFolderId },      
-      { id: "1ddUrxLA6A3LqUhArhuB3MuOC5z43eJmkts596aiUYOw", parent: newBaseFolderId }       
-    ];
-    
-    for (const f of templateFiles) {
-      try {
-        const originalFile = await drive.files.get({ fileId: f.id, fields: "name", supportsAllDrives: true });
-        log(`Copying template file: ${originalFile.data.name || f.id}`);
-        await drive.files.copy({
-          fileId: f.id,
-          requestBody: { name: originalFile.data.name || "Copied File", parents: [f.parent] },
-          fields: "id",
-          supportsAllDrives: true
-        });
-      } catch (err: any) {
-        log(`Failed to copy file ${f.id}: ${err.message}`);
-      }
-    }
-    
-    // 5. Backup master spreadsheets dynamically if they exist, into lastYearFolderId
-    if (lastYearFolderId) {
-      log(`Backing up master spreadsheets to last year's folder (${lastYear})...`);
-      if (ticketsSpreadsheetId) {
-        log(`Backing up Tickets spreadsheet...`);
-        await drive.files.copy({
-          fileId: ticketsSpreadsheetId,
-          requestBody: { name: `${lastYear} Auction Tickets`, parents: [lastYearFolderId] },
-          supportsAllDrives: true
-        }).catch(err => log(`Error backing up Tickets: ${err.message}`));
-      }
-      
-      if (itemEntrySpreadsheetId) {
-        log(`Backing up Item Entry spreadsheet...`);
-        await drive.files.copy({
-          fileId: itemEntrySpreadsheetId,
-          requestBody: { name: `${lastYear} Auction Items`, parents: [lastYearFolderId] },
-          supportsAllDrives: true
-        }).catch(err => log(`Error backing up Items: ${err.message}`));
-      }
-      
-      if (bidManagementSpreadsheetId) {
-        log(`Backing up Bid Management spreadsheet...`);
-        await drive.files.copy({
-          fileId: bidManagementSpreadsheetId,
-          requestBody: { name: `${lastYear} Bid Management`, parents: [lastYearFolderId] },
-          supportsAllDrives: true
-        }).catch(err => log(`Error backing up Bid Management: ${err.message}`));
-      }
-    } else {
-      log(`No folder found for ${lastYear} Auction, skipping spreadsheet backups.`);
-    }
-    
-    // 6. Clean master spreadsheets
-    log(`Cleaning data from master spreadsheets...`);
-    try {
-      if (itemEntrySpreadsheetId) {
-        await sheets.spreadsheets.values.clear({
-          spreadsheetId: itemEntrySpreadsheetId,
-          range: "Auction-Items!A2:Z"
-        }).catch(err => console.error("Failed to clear Item Entry sheets", err));
-      }
-      
-      if (ticketsSpreadsheetId) {
-        await sheets.spreadsheets.values.clear({
-          spreadsheetId: ticketsSpreadsheetId,
-          range: "'tickets'!A2:Z"
-        }).catch(err => console.error("Failed to clear tickets sheet", err));
-        
-        await sheets.spreadsheets.values.clear({
-          spreadsheetId: ticketsSpreadsheetId,
-          range: "'sponsor tickets'!A2:Z"
-        }).catch(err => console.error("Failed to clear sponsor tickets", err));
-      }
-      
-      if (bidManagementSpreadsheetId) {
-        // Find sheet IDs for Auction-Items, Bid-Management, Bidder-Numbers to delete them
-        const shtInfo = await sheets.spreadsheets.get({ spreadsheetId: bidManagementSpreadsheetId });
-        const shts = shtInfo.data.sheets || [];
-        
-        const reqs: any[] = [];
-        
-        shts.forEach(sheet => {
-          const nm = sheet.properties?.title;
-          const id = sheet.properties?.sheetId;
-          const deleteSheetsList = ["Auction-Items", "Bid-Management", "Bidder-Numbers"];
-          if (nm && deleteSheetsList.includes(nm) && id !== undefined) {
-             reqs.push({ deleteSheet: { sheetId: id } });
-          }
-        });
-        
-        if (reqs.length > 0) {
-          await sheets.spreadsheets.batchUpdate({
-            spreadsheetId: bidManagementSpreadsheetId,
-            requestBody: { requests: reqs }
-          }).catch(err => console.error("Failed deleting sheets", err));
-        }
-
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: bidManagementSpreadsheetId,
-          range: "'Auction-Status'!A2",
-          valueInputOption: "USER_ENTERED",
-          requestBody: { values: [[true]] }
-        }).catch(err => console.error("Failed Auction-Status", err));
-
-        await sheets.spreadsheets.values.clear({
-          spreadsheetId: bidManagementSpreadsheetId,
-          range: "'Special-Winners'!B2:B3"
-        }).catch(err => console.error("Failed Special-Winners clear", err));
-
-        await sheets.spreadsheets.values.clear({
-          spreadsheetId: bidManagementSpreadsheetId,
-          range: "'Follow-Up'!A2:Z"
-        }).catch(err => console.error("Failed Follow-Up clear", err));
-      }
-    } catch (err) {
-      console.error("General error during sheet resets", err);
-    }
-    
-    log(`Setup for new auction completed successfully!`);
-
-    res.write(JSON.stringify({
-      success: true,
-      auctionYear,
-      forPrintFolderId,
-      bidderReceiptsFolderId,
-      logs
-    }) + "\n");
-    res.end();
-
-  } catch (error: any) {
-    console.error("Setup Auction Flow Error:", error);
-    res.status(500);
-    res.write(JSON.stringify({ error: error.message || "Failed to setup new auction instance." }) + "\n");
-    res.end();
-  }
-});
 
 // Sync bidders via Node.js Google Sheets integration (migrated from apiSyncBidders Apps Script)
 app.post("/api/bidders/sync", async (req, res) => {
@@ -1072,6 +587,7 @@ setInterval(() => {
   }
 }, 3600000);
 
+/*
 function checkIdempotency(req: express.Request, res: express.Response, key: string) {
   if (key && processedRequests.has(key)) {
     const cached = processedRequests.get(key);
@@ -1086,102 +602,8 @@ function saveIdempotency(key: string, response: any) {
     processedRequests.set(key, { timestamp: Date.now(), response });
   }
 }
+*/
 
-interface SheetOp {
-  spreadsheetId: string;
-  range: string;
-  newValues: any[][];
-  type: 'UPDATE' | 'APPEND';
-}
-
-async function executeGoogleSheetsTransaction(
-  sheets: any, 
-  operations: SheetOp[]
-) {
-  const stagedOps = [];
-  
-  // Phase 1: Stage and Verify Targets
-  for (const op of operations) {
-    try {
-      if (op.type === 'UPDATE') {
-        const res = await sheets.spreadsheets.values.get({
-          spreadsheetId: op.spreadsheetId,
-          range: op.range,
-        });
-        stagedOps.push({ ...op, oldValues: res.data.values || [] });
-      } else if (op.type === 'APPEND') {
-        const rangeParts = op.range.split('!');
-        const sheetName = rangeParts[0];
-        await sheets.spreadsheets.values.get({
-          spreadsheetId: op.spreadsheetId,
-          range: `${sheetName}!A1`, 
-        });
-        stagedOps.push({ ...op });
-      }
-    } catch (err: any) {
-      throw new Error(`Transaction Staging Failed - Target not ready: ${op.spreadsheetId} ${op.range}. Error: ${err.message}`);
-    }
-  }
-  
-  // Phase 2: Commit Updates
-  const completedOps = [];
-  try {
-    for (const op of stagedOps) {
-      if (op.type === 'UPDATE') {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: op.spreadsheetId,
-          range: op.range,
-          valueInputOption: "USER_ENTERED",
-          requestBody: { values: op.newValues }
-        });
-        completedOps.push(op);
-      } else if (op.type === 'APPEND') {
-        const appendRes = await sheets.spreadsheets.values.append({
-          spreadsheetId: op.spreadsheetId,
-          range: op.range,
-          valueInputOption: "USER_ENTERED",
-          requestBody: { values: op.newValues }
-        });
-        completedOps.push({ ...op, appendedRange: appendRes.data.updates.updatedRange });
-      }
-    }
-  } catch (commitError: any) {
-    console.error("[Transaction] Commit failed! Initiating rollback process...", commitError.message);
-    
-    // Phase 3: Rollback on Failure
-    const rollbackErrors = [];
-    for (let i = completedOps.length - 1; i >= 0; i--) {
-      const opToRevert = completedOps[i];
-      try {
-        if (opToRevert.type === 'UPDATE') {
-           const writeValues = opToRevert.oldValues && opToRevert.oldValues.length > 0
-            ? opToRevert.oldValues 
-            : opToRevert.newValues.map((row: any[]) => row.map(() => "")); // clean out block if originally empty
-
-           await sheets.spreadsheets.values.update({
-             spreadsheetId: opToRevert.spreadsheetId,
-             range: opToRevert.range,
-             valueInputOption: "USER_ENTERED",
-             requestBody: { values: writeValues }
-           });
-        } else if (opToRevert.type === 'APPEND' && opToRevert.appendedRange) {
-           await sheets.spreadsheets.values.clear({
-             spreadsheetId: opToRevert.spreadsheetId,
-             range: opToRevert.appendedRange,
-           });
-        }
-      } catch (rollbackErr: any) {
-         rollbackErrors.push(`Failed to revert ${opToRevert.range}: ${rollbackErr.message}`);
-      }
-    }
-    
-    if (rollbackErrors.length > 0) {
-      throw new Error(`Transaction failed, and rollback partially failed (Mismatched state): ${commitError.message} | Rollback issues: ${rollbackErrors.join(', ')}`);
-    } else {
-      throw new Error(`Transaction failed and safely rolled back: ${commitError.message}`);
-    }
-  }
-}
 
 // transactional checkout
 app.post("/api/auction/checkout-mark-paid", async (req, res) => {
@@ -1694,101 +1116,10 @@ app.post("/api/auction/check-in-with-bid", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-app.post("/api/bundle/suggest-names", async (req, res) => {
-  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
-  if (!process.env.GEMINI_API_KEY) {
-    return res.status(500).json({ error: "GEMINI_API_KEY is not configured in the environment." });
-  }
 
-  const { items } = req.body;
-  if (!items || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ error: "No items provided for suggestions" });
-  }
-
-  try {
-    const itemsDescription = items.map((it: any) => `- ${it.name}: ${it.description || 'No description'}`).join('\n');
-    const prompt = `Suggested names for bundle: ${itemsDescription}`;
-
-    const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-    const result = await genAI.models.generateContent({
-      model: modelName,
-      contents: prompt,
-      config: {
-        systemInstruction: "You are an expert at creating catchy, themed bundle names for a non-profit preschool's silent auction. Return JSON array of 5 strings.",
-        responseMimeType: "application/json"
-      }
-    });
-
-    // Audit finish reason
-    const finishReason = result.candidates?.[0]?.finishReason;
-    if (finishReason && finishReason !== 'STOP') {
-      console.warn(`[AI Audit] Finish reason was not STOP: ${finishReason}`);
-      return res.status(503).json({ 
-        error: "AI generation interrupted", 
-        fallback: true 
-      });
-    }
-
-    try {
-      const rawText = result.text || "[]";
-      let cleanedText = rawText.trim();
-      if (cleanedText.startsWith("```json")) {
-        cleanedText = cleanedText.replace(/^```json\n?/, "").replace(/\n?```$/, "");
-      } else if (cleanedText.startsWith("```")) {
-        cleanedText = cleanedText.replace(/^```\n?/, "").replace(/\n?```$/, "");
-      }
-      
-      const suggestions = JSON.parse(cleanedText);
-      res.json({ suggestions });
-    } catch (parseError) {
-      console.error("[AI Audit] JSON parse failed:", parseError);
-      return res.status(502).json({ error: "Malformed AI response", fallback: true });
-    }
-  } catch (error: any) {
-    console.error("Gemini suggestion error:", error);
-    res.status(500).json({ error: error.message, fallback: true });
-  }
-});
 
 // Gemini Suggest Bundle Description
-app.post("/api/bundle/suggest-description", async (req, res) => {
-  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
-  if (!process.env.GEMINI_API_KEY) {
-    return res.status(500).json({ error: "GEMINI_API_KEY is not configured in the environment." });
-  }
 
-  const { items } = req.body;
-  if (!items || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ error: "No items provided for description suggestions" });
-  }
-
-  try {
-    const itemsList = items.map((it: any) => `- ${it.name}: ${it.description || 'No description'}`).join('\n');
-    const prompt = `Write a professional, catchy, and appealing auction description for a bundle containing these items:
-    ${itemsList}
-    
-    The description MUST be exactly one paragraph long, professional yet exciting for a school fundraiser. Don't use placeholders. Focus on the value and experience of the bundle.`;
-
-    const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-    const result = await genAI.models.generateContent({
-      model: modelName,
-      contents: prompt,
-      config: {
-        systemInstruction: "You are an expert at writing compelling silent auction descriptions for non-profit preschool fundraisers. Return a plain text description that is exactly one paragraph long.",
-      }
-    });
-
-    const finishReason = result.candidates?.[0]?.finishReason;
-    if (finishReason && finishReason !== 'STOP') {
-      return res.status(503).json({ error: "AI generation interrupted", fallback: true });
-    }
-
-    res.json({ description: result.text });
-  } catch (error: any) {
-    console.error("Gemini description error:", error);
-    res.status(500).json({ error: error.message, fallback: true });
-  }
-});
 
 // List Auction Backups
 app.get("/api/backups/list/:spreadsheetId", async (req, res) => {
@@ -1878,141 +1209,11 @@ app.post("/api/backups/restore", async (req, res) => {
 });
 
 // Bundling & Restoration Workflow Endpoints
+/*
 app.post("/api/bundle/process", async (req, res) => {
-  if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
-
-  const { spreadsheetId, targetIds, newName, newDescription, targetCategory, timestamp, idempotencyKey } = req.body;
-  const cached = checkIdempotency(req, res, idempotencyKey);
-  if (cached) return;
-
-  if (!spreadsheetId || !targetIds || !targetIds.length || !newName || !targetCategory) {
-    return res.status(400).json({ error: "Missing required bundling parameters" });
-  }
-
-  try {
-    const client = getAuthenticatedClient(req.session.tokens);
-    const sheets = google.sheets({ version: "v4", auth: client });
-
-    const metadata = await sheets.spreadsheets.get({ spreadsheetId });
-    const auctionItemsSheet = metadata.data.sheets?.find(s => s.properties?.title === "Auction-Items");
-    if (!auctionItemsSheet) throw new Error("Target sheet 'Auction-Items' not found");
-
-    const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Categories!A:C" });
-    const baseNumbers: Record<string, number> = {};
-    (catSearch.data.values || []).slice(1).forEach(row => {
-      const catName = (row[0] || "").toString().trim();
-      const catBase = parseInt(row[1] || row[2] || "0", 10) || 0;
-      if (catName) {
-        baseNumbers[catName] = catBase || getCategoryBase(catName);
-      }
-    });
-
-    const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:L" });
-    const values = dataRes.data.values || [];
-    const ts = timestamp || new Date().toLocaleString('en-US', { hour12: false }).replace(/\//g, '-');
-    const bundleEventToken = "BND-" + ts.replace(/[^0-9]/g, '');
-    
-    const rowsToUpdate: any[] = [];
-    const originalNames: string[] = [];
-    let totalValue = 0;
-    const originalDonors: string[] = [];
-    const originalItemTypes: string[] = [];
-
-    const targetSet = new Set(targetIds.map((id: string) => id.toString()));
-    for (let i = 1; i < values.length; i++) {
-      const row = values[i] || [];
-      const id = row[0]?.toString();
-      if (id && targetSet.has(id)) {
-        originalNames.push(row[2] || "Unknown");
-        totalValue += parseFloat((row[4] || "0").replace(/[^0-9.-]+/g, "")) || 0;
-        if (row[7]) originalDonors.push(row[7]);
-        if (row[8]) originalItemTypes.push(row[8]);
-        
-        row[0] = ""; 
-        row[9] = "Inactive"; 
-        row[10] = bundleEventToken;
-        row[11] = ts;
-      }
-    }
-
-    const startBase = baseNumbers[targetCategory] || getCategoryBase(targetCategory);
-    let nextId = startBase;
-    for (let i = 1; i < values.length; i++) {
-      const row = values[i] || [];
-      if (row[1] === targetCategory && row[9] === "Active") {
-        const idNum = parseInt(row[0], 10);
-        if (!isNaN(idNum) && idNum >= nextId) nextId = idNum + 1;
-      }
-    }
-    const tempBundleId = nextId.toString();
-
-    const donorString = Array.from(new Set(originalDonors)).join(" / ");
-    
-    // Type logic
-    const uniqueTypes = Array.from(new Set(originalItemTypes));
-    let finalType = "Both";
-    if (uniqueTypes.length === 1) finalType = uniqueTypes[0];
-
-    const openingBid = "$" + (Math.ceil((totalValue * 0.4) / 5) * 5).toFixed(0);
-    const minRaise = "$" + (Math.ceil((totalValue * 0.1) / 5) * 5).toFixed(0);
-    const valString = "$" + totalValue.toFixed(0);
-
-    const newRow = [
-      tempBundleId, targetCategory, newName, newDescription, valString, openingBid, minRaise, donorString, finalType, "Active", bundleEventToken, ""
-    ];
-    values.push(newRow);
-
-    const affectedCategories = new Set<string>();
-    affectedCategories.add(targetCategory);
-    for (let i = 1; i < values.length; i++) {
-      const row = values[i] || [];
-      if (row[10] === bundleEventToken && row[9] === "Inactive") {
-        affectedCategories.add(row[1]);
-      }
-    }
-
-    for (const cat of affectedCategories) {
-      const rowMapping: {origIndex: number, row: any[]}[] = [];
-      for (let i = 1; i < values.length; i++) {
-        const row = values[i] || [];
-        if (row[1] === cat && row[9] === "Active" && row[0] !== "") {
-          rowMapping.push({ origIndex: i, row });
-        }
-      }
-      rowMapping.sort((a, b) => {
-        const idA = parseInt(a.row[0]) || 999999;
-        const idB = parseInt(b.row[0]) || 999999;
-        return idA - idB;
-      });
-      const startNum = baseNumbers[cat] || getCategoryBase(cat);
-      let runningNum = startNum;
-      rowMapping.forEach(item => { item.row[0] = runningNum.toString(); runningNum++; });
-    }
-
-    await sheets.spreadsheets.values.update({
-      spreadsheetId, range: "Auction-Items!A1:L", valueInputOption: "USER_ENTERED", requestBody: { values }
-    });
-
-    const responsePayload = {
-      action_executed: "BUNDLE_ITEMS",
-      affected_categories: Array.from(affectedCategories),
-      ui_history_log: { 
-        bundle_token: bundleEventToken, 
-        timestamp: ts, 
-        bundle_item_name: newName, 
-        original_item_names: originalNames 
-      },
-      rows_to_update: values.map((row, i) => ({
-        row_index: i + 1,
-        column_updates: { A: row[0], J: row[9], K: row[10], L: row[11] }
-      }))
-    };
-    saveIdempotency(idempotencyKey, responsePayload);
-    res.json(responsePayload);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
+...
 });
+*/
 
 app.post("/api/bundle/restore", async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: "Unauthorized" });
