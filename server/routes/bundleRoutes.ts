@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import { getAuthenticatedClient } from '../utils/auth';
 import { getCategoryBase } from '../utils/categoryHelpers';
 import { checkIdempotency, saveIdempotency } from '../utils/idempotency';
+import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 
 export default function createBundleRouter(genAI: GoogleGenAI) {
   const router = Router();
@@ -123,6 +124,7 @@ export default function createBundleRouter(genAI: GoogleGenAI) {
       values.push([nextId.toString(), targetCategory, newName, newDescription, "$" + totalValue.toFixed(0), "$", "$", Array.from(new Set(originalDonors)).join(" / "), originalItemTypes.length === 1 ? originalItemTypes[0] : "Both", "Active", bundleEventToken, ""]);
 
       await sheets.spreadsheets.values.update({ spreadsheetId, range: "Auction-Items!A1:L", valueInputOption: "USER_ENTERED", requestBody: { values } });
+      clearCacheForSpreadsheet(spreadsheetId);
 
       const responsePayload = { action_executed: "BUNDLE_ITEMS", ui_history_log: { bundle_token: bundleEventToken, timestamp: ts, bundle_item_name: newName, original_item_names: originalNames } };
       saveIdempotency(idempotencyKey, responsePayload);
@@ -165,6 +167,7 @@ export default function createBundleRouter(genAI: GoogleGenAI) {
       }
       
       await sheets.spreadsheets.values.update({ spreadsheetId, range: "Auction-Items!A1:L", valueInputOption: "USER_ENTERED", requestBody: { values } });
+      clearCacheForSpreadsheet(spreadsheetId);
       res.json({ success: true });
     } catch (error) {
       next(error);

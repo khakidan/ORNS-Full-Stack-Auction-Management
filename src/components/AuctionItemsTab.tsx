@@ -654,10 +654,18 @@ export default function AuctionItemsTab() {
 
     const previousItems = [...items];
 
+    let finalValueToSave = value;
+    if (field === 'value' && value) {
+      const parsedNum = parseDollar(value);
+      if (parsedNum > 0) {
+        finalValueToSave = `$${parsedNum.toFixed(2)}`;
+      }
+    }
+
     // Optimistic update
     setItems((prev) => 
       prev.map((item) => 
-        item.rowIndex === rowIndex ? { ...item, [field]: value } : item
+        item.rowIndex === rowIndex ? { ...item, [field]: finalValueToSave } : item
       )
     );
 
@@ -667,18 +675,30 @@ export default function AuctionItemsTab() {
     let raise = "";
 
     if (field === 'value') {
-      const calculated = calculateAutoBids(value);
+      const calculated = calculateAutoBids(finalValueToSave);
       opening = calculated.opening;
       raise = calculated.raise;
 
       const currentOpening = targetItem.openingBid;
       const currentRaise = targetItem.minRaise;
 
-      if (opening && (!currentOpening || currentOpening.trim() === '')) {
+      const isOpeningEmpty = !currentOpening || 
+                             currentOpening.trim() === '' || 
+                             currentOpening.trim() === '$' || 
+                             currentOpening.trim() === '$,' || 
+                             currentOpening.trim() === '$, ';
+                             
+      const isRaiseEmpty = !currentRaise || 
+                           currentRaise.trim() === '' || 
+                           currentRaise.trim() === '$' || 
+                           currentRaise.trim() === '$,' || 
+                           currentRaise.trim() === '$, ';
+
+      if (opening && isOpeningEmpty) {
         setItems(p => p.map(i => i.rowIndex === rowIndex ? { ...i, openingBid: opening } : i));
         updateOpening = true;
       }
-      if (raise && (!currentRaise || currentRaise.trim() === '')) {
+      if (raise && isRaiseEmpty) {
         setItems(p => p.map(i => i.rowIndex === rowIndex ? { ...i, minRaise: raise } : i));
         updateRaise = true;
       }
@@ -709,12 +729,12 @@ export default function AuctionItemsTab() {
     }
 
     // Background sync
-    const syncOperations = [updateSheetData(spreadsheetId, `Auction-Items!${colLetter}${rowIndex}`, [[value]])];
+    const syncOperations = [updateSheetData(spreadsheetId, `Auction-Items!${colLetter}${rowIndex}`, [[finalValueToSave]])];
     if (updateOpening) {
-      syncOperations.push(updateSheetData(spreadsheetId, `Auction-Items!G${rowIndex}`, [[opening]]));
+      syncOperations.push(updateSheetData(spreadsheetId, `Auction-Items!F${rowIndex}`, [[opening]]));
     }
     if (updateRaise) {
-      syncOperations.push(updateSheetData(spreadsheetId, `Auction-Items!H${rowIndex}`, [[raise]]));
+      syncOperations.push(updateSheetData(spreadsheetId, `Auction-Items!G${rowIndex}`, [[raise]]));
     }
 
     Promise.all(syncOperations)

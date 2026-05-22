@@ -4,13 +4,12 @@ import { GoogleGenAI } from '@google/genai';
 import { getAuthenticatedClient } from '../utils/auth';
 import { performSheetSync } from '../services/syncService';
 import { getCategoryBase } from '../utils/categoryHelpers';
+import { sheetCache, CACHE_TTL, clearCacheForSpreadsheet } from '../utils/sheetCache';
 
 export default function createDataRouter(genAI: GoogleGenAI) {
   const router = Router();
   
-  // Sheet API Cache
-  const sheetCache = new Map<string, { data: any, timestamp: number }>();
-  const CACHE_TTL = 5000; // 5 seconds cache
+  // Sheet API Cache is now imported from shared utils/sheetCache
 
   // Sync bidders via Node.js Google Sheets integration
   router.post("/bidders/sync", async (req: Request, res: Response, next: NextFunction) => {

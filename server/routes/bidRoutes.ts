@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../utils/auth';
 import { checkIdempotency, saveIdempotency } from '../utils/idempotency';
 import { executeGoogleSheetsTransaction, SheetOp } from '../services/sheetsService';
+import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 
 export default function createBidRouter() {
   const router = Router();
@@ -131,6 +132,7 @@ export default function createBidRouter() {
       }
 
       await executeGoogleSheetsTransaction(sheets, operations);
+      clearCacheForSpreadsheet(spreadsheetId);
 
       const result = { success: true, followUpAdded };
       saveIdempotency(idempotencyKey, result);
@@ -215,8 +217,13 @@ export default function createBidRouter() {
           newValues: [["Paid"]]
         });
         await executeGoogleSheetsTransaction(sheets, operations);
+        if (ticketsSpreadsheetId) {
+          clearCacheForSpreadsheet(ticketsSpreadsheetId);
+        }
         attendeeUpdated = true;
       }
+
+      clearCacheForSpreadsheet(spreadsheetId);
 
       const result = { success: true, attendeeUpdated };
       saveIdempotency(idempotencyKey, result);
@@ -299,6 +306,8 @@ export default function createBidRouter() {
           }
         });
       }
+
+      clearCacheForSpreadsheet(spreadsheetId);
 
       res.json({ success: true, count: updates.length });
     } catch (error: any) {

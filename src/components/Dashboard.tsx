@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Users, ShoppingBag, TrendingUp, UserCheck, Trophy, Loader2, AlertCircle, Clock, ExternalLink, RefreshCw } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getSheetData, updateSheetData } from "@/lib/google-api";
+import { getSheetData, updateSheetData, appendSheetData } from "@/lib/google-api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -87,6 +87,10 @@ export default function Dashboard() {
     setSavingGiftCard(true);
     try {
       await updateSheetData(spreadsheetId, "Special-Winners!B2", [[giftCardWinnerId]]);
+      if (bidder?.checkedOut) {
+        await appendSheetData(spreadsheetId, "Follow-Up!A:C", [[giftCardWinnerId, "$500 Amazon Gift Card", ""]]);
+        fetchFollowUpRecords();
+      }
       toast.success("Updated $500 Amazon Gift Card winner");
     } catch (err: any) {
       toast.error("Failed to save winner: " + (err.message || "Unknown error"));
@@ -121,6 +125,10 @@ export default function Dashboard() {
     setSavingRaffle(true);
     try {
       await updateSheetData(spreadsheetId, "Special-Winners!B3", [[raffleWinnerId]]);
+      if (bidder?.checkedOut) {
+        await appendSheetData(spreadsheetId, "Follow-Up!A:C", [[raffleWinnerId, "50/50 Raffle", ""]]);
+        fetchFollowUpRecords();
+      }
       toast.success("Updated 50/50 Raffle winner");
     } catch (err: any) {
       toast.error("Failed to save winner: " + (err.message || "Unknown error"));
