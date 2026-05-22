@@ -57,10 +57,13 @@ export default function TicketDocumentCreationTab() {
 
     try {
       toast.loading(`Running ${label}...`, { id: functionName });
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/script/run`, {
+      
+      const endpoint = "/api/production/tickets/bidder-labels";
+      
+      const res = await fetchWithRetry(`${getBaseUrl()}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ functionName, parameters: [forPrintFolderId], scriptId })
+        body: JSON.stringify({ scriptId })
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);

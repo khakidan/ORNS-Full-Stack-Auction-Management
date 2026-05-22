@@ -55,12 +55,29 @@ export default function DocumentCreationTab() {
       return;
     }
 
+    const endpointMap: Record<string, string> = {
+      apiCreateBundlingDoc: "/api/production/item-entry/bundling-doc",
+      apiCreateItemLabels: "/api/production/item-entry/item-labels",
+      apiCreateSlideshow: "/api/production/item-entry/slideshow",
+      apiCreateBiddingGuideCoverPage: "/api/production/item-entry/bidding-guide-cover",
+      apiCreateBiddingGuideInnerPages: "/api/production/item-entry/bidding-guide-inner",
+      apiCreateBidSheets: "/api/production/item-entry/bid-sheets",
+      apiCreateCatalog: "/api/production/item-entry/catalog",
+      apiCreateTableTents: "/api/production/item-entry/table-tents"
+    };
+
+    const endpoint = endpointMap[functionName];
+    if (!endpoint) {
+      toast.error(`Unknown function map: ${functionName}`);
+      return;
+    }
+
     try {
       toast.loading(`Running ${label}...`, { id: functionName });
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/script/run`, {
+      const res = await fetchWithRetry(`${getBaseUrl()}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ functionName, parameters: [config.forPrintFolderId], scriptId })
+        body: JSON.stringify({ folderId: config.forPrintFolderId, scriptId })
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);

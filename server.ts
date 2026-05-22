@@ -27,6 +27,7 @@ import createBundleRouter from './server/routes/bundleRoutes';
 import createSetupRouter from './server/routes/setupRoutes';
 import createBidRouter from './server/routes/bidRoutes';
 import createDataRouter from './server/routes/dataRoutes';
+import createProductionRouter from './server/routes/productionRoutes';
 
 import { errorHandler } from './server/middleware/errorHandler';
 
@@ -133,6 +134,7 @@ app.use("/api/health", healthRouter);
 app.use(authRoutes);
 app.use("/api/receipts", createReceiptsRouter());
 app.use("/api/auction", createSetupRouter());
+app.use("/api/production", createProductionRouter());
 app.use("/api/bundle", createBundleRouter(genAI));
 app.use("/api", createBidRouter());
 app.use("/api", createDataRouter(genAI));

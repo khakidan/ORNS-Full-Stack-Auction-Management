@@ -22,7 +22,7 @@ export default function createReceiptsRouter() {
         scriptId,
         requestBody: {
           function: "apiCreateIndividualReceipt",
-          parameters: [String(bidderId), !!emailReceipt, receiptFolderId || ""],
+          parameters: [String(bidderId), !!emailReceipt],
           devMode: true,
         },
       });
@@ -52,7 +52,7 @@ export default function createReceiptsRouter() {
         scriptId,
         requestBody: {
           function: "apiCreateAllReceipts",
-          parameters: [receiptFolderId || ""],
+          parameters: [],
           devMode: true,
         },
       });
