@@ -32,7 +32,7 @@ export default function createBidRouter() {
       // 1. Get Bidder Info (to check if already checked out)
       const bidderSearch = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${bidderNumbersSheet}!A:G`,
+        range: `'${bidderNumbersSheet}'!A:G`,
       });
       const biddersRows = bidderSearch.data.values || [];
       const bidderRow = biddersRows.find((row: any) => row[0]?.toString() === bidderId);
@@ -46,7 +46,7 @@ export default function createBidRouter() {
       // 2. Add Bid to Bid-Management Sheet
       const dataRes = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${bidManagementSheet}!1:300`,
+        range: `'${bidManagementSheet}'!1:300`,
       });
       const values = dataRes.data.values || [];
       if (values.length === 0) throw new Error("Bid sheet is empty");
@@ -246,7 +246,7 @@ export default function createBidRouter() {
       // 1. Close Auction
       await sheets.spreadsheets.values.update({
         spreadsheetId,
-        range: "Auction-Status!A2",
+        range: "'Auction-Status'!A2",
         valueInputOption: "USER_ENTERED",
         requestBody: { values: [[false]] }
       });
@@ -254,14 +254,14 @@ export default function createBidRouter() {
       // 2. Read Bidders
       const biddersRes = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${bidderNumbersSheet}!A:H`
+        range: `'${bidderNumbersSheet}'!A:H`
       });
       const bidderRows = biddersRes.data.values || [];
 
       // 3. Read Winners (to find out who won anything)
       const bidRes = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${bidManagementSheet}!A:ZZ`
+        range: `'${bidManagementSheet}'!A:ZZ`
       });
       const bidRows = bidRes.data.values || [];
       
@@ -291,7 +291,7 @@ export default function createBidRouter() {
         
         if (id && !checkedOut && !winnersSet.has(id)) {
           updates.push({
-            range: `${bidderNumbersSheet}!G${i + 1}:H${i + 1}`,
+            range: `'${bidderNumbersSheet}'!G${i + 1}:H${i + 1}`,
             values: [[true, true]] 
           });
         }
@@ -355,7 +355,7 @@ export default function createBidRouter() {
         // Verify we can access/append to this range
         await sheets.spreadsheets.values.get({
           spreadsheetId: ticketsSpreadsheetId,
-          range: `${targetSheetName}!A1`, 
+          range: `'${targetSheetName}'!A1`, 
         });
       }
 
@@ -375,7 +375,7 @@ export default function createBidRouter() {
       // Step B: Calculate new Bidder ID
       const bdData = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${bidderNumbersSheet}!A:A`
+        range: `'${bidderNumbersSheet}'!A:A`
       });
       const bdRows = bdData.data.values || [];
       const formatName = (str: string) => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : '';
@@ -391,7 +391,7 @@ export default function createBidRouter() {
       // Step C: Find last column in Bid-Management
       const bmData = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${bidManagementSheet}!1:5`
+        range: `'${bidManagementSheet}'!1:5`
       });
       
       let maxCols = 0;
@@ -583,7 +583,7 @@ export default function createBidRouter() {
       // 1. Add Bid to Bid-Management Sheet
       const dataRes = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${bidManagementSheet}!1:300`,
+        range: `'${bidManagementSheet}'!1:300`,
       });
       const values = dataRes.data.values || [];
       if (values.length === 0) throw new Error("Bid sheet is empty");
@@ -626,14 +626,14 @@ export default function createBidRouter() {
       operations.push({
         type: 'UPDATE',
         spreadsheetId,
-        range: `${bidManagementSheet}!${colLetter}${rowIndex}:${nextColLetter}${rowIndex}`,
+        range: `'${bidManagementSheet}'!${colLetter}${rowIndex}:${nextColLetter}${rowIndex}`,
         newValues: [["1606", bidValue]]
       });
 
       // 2. Mark Checked In in Bidder Numbers Sheet
       const bidderSearch = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${bidderNumbersSheet}!A:A`,
+        range: `'${bidderNumbersSheet}'!A:A`,
       });
       const biddersRows = bidderSearch.data.values || [];
       const bidderRowIndex = biddersRows.findIndex((row: any) => row[0]?.toString() === bidderId) + 1;
@@ -642,7 +642,7 @@ export default function createBidRouter() {
         operations.push({
           type: 'UPDATE',
           spreadsheetId,
-          range: `${bidderNumbersSheet}!E${bidderRowIndex}`,
+          range: `'${bidderNumbersSheet}'!E${bidderRowIndex}`,
           newValues: [[true]]
         });
       }

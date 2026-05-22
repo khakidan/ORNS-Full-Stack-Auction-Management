@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { google } from 'googleapis';
-import { GoogleGenAI } from '@google/genai';
 import { getAuthenticatedClient } from '../utils/auth';
 import { getCategoryBase } from '../utils/categoryHelpers';
 import { checkIdempotency, saveIdempotency } from '../utils/idempotency';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
+import { genAI } from '../services/genai';
 
-export default function createBundleRouter(genAI: GoogleGenAI) {
+export default function createBundleRouter() {
   const router = Router();
 
   router.post("/suggest-names", async (req, res, next) => {
@@ -67,7 +67,22 @@ export default function createBundleRouter(genAI: GoogleGenAI) {
   router.post("/process", async (req, res, next) => {
     if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
 
-    const { spreadsheetId, targetIds, newName, newDescription, targetCategory, timestamp, idempotencyKey } = req.body;
+    const { 
+      spreadsheetId, 
+      targetIds, 
+      newName, 
+      newDescription, 
+      targetCategory, 
+      value, 
+      openingBid, 
+      minRaise, 
+      donor, 
+      itemType, 
+      bundleEventToken: clientBundleToken, 
+      timestamp, 
+      idempotencyKey 
+    } = req.body;
+
     const cached = checkIdempotency(req, res, idempotencyKey);
     if (cached) return;
 
@@ -82,22 +97,36 @@ export default function createBundleRouter(genAI: GoogleGenAI) {
       const metadata = await sheets.spreadsheets.get({ spreadsheetId });
       if (!metadata.data.sheets?.find(s => s.properties?.title === "Auction-Items")) throw new Error("Target sheet 'Auction-Items' not found");
 
-      const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Categories!A:C" });
+       const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Categories'!A:C" });
       const baseNumbers: Record<string, number> = {};
       (catSearch.data.values || []).slice(1).forEach(row => {
         const catName = (row[0] || "").toString().trim();
         if (catName) baseNumbers[catName] = parseInt(row[1] || row[2] || "0", 10) || getCategoryBase(catName);
       });
 
-      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:L" });
+      const calcSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Value Calculations'!A:B" }).catch(() => null);
+      const valueCalculations: { minRange: number; minRaise: number }[] = [];
+      if (calcSearch && calcSearch.data.values && calcSearch.data.values.length > 1) {
+        calcSearch.data.values.slice(1).forEach((row: any[]) => {
+          const minRange = parseFloat(row[0]?.toString().replace(/[^0-9.-]+/g, "") || "0");
+          const minRaiseVal = parseFloat(row[1]?.toString().replace(/[^0-9.-]+/g, "") || "0");
+          if (!isNaN(minRange) && !isNaN(minRaiseVal) && minRaiseVal > 0) {
+            valueCalculations.push({ minRange, minRaise: minRaiseVal });
+          }
+        });
+      }
+
+      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:L" });
       const values = dataRes.data.values || [];
       const ts = timestamp || new Date().toLocaleString('en-US', { hour12: false }).replace(/\//g, '-');
-      const bundleEventToken = "BND-" + ts.replace(/[^0-9]/g, '');
+      const bundleEventToken = clientBundleToken || ("BND-" + ts.replace(/[^0-9]/g, ''));
       
       let totalValue = 0;
       const originalNames: string[] = [];
       const originalDonors: string[] = [];
       const originalItemTypes: string[] = [];
+      const affectedCategories = new Set<string>();
+      affectedCategories.add(targetCategory);
 
       const targetSet = new Set(targetIds.map((id: string) => id.toString()));
       for (let i = 1; i < values.length; i++) {
@@ -108,22 +137,92 @@ export default function createBundleRouter(genAI: GoogleGenAI) {
           if (row[7]) originalDonors.push(row[7]);
           if (row[8]) originalItemTypes.push(row[8]);
           
+          const origCategory = row[1];
+          if (origCategory) affectedCategories.add(origCategory);
+          
           row[0] = ""; row[9] = "Inactive"; row[10] = bundleEventToken; row[11] = ts;
         }
       }
 
-      let nextId = baseNumbers[targetCategory] || getCategoryBase(targetCategory);
-      for (let i = 1; i < values.length; i++) {
-        const row = values[i] || [];
-        if (row[1] === targetCategory && row[9] === "Active") {
-          const idNum = parseInt(row[0], 10);
-          if (!isNaN(idNum) && idNum >= nextId) nextId = idNum + 1;
+      // Calculate or clean values
+      const parsedValue = value ? parseFloat(value.replace(/[^0-9.-]+/g, "")) : totalValue;
+      const finalValueStr = parsedValue > 0 ? `$${parsedValue.toFixed(2)}` : "";
+      
+      const cleanOpeningBid = openingBid ? openingBid : (parsedValue > 0 ? `$${(parsedValue * 0.45).toFixed(2)}` : "");
+      
+      // Enforce calculating minimum raise based purely on the new total value and established rules
+      let cleanMinRaise = "";
+      if (parsedValue > 0) {
+        let calculatedRaise = 5;
+        if (valueCalculations.length > 0) {
+          const sorted = [...valueCalculations].sort((a, b) => a.minRange - b.minRange);
+          for (const tier of sorted) {
+            if (parsedValue >= tier.minRange) {
+              calculatedRaise = tier.minRaise;
+            }
+          }
+        } else {
+          if (parsedValue < 150) calculatedRaise = 5;
+          else if (parsedValue < 300) calculatedRaise = 10;
+          else if (parsedValue < 450) calculatedRaise = 15;
+          else if (parsedValue < 600) calculatedRaise = 20;
+          else if (parsedValue < 750) calculatedRaise = 30;
+          else if (parsedValue < 900) calculatedRaise = 40;
+          else calculatedRaise = 50;
         }
+        cleanMinRaise = `$${calculatedRaise.toFixed(2)}`;
       }
 
-      values.push([nextId.toString(), targetCategory, newName, newDescription, "$" + totalValue.toFixed(0), "$", "$", Array.from(new Set(originalDonors)).join(" / "), originalItemTypes.length === 1 ? originalItemTypes[0] : "Both", "Active", bundleEventToken, ""]);
+      // If cleanMinRaise is not set or if there's any fallback required, ensure we default to $5.00
+      if (!cleanMinRaise) {
+        cleanMinRaise = "$5.00";
+      }
 
-      await sheets.spreadsheets.values.update({ spreadsheetId, range: "Auction-Items!A1:L", valueInputOption: "USER_ENTERED", requestBody: { values } });
+      const finalDonor = donor || Array.from(new Set(originalDonors)).join(" / ");
+      const finalItemType = itemType || (originalItemTypes.length === 1 ? originalItemTypes[0] : "Both");
+
+      values.push([
+        "TEMP", 
+        targetCategory, 
+        newName, 
+        newDescription || "", 
+        finalValueStr, 
+        cleanOpeningBid, 
+        cleanMinRaise, 
+        finalDonor, 
+        finalItemType, 
+        "Active", 
+        bundleEventToken, 
+        ""
+      ]);
+
+      // Run Re-Sequencing Cleanup for the affected categories to compute and guarantee gap-free IDs
+      for (const cat of affectedCategories) {
+        if (!cat) continue;
+        const rowMapping: { origIndex: number, row: any[] }[] = [];
+        for (let i = 1; i < values.length; i++) {
+          const r = values[i] || [];
+          if (r[1] === cat && r[9] === "Active") {
+            rowMapping.push({ origIndex: i, row: r });
+          }
+        }
+
+        rowMapping.sort((a, b) => {
+          const idA = a.row[0] === "TEMP" ? 999999 : (parseInt(a.row[0]) || 999999);
+          const idB = b.row[0] === "TEMP" ? 999999 : (parseInt(b.row[0]) || 999999);
+          if (idA !== idB) return idA - idB;
+          return a.origIndex - b.origIndex;
+        });
+
+        const startNum = baseNumbers[cat] || getCategoryBase(cat);
+        let runningNum = startNum;
+        rowMapping.forEach(item => {
+          item.row[0] = runningNum.toString();
+          runningNum++;
+        });
+      }
+
+      await sheets.spreadsheets.values.update({ spreadsheetId, range: "'Auction-Items'!A1:L", valueInputOption: "USER_ENTERED", requestBody: { values } });
       clearCacheForSpreadsheet(spreadsheetId);
 
       const responsePayload = { action_executed: "BUNDLE_ITEMS", ui_history_log: { bundle_token: bundleEventToken, timestamp: ts, bundle_item_name: newName, original_item_names: originalNames } };
@@ -147,28 +246,76 @@ export default function createBundleRouter(genAI: GoogleGenAI) {
       const client = getAuthenticatedClient(req.session.tokens);
       const sheets = google.sheets({ version: "v4", auth: client });
 
-      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:L" });
+      const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Categories'!A:C" });
+      const baseNumbers: Record<string, number> = {};
+      (catSearch.data.values || []).slice(1).forEach(row => {
+        const catName = (row[0] || "").toString().trim();
+        if (catName) baseNumbers[catName] = parseInt(row[1] || row[2] || "0", 10) || getCategoryBase(catName);
+      });
+
+      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:L" });
       const values = dataRes.data.values || [];
       
+      const affectedCategories = new Set<string>();
       let bundleRowFound = false;
       for (let i = 1; i < values.length; i++) {
         const row = values[i] || [];
         if (row[10]?.toString() === targetBundleToken?.toString() && row[9] === "Active") {
+          const cat = row[1];
+          if (cat) affectedCategories.add(cat);
           row[0] = ""; row[9] = "Inactive"; row[10] = ""; bundleRowFound = true; break; 
         }
       }
       if (!bundleRowFound) return res.status(404).json({ error: "Active bundle not found" });
 
+      const originalNames: string[] = [];
       for (let i = 1; i < values.length; i++) {
         const row = values[i] || [];
         if (row[10]?.toString() === targetBundleToken?.toString() && row[9] === "Inactive") {
+          const cat = row[1];
+          if (cat) affectedCategories.add(cat);
+          if (row[2]) originalNames.push(row[2]);
           row[9] = "Active"; row[10] = ""; row[11] = "";       
         }
       }
+
+      // Run Re-Sequencing Cleanup for the affected categories to compute and guarantee gap-free IDs
+      for (const cat of affectedCategories) {
+        if (!cat) continue;
+        const rowMapping: { origIndex: number, row: any[] }[] = [];
+        for (let i = 1; i < values.length; i++) {
+          const r = values[i] || [];
+          if (r[1] === cat && r[9] === "Active") {
+            rowMapping.push({ origIndex: i, row: r });
+          }
+        }
+
+        rowMapping.sort((a, b) => {
+          const idA = a.row[0] === "TEMP" ? 999999 : (parseInt(a.row[0]) || 999999);
+          const idB = b.row[0] === "TEMP" ? 999999 : (parseInt(b.row[0]) || 999999);
+          if (idA !== idB) return idA - idB;
+          return a.origIndex - b.origIndex;
+        });
+
+        const startNum = baseNumbers[cat] || getCategoryBase(cat);
+        let runningNum = startNum;
+        rowMapping.forEach(item => {
+          item.row[0] = runningNum.toString();
+          runningNum++;
+        });
+      }
       
-      await sheets.spreadsheets.values.update({ spreadsheetId, range: "Auction-Items!A1:L", valueInputOption: "USER_ENTERED", requestBody: { values } });
+      await sheets.spreadsheets.values.update({ spreadsheetId, range: "'Auction-Items'!A1:L", valueInputOption: "USER_ENTERED", requestBody: { values } });
       clearCacheForSpreadsheet(spreadsheetId);
-      res.json({ success: true });
+      
+      const responsePayload = {
+        success: true,
+        ui_history_log: {
+          original_item_names: originalNames
+        }
+      };
+      saveIdempotency(idempotencyKey, responsePayload);
+      res.json(responsePayload);
     } catch (error) {
       next(error);
     }

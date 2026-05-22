@@ -1,4 +1,5 @@
 import { sheets_v4 } from 'googleapis';
+import { normalizeRange } from '../utils/rangeUtils';
 
 export interface SheetOp {
   spreadsheetId: string;
@@ -17,21 +18,22 @@ export async function executeGoogleSheetsTransaction(
   
   // Phase 1: Stage and Verify Targets
   for (const op of operations) {
+    const normalizedRange = normalizeRange(op.range);
     try {
       if (op.type === 'UPDATE') {
         const res = await sheets.spreadsheets.values.get({
           spreadsheetId: op.spreadsheetId,
-          range: op.range,
+          range: normalizedRange,
         });
-        stagedOps.push({ ...op, oldValues: res.data.values || [] });
+        stagedOps.push({ ...op, range: normalizedRange, oldValues: res.data.values || [] });
       } else if (op.type === 'APPEND') {
-        const rangeParts = op.range.split('!');
+        const rangeParts = normalizedRange.split('!');
         const sheetName = rangeParts[0];
         await sheets.spreadsheets.values.get({
           spreadsheetId: op.spreadsheetId,
           range: `${sheetName}!A1`, 
         });
-        stagedOps.push({ ...op });
+        stagedOps.push({ ...op, range: normalizedRange });
       }
     } catch (err: any) {
       throw new Error(`Transaction Staging Failed - Target not ready: ${op.spreadsheetId} ${op.range}. Error: ${err.message}`);

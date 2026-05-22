@@ -77,7 +77,7 @@ export default function createReceiptsRouter() {
       const client = getAuthenticatedClient(req.session.tokens);
       const sheets = google.sheets({ version: "v4", auth: client });
       
-      const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Bidder-Numbers!A:L" });
+      const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });
       const numData = bNum.data.values || [];
       let sentCount = 0;
       

@@ -382,11 +382,13 @@ export default function AuctionItemsTab() {
           }
         }
       } else {
-        if (v >= 1000) calculatedRaise = 50;
-        else if (v >= 500) calculatedRaise = 20;
-        else if (v >= 300) calculatedRaise = 15;
-        else if (v >= 150) calculatedRaise = 10;
-        else calculatedRaise = 5;
+        if (v < 150) calculatedRaise = 5;
+        else if (v < 300) calculatedRaise = 10;
+        else if (v < 450) calculatedRaise = 15;
+        else if (v < 600) calculatedRaise = 20;
+        else if (v < 750) calculatedRaise = 30;
+        else if (v < 900) calculatedRaise = 40;
+        else calculatedRaise = 50;
       }
       raise = `$${calculatedRaise.toFixed(2)}`;
     }
@@ -517,6 +519,9 @@ export default function AuctionItemsTab() {
       const selectedItems = items.filter(i => selectedRows[i.rowIndex]);
       const sourceRowIndices = selectedItems.map(i => i.rowIndex);
       
+      const ts = new Date().toLocaleString('en-US', { hour12: false }).replace(/\//g, '-');
+      const bundleEventToken = "BND-" + ts.replace(/[^0-9]/g, '');
+
       // Calculate nextId pessimistically just for UI immediate update
       const optimisticId = "Bundling...";
 
@@ -528,8 +533,8 @@ export default function AuctionItemsTab() {
           id: optimisticId,
           category: bundleDetails.category!,
           status: "Active",
-          bundleId: "",
-          bundledDateTime: "",
+          bundleId: bundleEventToken,
+          bundledDateTime: ts,
           name: bundleDetails.name!,
           description: bundleDetails.description || "",
           value: bundleDetails.value || "",
@@ -551,6 +556,12 @@ export default function AuctionItemsTab() {
           newName: bundleDetails.name,
           newDescription: bundleDetails.description,
           targetCategory: bundleDetails.category,
+          value: bundleDetails.value,
+          openingBid: bundleDetails.openingBid,
+          minRaise: bundleDetails.minRaise,
+          donor: bundleDetails.donor,
+          itemType: bundleDetails.itemType,
+          bundleEventToken,
           idempotencyKey
         })
       })
@@ -1305,7 +1316,19 @@ export default function AuctionItemsTab() {
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-bold">Total Value (Calculated)</Label>
-                <Input value={bundleDetails.value || ""} onChange={(e) => setBundleDetails({...bundleDetails, value: e.target.value})} />
+                <Input 
+                  value={bundleDetails.value || ""} 
+                  onChange={(e) => {
+                    const newVal = e.target.value;
+                    const { opening, raise } = calculateAutoBids(newVal);
+                    setBundleDetails(prev => ({
+                      ...prev,
+                      value: newVal,
+                      openingBid: opening,
+                      minRaise: raise
+                    }));
+                  }} 
+                />
               </div>
             </div>
 

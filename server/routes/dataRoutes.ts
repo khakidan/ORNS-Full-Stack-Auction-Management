@@ -1,12 +1,13 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { google } from 'googleapis';
-import { GoogleGenAI } from '@google/genai';
 import { getAuthenticatedClient } from '../utils/auth';
 import { performSheetSync } from '../services/syncService';
 import { getCategoryBase } from '../utils/categoryHelpers';
 import { sheetCache, CACHE_TTL, clearCacheForSpreadsheet } from '../utils/sheetCache';
+import { normalizeRange } from '../utils/rangeUtils';
+import { genAI } from '../services/genai';
 
-export default function createDataRouter(genAI: GoogleGenAI) {
+export default function createDataRouter() {
   const router = Router();
   
   // Sheet API Cache is now imported from shared utils/sheetCache
@@ -191,7 +192,7 @@ export default function createDataRouter(genAI: GoogleGenAI) {
       const sheets = google.sheets({ version: "v4", auth: client });
 
       // 1. Fetch categories for safe resequencing bases
-      const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Categories!A:C" });
+      const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Categories'!A:C" });
       const baseNumbers: Record<string, number> = {};
       (catSearch.data.values || []).slice(1).forEach(row => {
         const catName = (row[0] || "").toString().trim();
@@ -202,7 +203,7 @@ export default function createDataRouter(genAI: GoogleGenAI) {
       });
 
       // 2. Fetch the current sheet data
-      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:L" });
+      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:L" });
       const values = dataRes.data.values || [];
 
       if (values.length === 0) {
@@ -256,7 +257,7 @@ export default function createDataRouter(genAI: GoogleGenAI) {
       // 5. Update the entire sheet range to persist the new row and correct/gap-free IDs
       await sheets.spreadsheets.values.update({
         spreadsheetId,
-        range: "Auction-Items!A1:L",
+        range: "'Auction-Items'!A1:L",
         valueInputOption: "USER_ENTERED",
         requestBody: { values }
       });
@@ -290,7 +291,7 @@ export default function createDataRouter(genAI: GoogleGenAI) {
       const sheets = google.sheets({ version: "v4", auth: client });
 
       // 1. Fetch categories for safe resequencing
-      const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Categories!A:C" });
+      const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Categories'!A:C" });
       const baseNumbers: Record<string, number> = {};
       (catSearch.data.values || []).slice(1).forEach(row => {
         const catName = (row[0] || "").toString().trim();
@@ -301,7 +302,7 @@ export default function createDataRouter(genAI: GoogleGenAI) {
       });
 
       // 2. Fetch the current sheet data
-      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:L" });
+      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:L" });
       const values = dataRes.data.values || [];
 
       // 3. Mark the specified item as deleted
@@ -344,7 +345,7 @@ export default function createDataRouter(genAI: GoogleGenAI) {
       // 5. Update the spreadsheet with the modified row and any re-sequenced items
       await sheets.spreadsheets.values.update({
         spreadsheetId, 
-        range: "Auction-Items!A1:L", 
+        range: "'Auction-Items'!A1:L", 
         valueInputOption: "USER_ENTERED", 
         requestBody: { values }
       });
@@ -370,7 +371,7 @@ export default function createDataRouter(genAI: GoogleGenAI) {
       const sheets = google.sheets({ version: "v4", auth: client });
 
       // 1. Fetch categories for safe resequencing
-      const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Categories!A:C" });
+      const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Categories'!A:C" });
       const baseNumbers: Record<string, number> = {};
       (catSearch.data.values || []).slice(1).forEach(row => {
         const catName = (row[0] || "").toString().trim();
@@ -381,7 +382,7 @@ export default function createDataRouter(genAI: GoogleGenAI) {
       });
 
       // 2. Fetch current items
-      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:L" });
+      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:L" });
       const values = dataRes.data.values || [];
 
       if (!values[rowIndex - 1]) {
@@ -452,7 +453,7 @@ export default function createDataRouter(genAI: GoogleGenAI) {
       // Update the spreadsheet with the modified rows
       await sheets.spreadsheets.values.update({
         spreadsheetId, 
-        range: "Auction-Items!A1:L", 
+        range: "'Auction-Items'!A1:L", 
         valueInputOption: "USER_ENTERED", 
         requestBody: { values }
       });
@@ -478,7 +479,7 @@ export default function createDataRouter(genAI: GoogleGenAI) {
       const sheets = google.sheets({ version: "v4", auth: client });
 
       // Fetch categories and base numbers
-      const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Categories!A:C" });
+      const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Categories'!A:C" });
       const baseNumbers: Record<string, number> = {};
       (catSearch.data.values || []).slice(1).forEach(row => {
         const catName = (row[0] || "").toString().trim();
@@ -488,7 +489,7 @@ export default function createDataRouter(genAI: GoogleGenAI) {
         }
       });
 
-      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:L" });
+      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:L" });
       const values = dataRes.data.values || [];
 
       const fieldMapping: Record<string, number> = {
@@ -554,7 +555,7 @@ export default function createDataRouter(genAI: GoogleGenAI) {
 
       await sheets.spreadsheets.values.update({
         spreadsheetId, 
-        range: "Auction-Items!A1:L", 
+        range: "'Auction-Items'!A1:L", 
         valueInputOption: "USER_ENTERED", 
         requestBody: { values }
       });
@@ -571,11 +572,13 @@ export default function createDataRouter(genAI: GoogleGenAI) {
     if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
 
     const { spreadsheetId, range } = req.params;
-    const cacheKey = `${spreadsheetId}:${range}`;
+    const decodedRange = decodeURIComponent(range);
+    const normalizedRange = normalizeRange(decodedRange);
+    const cacheKey = `${spreadsheetId}:${normalizedRange}`;
     const cached = sheetCache.get(cacheKey);
 
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
-      console.log(`[Cache Hit] GET ${spreadsheetId} / ${range}`);
+      console.log(`[Cache Hit] GET ${spreadsheetId} / ${normalizedRange}`);
       return res.json(cached.data);
     }
 
@@ -585,7 +588,7 @@ export default function createDataRouter(genAI: GoogleGenAI) {
 
       const result = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range,
+        range: normalizedRange,
       });
       
       // Update cache
@@ -615,9 +618,40 @@ export default function createDataRouter(genAI: GoogleGenAI) {
       const client = getAuthenticatedClient(req.session.tokens);
       const sheets = google.sheets({ version: "v4", auth: client });
 
+      const decodedRange = decodeURIComponent(range);
+      const normalizedRange = normalizeRange(decodedRange);
+      const sheetName = decodedRange.split('!')[0];
+      const metadata = await sheets.spreadsheets.get({ spreadsheetId }).catch(() => null);
+      
+      if (metadata) {
+        const hasSheet = metadata.data.sheets?.some(s => s.properties?.title === sheetName);
+        if (!hasSheet) {
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: {
+              requests: [{
+                addSheet: {
+                  properties: { title: sheetName }
+                }
+              }]
+            }
+          });
+          if (sheetName === "Follow-Up") {
+            await sheets.spreadsheets.values.update({
+              spreadsheetId,
+              range: "'Follow-Up'!A1:C1",
+              valueInputOption: "USER_ENTERED",
+              requestBody: {
+                values: [["Bidder ID", "Item ID", "Amount"]]
+              }
+            });
+          }
+        }
+      }
+
       const result = await sheets.spreadsheets.values.update({
         spreadsheetId,
-        range,
+        range: normalizedRange,
         valueInputOption: "USER_ENTERED",
         requestBody: {
           values: req.body.values,
@@ -625,7 +659,7 @@ export default function createDataRouter(genAI: GoogleGenAI) {
       });
       
       // Invalidate cache for this sheet/range
-      const cacheKey = `${spreadsheetId}:${range}`;
+      const cacheKey = `${spreadsheetId}:${normalizedRange}`;
       sheetCache.delete(cacheKey);
       // Also invalidate any overlapping ranges (simplest is to clear all for this sheet)
       for (const key of sheetCache.keys()) {
@@ -652,9 +686,40 @@ export default function createDataRouter(genAI: GoogleGenAI) {
       const client = getAuthenticatedClient(req.session.tokens);
       const sheets = google.sheets({ version: "v4", auth: client });
 
+      const decodedRange = decodeURIComponent(range);
+      const normalizedRange = normalizeRange(decodedRange);
+      const sheetName = decodedRange.split('!')[0];
+      const metadata = await sheets.spreadsheets.get({ spreadsheetId }).catch(() => null);
+      
+      if (metadata) {
+        const hasSheet = metadata.data.sheets?.some(s => s.properties?.title === sheetName);
+        if (!hasSheet) {
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: {
+              requests: [{
+                addSheet: {
+                  properties: { title: sheetName }
+                }
+              }]
+            }
+          });
+          if (sheetName === "Follow-Up") {
+            await sheets.spreadsheets.values.update({
+              spreadsheetId,
+              range: "'Follow-Up'!A1:C1",
+              valueInputOption: "USER_ENTERED",
+              requestBody: {
+                values: [["Bidder ID", "Item ID", "Amount"]]
+              }
+            });
+          }
+        }
+      }
+
       const result = await sheets.spreadsheets.values.append({
         spreadsheetId,
-        range,
+        range: normalizedRange,
         valueInputOption: "USER_ENTERED",
         requestBody: {
           values: req.body.values,
@@ -686,9 +751,12 @@ export default function createDataRouter(genAI: GoogleGenAI) {
       const client = getAuthenticatedClient(req.session.tokens);
       const sheets = google.sheets({ version: "v4", auth: client });
 
+      const decodedRange = decodeURIComponent(range);
+      const normalizedRange = normalizeRange(decodedRange);
+
       const result = await sheets.spreadsheets.values.clear({
         spreadsheetId,
-        range,
+        range: normalizedRange,
       });
 
       // Invalidate cache for this sheet

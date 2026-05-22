@@ -1,19 +1,9 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { google } from "googleapis";
-import { GoogleGenAI } from "@google/genai";
 import cookieSession from "cookie-session";
 
-// Global resilient retry matrix for API calls
-google.options({
-  retryConfig: {
-    retry: 4,
-    retryDelay: 1000,
-    httpMethodsToRetry: ['GET', 'PUT', 'HEAD', 'OPTIONS', 'DELETE', 'POST', 'PATCH'],
-    statusCodesToRetry: [[100, 199], [429, 429], [500, 599]],
-  }
-});
+import "./server/services/google";
 
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
@@ -30,6 +20,9 @@ import createDataRouter from './server/routes/dataRoutes';
 import createProductionRouter from './server/routes/productionRoutes';
 
 import { errorHandler } from './server/middleware/errorHandler';
+import { cacheControl } from './server/middleware/cacheControl';
+import { cookiePolicy } from './server/middleware/cookiePolicy';
+import { tokenRestorer } from './server/middleware/tokenRestorer';
 
 declare global {
   namespace Express {
@@ -43,16 +36,6 @@ dotenv.config();
 
 const app = express();
 const PORT = 3000;
-
-// Gemini AI setup
-const genAI = new GoogleGenAI({ 
-  apiKey: process.env.GEMINI_API_KEY || "",
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
 
 // CORS configuration to allow Tauri app to talk to local server
 app.use(cors({
@@ -72,12 +55,7 @@ app.use(cors({
 app.use(express.json());
 
 // Global middleware to prevent caching (required for Firebase Hosting to preserve Set-Cookie)
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api/') || req.path.startsWith('/auth/')) {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  }
-  next();
-});
+app.use(cacheControl);
 
 app.set("trust proxy", 1);
 
@@ -93,41 +71,10 @@ app.use(
 );
 
 // Dynamic cookie settings middleware for proper iframe (AI Studio build site) and top-level tab sameSite settings
-app.use((req, res, next) => {
-  if (req.sessionOptions) {
-    const host = req.get("host") || "";
-    const isIframe = req.get("sec-fetch-dest") === "iframe" || host.includes("ais-dev-") || host.includes("ais-pre-");
-    
-    if (process.env.NODE_ENV === "production" && !host.includes("localhost")) {
-      req.sessionOptions.secure = true;
-      req.sessionOptions.sameSite = isIframe ? "none" : "lax";
-    } else {
-      req.sessionOptions.secure = false;
-      req.sessionOptions.sameSite = "lax";
-    }
-  }
-  next();
-});
+app.use(cookiePolicy);
 
 // Restore session tokens if present in client headers, bypassing cookie block restrictions
-app.use((req, res, next) => {
-  const tokenHeader = req.headers['x-google-tokens'];
-  if (tokenHeader && typeof tokenHeader === 'string') {
-    try {
-      const parsed = JSON.parse(tokenHeader);
-      if (parsed) {
-        if (!req.session) {
-          req.session = {};
-        }
-        req.session.tokens = parsed;
-        console.log(`[Token Restorer] Successfully restored tokens for ${req.path}`);
-      }
-    } catch (e) {
-      console.error("[Token Restorer] Failed to parse custom token header:", e);
-    }
-  }
-  next();
-});
+app.use(tokenRestorer);
 
 // Setup Base Routes (Mounting everything cleanly)
 app.use("/api/health", healthRouter);
@@ -135,9 +82,9 @@ app.use(authRoutes);
 app.use("/api/receipts", createReceiptsRouter());
 app.use("/api/auction", createSetupRouter());
 app.use("/api/production", createProductionRouter());
-app.use("/api/bundle", createBundleRouter(genAI));
+app.use("/api/bundle", createBundleRouter());
 app.use("/api", createBidRouter());
-app.use("/api", createDataRouter(genAI));
+app.use("/api", createDataRouter());
 
 // Environment strict validation on boot
 const requiredEnvVars = [

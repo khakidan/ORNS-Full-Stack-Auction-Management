@@ -86,9 +86,9 @@ export function createRawEmail(to: string, subject: string, htmlBody: string, fr
 
 export async function processEmail(client: any, spreadsheetId: string, bidderId: string) {
   const sheets = google.sheets({ version: "v4", auth: client });
-  const bMgmt = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Bid-Management!A1:ZZ1000" });
-  const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Bidder-Numbers!A:L" });
-  const aucItems = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Auction-Items!A:Z" });
+  const bMgmt = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bid-Management'!A1:ZZ1000" });
+  const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });
+  const aucItems = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:Z" });
 
   const numData = bNum.data.values || [];
   let email = '';

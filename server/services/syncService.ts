@@ -144,19 +144,19 @@ export async function performSheetSync(client: any, spreadsheetId: string, custo
   let sponsorRows: any[][] = [];
   
   try {
-    const tRes = await sheets.spreadsheets.values.get({ spreadsheetId: auctionTicketSheetsID, range: "tickets!A:S" });
+    const tRes = await sheets.spreadsheets.values.get({ spreadsheetId: auctionTicketSheetsID, range: "'tickets'!A:S" });
     ticketsRows = tRes.data.values || [];
   } catch (e) {
     console.warn("[Sync warnings] 'tickets' tab download bypassed or missing:", e);
   }
   try {
-    const sRes = await sheets.spreadsheets.values.get({ spreadsheetId: auctionTicketSheetsID, range: "staff tickets!A:C" });
+    const sRes = await sheets.spreadsheets.values.get({ spreadsheetId: auctionTicketSheetsID, range: "'staff tickets'!A:C" });
     staffRows = sRes.data.values || [];
   } catch (e) {
     console.warn("[Sync warnings] 'staff tickets' tab download bypassed or missing:", e);
   }
   try {
-    const spRes = await sheets.spreadsheets.values.get({ spreadsheetId: auctionTicketSheetsID, range: "sponsor tickets!A:C" });
+    const spRes = await sheets.spreadsheets.values.get({ spreadsheetId: auctionTicketSheetsID, range: "'sponsor tickets'!A:C" });
     sponsorRows = spRes.data.values || [];
   } catch (e) {
     console.warn("[Sync warnings] 'sponsor tickets' tab download bypassed or missing:", e);
@@ -414,7 +414,7 @@ export async function performSheetSync(client: any, spreadsheetId: string, custo
         console.log("[Sync Step 7] Reading sheet '" + targetSheetName + "'' from master catalog...");
         const impData = await sheets.spreadsheets.values.get({
           spreadsheetId: auctionImportSheetID,
-          range: targetSheetName + "!A:Z"
+          range: `'${targetSheetName}'!A:Z`
         });
         importRows = impData.data.values || [];
       }
