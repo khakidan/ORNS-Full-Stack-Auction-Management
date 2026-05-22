@@ -14,7 +14,6 @@ export default function TicketDocumentCreationTab() {
   const { isAuctionClosed } = useAuction();
   const { config } = useConfig();
   const spreadsheetId = config.auctionTicketsSpreadsheetId;
-  const scriptId = config.auctionTicketsScriptId;
   const forPrintFolderId = config.forPrintFolderId;
   
   const [files, setFiles] = useState<any[]>([]);
@@ -50,8 +49,8 @@ export default function TicketDocumentCreationTab() {
   }, [forPrintFolderId]);
 
   const runScript = async (functionName: string, label: string) => {
-    if (!spreadsheetId || !scriptId || spreadsheetId.includes("PASTE") || scriptId.includes("PASTE")) {
-      toast.error("Please correctly configure the Auction Tickets Spreadsheet ID and Script ID in Settings.");
+    if (!spreadsheetId || spreadsheetId.includes("PASTE")) {
+      toast.error("Please correctly configure the Auction Tickets Spreadsheet ID in Settings.");
       return;
     }
 
@@ -62,8 +61,7 @@ export default function TicketDocumentCreationTab() {
       
       const res = await fetchWithRetry(`${getBaseUrl()}${endpoint}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scriptId })
+        headers: { "Content-Type": "application/json" }
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);

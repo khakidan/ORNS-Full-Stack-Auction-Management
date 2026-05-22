@@ -9,10 +9,10 @@ export default function createReceiptsRouter() {
   router.post("/generate", async (req, res, next) => {
     if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
 
-    const { bidderId, emailReceipt, scriptId: bodyScriptId, receiptFolderId } = req.body;
-    const scriptId = bodyScriptId || process.env.GOOGLE_SCRIPT_ID;
+    const { bidderId, emailReceipt, receiptFolderId } = req.body;
+    const scriptId = process.env.SCRIPT_ID_BID_MANAGEMENT;
     
-    if (!scriptId) return res.status(500).json({ error: "GOOGLE_SCRIPT_ID not configured." });
+    if (!scriptId) return res.status(500).json({ error: "SCRIPT_ID_BID_MANAGEMENT not configured." });
 
     try {
       const client = getAuthenticatedClient(req.session.tokens);
@@ -39,10 +39,10 @@ export default function createReceiptsRouter() {
   router.post("/generate-all", async (req, res, next) => {
     if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
 
-    const { scriptId: bodyScriptId, receiptFolderId } = req.body;
-    const scriptId = bodyScriptId || process.env.GOOGLE_SCRIPT_ID;
+    const { receiptFolderId } = req.body;
+    const scriptId = process.env.SCRIPT_ID_BID_MANAGEMENT;
     
-    if (!scriptId) return res.status(500).json({ error: "GOOGLE_SCRIPT_ID not configured." });
+    if (!scriptId) return res.status(500).json({ error: "SCRIPT_ID_BID_MANAGEMENT not configured." });
 
     try {
       const client = getAuthenticatedClient(req.session.tokens);

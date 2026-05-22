@@ -139,6 +139,22 @@ app.use("/api/bundle", createBundleRouter(genAI));
 app.use("/api", createBidRouter());
 app.use("/api", createDataRouter(genAI));
 
+// Environment strict validation on boot
+const requiredEnvVars = [
+  "SESSION_SECRET",
+  "GEMINI_API_KEY",
+  "SCRIPT_ID_BID_MANAGEMENT",
+  "SCRIPT_ID_ITEM_ENTRY",
+  "SCRIPT_ID_TICKETS"
+];
+
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    console.error(`\n[FATAL SYSTEM ERROR] Boot aborted. Missing required environment variable: ${envVar}\n`);
+    process.exit(1);
+  }
+}
+
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");

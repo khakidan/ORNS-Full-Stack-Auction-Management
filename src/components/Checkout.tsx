@@ -27,7 +27,6 @@ export default function Checkout() {
   const { config } = useConfig();
   const spreadsheetId = config.bidManagementSpreadsheetId;
   const ticketsSpreadsheetId = config.auctionTicketsSpreadsheetId;
-  const scriptId = config.bidManagementScriptId;
   const bidManagementSheet = config.bidManagementSheet;
   const bidderNumbersSheet = config.bidderNumbersSheet;
   const folderId = config.receiptFolderId;
@@ -52,17 +51,12 @@ export default function Checkout() {
     setShowPrintConfirm(false);
     try {
       setIsPrintingAll(true);
-      if (!scriptId) {
-        toast.error("Google Script ID not found. Please set it in the Config tab.");
-        setIsPrintingAll(false);
-        return;
-      }
 
       console.log("[Checkout] Starting batch print...");
       const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/generate-all`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scriptId, spreadsheetId, receiptFolderId: folderId }),
+        body: JSON.stringify({ spreadsheetId, receiptFolderId: folderId }),
         credentials: "include"
       });
       
@@ -81,17 +75,12 @@ export default function Checkout() {
     setShowEmailConfirm(false);
     try {
       setIsEmailingAll(true);
-      if (!scriptId) {
-        toast.error("Google Script ID not found. Please set it in the Config tab.");
-        setIsEmailingAll(false);
-        return;
-      }
 
       console.log("[Checkout] Starting batch email...");
       const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/email-all`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scriptId, spreadsheetId }),
+        body: JSON.stringify({ spreadsheetId }),
         credentials: "include"
       });
       
@@ -209,7 +198,6 @@ export default function Checkout() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bidderId: winner.bidderId,
-          scriptId,
           spreadsheetId
         }),
         credentials: "include"
@@ -234,7 +222,6 @@ export default function Checkout() {
         body: JSON.stringify({
           bidderId: winner.bidderId,
           emailReceipt: false,
-          scriptId,
           spreadsheetId,
           receiptFolderId: folderId
         }),
@@ -338,7 +325,6 @@ export default function Checkout() {
           bidderId: winner.bidderId,
           spreadsheetId,
           ticketsSpreadsheetId,
-          scriptId,
           bidderNumbersSheet,
           attendeeInfo: attendee && attendee.sheet === 'tickets' ? { sheet: attendee.sheet, rowIndex: attendee.rowIndex } : null,
           paymentMethod: mappedMethod,

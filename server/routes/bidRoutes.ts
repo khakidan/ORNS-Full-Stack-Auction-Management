@@ -165,10 +165,10 @@ export default function createBidRouter() {
       return res.status(400).json({ error: "Missing required parameters for checkout" });
     }
 
-    const scriptId = bodyScriptId || process.env.GOOGLE_SCRIPT_ID;
+    const scriptId = process.env.SCRIPT_ID_BID_MANAGEMENT;
     if (!scriptId) {
       return res.status(500).json({
-        error: "GOOGLE_SCRIPT_ID is not configured. Please add it to the Settings tab in the app."
+        error: "SCRIPT_ID_BID_MANAGEMENT is not configured. Please add it to the Settings tab in the app."
       });
     }
 
@@ -315,7 +315,6 @@ export default function createBidRouter() {
       firstName, 
       lastName, 
       email, 
-      scriptId: bodyScriptId, 
       spreadsheetId, 
       ticketsSpreadsheetId,
       ticketPrice,
@@ -326,9 +325,6 @@ export default function createBidRouter() {
 
     const cached = checkIdempotency(req, res, idempotencyKey);
     if (cached) return;
-
-    const scriptId = bodyScriptId || process.env.GOOGLE_SCRIPT_ID;
-    if (!scriptId) return res.status(500).json({ error: "GOOGLE_SCRIPT_ID missing" });
 
     if (!bidderNumbersSheet || !bidManagementSheet) {
        return res.status(400).json({ error: "Missing required sheet names for walk-in." });

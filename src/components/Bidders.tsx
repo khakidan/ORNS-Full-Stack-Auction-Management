@@ -47,7 +47,6 @@ export default function Bidders() {
   const { config } = useConfig();
   const spreadsheetId = config.bidManagementSpreadsheetId;
   const ticketsSpreadsheetId = config.auctionTicketsSpreadsheetId;
-  const scriptId = config.bidManagementScriptId;
   const ticketPrice = config.ticketPrice;
   const bidManagementSheet = config.bidManagementSheet;
   const bidderNumbersSheet = config.bidderNumbersSheet;
@@ -244,7 +243,6 @@ export default function Bidders() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           ...walkInForm, 
-          scriptId, 
           spreadsheetId, 
           ticketsSpreadsheetId, 
           ticketPrice: ticketPrice,

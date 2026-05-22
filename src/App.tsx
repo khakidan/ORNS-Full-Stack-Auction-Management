@@ -119,7 +119,6 @@ export default function App() {
 
   const handleSyncBidders = async () => {
     setIsSyncing(true);
-    const scriptId = config.bidManagementScriptId;
     const spreadsheetId = config.bidManagementSpreadsheetId;
     
     const toastId = toast.loading("Checking credentials and backing up existing Bid-Management layers...");
@@ -130,7 +129,6 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          scriptId, 
           spreadsheetId,
           auctionImportSheetID: config.auctionItemsSpreadsheetId,
           auctionTicketSheetsID: config.auctionTicketsSpreadsheetId

@@ -52,43 +52,43 @@ export default function createProductionRouter() {
    */
 
   router.post("/item-entry/bundling-doc", (req, res, next) => {
-    const { scriptId, folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateBundlingDoc", scriptId, [folderId || ""]);
+    const { folderId } = req.body;
+    handleAppsScriptCall(req, res, next, "apiCreateBundlingDoc", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
   });
 
   router.post("/item-entry/item-labels", (req, res, next) => {
-    const { scriptId, folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateItemLabels", scriptId, [folderId || ""]);
+    const { folderId } = req.body;
+    handleAppsScriptCall(req, res, next, "apiCreateItemLabels", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
   });
 
   router.post("/item-entry/slideshow", (req, res, next) => {
-    const { scriptId, folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateSlideshow", scriptId, [folderId || ""]);
+    const { folderId } = req.body;
+    handleAppsScriptCall(req, res, next, "apiCreateSlideshow", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
   });
 
   router.post("/item-entry/bidding-guide-cover", (req, res, next) => {
-    const { scriptId, folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateBiddingGuideCoverPage", scriptId, [folderId || ""]);
+    const { folderId } = req.body;
+    handleAppsScriptCall(req, res, next, "apiCreateBiddingGuideCoverPage", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
   });
 
   router.post("/item-entry/bidding-guide-inner", (req, res, next) => {
-    const { scriptId, folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateBiddingGuideInnerPages", scriptId, [folderId || ""]);
+    const { folderId } = req.body;
+    handleAppsScriptCall(req, res, next, "apiCreateBiddingGuideInnerPages", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
   });
 
   router.post("/item-entry/bid-sheets", (req, res, next) => {
-    const { scriptId, folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateBidSheets", scriptId, [folderId || ""]);
+    const { folderId } = req.body;
+    handleAppsScriptCall(req, res, next, "apiCreateBidSheets", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
   });
 
   router.post("/item-entry/catalog", (req, res, next) => {
-    const { scriptId, folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateCatalog", scriptId, [folderId || ""]);
+    const { folderId } = req.body;
+    handleAppsScriptCall(req, res, next, "apiCreateCatalog", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
   });
 
   router.post("/item-entry/table-tents", (req, res, next) => {
-    const { scriptId, folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateTableTents", scriptId, [folderId || ""]);
+    const { folderId } = req.body;
+    handleAppsScriptCall(req, res, next, "apiCreateTableTents", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
   });
 
   /**
@@ -96,8 +96,7 @@ export default function createProductionRouter() {
    */
 
   router.post("/tickets/bidder-labels", (req, res, next) => {
-    const { scriptId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateBidderLabels", scriptId, []);
+    handleAppsScriptCall(req, res, next, "apiCreateBidderLabels", process.env.SCRIPT_ID_TICKETS!, []);
   });
 
   return router;

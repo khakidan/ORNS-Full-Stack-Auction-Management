@@ -14,7 +14,6 @@ export default function DocumentCreationTab() {
   const { isAuctionClosed } = useAuction();
   const { config } = useConfig();
   const spreadsheetId = config.auctionItemsSpreadsheetId;
-  const scriptId = config.auctionItemsScriptId;
   const forPrintFolderId = config.forPrintFolderId;
   
   const [files, setFiles] = useState<any[]>([]);
@@ -50,8 +49,8 @@ export default function DocumentCreationTab() {
   }, [forPrintFolderId]);
 
   const runScript = async (functionName: string, label: string) => {
-    if (!spreadsheetId || !scriptId || spreadsheetId.includes("PASTE") || scriptId.includes("PASTE")) {
-      toast.error("Please correctly configure the Auction Items Spreadsheet ID and Script ID in Settings.");
+    if (!spreadsheetId || spreadsheetId.includes("PASTE")) {
+      toast.error("Please correctly configure the Auction Items Spreadsheet ID in Settings.");
       return;
     }
 
@@ -77,7 +76,7 @@ export default function DocumentCreationTab() {
       const res = await fetchWithRetry(`${getBaseUrl()}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderId: config.forPrintFolderId, scriptId })
+        body: JSON.stringify({ folderId: config.forPrintFolderId })
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
