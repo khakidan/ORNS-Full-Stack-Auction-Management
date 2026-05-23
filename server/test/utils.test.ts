@@ -3,6 +3,7 @@ import { getCategoryBase } from "../utils/categoryHelpers";
 import { calculatePayPalSurcharge } from "../utils/financeUtils";
 import { normalizeRange } from "../utils/rangeUtils";
 import { validateEnv } from "../utils/validateEnv";
+import { getColumnLetter } from "../utils/columnUtils";
 
 describe("validateEnv", () => {
   afterEach(() => {
@@ -122,5 +123,36 @@ describe("rangeUtils - normalizeRange", () => {
   it("escapes single quotes in sheet names (O'Brien -> 'O''Brien')", () => {
     expect(normalizeRange("O'Brien!A1")).toBe("'O''Brien'!A1");
     expect(normalizeRange("O'Brien")).toBe("'O''Brien'");
+  });
+});
+
+describe("columnUtils - getColumnLetter", () => {
+  it("Index 0 returns \"A\"", () => {
+    expect(getColumnLetter(0)).toBe("A");
+  });
+
+  it("Index 25 returns \"Z\"", () => {
+    expect(getColumnLetter(25)).toBe("Z");
+  });
+
+  it("Index 26 returns \"AA\"", () => {
+    expect(getColumnLetter(26)).toBe("AA");
+  });
+
+  it("Index 27 returns \"AB\"", () => {
+    expect(getColumnLetter(27)).toBe("AB");
+  });
+
+  it("Index 51 returns \"AZ\"", () => {
+    expect(getColumnLetter(51)).toBe("AZ");
+  });
+
+  it("Index 52 returns \"BA\"", () => {
+    expect(getColumnLetter(52)).toBe("BA");
+  });
+
+  it("A negative index returns an empty string or throws", () => {
+    expect(getColumnLetter(-1)).toBe("");
+    expect(getColumnLetter(-5)).toBe("");
   });
 });
