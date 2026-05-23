@@ -7,9 +7,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Edit2, Check, X, Plus, ArrowUpDown, ArrowDown, ArrowUp, Package, Wand2, Trash2, RotateCcw, Search, Filter } from "lucide-react";
+import { Loader2, Plus, ArrowUpDown, ArrowDown, ArrowUp, Search, Filter, Trash2, Package, Wand2 } from "lucide-react";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -19,224 +28,49 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 
 import { Bidder, AuctionItem, Attendee, Guest } from "@/types";
-
-function getCategoryBase(categoryName: string): number {
-  if (!categoryName) return 1;
-  const clean = categoryName.toLowerCase().replace(/&/g, "and").trim().replace(/\s+/g, " ");
-  
-  if (clean.includes("classroom art")) return 101;
-  if (clean.includes("arts, crafts and jewelry") || clean.includes("arts, crafts & jewelry") || clean.includes("jewelry")) return 201;
-  if (clean.includes("health & beauty") || clean.includes("health and beauty") || clean.includes("health") || clean.includes("beauty")) return 301;
-  if (clean.includes("fitness")) return 401;
-  if (clean.includes("kids activities") || clean.includes("kids activity") || clean.includes("kids")) return 501;
-  if (clean.includes("retail")) return 601;
-  if (clean.includes("entertainment") || clean.includes("experience")) return 701;
-  if (clean.includes("food")) return 801;
-  if (clean.includes("service")) return 901;
-  if (clean.includes("classroom baskets") || clean.includes("classroom basket")) return 1001;
-  if (clean.includes("travel")) return 1101;
-  if (clean.includes("sports") || clean.includes("sports memorabilia") || clean.includes("ticket")) {
-    if (clean.includes("raffle")) return 1501;
-    return 1201;
-  }
-  if (clean.includes("live")) return 1301;
-  if (clean.includes("movie")) return 1401;
-  if (clean.includes("raffle")) return 1501;
-  if (clean.includes("open appeal") || clean.includes("appeal")) return 1601;
-
-  // Exact fallback matches
-  const exactMatches: Record<string, number> = {
-    "classroom art": 101,
-    "arts, crafts and jewelry": 201,
-    "arts, crafts & jewelry": 201,
-    "health & beauty": 301,
-    "health and beauty": 301,
-    "fitness": 401,
-    "kids activities": 501,
-    "retail": 601,
-    "entertainment & experiences": 701,
-    "entertainment and experiences": 701,
-    "food": 801,
-    "services": 901,
-    "classroom baskets": 1001,
-    "travel": 1101,
-    "sports memorabilia & tickets": 1201,
-    "sports memorabilia and tickets": 1201,
-    "live": 1301,
-    "movie night": 1401,
-    "raffle tickets": 1501,
-    "open appeal": 1601
-  };
-  return exactMatches[clean] || 1;
-}
+import { EditableCell } from "@/components/ui/EditableCell";
+import { useAuctionItems } from "@/hooks/useAuctionItems";
+import { useBundling } from "@/hooks/useBundling";
+import { BundlingDialog } from "@/components/BundlingDialog";
 
 interface BundlingSelection {
   [rowIndex: number]: boolean;
-}
-
-function EditableCell({ 
-  value, 
-  onSave, 
-  type = "text",
-  options = [],
-  disabled = false
-}: { 
-  value: string; 
-  onSave: (val: string) => void; 
-  type?: "text" | "textarea" | "select";
-  options?: string[];
-  disabled?: boolean;
-}) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [tempValue, setTempValue] = useState(value);
-
-  useEffect(() => {
-    setTempValue(value);
-  }, [value]);
-
-  const handleSave = () => {
-    onSave(tempValue);
-    setIsEditing(false);
-  };
-
-  const handleCancel = () => {
-    setTempValue(value);
-    setIsEditing(false);
-  };
-
-  if (isEditing) {
-    return (
-      <div className="flex flex-col gap-2 min-w-[9rem] w-full">
-        {type === "select" ? (
-          <Select 
-            value={tempValue} 
-            onValueChange={(val) => setTempValue(val)}
-            defaultOpen
-          >
-            <SelectTrigger className="h-8 text-sm w-full">
-              <SelectValue placeholder="Select..." />
-            </SelectTrigger>
-            <SelectContent>
-              {options.map((opt) => (
-                <SelectItem key={opt} value={opt}>
-                  {opt}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : type === "textarea" ? (
-          <Textarea 
-            value={tempValue} 
-            onChange={(e) => setTempValue(e.target.value)}
-            className="text-sm min-h-[80px] w-full"
-            autoFocus
-          />
-        ) : (
-          <Input 
-            value={tempValue} 
-            onChange={(e) => setTempValue(e.target.value)} 
-            className="h-8 text-sm w-full"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSave();
-              if (e.key === "Escape") handleCancel();
-            }}
-          />
-        )}
-        <div className="flex justify-end gap-1">
-          <Button size="sm" variant="secondary" className="h-6 px-2 text-xs text-green-700 bg-green-100 hover:bg-green-200" onClick={handleSave}>
-            <Check className="h-3 w-3 mr-1" /> Save
-          </Button>
-          <Button size="sm" variant="secondary" className="h-6 px-2 text-xs text-red-700 bg-red-100 hover:bg-red-200" onClick={handleCancel}>
-            <X className="h-3 w-3 mr-1" /> Cancel
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="group relative flex items-start gap-2">
-      <span className="whitespace-pre-wrap break-words overflow-hidden text-ellipsis line-clamp-6">
-        {value || <span className="text-muted-foreground italic">Empty</span>}
-      </span>
-      {!disabled && (
-        <Button 
-          size="icon" 
-          variant="ghost" 
-          className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" 
-          onClick={() => setIsEditing(true)}
-        >
-          <Edit2 className="h-3 w-3" />
-        </Button>
-      )}
-    </div>
-  );
 }
 
 export default function AuctionItemsTab() {
   const { config } = useConfig();
   const { isAuctionClosed } = useAuction();
   const spreadsheetId = config.auctionItemsSpreadsheetId;
-  const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<AuctionItem[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [categoriesWithBase, setCategoriesWithBase] = useState<{name: string, base: number}[]>([]);
-  const [valueCalculations, setValueCalculations] = useState<{minRange: number, minRaise: number}[]>([]);
+  const { 
+    items, 
+    setItems, 
+    categories, 
+    valueCalculations, 
+    loading, 
+    refresh: fetchData 
+  } = useAuctionItems(spreadsheetId);
   const [sortConfig, setSortConfig] = useState<{key: keyof AuctionItem | null, direction: 'asc' | 'desc'}>({ key: 'id', direction: 'asc' });
   
   const [selectedRows, setSelectedRows] = useState<BundlingSelection>({});
-  const [isBundling, setIsBundling] = useState(false);
-  const [bundleDetails, setBundleDetails] = useState<Partial<AuctionItem>>({});
-  const [restoreBundleId, setRestoreBundleId] = useState("");
-  const [isExecutingRestore, setIsExecutingRestore] = useState(false);
-
-  const handleRestoreBundle = async (tokenToRestore: string = restoreBundleId) => {
-    if (!tokenToRestore) return;
-    setRestoreBundleId(tokenToRestore); // Keep UI synced
-    setIsExecutingRestore(true);
-    const idempotencyKey = crypto.randomUUID?.() || Math.random().toString(36).substring(2);
-
-    try {
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/bundle/restore`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          spreadsheetId,
-          targetBundleToken: tokenToRestore,
-          idempotencyKey
-        })
-      });
-
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-
-      toast.success(`Bundle restored! Items: ${data.ui_history_log.original_item_names.join(', ')}`);
-      setRestoreBundleId("");
-      fetchData();
-    } catch (e: any) {
-      console.error(e);
-      toast.error("Failed to restore bundle: " + e.message);
-    } finally {
-      setIsExecutingRestore(false);
-    }
-  };
-
-  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-  const [loadingDescription, setLoadingDescription] = useState(false);
-  const [isExecutingBundle, setIsExecutingBundle] = useState(false);
+  
+  const {
+    isBundling, setIsBundling,
+    bundleDetails, setBundleDetails,
+    aiSuggestions,
+    loadingSuggestions,
+    loadingDescription,
+    isExecutingBundle,
+    restoreBundleId, setRestoreBundleId,
+    isExecutingRestore,
+    openBundlingModal,
+    getAiSuggestions,
+    getAiDescriptionSuggestion,
+    executeBundle,
+    handleRestoreBundle
+  } = useBundling(items, selectedRows, spreadsheetId, valueCalculations, fetchData);
   const [isBulkEditing, setIsBulkEditing] = useState(false);
   const [bulkField, setBulkField] = useState<"category" | "itemType" | null>(null);
   const [bulkValue, setBulkValue] = useState("");
@@ -262,103 +96,8 @@ export default function AuctionItemsTab() {
   const [isSubmittingItem, setIsSubmittingItem] = useState(false);
 
   useEffect(() => {
-    fetchData();
-    fetchCategories();
-    fetchValueCalculations();
+    // fetchData is called by useAuctionItems on mount/spreadsheetId change
   }, [spreadsheetId]);
-
-  async function fetchValueCalculations() {
-    if (!spreadsheetId) return;
-    try {
-      const data = await getSheetData(spreadsheetId, "Value Calculations!A:B");
-      if (data.values && data.values.length > 1) {
-        const tiers = data.values.slice(1).map((row: any[]) => ({
-          minRange: parseFloat(row[0]?.toString().replace(/[^0-9.-]+/g, "") || "0"),
-          minRaise: parseFloat(row[1]?.toString().replace(/[^0-9.-]+/g, "") || "0")
-        })).filter((t: any) => !isNaN(t.minRange) && !isNaN(t.minRaise) && t.minRaise > 0);
-        setValueCalculations(tiers);
-      }
-    } catch (error) {
-      console.error("Failed to fetch value calculations:", error);
-    }
-  }
-
-  async function fetchCategories() {
-    if (!spreadsheetId) return;
-    try {
-      const data = await getSheetData(spreadsheetId, "Categories!A:B");
-      if (data.values && data.values.length > 1) {
-        // Skip header, filter out empty
-        const catsWithBase = data.values.slice(1).map((row: any[]) => {
-          const catName = row[0]?.toString() || "";
-          const parsedBase = parseInt(row[1]?.toString() || "0", 10) || 0;
-          return {
-            name: catName,
-            base: parsedBase || getCategoryBase(catName)
-          };
-        }).filter((c: any) => c.name);
-        setCategoriesWithBase(catsWithBase);
-        setCategories(catsWithBase.map((c: any) => c.name));
-      }
-    } catch (error) {
-      console.error("Failed to fetch categories:", error);
-    }
-  }
-
-  async function fetchData() {
-    if (!spreadsheetId) {
-      setLoading(false);
-      return;
-    }
-    try {
-      const data = await getSheetData(spreadsheetId, "Auction-Items!A:Z");
-      if (data.values && data.values.length > 1) {
-        const headers = data.values[0].map((h: string) => (h || "").toString().toLowerCase().trim());
-        
-        const getCol = (names: string[], defaultIdx: number) => {
-          const idx = headers.findIndex((h: string) => names.some(n => h === n || h.includes(n)));
-          return idx !== -1 ? idx : defaultIdx;
-        };
-
-        const idIdx = getCol(["item number", "number", "id"], 0);
-        const categoryIdx = getCol(["category"], 1);
-        const nameIdx = getCol(["item name", "name"], 2);
-        const descIdx = getCol(["description", "desc"], 3);
-        const valIdx = getCol(["value", "fair market"], 4);
-        const openIdx = getCol(["opening bid", "starting bid"], 5);
-        const minIdx = getCol(["min raise", "increment"], 6);
-        const donorIdx = getCol(["donor"], 7);
-        const typeIdx = getCol(["item type", "type"], 8);
-        const statusIdx = getCol(["status"], 9);
-        const bundleIdIdx = getCol(["bundle id", "bundled with"], 10);
-        const bundledIdx = getCol(["bundled datetime", "bundled"], 11);
-
-        const rows = data.values.slice(1).map((row: any[], index: number) => {
-          return {
-            rowIndex: index + 2, // 1 for 1-based index, +1 for header row
-            id: row[idIdx]?.toString() || "",
-            category: row[categoryIdx]?.toString() || "",
-            name: row[nameIdx]?.toString() || "",
-            description: row[descIdx]?.toString() || "",
-            value: row[valIdx]?.toString() || "",
-            openingBid: row[openIdx]?.toString() || "",
-            minRaise: row[minIdx]?.toString() || "",
-            donor: row[donorIdx]?.toString() || "",
-            itemType: row[typeIdx]?.toString() || "",
-            status: row[statusIdx]?.toString() || "",
-            bundleId: row[bundleIdIdx]?.toString() || "",
-            bundledDateTime: row[bundledIdx]?.toString() || "",
-          };
-        }).filter((item: any) => item.id && item.name);
-        setItems(rows);
-      }
-    } catch (error) {
-      console.error("Failed to fetch auction items:", error);
-      toast.error("Failed to load auction items");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const parseDollar = (val: string) => {
     if (!val) return 0;
@@ -402,194 +141,6 @@ export default function AuctionItemsTab() {
     }));
   };
 
-  const toggleAll = () => {
-    if (selectedItemsCount === sortedItems.length) {
-      setSelectedRows({});
-    } else {
-      const all: BundlingSelection = {};
-      sortedItems.forEach(item => {
-        all[item.rowIndex] = true;
-      });
-      setSelectedRows(all);
-    }
-  };
-
-  const openBundlingModal = () => {
-    const selectedItems = items.filter(i => selectedRows[i.rowIndex]);
-    if (selectedItems.length < 2) {
-      toast.error("Select at least 2 items to bundle");
-      return;
-    }
-
-    // Merge logic
-    const mergedDescription = selectedItems.map(i => `- ${i.name}: ${i.description}`).join('\n\n');
-    const totalValue = selectedItems.reduce((sum, item) => sum + parseDollar(item.value), 0);
-    const mergedDonor = Array.from(new Set(selectedItems.map(i => i.donor).filter(Boolean))).join(', ');
-    const commonCategory = selectedItems[0].category;
-    
-    // Auto Bid calculation for bundle
-    const { opening, raise } = calculateAutoBids(totalValue.toString());
-
-    setBundleDetails({
-      category: commonCategory,
-      name: "",
-      description: mergedDescription,
-      value: totalValue > 0 ? `$${totalValue.toFixed(2)}` : "",
-      donor: mergedDonor,
-      openingBid: opening,
-      minRaise: raise,
-      itemType: selectedItems[0].itemType
-    });
-    setAiSuggestions([]);
-    setIsBundling(true);
-  };
-
-  const getAiSuggestions = async () => {
-    const selectedItems = items.filter(i => selectedRows[i.rowIndex]);
-    setLoadingSuggestions(true);
-    try {
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/bundle/suggest-names`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: selectedItems })
-      });
-      const data = await res.json();
-      
-      if (data.fallback) {
-        toast.error("AI generation failed. Please enter a bundle name manually.");
-        setAiSuggestions([
-          "The Ultimate Collection",
-          "Deluxe Surprise Package",
-          "Premium Gala Bundle"
-        ]);
-        return;
-      }
-      
-      if (data.error) throw new Error(data.error);
-      setAiSuggestions(data.suggestions || []);
-    } catch (e: any) {
-      toast.error("AI naming failed: " + e.message);
-    } finally {
-      setLoadingSuggestions(false);
-    }
-  };
-
-  const getAiDescriptionSuggestion = async () => {
-    const selectedItems = items.filter(i => selectedRows[i.rowIndex]);
-    setLoadingDescription(true);
-    try {
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/bundle/suggest-description`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: selectedItems })
-      });
-      const data = await res.json();
-      
-      if (data.fallback) {
-        toast.error("AI generation failed. Please write a description manually.");
-        setBundleDetails(prev => ({ 
-          ...prev, 
-          description: "An exclusive item collection bundled together for this special event. Don't miss out!" 
-        }));
-        return;
-      }
-      
-      if (data.error) throw new Error(data.error);
-      setBundleDetails(prev => ({ ...prev, description: data.description }));
-      toast.success("AI description generated!");
-    } catch (e: any) {
-      toast.error("AI description failed: " + e.message);
-    } finally {
-      setLoadingDescription(false);
-    }
-  };
-
-
-  const executeBundle = async () => {
-    if (!bundleDetails.name || !bundleDetails.category) {
-      toast.error("Bundle Name and Category are required");
-      return;
-    }
-
-    setIsExecutingBundle(true);
-    const previousItems = [...items];
-    const idempotencyKey = crypto.randomUUID?.() || Math.random().toString(36).substring(2);
-
-    try {
-      const selectedItems = items.filter(i => selectedRows[i.rowIndex]);
-      const sourceRowIndices = selectedItems.map(i => i.rowIndex);
-      
-      const ts = new Date().toLocaleString('en-US', { hour12: false }).replace(/\//g, '-');
-      const bundleEventToken = "BND-" + ts.replace(/[^0-9]/g, '');
-
-      // Calculate nextId pessimistically just for UI immediate update
-      const optimisticId = "Bundling...";
-
-      // Optimistic Update: Hide original items, add new bundle
-      setItems(prev => {
-        const remaining = prev.filter(item => !selectedRows[item.rowIndex]);
-        const newBundle: AuctionItem = {
-          rowIndex: 9999, // Temporary
-          id: optimisticId,
-          category: bundleDetails.category!,
-          status: "Active",
-          bundleId: bundleEventToken,
-          bundledDateTime: ts,
-          name: bundleDetails.name!,
-          description: bundleDetails.description || "",
-          value: bundleDetails.value || "",
-          openingBid: bundleDetails.openingBid || "",
-          minRaise: bundleDetails.minRaise || "",
-          donor: bundleDetails.donor || "",
-          itemType: bundleDetails.itemType || ""
-        };
-        return [...remaining, newBundle];
-      });
-
-      // Background sync
-      fetchWithRetry(`${getBaseUrl()}/api/bundle/process`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          spreadsheetId,
-          targetIds: selectedItems.map(i => i.id),
-          newName: bundleDetails.name,
-          newDescription: bundleDetails.description,
-          targetCategory: bundleDetails.category,
-          value: bundleDetails.value,
-          openingBid: bundleDetails.openingBid,
-          minRaise: bundleDetails.minRaise,
-          donor: bundleDetails.donor,
-          itemType: bundleDetails.itemType,
-          bundleEventToken,
-          idempotencyKey
-        })
-      })
-      .then(async (res) => {
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-
-        toast.success(`Items bundled into "${data.ui_history_log.bundle_item_name}" successfully! Token: ${data.ui_history_log.bundle_token}`);
-        setBundleDetails({});
-        setSelectedRows({});
-        fetchData(); // Resync to get real row indices and IDs
-      })
-      .catch((e: any) => {
-        console.error("Bundle Error", e);
-        setItems(previousItems);
-        toast.error("Failed to sync updates—retrying... local state reverted.");
-      });
-
-      setSelectedRows({});
-      setIsBundling(false);
-    } catch (e: any) {
-      console.error(e);
-      setItems(previousItems);
-      toast.error("Failed to sync updates—retrying... local state reverted.");
-    } finally {
-      setIsExecutingBundle(false);
-    }
-  };
 
   const executeBulkUpdate = async () => {
     if (!bulkField || !bulkValue || !spreadsheetId) return;
@@ -911,6 +462,18 @@ export default function AuctionItemsTab() {
     }
     return sortableItems;
   }, [items, sortConfig, searchTerm, selectedCategory, selectedItemType]);
+
+  const toggleAll = () => {
+    if (selectedItemsCount === sortedItems.length && sortedItems.length > 0) {
+      setSelectedRows({});
+    } else {
+      const all: BundlingSelection = {};
+      sortedItems.forEach(item => {
+        all[item.rowIndex] = true;
+      });
+      setSelectedRows(all);
+    }
+  };
 
   if (!spreadsheetId) {
     return (
@@ -1252,138 +815,20 @@ export default function AuctionItemsTab() {
       </DialogContent>
     </Dialog>
 
-    {/* Bundling Dialog */}
-    <Dialog open={isBundling} onOpenChange={setIsBundling}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Package className="w-6 h-6 text-primary" /> Bundle Auction Items</DialogTitle>
-          <DialogDescription>
-            This will combine {selectedItemsCount} items into one new package. A backup of your spreadsheet will be created automatically.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-6 py-4">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-bold flex items-center justify-between">
-                <span>Bundle Name *</span>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-7 text-xs text-primary hover:text-primary animate-pulse flex items-center gap-1"
-                  onClick={getAiSuggestions}
-                  disabled={loadingSuggestions}
-                >
-                  {loadingSuggestions ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
-                  Ask Gemini for Ideas
-                </Button>
-              </Label>
-              
-              {aiSuggestions.length > 0 && (
-                <div className="bg-primary/5 p-3 rounded-lg border border-primary/20 space-y-2 mb-3">
-                  <span className="text-[10px] font-bold text-primary uppercase">Suggested by Gemini:</span>
-                  <div className="flex flex-wrap gap-2">
-                    {aiSuggestions.map((name, i) => (
-                      <Badge 
-                        key={i} 
-                        variant="secondary" 
-                        className="cursor-pointer hover:bg-primary hover:text-white transition-colors"
-                        onClick={() => setBundleDetails({...bundleDetails, name})}
-                      >
-                        {name}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <Input 
-                placeholder="e.g. The Ultimate Family Staycation Pack" 
-                value={bundleDetails.name || ""} 
-                onChange={(e) => setBundleDetails({...bundleDetails, name: e.target.value})}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-bold">Category *</Label>
-                <Select value={bundleDetails.category} onValueChange={(val) => setBundleDetails({...bundleDetails, category: val})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-bold">Total Value (Calculated)</Label>
-                <Input 
-                  value={bundleDetails.value || ""} 
-                  onChange={(e) => {
-                    const newVal = e.target.value;
-                    const { opening, raise } = calculateAutoBids(newVal);
-                    setBundleDetails(prev => ({
-                      ...prev,
-                      value: newVal,
-                      openingBid: opening,
-                      minRaise: raise
-                    }));
-                  }} 
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-bold text-muted-foreground flex items-center justify-between">
-                <span>Combined Description</span>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-7 text-xs text-primary hover:text-primary animate-pulse flex items-center gap-1"
-                  onClick={getAiDescriptionSuggestion}
-                  disabled={loadingDescription}
-                >
-                  {loadingDescription ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
-                  Ask Gemini for Description
-                </Button>
-              </Label>
-              <Textarea 
-                className="min-h-[150px] text-xs font-mono"
-                value={bundleDetails.description || ""} 
-                onChange={(e) => setBundleDetails({...bundleDetails, description: e.target.value})}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-               <div className="space-y-2">
-                <Label className="text-sm font-bold">Opening Bid</Label>
-                <Input value={bundleDetails.openingBid || ""} onChange={(e) => setBundleDetails({...bundleDetails, openingBid: e.target.value})} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-bold">Min Raise</Label>
-                <Input value={bundleDetails.minRaise || ""} onChange={(e) => setBundleDetails({...bundleDetails, minRaise: e.target.value})} />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-bold">Donors (Combined)</Label>
-              <Input value={bundleDetails.donor || ""} onChange={(e) => setBundleDetails({...bundleDetails, donor: e.target.value})} />
-            </div>
-          </div>
-        </div>
-
-        <DialogFooter className="bg-slate-50 -mx-6 -mb-6 p-6">
-          <Button variant="outline" onClick={() => setIsBundling(false)}>Cancel</Button>
-          <Button 
-            onClick={executeBundle} 
-            disabled={isExecutingBundle}
-            className="bg-primary text-white hover:bg-primary/90 flex items-center gap-2"
-          >
-            {isExecutingBundle ? <Loader2 className="w-4 h-4 animate-spin" /> : <Package className="w-4 h-4" />}
-            Confirm Bundle & Merge Rows
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <BundlingDialog 
+      isBundling={isBundling}
+      setIsBundling={setIsBundling}
+      bundleDetails={bundleDetails}
+      setBundleDetails={setBundleDetails}
+      categories={categories}
+      getAiSuggestions={getAiSuggestions}
+      aiSuggestions={aiSuggestions}
+      loadingSuggestions={loadingSuggestions}
+      getAiDescriptionSuggestion={getAiDescriptionSuggestion}
+      loadingDescription={loadingDescription}
+      executeBundle={executeBundle}
+      isExecutingBundle={isExecutingBundle}
+    />
 
 
     <Dialog open={isAddingItem} onOpenChange={setIsAddingItem}>
