@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Plus, ArrowUpDown, ArrowDown, ArrowUp, Search, Filter, Trash2, Package, Wand2 } from "lucide-react";
+import { Loader2, Plus, ArrowUpDown, ArrowDown, ArrowUp, Search, Filter, Trash2, Package, Wand2, RotateCcw } from "lucide-react";
 
 import {
   Dialog,
@@ -76,6 +76,7 @@ export default function AuctionItemsTab() {
   const [bulkValue, setBulkValue] = useState("");
   const [isExecutingBulk, setIsExecutingBulk] = useState(false);
   const [isAddingItem, setIsAddingItem] = useState(false);
+  const [addItemIdempotencyKey, setAddItemIdempotencyKey] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedItemType, setSelectedItemType] = useState("all");
@@ -320,15 +321,6 @@ export default function AuctionItemsTab() {
     const previousItems = [...items];
 
     try {
-      let finalOpeningBid = newItem.openingBid || "";
-      let finalMinRaise = newItem.minRaise || "";
-
-      if (newItem.value && (!finalOpeningBid || !finalMinRaise)) {
-        const { opening, raise } = calculateAutoBids(newItem.value);
-        if (!finalOpeningBid) finalOpeningBid = opening;
-        if (!finalMinRaise) finalMinRaise = raise;
-      }
-
       // Call server endpoint to handle add + transactional resequencing
       const response = await fetchWithRetry(`${getBaseUrl()}/api/auction/add-item`, {
         method: "POST",
@@ -339,10 +331,9 @@ export default function AuctionItemsTab() {
           name: newItem.name,
           description: newItem.description || "",
           value: newItem.value || "",
-          openingBid: finalOpeningBid,
-          minRaise: finalMinRaise,
           donor: newItem.donor || "",
-          itemType: newItem.itemType || ""
+          itemType: newItem.itemType || "",
+          idempotencyKey: addItemIdempotencyKey
         })
       });
 
@@ -506,7 +497,10 @@ export default function AuctionItemsTab() {
           </div>
           <div className="flex gap-2">
             {!isAuctionClosed && (
-              <Button onClick={() => setIsAddingItem(true)} className="flex items-center gap-2">
+              <Button onClick={() => {
+                setAddItemIdempotencyKey(window.crypto.randomUUID());
+                setIsAddingItem(true);
+              }} className="flex items-center gap-2">
                 <Plus className="w-4 h-4" /> Add New Item
               </Button>
             )}

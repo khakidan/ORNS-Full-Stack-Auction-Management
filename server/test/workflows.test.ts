@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app";
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
+import { appendCallCount, updateCallCount, lastAppendedRow, resetHandlersState } from "./handlers";
 
 /**
  * COVERAGE MAP:
@@ -394,6 +395,101 @@ describe("Workflow Integration Tests", () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error).toContain("Missing required parameters");
+    });
+  });
+
+  describe("Add Auction Item workflow", () => {
+    const validItemBody = {
+      spreadsheetId: "test-spreadsheet-id",
+      category: "Food",
+      name: "Dinner for Two",
+      description: "A lovely dinner for two at a local restaurant.",
+      value: "$100.00",
+      donor: "Jane Smith",
+      itemType: "Certificate",
+      idempotencyKey: crypto.randomUUID()
+    };
+
+    afterEach(() => {
+      resetHandlersState();
+    });
+
+    it("handles the happy path", async () => {
+      const response = await request(app)
+        .post("/api/auction/add-item")
+        .set(authHeader)
+        .send(validItemBody);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.assigned_id).toBe("802"); 
+      
+      expect(appendCallCount).toBeGreaterThan(0);
+      
+      // assert on lastAppendedRow
+      expect(lastAppendedRow).toBeDefined();
+      expect(lastAppendedRow[0]).toBe("802"); // ID
+      expect(lastAppendedRow[1]).toBe("Food"); // Category
+      expect(lastAppendedRow[2]).toBe("Dinner for Two"); // Name
+      expect(lastAppendedRow[5]).toBe("$45.00"); // Opening Bid (45% of 100)
+      expect(lastAppendedRow[9]).toBe("Active"); // Status
+      expect(lastAppendedRow[10]).toBe(""); // Bundle ID
+      expect(lastAppendedRow[11]).toBe(""); // Bundled Date
+      expect(lastAppendedRow.length).toBe(12);
+    });
+
+    it("handles idempotency - duplicate submission", async () => {
+      const key = crypto.randomUUID();
+      const body = { ...validItemBody, idempotencyKey: key };
+      
+      const res1 = await request(app)
+        .post("/api/auction/add-item")
+        .set(authHeader)
+        .send(body);
+        
+      const res2 = await request(app)
+        .post("/api/auction/add-item")
+        .set(authHeader)
+        .send(body);
+
+      expect(res2.status).toBe(200);
+      expect(res2.body.duplicated).toBe(true);
+      expect(updateCallCount).toBe(1);
+    });
+
+    it("returns 401 when unauthenticated", async () => {
+      const response = await request(app)
+        .post("/api/auction/add-item")
+        .send(validItemBody);
+
+      expect(response.status).toBe(401);
+    });
+
+    it("returns 400 for validation failure (missing name)", async () => {
+      const invalidBody = { ...validItemBody, name: "" };
+      const response = await request(app)
+        .post("/api/auction/add-item")
+        .set(authHeader)
+        .send(invalidBody);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
+    });
+
+    it("returns 500 for external service failure", async () => {
+      server.use(
+        http.put('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', () => {
+          return new HttpResponse(null, { status: 500 });
+        })
+      );
+      
+      const response = await request(app)
+        .post("/api/auction/add-item")
+        .set(authHeader)
+        .send({ ...validItemBody, idempotencyKey: crypto.randomUUID() });
+
+      expect(response.status).toBe(500);
+      expect(response.body.success).toBeUndefined();
     });
   });
 });

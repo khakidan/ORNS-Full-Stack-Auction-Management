@@ -8,10 +8,27 @@ export interface AddItemParams {
   name: string;
   description?: string;
   value?: string;
-  openingBid?: string;
-  minRaise?: string;
   donor?: string;
   itemType?: string;
+}
+
+export function calculateBidAmounts(value: string, valueCalculations: {minRange: number, minRaise: number}[]): { openingBid: string, minRaise: string } {
+  const numericValue = parseFloat(value.replace(/[^0-9.-]+/g, "")) || 0;
+  if (numericValue <= 0) return { openingBid: "", minRaise: "" };
+
+  const openingBid = "$" + (numericValue * 0.45).toFixed(2);
+  let raiseAmount = 5;
+  
+  if (valueCalculations && valueCalculations.length > 0) {
+    const sorted = [...valueCalculations].sort((a, b) => a.minRange - b.minRange);
+    for (const tier of sorted) {
+      if (numericValue >= tier.minRange) {
+        raiseAmount = tier.minRaise;
+      }
+    }
+  }
+  
+  return { openingBid, minRaise: "$" + raiseAmount.toFixed(2) };
 }
 
 export interface AddItemResult {
@@ -89,10 +106,31 @@ async function fetchCategoryBases(sheets: sheets_v4.Sheets, spreadsheetId: strin
  * Adds a new auction item and triggers re-sequencing.
  */
 export async function addItem(sheets: sheets_v4.Sheets, params: AddItemParams): Promise<AddItemResult> {
-  const { spreadsheetId, category, name, description, value, openingBid, minRaise, donor, itemType } = params;
+  const { spreadsheetId, category, name, description, value, donor, itemType } = params;
 
-  const baseNumbers = await fetchCategoryBases(sheets, spreadsheetId);
-  const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:L" });
+  // Fetch Category Bases and Value Calculations in parallel
+  const [baseNumbers, settingsRes, dataRes] = await Promise.all([
+    fetchCategoryBases(sheets, spreadsheetId),
+    sheets.spreadsheets.values.get({ spreadsheetId, range: "'Value Calculations'!A:B" }).catch(() => null),
+    sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:L" })
+  ]);
+  
+  const valueCalculations = [];
+  if (settingsRes && settingsRes.data && settingsRes.data.values) {
+    const rows = settingsRes.data.values.slice(1); // skip header
+    for (const row of rows) {
+      if (row[0] && row[1]) {
+        const minRange = parseFloat(row[0].toString().replace(/[^0-9.-]+/g, ""));
+        const minRaise = parseFloat(row[1].toString().replace(/[^0-9.-]+/g, ""));
+        if (!isNaN(minRange) && !isNaN(minRaise)) {
+          valueCalculations.push({ minRange, minRaise });
+        }
+      }
+    }
+  }
+
+  const { openingBid, minRaise } = calculateBidAmounts(value || "", valueCalculations);
+
   const values = dataRes.data.values || [];
 
   if (values.length === 0) {

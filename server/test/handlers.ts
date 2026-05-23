@@ -1,5 +1,14 @@
 import { http, HttpResponse, passthrough } from 'msw'
 
+export let appendCallCount = 0;
+export let updateCallCount = 0;
+export let lastAppendedRow: any[] = [];
+export function resetHandlersState() {
+  appendCallCount = 0;
+  updateCallCount = 0;
+  lastAppendedRow = [];
+}
+
 export const handlers = [
   // Google OAuth token endpoint
   http.post('https://oauth2.googleapis.com/token', () => {
@@ -12,14 +21,50 @@ export const handlers = [
   }),
 
   // Google Sheets read handler
-  http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', () => {
+  http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+    const url = new URL(request.url);
+    if (url.pathname.includes('Auction-Items')) {
+      return HttpResponse.json({
+        values: [
+          ["Item Number", "Category", "Item Name", "Description", "Value", "Opening Bid", "Min Raise", "Donated By", "Physical Item, Certificate, or Both?", "Status", "Bundle ID", "Bundled Date/Time"],
+          ["801", "Food", "Pizza Night", "A pizza dinner", "$50.00", "$22.50", "$5.00", "Joe's Pizza", "Certificate", "Active", "", ""],
+          ["803", "Food", "Sushi Dinner", "A sushi dinner", "$150.00", "$67.50", "$10.00", "Sushi Place", "Certificate", "Active", "", ""]
+        ]
+      });
+    }
+    if (url.pathname.includes('Categories')) {
+      return HttpResponse.json({
+        values: [["Category", "Base"], ["Food", "800"], ["Art", "900"]]
+      });
+    }
+    if (url.pathname.includes('Value%20Calculations') || url.pathname.includes('Value Calculations')) {
+      return HttpResponse.json({
+        values: [
+          ["Min Range", "Min Raise"],
+          ["0", "5"],
+          ["150", "10"],
+          ["300", "15"],
+          ["450", "20"],
+          ["600", "30"],
+          ["750", "40"],
+          ["900", "50"]
+        ]
+      });
+    }
     return HttpResponse.json({
       values: [["Header1", "Header2"], ["val1", "val2"]]
     });
   }),
 
   // Google Sheets write handler
-  http.put('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', () => {
+  http.put('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', async ({ request }) => {
+    updateCallCount++;
+    try {
+      const body = await request.clone().json() as any;
+      if (body.values && body.values.length > 0) {
+        lastAppendedRow = body.values[body.values.length - 1];
+      }
+    } catch(e) {}
     return HttpResponse.json({ updatedRows: 1 });
   }),
 
@@ -29,7 +74,14 @@ export const handlers = [
   }),
 
   // Google Sheets append handler
-  http.post('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range\\:append', () => {
+  http.post('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range\\:append', async ({ request }) => {
+    appendCallCount++;
+    try {
+      const body = await request.clone().json() as any;
+      if (body.values && body.values.length > 0) {
+        lastAppendedRow = body.values[0];
+      }
+    } catch(e) {}
     return HttpResponse.json({ updates: { updatedRows: 1 } });
   }),
 

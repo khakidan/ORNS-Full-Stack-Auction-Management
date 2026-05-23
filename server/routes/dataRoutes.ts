@@ -14,6 +14,7 @@ import {
 } from '../services/itemService';
 import { listBackups, restoreBackup } from '../services/backupService';
 import { handleAssistantRequest } from '../services/assistantService';
+import { checkIdempotency, saveIdempotency } from '../utils/idempotency';
 
 export default function createDataRouter() {
   const router = Router();
@@ -140,10 +141,13 @@ export default function createDataRouter() {
   router.post("/auction/add-item", async (req: Request, res: Response, next: NextFunction) => {
     if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
 
-    const { spreadsheetId, category, name, description, value, openingBid, minRaise, donor, itemType } = req.body;
+    const { spreadsheetId, category, name, description, value, donor, itemType, idempotencyKey } = req.body;
     if (!spreadsheetId || !category || !name) {
       return res.status(400).json({ error: "Missing required parameters for adding item" });
     }
+
+    const cached = checkIdempotency(req, res, idempotencyKey);
+    if (cached) return;
 
     try {
       const client = getAuthenticatedClient(req.session.tokens);
@@ -155,12 +159,11 @@ export default function createDataRouter() {
         name,
         description,
         value,
-        openingBid,
-        minRaise,
         donor,
         itemType
       });
 
+      saveIdempotency(idempotencyKey, result);
       res.json(result);
     } catch (error: any) {
       console.error("[Server Error] add-item:", error);
