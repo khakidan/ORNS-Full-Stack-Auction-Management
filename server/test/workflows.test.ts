@@ -3,7 +3,7 @@ import request from "supertest";
 import { app } from "../app";
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
-import { appendCallCount, updateCallCount, lastAppendedRow, resetHandlersState } from "./handlers";
+import { appendCallCount, updateCallCount, lastAppendedRow, appsScriptCallCount, resetHandlersState } from "./handlers";
 
 /**
  * COVERAGE MAP:
@@ -490,6 +490,307 @@ describe("Workflow Integration Tests", () => {
 
       expect(response.status).toBe(500);
       expect(response.body.success).toBeUndefined();
+    });
+  });
+
+  describe('Checkout workflow', () => {
+    afterEach(() => {
+      resetHandlersState();
+      server.resetHandlers();
+    });
+
+    it('Cash/Check payment — standard 200 path', async () => {
+      const response = await request(app)
+        .post("/api/auction/checkout-mark-paid")
+        .set(authHeader)
+        .send({
+          bidderId: "42",
+          spreadsheetId: "test-spreadsheet-id",
+          bidderNumbersSheet: "Bidder-Numbers",
+          paymentMethod: "cash",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.deferred).toBeFalsy();
+    });
+
+    it('Credit card payment — deferred 202 path', async () => {
+      const response = await request(app)
+        .post("/api/auction/checkout-mark-paid")
+        .set(authHeader)
+        .send({
+          bidderId: "42",
+          spreadsheetId: "test-spreadsheet-id",
+          bidderNumbersSheet: "Bidder-Numbers",
+          paymentMethod: "credit_card",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(response.status).toBe(202);
+      expect(response.body.success).toBe(true);
+      expect(response.body.deferred).toBe(true);
+      expect(response.body.message).toBe("Verification deferred");
+      expect(response.body.bidderId).toBe("42");
+    });
+
+    it('Idempotency — duplicate checkout submission', async () => {
+      const key = crypto.randomUUID();
+      const payload = {
+        bidderId: "42",
+        spreadsheetId: "test-spreadsheet-id",
+        bidderNumbersSheet: "Bidder-Numbers",
+        paymentMethod: "credit_card",
+        idempotencyKey: key
+      };
+
+      const res1 = await request(app)
+        .post("/api/auction/checkout-mark-paid")
+        .set(authHeader)
+        .send(payload);
+      expect(res1.status).toBe(202);
+
+      const res2 = await request(app)
+        .post("/api/auction/checkout-mark-paid")
+        .set(authHeader)
+        .send(payload);
+
+      expect(res2.status).toBe(200);
+      expect(res2.body.duplicated).toBe(true);
+      expect(appsScriptCallCount).toBe(1);
+    });
+
+    it('Auth failure', async () => {
+      const response = await request(app)
+        .post("/api/auction/checkout-mark-paid")
+        .send({
+          bidderId: "42",
+          spreadsheetId: "test-spreadsheet-id",
+          bidderNumbersSheet: "Bidder-Numbers",
+          paymentMethod: "cash",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('Apps Script failure', async () => {
+      server.use(
+        http.post('https://script.googleapis.com/v1/scripts/:scriptId\\:run', () => {
+          return new HttpResponse(null, { status: 500 });
+        })
+      );
+
+      const response = await request(app)
+        .post("/api/auction/checkout-mark-paid")
+        .set(authHeader)
+        .send({
+          bidderId: "42",
+          spreadsheetId: "test-spreadsheet-id",
+          bidderNumbersSheet: "Bidder-Numbers",
+          paymentMethod: "cash",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(response.status).toBe(500);
+      expect(response.body.success).toBeUndefined();
+    });
+  });
+
+  describe('Full bid-to-checkout lifecycle', () => {
+    const setupLifecycleMocks = (isCheckedOut = false) => {
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+          const url = new URL(request.url);
+          const range = decodeURIComponent(url.pathname.split('/').pop() || "");
+          
+          if (range.includes("Bidder-Numbers")) {
+            return HttpResponse.json({
+              values: [
+                ["ID", "First Name", "Last Name", "Email", "Phone", "Checked In", "Checked Out", "Is Paid", "Invoice URL", "Invoice Total Amount", "PayPal Fee Status", "Checkout Timestamp"],
+                ["42", "John", "Doe", "john@example.com", "555-0199", "TRUE", isCheckedOut ? "TRUE" : "FALSE", "FALSE", "", "", "", ""]
+              ]
+            });
+          }
+          if (range.includes("Bid-Management")) {
+            return HttpResponse.json({
+              values: [
+                ["42", "Price"],
+                ["Total", ""],
+                ["", ""],
+                ["", ""]
+              ]
+            });
+          }
+          if (range.includes("Auction-Items")) {
+            return HttpResponse.json({
+              values: [
+                ["Item Number", "Category", "Item Name", "Description", "Value", "Opening Bid", "Min Raise", "Donated By", "Physical Item, Certificate, or Both?", "Status", "Bundle ID", "Bundled Date/Time"],
+                ["801", "Food", "Pizza Night", "A pizza dinner", "$50.00", "$22.50", "$5.00", "Joe's Pizza", "Certificate", "Active", "", ""],
+                ["803", "Food", "Sushi Dinner", "A sushi dinner", "$150.00", "$67.50", "$10.00", "Sushi Place", "Certificate", "Active", "", ""]
+              ]
+            });
+          }
+          return HttpResponse.json({ values: [] });
+        })
+      );
+    };
+
+    afterEach(() => {
+      resetHandlersState();
+      server.resetHandlers();
+    });
+
+    it('Happy path — bid recorded then cash checkout', async () => {
+      setupLifecycleMocks(false);
+
+      const bidRes = await request(app)
+        .post("/api/auction/record-winning-bid")
+        .set(authHeader)
+        .send({
+          bidderId: "42",
+          itemId: "801",
+          price: 150.00,
+          spreadsheetId: "test-spreadsheet-id",
+          bidManagementSheet: "Bid-Management",
+          bidderNumbersSheet: "Bidder-Numbers",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(bidRes.status).toBe(200);
+      expect(bidRes.body.success).toBe(true);
+
+      const checkoutRes = await request(app)
+        .post("/api/auction/checkout-mark-paid")
+        .set(authHeader)
+        .send({
+          bidderId: "42",
+          spreadsheetId: "test-spreadsheet-id",
+          bidderNumbersSheet: "Bidder-Numbers",
+          paymentMethod: "cash",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(checkoutRes.status).toBe(200);
+      expect(checkoutRes.body.success).toBe(true);
+    });
+
+    it('Happy path — bid recorded then credit card checkout', async () => {
+      setupLifecycleMocks(false);
+
+      const bidRes = await request(app)
+        .post("/api/auction/record-winning-bid")
+        .set(authHeader)
+        .send({
+          bidderId: "42",
+          itemId: "801",
+          price: 150.00,
+          spreadsheetId: "test-spreadsheet-id",
+          bidManagementSheet: "Bid-Management",
+          bidderNumbersSheet: "Bidder-Numbers",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(bidRes.status).toBe(200);
+
+      const checkoutRes = await request(app)
+        .post("/api/auction/checkout-mark-paid")
+        .set(authHeader)
+        .send({
+          bidderId: "42",
+          spreadsheetId: "test-spreadsheet-id",
+          bidderNumbersSheet: "Bidder-Numbers",
+          paymentMethod: "credit_card",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(checkoutRes.status).toBe(202);
+      expect(checkoutRes.body.message).toBe("Verification deferred");
+    });
+
+    it('Lifecycle — checked-out bidder winning bid goes to follow-up', async () => {
+      const capturedRequests: { method: string; range: string; body?: any }[] = [];
+
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+          const url = new URL(request.url);
+          const range = decodeURIComponent(url.pathname.split('/').pop() || "");
+          
+          if (range.includes("Bidder-Numbers")) {
+            return HttpResponse.json({
+              values: [
+                ["ID", "First Name", "Last Name", "Email", "Phone", "Checked In", "Checked Out", "Is Paid", "Invoice URL", "Invoice Total Amount", "PayPal Fee Status", "Checkout Timestamp"],
+                ["42", "John", "Doe", "john@example.com", "555-0199", "TRUE", "TRUE", "FALSE", "", "", "", ""]
+              ]
+            });
+          }
+          if (range.includes("Bid-Management")) {
+            return HttpResponse.json({
+              values: [
+                ["42", "Price"],
+                ["Total", ""],
+                ["", ""],
+                ["", ""]
+              ]
+            });
+          }
+          if (range.includes("Auction-Items")) {
+            return HttpResponse.json({
+              values: [
+                ["Item Number", "Category", "Item Name", "Description", "Value", "Opening Bid", "Min Raise", "Donated By", "Physical Item, Certificate, or Both?", "Status", "Bundle ID", "Bundled Date/Time"],
+                ["801", "Food", "Pizza Night", "A pizza dinner", "$50.00", "$22.50", "$5.00", "Joe's Pizza", "Certificate", "Active", "", ""]
+              ]
+            });
+          }
+          return HttpResponse.json({ values: [] });
+        }),
+
+        http.put('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/*', async ({ request }) => {
+          const url = new URL(request.url);
+          const range = decodeURIComponent(url.pathname.split('/values/')[1] || "");
+          const body = await request.clone().json().catch(() => null);
+          capturedRequests.push({ method: 'PUT', range, body });
+          return HttpResponse.json({ updatedRows: 1 });
+        }),
+
+        http.post('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/*', async ({ request }) => {
+          const url = new URL(request.url);
+          const range = decodeURIComponent(url.pathname.split('/values/')[1] || "");
+          const body = await request.clone().json().catch(() => null);
+          capturedRequests.push({ method: 'POST', range, body });
+          return HttpResponse.json({ updates: { updatedRange: "Follow-Up!A2:C2", updatedRows: 1 } });
+        }),
+
+        http.post('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId\\:batchUpdate', () => {
+          return HttpResponse.json({ replies: [] });
+        })
+      );
+
+      const bidRes = await request(app)
+        .post("/api/auction/record-winning-bid")
+        .set(authHeader)
+        .send({
+          bidderId: "42",
+          itemId: "801",
+          price: 150.00,
+          spreadsheetId: "test-spreadsheet-id",
+          bidManagementSheet: "Bid-Management",
+          bidderNumbersSheet: "Bidder-Numbers",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(bidRes.status).toBe(200);
+      expect(bidRes.body.success).toBe(true);
+
+      const appends = capturedRequests.filter(r => r.method === 'POST' && r.range.includes('append'));
+      expect(appends.length).toBeGreaterThan(0);
+      
+      const hasFollowUpWrite = appends.some(r => r.range.includes('Follow-Up'));
+      expect(hasFollowUpWrite).toBe(true);
+
+      const hasBidManagementAppend = appends.some(r => r.range.includes('Bid-Management'));
+      expect(hasBidManagementAppend).toBe(false);
     });
   });
 });

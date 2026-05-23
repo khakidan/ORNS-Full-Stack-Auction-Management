@@ -31,6 +31,7 @@ export interface CheckoutParams {
 export interface CheckoutResult {
   success: boolean;
   attendeeUpdated: boolean;
+  deferred?: boolean;
 }
 
 export interface CloseAuctionParams {
@@ -199,10 +200,14 @@ export async function checkoutMarkPaid(
   }
 
   const { response } = scriptResponse.data;
+  let deferred = false;
   if (response?.result && typeof response.result === 'object') {
     const resultObj = response.result as any;
     if (resultObj.success === false) {
       throw new Error(resultObj.error || "Failed to record payment in Google Apps Script");
+    }
+    if (resultObj.deferred === true) {
+      deferred = true;
     }
   }
 
@@ -222,7 +227,7 @@ export async function checkoutMarkPaid(
     attendeeUpdated = true;
   }
 
-  return { success: true, attendeeUpdated };
+  return { success: true, attendeeUpdated, deferred };
 }
 
 /**

@@ -115,7 +115,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       const sheetName = config.bidderNumbersSheet;
-      const data = await getSheetData(spreadsheetId, `${sheetName}!A:H`);
+      const data = await getSheetData(spreadsheetId, `${sheetName}!A:L`);
 
       if (data && data.values?.length > 1) {
         const biddersList: Bidder[] = data.values.slice(1).map((row: string[], idx: number) => ({
@@ -127,6 +127,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
           isProxy: row[5] === "TRUE" || row[5] === "true",
           checkedOut: row[6] === "TRUE" || row[6] === "true",
           paid: row[7] === "TRUE" || row[7] === "true",
+          checkoutTimestamp: row[11]?.toString() || "",
           rowIndex: idx + 2,
         })).filter(b => b.id);
         setBidders(biddersList);

@@ -19,6 +19,7 @@ interface WinnerRecord {
   total: number;
   items: { id: string, name: string, price: number }[];
   paid: boolean;
+  paymentPending?: boolean;
   paymentMethod: string;
 }
 
@@ -147,6 +148,7 @@ export default function Checkout() {
             total,
             items: wonItems,
             paid: bidderInfo?.paid || false,
+            paymentPending: !!bidderInfo?.checkoutTimestamp && !bidderInfo?.paid,
             paymentMethod: "" // Will be determined from bidders/attendees if needed
           });
         }
@@ -301,7 +303,7 @@ export default function Checkout() {
     // Perform optimistic update locally immediately
     setWinners(prev => prev.map(w => {
       if (w.bidderId === winner.bidderId) {
-        return { ...w, paid: true };
+        return { ...w, paid: mappedMethod !== "PAYPAL", paymentPending: mappedMethod === "PAYPAL" };
       }
       return w;
     }));
@@ -338,8 +340,18 @@ export default function Checkout() {
           const err = await res.json();
           throw new Error(err.error || "Failed to complete checkout transaction");
         }
+        
+        const data = await res.json();
         const bidderName = bidderInfo ? `${bidderInfo.firstName} ${bidderInfo.lastName}` : `Bidder ${winner.bidderId}`;
-        toast.success(`${bidderName} marked as Paid (${method})`);
+        
+        if (res.status === 202 || data.deferred) {
+          toast.info(`${bidderName} checkout sent. Pending PayPal background verification.`);
+          setWinners(prev => prev.map(w => w.bidderId === winner.bidderId ? { ...w, paymentPending: true, paid: false } : w));
+        } else {
+          toast.success(`${bidderName} marked as Paid (${method})`);
+          setWinners(prev => prev.map(w => w.bidderId === winner.bidderId ? { ...w, paymentPending: false, paid: true } : w));
+        }
+        
         fetchAllData(); // Refresh all data to ensure sync
       })
     .catch((error: any) => {
@@ -600,6 +612,10 @@ function WinnerCard({ winner, hasEmail, processingId, handleEmailReceipt, handle
           <div className="w-full py-2 text-center text-emerald-600 font-medium flex items-center justify-center gap-2">
             <CheckCircle2 className="w-4 h-4" /> Paid
           </div>
+        ) : winner.paymentPending ? (
+          <div className="w-full py-2 text-center text-amber-600 font-medium flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" /> Pending Verification
+          </div>
         ) : (
           <Button
             size="sm"
@@ -608,7 +624,7 @@ function WinnerCard({ winner, hasEmail, processingId, handleEmailReceipt, handle
             disabled={!!processingId && processingId.startsWith(`${winner.bidderId}-`)}
           >
             {processingId === `${winner.bidderId}-pay` ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-            Mark Paid
+            Checkout
           </Button>
         )}
       </CardFooter>

@@ -95,7 +95,16 @@ export default function createBidRouter() {
       if (ticketsSpreadsheetId) clearCacheForSpreadsheet(ticketsSpreadsheetId);
 
       saveIdempotency(idempotencyKey, result);
-      res.json(result);
+      
+      if (result.deferred) {
+        res.status(202).json({
+          ...result,
+          message: "Verification deferred",
+          bidderId: String(bidderId)
+        });
+      } else {
+        res.status(200).json(result);
+      }
     } catch (error: any) {
       console.error("[Route Error] checkout-mark-paid:", error);
       if (error.message.includes("not found") || error.message.includes("is not configured")) {

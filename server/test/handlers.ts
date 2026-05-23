@@ -3,10 +3,13 @@ import { http, HttpResponse, passthrough } from 'msw'
 export let appendCallCount = 0;
 export let updateCallCount = 0;
 export let lastAppendedRow: any[] = [];
+export let appsScriptCallCount = 0;
+
 export function resetHandlersState() {
   appendCallCount = 0;
   updateCallCount = 0;
   lastAppendedRow = [];
+  appsScriptCallCount = 0;
 }
 
 export const handlers = [
@@ -29,6 +32,14 @@ export const handlers = [
           ["Item Number", "Category", "Item Name", "Description", "Value", "Opening Bid", "Min Raise", "Donated By", "Physical Item, Certificate, or Both?", "Status", "Bundle ID", "Bundled Date/Time"],
           ["801", "Food", "Pizza Night", "A pizza dinner", "$50.00", "$22.50", "$5.00", "Joe's Pizza", "Certificate", "Active", "", ""],
           ["803", "Food", "Sushi Dinner", "A sushi dinner", "$150.00", "$67.50", "$10.00", "Sushi Place", "Certificate", "Active", "", ""]
+        ]
+      });
+    }
+    if (url.pathname.includes('Bidder-Numbers')) {
+      return HttpResponse.json({
+        values: [
+          ["ID", "First Name", "Last Name", "Email", "Phone", "Checked In", "Checked Out", "Is Paid", "Invoice URL", "Invoice Total Amount", "PayPal Fee Status", "Checkout Timestamp"],
+          ["42", "John", "Doe", "john@example.com", "555-0199", "TRUE", "FALSE", "FALSE", "", "", "", ""]
         ]
       });
     }
@@ -143,15 +154,33 @@ export const handlers = [
     });
   }),
 
-  http.post('https://script.googleapis.com/v1/scripts/:scriptId\\:run', ({ request }) => {
-    console.log('MSW Intercepted:', request.url);
+  http.post('https://script.googleapis.com/v1/scripts/:scriptId\\:run', async ({ request }) => {
+    appsScriptCallCount++;
+    const body = await request.json() as any;
+    const params = body?.requestBody?.parameters || body?.parameters || [];
+    const paymentMethod = params[1];
+
+    if (paymentMethod === 'credit_card') {
+      return HttpResponse.json({
+        response: {
+          result: {
+            success: true,
+            deferred: true,
+            status: "UNPAID",
+            bidderId: params[0]
+          }
+        }
+      });
+    }
+
     return HttpResponse.json({
-      response: { 
-        result: { 
-          success: true, 
-          message: "MSW intercepted this!" 
-        } 
+      response: {
+        result: {
+          success: true,
+          deferred: false,
+          bidderId: params[0]
+        }
       }
-    })
+    });
   })
 ]
