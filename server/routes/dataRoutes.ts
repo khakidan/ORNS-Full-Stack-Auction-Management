@@ -1,11 +1,19 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { google } from 'googleapis';
-import { getAuthenticatedClient } from '../utils/auth';
+import { getAuthenticatedClient } from '../services/oauth';
 import { performSheetSync } from '../services/syncService';
-import { getCategoryBase } from '../utils/categoryHelpers';
 import { sheetCache, CACHE_TTL, clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { normalizeRange } from '../utils/rangeUtils';
 import { genAI } from '../services/genai';
+import { 
+  addItem, 
+  deleteItem, 
+  updateItem, 
+  bulkUpdateItems,
+  ensureFollowUpSheet
+} from '../services/itemService';
+import { listBackups, restoreBackup } from '../services/backupService';
+import { handleAssistantRequest } from '../services/assistantService';
 
 export default function createDataRouter() {
   const router = Router();
@@ -41,20 +49,8 @@ export default function createDataRouter() {
     try {
       const client = getAuthenticatedClient(req.session.tokens);
       const sheets = google.sheets({ version: "v4", auth: client });
-
-      const metadata = await sheets.spreadsheets.get({
-        spreadsheetId: req.params.spreadsheetId,
-      });
-
-      const backupSheets = metadata.data.sheets?.filter(s => 
-        s.properties?.title?.startsWith("Auction-Items Back Up (")
-      ).map(s => ({
-        title: s.properties?.title,
-        sheetId: s.properties?.sheetId,
-        index: s.properties?.index
-      })) || [];
-
-      res.json(backupSheets);
+      const result = await listBackups(sheets, req.params.spreadsheetId);
+      res.json(result);
     } catch (error: any) {
       if (error.code === 404) {
         return res.status(404).json({ error: "Spreadsheet not found. Please check the Spreadsheet ID in Settings." });
@@ -73,46 +69,8 @@ export default function createDataRouter() {
     try {
       const client = getAuthenticatedClient(req.session.tokens);
       const sheets = google.sheets({ version: "v4", auth: client });
-
-      const metadata = await sheets.spreadsheets.get({ spreadsheetId });
-      const sheetsList = metadata.data.sheets || [];
-      
-      const currentSheet = sheetsList.find(s => s.properties?.title === "Auction-Items");
-      const backupSheet = sheetsList.find(s => s.properties?.title === backupSheetName);
-
-      if (!backupSheet) throw new Error("Backup sheet not found");
-
-      const requests: any[] = [];
-      const timestamp = new Date().getTime();
-
-      // 1. Rename current to an archive name
-      if (currentSheet) {
-        requests.push({
-          updateSheetProperties: {
-            properties: {
-              sheetId: currentSheet.properties?.sheetId,
-              title: `Auction-Items (Archived ${timestamp})`
-            },
-            fields: "title"
-          }
-        });
-      }
-
-      // 2. Duplicate backup sheet
-      requests.push({
-        duplicateSheet: {
-          sourceSheetId: backupSheet.properties?.sheetId,
-          newSheetName: "Auction-Items",
-          insertSheetIndex: 0
-        }
-      });
-
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: { requests }
-      });
-
-      res.json({ success: true });
+      const result = await restoreBackup(sheets, spreadsheetId, backupSheetName);
+      res.json(result);
     } catch (error: any) {
       if (error.code === 404) {
         return res.status(404).json({ error: "Spreadsheet not found. Please check the Spreadsheet ID in Settings." });
@@ -191,86 +149,19 @@ export default function createDataRouter() {
       const client = getAuthenticatedClient(req.session.tokens);
       const sheets = google.sheets({ version: "v4", auth: client });
 
-      // 1. Fetch categories for safe resequencing bases
-      const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Categories'!A:C" });
-      const baseNumbers: Record<string, number> = {};
-      (catSearch.data.values || []).slice(1).forEach(row => {
-        const catName = (row[0] || "").toString().trim();
-        const catBase = parseInt(row[1] || row[2] || "0", 10) || 0;
-        if (catName) {
-          baseNumbers[catName] = catBase || getCategoryBase(catName);
-        }
-      });
-
-      // 2. Fetch the current sheet data
-      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:L" });
-      const values = dataRes.data.values || [];
-
-      if (values.length === 0) {
-        values.push([
-          "Auction Item ID", "Category", "Item Name", "Description", "Value", 
-          "Opening Bid", "Min Raise Amount", "Donated By", 
-          "Physical Item, Certificate, or Both?", "Status", "Bundle ID", "Bundled Date/Time"
-        ]);
-      }
-
-      // 3. Construct and append the new item (temporary ID "TEMP")
-      const newRow = [
-        "TEMP",
+      const result = await addItem(sheets, {
+        spreadsheetId,
         category,
         name,
-        description || "",
-        value || "",
-        openingBid || "",
-        minRaise || "",
-        donor || "",
-        itemType || "",
-        "Active",
-        "",
-        ""
-      ];
-      values.push(newRow);
-
-      // 4. Run Re-Sequencing Cleanup for the affected category to compute and guarantee correct ID
-      const rowMapping: {origIndex: number, row: any[]}[] = [];
-      for (let i = 1; i < values.length; i++) {
-        const r = values[i] || [];
-        if (r[1] === category && r[9] === "Active") {
-          rowMapping.push({ origIndex: i, row: r });
-        }
-      }
-
-      rowMapping.sort((a, b) => {
-        const idA = a.row[0] === "TEMP" ? 999999 : (parseInt(a.row[0]) || 999999);
-        const idB = b.row[0] === "TEMP" ? 999999 : (parseInt(b.row[0]) || 999999);
-        if (idA !== idB) return idA - idB;
-        return a.origIndex - b.origIndex;
+        description,
+        value,
+        openingBid,
+        minRaise,
+        donor,
+        itemType
       });
 
-      const startNum = baseNumbers[category] || getCategoryBase(category);
-      let runningNum = startNum;
-      rowMapping.forEach(item => {
-        item.row[0] = runningNum.toString();
-        runningNum++;
-      });
-
-      // 5. Update the entire sheet range to persist the new row and correct/gap-free IDs
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: "'Auction-Items'!A1:L",
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values }
-      });
-
-      // Invalidate cache for this spreadsheet
-      for (const key of sheetCache.keys()) {
-        if (key.startsWith(`${spreadsheetId}:`)) {
-          sheetCache.delete(key);
-        }
-      }
-
-      const assignedId = newRow[0];
-      res.json({ success: true, assigned_id: assignedId, rowIndex: values.length });
+      res.json(result);
     } catch (error: any) {
       console.error("[Server Error] add-item:", error);
       next(error);
@@ -290,67 +181,12 @@ export default function createDataRouter() {
       const client = getAuthenticatedClient(req.session.tokens);
       const sheets = google.sheets({ version: "v4", auth: client });
 
-      // 1. Fetch categories for safe resequencing
-      const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Categories'!A:C" });
-      const baseNumbers: Record<string, number> = {};
-      (catSearch.data.values || []).slice(1).forEach(row => {
-        const catName = (row[0] || "").toString().trim();
-        const catBase = parseInt(row[1] || row[2] || "0", 10) || 0;
-        if (catName) {
-          baseNumbers[catName] = catBase || getCategoryBase(catName);
-        }
+      const result = await deleteItem(sheets, {
+        spreadsheetId,
+        rowIndex
       });
 
-      // 2. Fetch the current sheet data
-      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:L" });
-      const values = dataRes.data.values || [];
-
-      // 3. Mark the specified item as deleted
-      // Ensure the array reaches the requested rowIndex
-      if (!values[rowIndex - 1]) {
-        throw new Error(`Row ${rowIndex} not found in the spreadsheet.`);
-      }
-
-      const row = values[rowIndex - 1];
-      const category = row[1]; // Category is in Column B (index 1)
-
-      // Soft delete: clear ID (Column A) and set status to "Deleted" (Column J)
-      row[0] = "";
-      row[9] = "Deleted";
-
-      // 4. Run Re-Sequencing Cleanup for the affected category
-      if (category) {
-        const affectedCategories = new Set<string>();
-        affectedCategories.add(category);
-
-        for (const cat of affectedCategories) {
-          const rowMapping: {origIndex: number, row: any[]}[] = [];
-          for (let i = 1; i < values.length; i++) {
-            const r = values[i] || [];
-            if (r[1] === r[1] && r[1] === cat && r[9] === "Active") {
-              rowMapping.push({ origIndex: i, row: r });
-            }
-          }
-          rowMapping.sort((a, b) => {
-            const idA = parseInt(a.row[0]) || 999999;
-            const idB = parseInt(b.row[0]) || 999999;
-            return idA - idB;
-          });
-          const startNum = baseNumbers[cat] || getCategoryBase(cat);
-          let runningNum = startNum;
-          rowMapping.forEach(item => { item.row[0] = runningNum.toString(); runningNum++; });
-        }
-      }
-
-      // 5. Update the spreadsheet with the modified row and any re-sequenced items
-      await sheets.spreadsheets.values.update({
-        spreadsheetId, 
-        range: "'Auction-Items'!A1:L", 
-        valueInputOption: "USER_ENTERED", 
-        requestBody: { values }
-      });
-
-      res.json({ success: true });
+      res.json(result);
     } catch (error: any) {
       console.error("[Server Error] delete-item:", error);
       next(error);
@@ -370,95 +206,14 @@ export default function createDataRouter() {
       const client = getAuthenticatedClient(req.session.tokens);
       const sheets = google.sheets({ version: "v4", auth: client });
 
-      // 1. Fetch categories for safe resequencing
-      const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Categories'!A:C" });
-      const baseNumbers: Record<string, number> = {};
-      (catSearch.data.values || []).slice(1).forEach(row => {
-        const catName = (row[0] || "").toString().trim();
-        const catBase = parseInt(row[1] || row[2] || "0", 10) || 0;
-        if (catName) {
-          baseNumbers[catName] = catBase || getCategoryBase(catName);
-        }
+      const result = await updateItem(sheets, {
+        spreadsheetId,
+        rowIndex,
+        field,
+        value
       });
 
-      // 2. Fetch current items
-      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:L" });
-      const values = dataRes.data.values || [];
-
-      if (!values[rowIndex - 1]) {
-        throw new Error(`Row ${rowIndex} not found`);
-      }
-
-      const row = values[rowIndex - 1];
-      const oldCategory = row[1];
-
-      // Field mapping to index
-      const fieldMapping: Record<string, number> = {
-        id: 0,
-        category: 1,
-        name: 2,
-        description: 3,
-        value: 4,
-        openingBid: 5,
-        minRaise: 6,
-        donor: 7,
-        itemType: 8,
-        status: 9,
-        bundleId: 10,
-        bundledDateTime: 11
-      };
-
-      const colIdx = fieldMapping[field];
-      if (colIdx === undefined) throw new Error(`Invalid field: ${field}`);
-
-      // Update the field
-      row[colIdx] = value;
-
-      // Track affected categories for re-sequencing
-      const affectedCategories = new Set<string>();
-      if (field === 'category') {
-        if (oldCategory) affectedCategories.add(oldCategory);
-        if (value) affectedCategories.add(value);
-      } else if (field === 'status') {
-        const category = row[1];
-        if (category) affectedCategories.add(category);
-      }
-
-      // Run Re-Sequencing Cleanup for affected categories
-      for (const cat of affectedCategories) {
-        if (!cat) continue;
-        const rowMapping: {origIndex: number, row: any[]}[] = [];
-        for (let i = 1; i < values.length; i++) {
-          const r = values[i] || [];
-          if (r[1] === cat && r[9] === "Active") {
-            rowMapping.push({ origIndex: i, row: r });
-          }
-        }
-        // Sort them by their original numerical ID or rowIndex if ID is missing / empty
-        rowMapping.sort((a, b) => {
-          const idA = parseInt(a.row[0]) || 999999;
-          const idB = parseInt(b.row[0]) || 999999;
-          if (idA !== idB) return idA - idB;
-          return a.origIndex - b.origIndex;
-        });
-        
-        const startNum = baseNumbers[cat] || getCategoryBase(cat);
-        let runningNum = startNum;
-        rowMapping.forEach(item => {
-          item.row[0] = runningNum.toString();
-          runningNum++;
-        });
-      }
-
-      // Update the spreadsheet with the modified rows
-      await sheets.spreadsheets.values.update({
-        spreadsheetId, 
-        range: "'Auction-Items'!A1:L", 
-        valueInputOption: "USER_ENTERED", 
-        requestBody: { values }
-      });
-
-      res.json({ success: true, affected_categories: Array.from(affectedCategories) });
+      res.json(result);
     } catch (error: any) {
       console.error("[Server Error] update-item:", error);
       next(error);
@@ -478,89 +233,14 @@ export default function createDataRouter() {
       const client = getAuthenticatedClient(req.session.tokens);
       const sheets = google.sheets({ version: "v4", auth: client });
 
-      // Fetch categories and base numbers
-      const catSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Categories'!A:C" });
-      const baseNumbers: Record<string, number> = {};
-      (catSearch.data.values || []).slice(1).forEach(row => {
-        const catName = (row[0] || "").toString().trim();
-        const catBase = parseInt(row[1] || row[2] || "0", 10) || 0;
-        if (catName) {
-          baseNumbers[catName] = catBase || getCategoryBase(catName);
-        }
+      const result = await bulkUpdateItems(sheets, {
+        spreadsheetId,
+        rowIndices,
+        field,
+        value
       });
 
-      const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:L" });
-      const values = dataRes.data.values || [];
-
-      const fieldMapping: Record<string, number> = {
-        id: 0,
-        category: 1,
-        name: 2,
-        description: 3,
-        value: 4,
-        openingBid: 5,
-        minRaise: 6,
-        donor: 7,
-        itemType: 8,
-        status: 9,
-        bundleId: 10,
-        bundledDateTime: 11
-      };
-
-      const colIdx = fieldMapping[field];
-      if (colIdx === undefined) throw new Error(`Invalid field: ${field}`);
-
-      const affectedCategories = new Set<string>();
-
-      for (const rowIndex of rowIndices) {
-        if (!values[rowIndex - 1]) continue;
-        const row = values[rowIndex - 1];
-        const oldCategory = row[1];
-        
-        row[colIdx] = value;
-
-        if (field === 'category') {
-          if (oldCategory) affectedCategories.add(oldCategory);
-          if (value) affectedCategories.add(value);
-        } else if (field === 'status') {
-          const category = row[1];
-          if (category) affectedCategories.add(category);
-        }
-      }
-
-      // Run Re-Sequencing Cleanup
-      for (const cat of affectedCategories) {
-        if (!cat) continue;
-        const rowMapping: {origIndex: number, row: any[]}[] = [];
-        for (let i = 1; i < values.length; i++) {
-          const r = values[i] || [];
-          if (r[1] === cat && r[9] === "Active") {
-            rowMapping.push({ origIndex: i, row: r });
-          }
-        }
-        rowMapping.sort((a, b) => {
-          const idA = parseInt(a.row[0]) || 999999;
-          const idB = parseInt(b.row[0]) || 999999;
-          if (idA !== idB) return idA - idB;
-          return a.origIndex - b.origIndex;
-        });
-        
-        const startNum = baseNumbers[cat] || getCategoryBase(cat);
-        let runningNum = startNum;
-        rowMapping.forEach(item => {
-          item.row[0] = runningNum.toString();
-          runningNum++;
-        });
-      }
-
-      await sheets.spreadsheets.values.update({
-        spreadsheetId, 
-        range: "'Auction-Items'!A1:L", 
-        valueInputOption: "USER_ENTERED", 
-        requestBody: { values }
-      });
-
-      res.json({ success: true, affected_categories: Array.from(affectedCategories) });
+      res.json(result);
     } catch (error: any) {
       console.error("[Server Error] bulk-update-items:", error);
       next(error);
@@ -621,33 +301,8 @@ export default function createDataRouter() {
       const decodedRange = decodeURIComponent(range);
       const normalizedRange = normalizeRange(decodedRange);
       const sheetName = decodedRange.split('!')[0];
-      const metadata = await sheets.spreadsheets.get({ spreadsheetId }).catch(() => null);
       
-      if (metadata) {
-        const hasSheet = metadata.data.sheets?.some(s => s.properties?.title === sheetName);
-        if (!hasSheet) {
-          await sheets.spreadsheets.batchUpdate({
-            spreadsheetId,
-            requestBody: {
-              requests: [{
-                addSheet: {
-                  properties: { title: sheetName }
-                }
-              }]
-            }
-          });
-          if (sheetName === "Follow-Up") {
-            await sheets.spreadsheets.values.update({
-              spreadsheetId,
-              range: "'Follow-Up'!A1:C1",
-              valueInputOption: "USER_ENTERED",
-              requestBody: {
-                values: [["Bidder ID", "Item ID", "Amount"]]
-              }
-            });
-          }
-        }
-      }
+      await ensureFollowUpSheet(sheets, spreadsheetId, sheetName);
 
       const result = await sheets.spreadsheets.values.update({
         spreadsheetId,
@@ -689,34 +344,9 @@ export default function createDataRouter() {
       const decodedRange = decodeURIComponent(range);
       const normalizedRange = normalizeRange(decodedRange);
       const sheetName = decodedRange.split('!')[0];
-      const metadata = await sheets.spreadsheets.get({ spreadsheetId }).catch(() => null);
-      
-      if (metadata) {
-        const hasSheet = metadata.data.sheets?.some(s => s.properties?.title === sheetName);
-        if (!hasSheet) {
-          await sheets.spreadsheets.batchUpdate({
-            spreadsheetId,
-            requestBody: {
-              requests: [{
-                addSheet: {
-                  properties: { title: sheetName }
-                }
-              }]
-            }
-          });
-          if (sheetName === "Follow-Up") {
-            await sheets.spreadsheets.values.update({
-              spreadsheetId,
-              range: "'Follow-Up'!A1:C1",
-              valueInputOption: "USER_ENTERED",
-              requestBody: {
-                values: [["Bidder ID", "Item ID", "Amount"]]
-              }
-            });
-          }
-        }
-      }
 
+      await ensureFollowUpSheet(sheets, spreadsheetId, sheetName);
+      
       const result = await sheets.spreadsheets.values.append({
         spreadsheetId,
         range: normalizedRange,
@@ -871,34 +501,8 @@ export default function createDataRouter() {
     }
 
     try {
-      const recentHistory = Array.isArray(history) ? history.slice(-10) : [];
-      
-      const mappedContext = recentHistory.map((msg: any) => ({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.text }]
-      }));
-
-      mappedContext.push({
-        role: 'user',
-        parts: [{ text: message }]
-      });
-
-      const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-
-      const result = await genAI.models.generateContent({
-        model: modelName,
-        contents: mappedContext,
-        config: {
-          systemInstruction: context || "You are an AI assistant for a charity auction.",
-        }
-      });
-
-      const finishReason = result.candidates?.[0]?.finishReason;
-      if (finishReason && finishReason !== 'STOP') {
-        return res.status(503).json({ error: "AI generation interrupted", fallback: true });
-      }
-
-      res.json({ text: result.text });
+      const text = await handleAssistantRequest(context, message, history);
+      res.json({ text });
     } catch (error: any) {
       console.error("Gemini assistant error:", error);
       res.status(500).json({ error: error.message, fallback: true });

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { google } from 'googleapis';
-import { getOAuthClient, SCOPES } from '../utils/auth';
+import { getOAuthClient, SCOPES } from '../services/oauth';
 
 const router = Router();
 

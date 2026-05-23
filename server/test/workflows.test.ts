@@ -101,6 +101,34 @@ describe("Workflow Integration Tests", () => {
     });
   });
 
+  describe("bidRoutes - Legacy Compatibility & Error Handling", () => {
+    it("handles a Google API 429 Rate Limit error gracefully via errorHandler middleware", async () => {
+      // Simulate Google API rate limits throwing exceptions via MSW
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', () => {
+          return new HttpResponse(
+            JSON.stringify({ error: { message: "Quota exceeded for quota metric 'Read requests'", status: "RESOURCE_EXHAUSTED" } }),
+            { status: 429 }
+          );
+        })
+      );
+
+      const response = await request(app)
+        .post("/api/auction/close-and-cleanup")
+        .set(authHeader)
+        .send({
+          spreadsheetId: "test-sheet-id",
+          bidderNumbersSheet: "Bidder-Numbers",
+          bidManagementSheet: "Bid-Management",
+        });
+
+      // The global errorHandler catch intercepts errors and outputs formatted JSON responses
+      expect(response.status).toBe(500); 
+      expect(response.body).toHaveProperty("message");
+      expect(response.body.message).toContain("Quota exceeded");
+    });
+  });
+
   describe("bidRoutes - /api/auction/record-winning-bid", () => {
     const validBody = {
       bidderId: "1001",
@@ -257,7 +285,7 @@ describe("Workflow Integration Tests", () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toContain("Missing required sheet names");
+      expect(response.body.error).toContain("Missing required fields for walk-in");
     });
   });
 

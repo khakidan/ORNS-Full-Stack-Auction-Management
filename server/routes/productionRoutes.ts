@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { google } from 'googleapis';
-import { getAuthenticatedClient } from '../utils/auth';
+import { getAuthenticatedClient } from '../services/oauth';
 
 export default function createProductionRouter() {
   const router = Router();
