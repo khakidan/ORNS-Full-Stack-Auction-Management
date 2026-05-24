@@ -220,6 +220,9 @@ export default function createDataRouter() {
       res.json(result);
     } catch (error: any) {
       console.error("[Server Error] update-item:", error);
+      if (error.message?.includes("Invalid field")) {
+        return res.status(400).json({ error: error.message });
+      }
       next(error);
     }
   });

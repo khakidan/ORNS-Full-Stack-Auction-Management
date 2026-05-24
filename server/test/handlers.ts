@@ -6,6 +6,7 @@ export let lastAppendedRow: any[] = [];
 export let appsScriptCallCount = 0;
 export let lastBulkWritePayload: any[][] = [];
 export let bulkWriteCallCount = 0;
+export let productionScriptCallLog: string[] = [];
 
 export function resetHandlersState() {
   appendCallCount = 0;
@@ -14,6 +15,7 @@ export function resetHandlersState() {
   appsScriptCallCount = 0;
   lastBulkWritePayload = [];
   bulkWriteCallCount = 0;
+  productionScriptCallLog = [];
 }
 
 export const handlers = [
@@ -167,6 +169,10 @@ export const handlers = [
   http.post('https://script.googleapis.com/v1/scripts/:scriptId\\:run', async ({ request }) => {
     appsScriptCallCount++;
     const body = await request.json() as any;
+    const funcName = body?.requestBody?.function || body?.function;
+    if (funcName) {
+      productionScriptCallLog.push(funcName);
+    }
     const params = body?.requestBody?.parameters || body?.parameters || [];
     const paymentMethod = params[1];
 

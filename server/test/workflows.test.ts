@@ -3,7 +3,7 @@ import request from "supertest";
 import { app } from "../app";
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
-import { appendCallCount, updateCallCount, lastAppendedRow, appsScriptCallCount, resetHandlersState, lastBulkWritePayload, bulkWriteCallCount } from "./handlers";
+import { appendCallCount, updateCallCount, lastAppendedRow, appsScriptCallCount, resetHandlersState, lastBulkWritePayload, bulkWriteCallCount, productionScriptCallLog } from "./handlers";
 import { checkIdempotency, saveIdempotency } from "../utils/idempotency";
 
 /**
@@ -1122,6 +1122,525 @@ describe("Workflow Integration Tests", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
+    });
+  });
+
+  describe("Update Auction Item workflow", () => {
+    const spreadsheetId = "test-spreadsheet-id";
+    // We already have authHeader in the outer scope of workflows.test.ts! It is defined on line 30.
+    // I can just reuse it and not define it here, so I'll remove it.
+
+    beforeEach(() => {
+      resetHandlersState();
+    });
+
+    afterEach(() => {
+      server.resetHandlers();
+      resetHandlersState();
+    });
+
+    const ITEM_FIELD_MAPPING = {
+      category: 1,
+      name: 2,
+      description: 3,
+      value: 4,
+      openingBid: 5,
+      minRaise: 6,
+      donor: 7,
+      itemType: 8,
+      status: 9
+    };
+
+    Object.entries(ITEM_FIELD_MAPPING).forEach(([field, colIdx]) => {
+      it(`updates the ${field} field successfully`, async () => {
+        const response = await request(app)
+          .post("/api/auction/update-item")
+          .set(authHeader)
+          .send({
+            spreadsheetId,
+            rowIndex: 2,
+            field,
+            value: "Test Value"
+          });
+
+        expect(response.status).toBe(200);
+        expect(response.body.success).toBe(true);
+        expect(lastBulkWritePayload).toBeDefined();
+        // Check if value is at correct colIdx for row 2 (which is index 1)
+        expect(lastBulkWritePayload[1][colIdx]).toBe("Test Value");
+      });
+    });
+
+    it("auth failure test", async () => {
+      const response = await request(app)
+        .post("/api/auction/update-item")
+        .send({
+          spreadsheetId,
+          rowIndex: 2,
+          field: "name",
+          value: "Test Value"
+        });
+
+      expect(response.status).toBe(401);
+    });
+
+    it("missing required fields test", async () => {
+      const response = await request(app)
+        .post("/api/auction/update-item")
+        .set(authHeader)
+        .send({
+          spreadsheetId,
+          // Missing rowIndex
+          field: "name",
+          value: "Test Value"
+        });
+
+      expect(response.status).toBe(400);
+    });
+
+    it("invalid field name test", async () => {
+      const response = await request(app)
+        .post("/api/auction/update-item")
+        .set(authHeader)
+        .send({
+          spreadsheetId,
+          rowIndex: 2,
+          field: "nonExistentField",
+          value: "Test"
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
+    });
+
+    it("category change triggers re-sequencing test", async () => {
+      const response = await request(app)
+        .post("/api/auction/update-item")
+        .set(authHeader)
+        .send({
+          spreadsheetId,
+          rowIndex: 2,
+          field: "category",
+          value: "Travel"
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(lastBulkWritePayload).toBeDefined();
+      
+      // Changed to Travel, so ID should be exactly 1101 (since base is 1100 and it's the 1st travel item)
+      // ID is at index 0
+      expect(lastBulkWritePayload[1][0]).toBe("1101");
+    });
+  });
+
+  describe("Delete Auction Item workflow", () => {
+    const spreadsheetId = "test-spreadsheet-id";
+
+    beforeEach(() => {
+      resetHandlersState();
+    });
+
+    afterEach(() => {
+      server.resetHandlers();
+      resetHandlersState();
+    });
+
+    it("Happy path — delete marks item correctly", async () => {
+      const response = await request(app)
+        .post("/api/auction/delete-item")
+        .set(authHeader)
+        .send({ spreadsheetId, rowIndex: 2 });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ success: true });
+
+      expect(lastBulkWritePayload).toBeDefined();
+
+      const updatedRow = lastBulkWritePayload[1];
+      expect(updatedRow[0]).toBe("");
+      expect(updatedRow[9]).toBe("Deleted");
+    });
+
+    it("Deleted items excluded from sync", async () => {
+      server.use(
+        http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ params, request }) => {
+          const range = decodeURIComponent(params.range as string);
+
+          if (range.includes("Auction-Items")) {
+            return HttpResponse.json({
+              values: [
+                ["Item Number", "Category", "Item Name", "Description", "Value", "Opening Bid", "Min Raise", "Donated By", "Type", "Status", "Bundle ID", "Bundled Date/Time"],
+                ["800", "Food", "Active Pizza", "Desc", "50", "20", "5", "Donor", "Certificate", "Active", "", ""],
+                ["", "Food", "Deleted Sushi", "Desc", "150", "50", "10", "Donor", "Certificate", "Deleted", "", ""]
+              ]
+            });
+          }
+
+          if (range.includes("Bidder-Numbers!A:Z")) {
+             return HttpResponse.json({ values: [["Bidder #", "Names"]] });
+          }
+          if (range.includes("Bid-Management!A:F")) {
+             return HttpResponse.json({ values: [["ID", "Item Name", "Winning Bidder", "Winning Bid", "Notes"]] });
+          }
+
+          if (range.includes("Categories!A:C")) {
+             return HttpResponse.json({
+               values: [
+                 ["Category Base", "Category Name", "Description"],
+                 ["800", "Food", "Food items"]
+               ]
+             });
+          }
+
+          return HttpResponse.json({ values: [] });
+        }),
+        http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId", () => {
+          return HttpResponse.json({
+            sheets: [
+              { properties: { title: "Auction-Items", sheetId: 111 } },
+              { properties: { title: "Bid-Management", sheetId: 222 } },
+              { properties: { title: "Bidder-Numbers", sheetId: 333 } },
+            ]
+          });
+        })
+      );
+
+      const response = await request(app)
+        .post("/api/bidders/sync")
+        .set(authHeader)
+        .send({
+          spreadsheetId: spreadsheetId,
+          auctionImportSheetID: "dummy",
+          auctionTicketSheetsID: "dummy"
+        });
+
+      if (response.status !== 200) {
+        console.error("SYNC FAILED", response.body);
+      }
+      expect(response.status).toBe(200);
+
+      expect(lastBulkWritePayload).toBeDefined();
+      
+      const flatWritten = JSON.stringify(lastBulkWritePayload);
+      
+      expect(flatWritten).toContain("Active Pizza");
+      expect(flatWritten).not.toContain("Deleted Sushi");
+    });
+
+    it("Auth failure", async () => {
+      const response = await request(app)
+        .post("/api/auction/delete-item")
+        .send({ spreadsheetId, rowIndex: 2 });
+      expect(response.status).toBe(401);
+    });
+
+    it("Missing required fields", async () => {
+      const response = await request(app)
+        .post("/api/auction/delete-item")
+        .set(authHeader)
+        .send({ spreadsheetId });
+        
+      expect(response.status).toBe(400);
+    });
+
+    it("Re-sequencing after delete", async () => {
+      server.use(
+        http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ request }) => {
+          const url = new URL(request.url);
+          const pathname = decodeURIComponent(url.pathname);
+
+          if (pathname.includes("Categories!A:C") || pathname.includes("Categories")) {
+            return HttpResponse.json({
+              values: [
+                ["Category", "Base"],
+                ["Food", "800"]
+              ]
+            });
+          }
+
+          if (pathname.includes("Auction-Items")) {
+            return HttpResponse.json({
+              values: [
+                ["Item Number", "Category", "Item Name", "Description", "Value", "Opening Bid", "Min Raise", "Donated By", "Type", "Status", "Bundle ID", "Bundled Date/Time"],
+                ["800", "Food", "Pizza Night", "A pizza dinner", "$50.00", "$22.50", "$5.00", "Joe's Pizza", "Certificate", "Active", "", ""],
+                ["801", "Food", "Sushi Dinner", "A sushi dinner", "$150.00", "$67.50", "$10.00", "Sushi Place", "Certificate", "Active", "", ""],
+                ["802", "Food", "Pasta Night", "A pasta dinner", "$60.00", "$25.00", "$5.00", "Pasta Place", "Certificate", "Active", "", ""]
+              ]
+            });
+          }
+
+          return HttpResponse.json({ values: [] });
+        })
+      );
+
+      const response = await request(app)
+        .post("/api/auction/delete-item")
+        .set(authHeader)
+        .send({ spreadsheetId, rowIndex: 3 });
+
+      expect(response.status).toBe(200);
+
+      expect(lastBulkWritePayload).toBeDefined();
+      
+      const values = lastBulkWritePayload;
+      console.log("RESEQUENCED VALUES:", values);
+      expect(values[1][0]).toBe("800"); 
+      expect(values[2][0]).toBe(""); 
+      expect(values[3][0]).toBe("801"); 
+    });
+  });
+
+  describe("Document and Presentation Creation workflow", () => {
+    beforeEach(() => {
+      process.env.SCRIPT_ID_ITEM_ENTRY = "dummy-item-script-id";
+      process.env.SCRIPT_ID_TICKETS = "dummy-tickets-script-id";
+    });
+
+    afterEach(() => {
+      resetHandlersState();
+      server.resetHandlers();
+    });
+
+    const testCases = [
+      {
+        endpoint: "/api/production/item-entry/bundling-doc",
+        funcName: "apiCreateBundlingDoc",
+        payload: { folderId: "test-folder-id" },
+      },
+      {
+        endpoint: "/api/production/item-entry/item-labels",
+        funcName: "apiCreateItemLabels",
+        payload: { folderId: "test-folder-id" },
+      },
+      {
+        endpoint: "/api/production/item-entry/slideshow",
+        funcName: "apiCreateSlideshow",
+        payload: { folderId: "test-folder-id" },
+      },
+      {
+        endpoint: "/api/production/item-entry/bidding-guide-cover",
+        funcName: "apiCreateBiddingGuideCoverPage",
+        payload: { folderId: "test-folder-id" },
+      },
+      {
+        endpoint: "/api/production/item-entry/bidding-guide-inner",
+        funcName: "apiCreateBiddingGuideInnerPages",
+        payload: { folderId: "test-folder-id" },
+      },
+      {
+        endpoint: "/api/production/item-entry/bid-sheets",
+        funcName: "apiCreateBidSheets",
+        payload: { folderId: "test-folder-id" },
+      },
+      {
+        endpoint: "/api/production/item-entry/catalog",
+        funcName: "apiCreateCatalog",
+        payload: { folderId: "test-folder-id" },
+      },
+      {
+        endpoint: "/api/production/item-entry/table-tents",
+        funcName: "apiCreateTableTents",
+        payload: { folderId: "test-folder-id" },
+      },
+      {
+        endpoint: "/api/production/tickets/bidder-labels",
+        funcName: "apiCreateBidderLabels",
+        payload: {},
+      },
+    ];
+
+    testCases.forEach(({ endpoint, funcName, payload }) => {
+      describe(endpoint, () => {
+        it(`happy path - successfully calls ${funcName}`, async () => {
+          const response = await request(app)
+            .post(endpoint)
+            .set(authHeader)
+            .send(payload);
+
+          expect(response.status).toBe(200);
+          expect(productionScriptCallLog).toContain(funcName);
+          expect(appsScriptCallCount).toBe(1);
+        });
+
+        it("auth failure - returns 401 when unauthenticated", async () => {
+          const response = await request(app)
+            .post(endpoint)
+            .send(payload);
+
+          expect(response.status).toBe(401);
+          expect(appsScriptCallCount).toBe(0);
+        });
+      });
+    });
+
+    it("handles Apps Script execution failure with 500 status", async () => {
+      server.use(
+        http.post("https://script.googleapis.com/v1/scripts/:scriptId\\:run", () => {
+          return HttpResponse.json({
+            error: {
+              message: "Apps Script simulation failed"
+            }
+          });
+        })
+      );
+
+      const response = await request(app)
+        .post("/api/production/item-entry/bundling-doc")
+        .set(authHeader)
+        .send({ folderId: "fail-folder-id" });
+
+      expect(response.status).toBe(500);
+      expect(response.body?.success).not.toBe(true);
+    });
+  });
+
+  describe("Ticket Payment Status workflow", () => {
+    beforeEach(() => {
+      process.env.SCRIPT_ID_BID_MANAGEMENT = "dummy-bid-management-script-id";
+    });
+
+    afterEach(() => {
+      resetHandlersState();
+      server.resetHandlers();
+    });
+
+    it("Happy path — check-in adds ticket bid then checkout marks attendee paid", async () => {
+      const putPayloads: any[][][] = [];
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+          const url = new URL(request.url);
+          const range = decodeURIComponent(url.pathname.split('/').pop() || "");
+          if (range.includes("Bidder-Numbers")) {
+            return HttpResponse.json({
+              values: [
+                ["ID", "First Name", "Last Name", "Email", "Phone", "Checked In", "Checked Out", "Is Paid", "Invoice URL", "Invoice Total Amount", "PayPal Fee Status", "Checkout Timestamp"],
+                ["1001", "John", "Doe", "john@example.com", "555-0199", "FALSE", "FALSE", "FALSE", "", "", "", ""]
+              ]
+            });
+          }
+          if (range.includes("Bid-Management")) {
+            return HttpResponse.json({
+              values: [
+                ["1001", "Price"],
+                ["Total", ""],
+                ["", ""],
+                ["", ""]
+              ]
+            });
+          }
+          if (range.includes("tickets")) {
+            return HttpResponse.json({
+              values: [["Header"]]
+            });
+          }
+          return HttpResponse.json({ values: [] });
+        }),
+        http.put('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', async ({ request }) => {
+          try {
+            const body = await request.clone().json() as any;
+            if (body.values) {
+              putPayloads.push(body.values);
+            }
+          } catch (e) {}
+          return HttpResponse.json({ updatedRows: 1 });
+        })
+      );
+
+      // Step 1: POST check-in-with-bid
+      const step1Response = await request(app)
+        .post("/api/auction/check-in-with-bid")
+        .set(authHeader)
+        .send({
+          bidderId: "1001",
+          spreadsheetId: "test-spread-id",
+          bidManagementSheet: "Bid-Management",
+          bidderNumbersSheet: "Bidder-Numbers",
+          bidValue: 35,
+          ticketsSpreadsheetId: "test-tickets-id",
+          ticketPrice: "35",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(step1Response.status).toBe(200);
+      expect(step1Response.body.success).toBe(true);
+      expect(step1Response.body.bidAdded).toBe(true);
+      
+      // Assert the MSW write payload shows the ticket price was written to correct location
+      const hasTicketBid = putPayloads.some(values => 
+        values.some(row => row.includes("1606") && (row.includes(35) || row.includes("35")))
+      );
+      expect(hasTicketBid).toBe(true);
+
+      // Step 2: POST checkout-mark-paid
+      const step2Response = await request(app)
+        .post("/api/auction/checkout-mark-paid")
+        .set(authHeader)
+        .send({
+          bidderId: "1001",
+          spreadsheetId: "test-spread-id",
+          ticketsSpreadsheetId: "test-tickets-id",
+          bidderNumbersSheet: "Bidder-Numbers",
+          attendeeInfo: { sheet: "tickets", rowIndex: 2 },
+          paymentMethod: "cash",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(step2Response.status).toBe(200);
+      expect(step2Response.body.success).toBe(true);
+      expect(step2Response.body.attendeeUpdated).toBe(true);
+
+      // Assert putPayloads contains "Paid" written to correct column in tickets spreadsheet
+      const hasPaidUpdate = putPayloads.some(values => 
+        values.some(row => row.includes("Paid"))
+      );
+      expect(hasPaidUpdate).toBe(true);
+    });
+
+    it("Checkout without tickets spreadsheet — attendeeUpdated is false", async () => {
+      const response = await request(app)
+        .post("/api/auction/checkout-mark-paid")
+        .set(authHeader)
+        .send({
+          bidderId: "1001",
+          spreadsheetId: "test-spread-id",
+          bidderNumbersSheet: "Bidder-Numbers",
+          paymentMethod: "cash",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.attendeeUpdated).toBe(false);
+    });
+
+    it("Auth failure (check-in) — returns 401 when unauthenticated", async () => {
+      const response = await request(app)
+        .post("/api/auction/check-in-with-bid")
+        .send({
+          bidderId: "1001",
+          spreadsheetId: "test-spread-id",
+          bidManagementSheet: "Bid-Management",
+          bidderNumbersSheet: "Bidder-Numbers",
+          bidValue: 35,
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(response.status).toBe(401);
+    });
+
+    it("Auth failure (checkout) — returns 401 when unauthenticated", async () => {
+      const response = await request(app)
+        .post("/api/auction/checkout-mark-paid")
+        .send({
+          bidderId: "1001",
+          spreadsheetId: "test-spread-id",
+          bidderNumbersSheet: "Bidder-Numbers",
+          paymentMethod: "cash",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(response.status).toBe(401);
     });
   });
 });

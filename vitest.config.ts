@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from "vitest/config";
 import path from "path";
 
@@ -21,5 +22,10 @@ export default defineConfig({
       GOOGLE_CLIENT_SECRET: "test-google-client-secret",
       NODE_ENV: "test",
     },
+    // @ts-ignore
+    environmentMatchGlobs: [
+      ["src/**/*.test.tsx", "jsdom"],
+      ["src/**/*.test.ts", "jsdom"],
+    ],
   },
 });
