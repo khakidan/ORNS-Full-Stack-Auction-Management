@@ -50,6 +50,14 @@ export interface Attendee {
   totalPaid: string;
 }
 
+export interface GoogleTokens {
+  access_token?: string | null;
+  refresh_token?: string | null;
+  expiry_date?: number | null;
+  token_type?: string | null;
+  scope?: string | null;
+}
+
 export interface Config {
   auctionItemsSpreadsheetId: string;
   auctionTicketsSpreadsheetId: string;

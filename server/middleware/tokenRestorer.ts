@@ -8,7 +8,7 @@ export function tokenRestorer(req: Request, res: Response, next: NextFunction): 
   if (tokenHeader && typeof tokenHeader === "string") {
     try {
       const parsed = JSON.parse(tokenHeader);
-      if (parsed) {
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         if (!req.session) {
           req.session = {} as any;
         }

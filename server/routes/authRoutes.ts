@@ -43,12 +43,10 @@ router.get("/auth/callback", async (req, res, next) => {
       req.session = { tokens: null };
     }
     
-    if (req.session) {
-      const slimTokens = { ...tokens };
-      delete slimTokens.id_token;
-      delete slimTokens.scope;
-      req.session.tokens = slimTokens;
-    }
+    const slimTokens = { ...tokens };
+    delete slimTokens.id_token;
+    delete slimTokens.scope;
+    req.session.tokens = slimTokens;
     
     res.redirect('/');
   } catch (error) {

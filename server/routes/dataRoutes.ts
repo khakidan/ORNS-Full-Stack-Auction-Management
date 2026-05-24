@@ -189,6 +189,7 @@ export default function createDataRouter() {
         rowIndex
       });
 
+      clearCacheForSpreadsheet(spreadsheetId);
       res.json(result);
     } catch (error: any) {
       console.error("[Server Error] delete-item:", error);
@@ -227,10 +228,13 @@ export default function createDataRouter() {
   router.post("/auction/bulk-update-items", async (req: Request, res: Response, next: NextFunction) => {
     if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
 
-    const { spreadsheetId, rowIndices, field, value } = req.body;
+    const { spreadsheetId, rowIndices, field, value, idempotencyKey } = req.body;
     if (!spreadsheetId || !rowIndices || !rowIndices.length || !field) {
       return res.status(400).json({ error: "Missing required bulk update parameters" });
     }
+
+    const cached = checkIdempotency(req, res, idempotencyKey);
+    if (cached) return;
 
     try {
       const client = getAuthenticatedClient(req.session.tokens);
@@ -243,6 +247,7 @@ export default function createDataRouter() {
         value
       });
 
+      saveIdempotency(idempotencyKey, result);
       res.json(result);
     } catch (error: any) {
       console.error("[Server Error] bulk-update-items:", error);
@@ -316,15 +321,7 @@ export default function createDataRouter() {
         },
       });
       
-      // Invalidate cache for this sheet/range
-      const cacheKey = `${spreadsheetId}:${normalizedRange}`;
-      sheetCache.delete(cacheKey);
-      // Also invalidate any overlapping ranges (simplest is to clear all for this sheet)
-      for (const key of sheetCache.keys()) {
-        if (key.startsWith(`${spreadsheetId}:`)) {
-          sheetCache.delete(key);
-        }
-      }
+      clearCacheForSpreadsheet(spreadsheetId);
 
       res.json(result.data);
     } catch (error: any) {
@@ -359,12 +356,7 @@ export default function createDataRouter() {
         },
       });
 
-      // Invalidate cache for this sheet
-      for (const key of sheetCache.keys()) {
-        if (key.startsWith(`${spreadsheetId}:`)) {
-          sheetCache.delete(key);
-        }
-      }
+      clearCacheForSpreadsheet(spreadsheetId);
 
       res.json(result.data);
     } catch (error: any) {
@@ -392,12 +384,7 @@ export default function createDataRouter() {
         range: normalizedRange,
       });
 
-      // Invalidate cache for this sheet
-      for (const key of sheetCache.keys()) {
-        if (key.startsWith(`${spreadsheetId}:`)) {
-          sheetCache.delete(key);
-        }
-      }
+      clearCacheForSpreadsheet(spreadsheetId);
 
       res.json(result.data);
     } catch (error: any) {

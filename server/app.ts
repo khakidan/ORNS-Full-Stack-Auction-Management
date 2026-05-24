@@ -21,7 +21,7 @@ import { tokenRestorer } from './middleware/tokenRestorer';
 declare global {
   namespace Express {
     interface Request {
-      session: { tokens?: any } | null;
+      session: { tokens?: import('../src/types').GoogleTokens } | null;
     }
   }
 }

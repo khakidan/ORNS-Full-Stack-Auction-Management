@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { OAuth2Client } from "google-auth-library";
 import { calculatePayPalSurcharge } from "../utils/financeUtils";
 
 export function generateEmailHtml(receipt: any, paymentUrl: string, adjustedTotal: string, feeAmount: string): string {
@@ -84,7 +85,7 @@ export function createRawEmail(to: string, subject: string, htmlBody: string, fr
   return Buffer.from(message, 'utf-8').toString("base64").replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export async function processEmail(client: any, spreadsheetId: string, bidderId: string) {
+export async function processEmail(client: OAuth2Client, spreadsheetId: string, bidderId: string) {
   const sheets = google.sheets({ version: "v4", auth: client });
   const bMgmt = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bid-Management'!A1:ZZ1000" });
   const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });

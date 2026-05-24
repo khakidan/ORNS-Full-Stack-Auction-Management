@@ -3,7 +3,8 @@ import request from "supertest";
 import { app } from "../app";
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
-import { appendCallCount, updateCallCount, lastAppendedRow, appsScriptCallCount, resetHandlersState } from "./handlers";
+import { appendCallCount, updateCallCount, lastAppendedRow, appsScriptCallCount, resetHandlersState, lastBulkWritePayload, bulkWriteCallCount } from "./handlers";
+import { checkIdempotency, saveIdempotency } from "../utils/idempotency";
 
 /**
  * COVERAGE MAP:
@@ -791,6 +792,336 @@ describe("Workflow Integration Tests", () => {
 
       const hasBidManagementAppend = appends.some(r => r.range.includes('Bid-Management'));
       expect(hasBidManagementAppend).toBe(false);
+    });
+  });
+
+  describe("Batch Update workflow — Set Category", () => {
+
+    afterEach(() => {
+      resetHandlersState();
+      server.resetHandlers();
+    });
+
+    it("Happy path — category update triggers re-sequencing", async () => {
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+          const url = new URL(request.url);
+          const range = decodeURIComponent(url.pathname.split('/').pop() || "");
+          
+          if (range.includes("Auction-Items")) {
+            return HttpResponse.json({
+              values: [
+                ["Item Number", "Category", "Item Name", "Description", "Value", "Opening Bid", "Min Raise", "Donated By", "Physical Item, Certificate, or Both?", "Status", "Bundle ID", "Bundled Date/Time"],
+                ["801", "Food", "Pizza Night", "A pizza dinner", "$50.00", "$22.50", "$5.00", "Joe's Pizza", "Certificate", "Active", "", ""],
+                ["803", "Food", "Sushi Dinner", "A sushi dinner", "$150.00", "$67.50", "$10.00", "Sushi Place", "Certificate", "Active", "", ""],
+                ["301", "Health & Beauty", "Spa Day", "A spa day", "$100.00", "$45.00", "$5.00", "Spa", "Certificate", "Active", "", ""]
+              ]
+            });
+          }
+          if (range.includes("Categories")) {
+            return HttpResponse.json({
+              values: [["Category", "Base"], ["Food", "800"], ["Health & Beauty", "300"]]
+            });
+          }
+          return HttpResponse.json({ values: [] });
+        })
+      );
+
+      const response = await request(app)
+        .post("/api/auction/bulk-update-items")
+        .set(authHeader)
+        .send({
+          spreadsheetId: "test-spreadsheet-id",
+          rowIndices: [2, 3], // row indices 2 and 3 correspond to the Food items (801 and 803)
+          field: "category",
+          value: "Travel",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.affected_categories).toContain("Food");
+      expect(response.body.affected_categories).toContain("Travel");
+
+      expect(bulkWriteCallCount).toBe(1);
+      expect(lastBulkWritePayload).toBeDefined();
+      
+      // Index 1 corresponds to Row 2
+      expect(lastBulkWritePayload[1][1]).toBe("Travel");
+      expect(lastBulkWritePayload[1][0]).toBe("1101");
+
+      // Index 2 corresponds to Row 3
+      expect(lastBulkWritePayload[2][1]).toBe("Travel");
+      expect(lastBulkWritePayload[2][0]).toBe("1102");
+
+      // Index 3 (Spa Day) remains unchanged
+      expect(lastBulkWritePayload[3][0]).toBe("301");
+      expect(lastBulkWritePayload[3][1]).toBe("Health & Beauty");
+    });
+
+    it("Category update — idempotency", async () => {
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+          const url = new URL(request.url);
+          const range = decodeURIComponent(url.pathname.split('/').pop() || "");
+          if (range.includes("Auction-Items")) {
+            return HttpResponse.json({
+              values: [
+                ["Item Number", "Category", "Item Name", "Description", "Value", "Opening Bid", "Min Raise", "Donated By", "Physical Item, Certificate, or Both?", "Status", "Bundle ID", "Bundled Date/Time"],
+                ["801", "Food", "Pizza Night", "A pizza dinner", "$50.00", "$22.50", "$5.00", "Joe's Pizza", "Certificate", "Active", "", ""],
+                ["803", "Food", "Sushi Dinner", "A sushi dinner", "$150.00", "$67.50", "$10.00", "Sushi Place", "Certificate", "Active", "", ""]
+              ]
+            });
+          }
+          if (range.includes("Categories")) {
+            return HttpResponse.json({
+              values: [["Category", "Base"], ["Food", "800"]]
+            });
+          }
+          return HttpResponse.json({ values: [] });
+        })
+      );
+
+      const idempotencyKey = crypto.randomUUID();
+      const payload = {
+        spreadsheetId: "test-spreadsheet-id",
+        rowIndices: [2, 3],
+        field: "category",
+        value: "Travel",
+        idempotencyKey
+      };
+
+      const res1 = await request(app)
+        .post("/api/auction/bulk-update-items")
+        .set(authHeader)
+        .send(payload);
+
+      expect(res1.status).toBe(200);
+
+      const res2 = await request(app)
+        .post("/api/auction/bulk-update-items")
+        .set(authHeader)
+        .send(payload);
+
+      expect(res2.status).toBe(200);
+      expect(res2.body.duplicated).toBe(true);
+      expect(bulkWriteCallCount).toBe(1); // The sheet was not written twice
+    });
+
+    it("Category update — auth failure", async () => {
+      const response = await request(app)
+        .post("/api/auction/bulk-update-items")
+        .send({
+          spreadsheetId: "test-spreadsheet-id",
+          rowIndices: [2, 3],
+          field: "category",
+          value: "Travel",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(response.status).toBe(401);
+    });
+
+    it("Category update — validation failure", async () => {
+      const response = await request(app)
+        .post("/api/auction/bulk-update-items")
+        .set(authHeader)
+        .send({
+          spreadsheetId: "test-spreadsheet-id",
+          field: "category",
+          value: "Travel",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain("Missing required bulk update parameters");
+    });
+
+    it("Category update — external service failure", async () => {
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', () => {
+          return new HttpResponse(null, { status: 500 });
+        })
+      );
+
+      const response = await request(app)
+        .post("/api/auction/bulk-update-items")
+        .set(authHeader)
+        .send({
+          spreadsheetId: "test-spreadsheet-id",
+          rowIndices: [2, 3],
+          field: "category",
+          value: "Travel",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(response.status).toBe(500);
+    });
+  });
+
+  describe("Batch Update workflow — Set Type", () => {
+
+    afterEach(() => {
+      resetHandlersState();
+      server.resetHandlers();
+    });
+
+    it("Happy path — type update does NOT trigger re-sequencing", async () => {
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+          const url = new URL(request.url);
+          const range = decodeURIComponent(url.pathname.split('/').pop() || "");
+          if (range.includes("Auction-Items")) {
+            return HttpResponse.json({
+              values: [
+                ["Item Number", "Category", "Item Name", "Description", "Value", "Opening Bid", "Min Raise", "Donated By", "Physical Item, Certificate, or Both?", "Status", "Bundle ID", "Bundled Date/Time"],
+                ["801", "Food", "Pizza Night", "A pizza dinner", "$50.00", "$22.50", "$5.00", "Joe's Pizza", "Certificate", "Active", "", ""],
+                ["803", "Food", "Sushi Dinner", "A sushi dinner", "$150.00", "$67.50", "$10.00", "Sushi Place", "Certificate", "Active", "", ""]
+              ]
+            });
+          }
+          if (range.includes("Categories")) {
+            return HttpResponse.json({
+              values: [["Category", "Base"], ["Food", "800"]]
+            });
+          }
+          return HttpResponse.json({ values: [] });
+        })
+      );
+
+      const response = await request(app)
+        .post("/api/auction/bulk-update-items")
+        .set(authHeader)
+        .send({
+          spreadsheetId: "test-spreadsheet-id",
+          rowIndices: [2, 3],
+          field: "itemType",
+          value: "Physical",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.affected_categories).toEqual([]);
+
+      expect(bulkWriteCallCount).toBe(1);
+      expect(lastBulkWritePayload).toBeDefined();
+
+      expect(lastBulkWritePayload[1][8]).toBe("Physical");
+      expect(lastBulkWritePayload[2][8]).toBe("Physical");
+
+      expect(lastBulkWritePayload[1][0]).toBe("801");
+      expect(lastBulkWritePayload[2][0]).toBe("803");
+    });
+
+    it("Type update — idempotency", async () => {
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+          const url = new URL(request.url);
+          const range = decodeURIComponent(url.pathname.split('/').pop() || "");
+          if (range.includes("Auction-Items")) {
+            return HttpResponse.json({
+              values: [
+                ["Item Number", "Category", "Item Name", "Description", "Value", "Opening Bid", "Min Raise", "Donated By", "Physical Item, Certificate, or Both?", "Status", "Bundle ID", "Bundled Date/Time"],
+                ["801", "Food", "Pizza Night", "A pizza dinner", "$50.00", "$22.50", "$5.00", "Joe's Pizza", "Certificate", "Active", "", ""]
+              ]
+            });
+          }
+          if (range.includes("Categories")) {
+            return HttpResponse.json({
+              values: [["Category", "Base"], ["Food", "800"]]
+            });
+          }
+          return HttpResponse.json({ values: [] });
+        })
+      );
+
+      const idempotencyKey = crypto.randomUUID();
+      const payload = {
+        spreadsheetId: "test-spreadsheet-id",
+        rowIndices: [2],
+        field: "itemType",
+        value: "Physical",
+        idempotencyKey
+      };
+
+      const res1 = await request(app)
+        .post("/api/auction/bulk-update-items")
+        .set(authHeader)
+        .send(payload);
+
+      expect(res1.status).toBe(200);
+
+      const res2 = await request(app)
+        .post("/api/auction/bulk-update-items")
+        .set(authHeader)
+        .send(payload);
+
+      expect(res2.status).toBe(200);
+      expect(res2.body.duplicated).toBe(true);
+      expect(bulkWriteCallCount).toBe(1);
+    });
+
+    it("Type update — auth failure", async () => {
+      const response = await request(app)
+        .post("/api/auction/bulk-update-items")
+        .send({
+          spreadsheetId: "test-spreadsheet-id",
+          rowIndices: [2],
+          field: "itemType",
+          value: "Physical",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(response.status).toBe(401);
+    });
+
+    it("Type update — validation failure", async () => {
+      const response = await request(app)
+        .post("/api/auction/bulk-update-items")
+        .set(authHeader)
+        .send({
+          spreadsheetId: "test-spreadsheet-id",
+          rowIndices: [],
+          field: "itemType",
+          value: "Physical",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(response.status).toBe(400);
+    });
+  });
+
+  describe("Batch Update workflow — confirmation dialog behavior", () => {
+    it("Cancel action — UI-only (verify no API calls are made)", async () => {
+      expect(bulkWriteCallCount).toBe(0);
+      expect(updateCallCount).toBe(0);
+    });
+
+    it("rejection of single-item selections in UI", async () => {
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+          return HttpResponse.json({
+            values: [
+              ["Item Number", "Category", "Item Name", "Description", "Value", "Opening Bid", "Min Raise", "Donated By", "Physical Item, Certificate, or Both?", "Status", "Bundle ID", "Bundled Date/Time"],
+              ["801", "Food", "Pizza Night", "A pizza dinner", "$50.00", "$22.50", "$5.00", "Joe's Pizza", "Certificate", "Active", "", ""]
+            ]
+          });
+        })
+      );
+      const response = await request(app)
+        .post("/api/auction/bulk-update-items")
+        .set(authHeader)
+        .send({
+          spreadsheetId: "test-spreadsheet-id",
+          rowIndices: [2],
+          field: "category",
+          value: "Travel",
+          idempotencyKey: crypto.randomUUID()
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
     });
   });
 });

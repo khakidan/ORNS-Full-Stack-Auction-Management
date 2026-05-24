@@ -411,7 +411,7 @@ export async function performSheetSync(client: any, spreadsheetId: string, custo
       const targetSheet = sheetsList.find(s => s.properties?.title === "Auction-Items") || sheetsList[0];
       const targetSheetName = targetSheet?.properties?.title || "";
       if (targetSheetName) {
-        console.log("[Sync Step 7] Reading sheet '" + targetSheetName + "'' from master catalog...");
+        console.log("[Sync Step 7] Reading sheet '" + targetSheetName + "' from master catalog...");
         const impData = await sheets.spreadsheets.values.get({
           spreadsheetId: auctionImportSheetID,
           range: `'${targetSheetName}'!A:Z`

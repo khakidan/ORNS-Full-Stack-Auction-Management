@@ -4,12 +4,16 @@ export let appendCallCount = 0;
 export let updateCallCount = 0;
 export let lastAppendedRow: any[] = [];
 export let appsScriptCallCount = 0;
+export let lastBulkWritePayload: any[][] = [];
+export let bulkWriteCallCount = 0;
 
 export function resetHandlersState() {
   appendCallCount = 0;
   updateCallCount = 0;
   lastAppendedRow = [];
   appsScriptCallCount = 0;
+  lastBulkWritePayload = [];
+  bulkWriteCallCount = 0;
 }
 
 export const handlers = [
@@ -70,10 +74,16 @@ export const handlers = [
   // Google Sheets write handler
   http.put('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', async ({ request }) => {
     updateCallCount++;
+    const url = new URL(request.url);
+    if (!url.pathname.includes('Bid-Management') && !url.pathname.includes('Bidder-Numbers') && !url.pathname.includes('Follow-Up')) {
+      bulkWriteCallCount++;
+    }
+    
     try {
       const body = await request.clone().json() as any;
       if (body.values && body.values.length > 0) {
         lastAppendedRow = body.values[body.values.length - 1];
+        lastBulkWritePayload = body.values;
       }
     } catch(e) {}
     return HttpResponse.json({ updatedRows: 1 });

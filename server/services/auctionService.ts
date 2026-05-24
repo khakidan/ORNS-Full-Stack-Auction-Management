@@ -1,4 +1,5 @@
 import { google, sheets_v4 } from "googleapis";
+import { OAuth2Client } from "google-auth-library";
 import { getColumnLetter } from "../utils/columnUtils";
 import { executeGoogleSheetsTransaction, SheetOp } from "../services/sheetsService";
 
@@ -165,7 +166,7 @@ export async function recordWinningBid(
  * Relies on Apps Script bridge for core payment logic.
  */
 export async function checkoutMarkPaid(
-  auth: any,
+  auth: OAuth2Client,
   params: CheckoutParams
 ): Promise<CheckoutResult> {
   const {

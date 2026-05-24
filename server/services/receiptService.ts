@@ -1,7 +1,8 @@
-import { google } from "googleapis";
+import { google, script_v1 } from "googleapis";
+import { OAuth2Client } from "google-auth-library";
 import { processEmail } from "./emailService";
 
-export async function createIndividualReceipt(script: any, scriptId: string, bidderId: string, emailReceipt: boolean) {
+export async function createIndividualReceipt(script: script_v1.Script, scriptId: string, bidderId: string, emailReceipt: boolean) {
     const response = await script.scripts.run({
         scriptId,
         requestBody: {
@@ -14,7 +15,7 @@ export async function createIndividualReceipt(script: any, scriptId: string, bid
       return response.data.response?.result;
 }
 
-export async function createAllReceipts(script: any, scriptId: string) {
+export async function createAllReceipts(script: script_v1.Script, scriptId: string) {
     const response = await script.scripts.run({
         scriptId,
         requestBody: {
@@ -27,7 +28,7 @@ export async function createAllReceipts(script: any, scriptId: string) {
       return response.data.response?.result;
 }
 
-export async function processAllEmails(client: any, spreadsheetId: string) {
+export async function processAllEmails(client: OAuth2Client, spreadsheetId: string) {
     const sheets = google.sheets({ version: "v4", auth: client });
     const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });
     const numData = bNum.data.values || [];

@@ -9,7 +9,9 @@ export function validateEnv(): void {
     "SCRIPT_ID_ITEM_ENTRY",
     "SCRIPT_ID_TICKETS",
     "DRIVE_PARENT_FOLDER_ID",
-    "DRIVE_ARCHIVE_FOLDER_ID"
+    "DRIVE_ARCHIVE_FOLDER_ID",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET"
   ];
 
   for (const envVar of requiredEnvVars) {
