@@ -1,3 +1,8 @@
+/**
+ * Test suite for the Auction Setup workflow.
+ * Covers POST /api/auction/setup-new specifically.
+ * Features full auction setup, Google Drive folder creation, and template copying.
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app";

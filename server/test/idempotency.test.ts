@@ -13,7 +13,7 @@ describe("idempotency - Concurrency and TTL caching", () => {
     // Reset module cache so that when the file is dynamically imported, 
     // it registers its setInterval using vitest's fake timers.
     vi.resetModules();
-    const mod = await import("./idempotency");
+    const mod = await import("../utils/idempotency");
     checkIdempotency = mod.checkIdempotency;
     saveIdempotency = mod.saveIdempotency;
 

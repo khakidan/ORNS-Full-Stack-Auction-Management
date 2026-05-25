@@ -1,3 +1,11 @@
+/**
+ * Test suite for the Document and Presentation Creation workflows (Production).
+ * Covers endpoints that interface with Google Apps Script to generate labels, 
+ * slideshows, guides, catalogs, and other collateral.
+ *
+ * NOTE: The bulk of the tests here are dynamically generated using a `testCases.forEach` loop
+ * that maps over the various document creation endpoints to produce 18 total tests.
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app";

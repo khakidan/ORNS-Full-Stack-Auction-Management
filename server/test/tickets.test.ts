@@ -1,3 +1,8 @@
+/**
+ * Test suite for Ticket Payment Status and Attendee management workflows.
+ * Covers check-in/checkout payment status integrations within the tickets spreadsheet,
+ * guest bidder number assignments, and updating individual attendee fields.
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app";

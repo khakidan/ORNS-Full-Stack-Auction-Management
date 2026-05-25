@@ -1,3 +1,11 @@
+/**
+ * Test suite for the Receipts and Email Generation workflow.
+ * Covers single and bulk receipt generation via Apps Script, as well as email dispatch endpoints.
+ *
+ * NOTE: This suite uses a shared `emailSheetHandler` mock which returns realistic 
+ * Bidder-Numbers, Bid-Management, and Auction-Items data structures so that the 
+ * `email-all` and `email-only` handlers operate with successfully built receipt data.
+ */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app";

@@ -28,14 +28,15 @@ declare global {
 
 const app = express();
 
-// CORS configuration to allow Tauri app to talk to local server
+// This tool runs as a local application (browser + Tauri desktop shell).
+// No public deployment exists, so the allowlist covers only localhost
+// and the Tauri custom protocol. All other origins are rejected.
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow null origin (some local requests), tauri custom protocols, and localhost
     if (!origin || origin.startsWith('tauri://') || origin.startsWith('http://localhost')) {
       callback(null, true);
     } else {
-      callback(null, true); // Be permissive for local development for now
+      callback(null, false);
     }
   },
   credentials: true,

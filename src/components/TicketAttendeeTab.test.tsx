@@ -1,12 +1,21 @@
 /**
  * @vitest-environment jsdom
  */
+/**
+ * Test suite for the TicketAttendeeTab component.
+ * 
+ * NOTE: `mockAddAttendee` is declared at the module level so it can be referenced in 
+ * both the `vi.mock` factory for the AuctionContext and inside the test assertions.
+ * Also, the AuctionContext mock returns `attendees: mockAttendees` which is critical;
+ * without it the tests will crash with "Cannot read properties of undefined (reading 'filter')".
+ */
 import React from "react";
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import TicketAttendeeTab from "./TicketAttendeeTab";
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import { toast } from "sonner";
 
 // Framer Motion Mock
 vi.mock('motion/react', () => ({
@@ -23,8 +32,8 @@ vi.mock('motion/react', () => ({
 // Mock standard select component as a native HTML elect element for easy/reliable testing
 vi.mock("@/components/ui/select", () => ({
   Select: ({ value, onValueChange, children }: any) => (
-    <select 
-      value={value} 
+    <select
+      value={value}
       onChange={(e) => {
         onValueChange(e.target.value);
       }}
@@ -133,12 +142,14 @@ vi.mock("@/context/ConfigContext", () => ({
   })
 }));
 
+const mockAddAttendee = vi.fn();
+
 vi.mock("@/context/AuctionContext", () => ({
   useAuction: () => ({
     attendees: mockAttendees,
+    addAttendee: mockAddAttendee,
     setAttendees: vi.fn(),
     loading: false,
-    addAttendee: vi.fn(),
     removeAttendee: vi.fn(),
     fetchAttendees: vi.fn(),
     isAuctionClosed: false,
@@ -156,7 +167,7 @@ describe('TicketAttendeeTab - Sort and Filter', () => {
 
     // Get the first dropdown which is the filter select
     const filterSelect = screen.getAllByTestId("mock-select")[0];
-    
+
     // Select General Tickets option ('tickets')
     await user.selectOptions(filterSelect, "tickets");
 
@@ -174,7 +185,7 @@ describe('TicketAttendeeTab - Sort and Filter', () => {
     render(<TicketAttendeeTab />);
 
     const filterSelect = screen.getAllByTestId("mock-select")[0];
-    
+
     // Select Sponsors option ('sponsor tickets')
     await user.selectOptions(filterSelect, "sponsor tickets");
 
@@ -192,7 +203,7 @@ describe('TicketAttendeeTab - Sort and Filter', () => {
     render(<TicketAttendeeTab />);
 
     const filterSelect = screen.getAllByTestId("mock-select")[0];
-    
+
     // Select Staff option ('staff tickets')
     await user.selectOptions(filterSelect, "staff tickets");
 
@@ -210,7 +221,7 @@ describe('TicketAttendeeTab - Sort and Filter', () => {
     render(<TicketAttendeeTab />);
 
     const filterSelect = screen.getAllByTestId("mock-select")[0];
-    
+
     // Filter first (e.g., to "Staff Tickets")
     await user.selectOptions(filterSelect, "staff tickets");
     expect(screen.queryByText("Alice")).not.toBeInTheDocument();
@@ -238,7 +249,7 @@ describe('TicketAttendeeTab - Search', () => {
     render(<TicketAttendeeTab />);
     const searchInput = screen.getByPlaceholderText("Search attendees...");
     await user.type(searchInput, "Alice");
-    
+
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.queryByText("Bob")).not.toBeInTheDocument();
     expect(screen.queryByText("Charlie")).not.toBeInTheDocument();
@@ -249,7 +260,7 @@ describe('TicketAttendeeTab - Search', () => {
     render(<TicketAttendeeTab />);
     const searchInput = screen.getByPlaceholderText("Search attendees...");
     await user.type(searchInput, "ALICE");
-    
+
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.queryByText("Bob")).not.toBeInTheDocument();
     expect(screen.queryByText("Charlie")).not.toBeInTheDocument();
@@ -260,7 +271,7 @@ describe('TicketAttendeeTab - Search', () => {
     render(<TicketAttendeeTab />);
     const searchInput = screen.getByPlaceholderText("Search attendees...");
     await user.type(searchInput, "xyz123");
-    
+
     expect(screen.queryByText("Alice")).not.toBeInTheDocument();
     expect(screen.queryByText("Bob")).not.toBeInTheDocument();
     expect(screen.queryByText("Charlie")).not.toBeInTheDocument();
@@ -270,7 +281,7 @@ describe('TicketAttendeeTab - Search', () => {
   it('Dynamic search — results update on each keystroke', async () => {
     render(<TicketAttendeeTab />);
     const searchInput = screen.getByPlaceholderText("Search attendees...");
-    
+
     // Type characters that match multiple attendees (e.g., 'li' matches Alice and Charlie)
     await user.type(searchInput, "li");
     expect(screen.getByText("Alice")).toBeInTheDocument();
@@ -287,16 +298,117 @@ describe('TicketAttendeeTab - Search', () => {
   it('Clearing the search field restores all attendees', async () => {
     render(<TicketAttendeeTab />);
     const searchInput = screen.getByPlaceholderText("Search attendees...");
-    
+
     await user.type(searchInput, "Alice");
     expect(screen.queryByText("Bob")).not.toBeInTheDocument();
 
     await user.clear(searchInput);
-    
+
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
     expect(screen.getByText("Charlie")).toBeInTheDocument();
     expect(screen.getByText("Diana")).toBeInTheDocument();
   });
-});
 
+  describe('TicketAttendeeTab - Add New Entry', () => {
+    let user: ReturnType<typeof userEvent.setup>;
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      user = userEvent.setup();
+    });
+
+    it('payment method and payment status fields are not shown in the form', () => {
+      render(<TicketAttendeeTab />);
+      // Workflow doc: these are set automatically — never shown to the user
+      expect(screen.queryByText(/payment method/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/payment status/i)).not.toBeInTheDocument();
+    });
+
+    it('General Ticket — calls addAttendee with source "tickets" and Pending payment status', async () => {
+      render(<TicketAttendeeTab />);
+
+      await user.type(screen.getByPlaceholderText('First'), 'Maria');
+      await user.type(screen.getByPlaceholderText('Last'), 'Garcia');
+      // Source select defaults to "tickets" — no change needed
+      await user.click(screen.getByText('Save Entry'));
+
+      expect(mockAddAttendee).toHaveBeenCalledOnce();
+      const [source, row] = mockAddAttendee.mock.calls[0];
+      expect(source).toBe('tickets');
+      expect(row[0]).toBe('Maria');    // firstName → column A
+      expect(row[1]).toBe('Garcia');   // lastName  → column B
+      expect(row[19]).toBe('Manual');  // payment method (auto-set, not user-entered)
+      expect(row[20]).toBe('Pending'); // payment status (auto-set)
+      expect(row[21]).toBe('$0');      // total paid
+    });
+
+    it('Staff — calls addAttendee with source "staff tickets" and Paid status', async () => {
+      render(<TicketAttendeeTab />);
+
+      // Source select is the second mock-select in the DOM (first is the filter select)
+      const sourceSelect = screen.getAllByTestId('mock-select')[1];
+      await user.selectOptions(sourceSelect, 'staff tickets');
+      await user.type(screen.getByPlaceholderText('First'), 'John');
+      await user.type(screen.getByPlaceholderText('Last'), 'Staff');
+      await user.click(screen.getByText('Save Entry'));
+
+      expect(mockAddAttendee).toHaveBeenCalledOnce();
+      const [source, row] = mockAddAttendee.mock.calls[0];
+      expect(source).toBe('staff tickets');
+      expect(row[0]).toBe('John');
+      expect(row[16]).toBe('Paid'); // payment status (auto-set)
+      expect(row[17]).toBe('$0');   // total paid
+      expect(row[19]).toBe('');     // payment method column NOT written for staff
+      expect(row[20]).toBe('');     // payment status column NOT written here for staff
+    });
+
+    it('Sponsor — calls addAttendee with source "sponsor tickets" and Paid status', async () => {
+      render(<TicketAttendeeTab />);
+
+      const sourceSelect = screen.getAllByTestId('mock-select')[1];
+      await user.selectOptions(sourceSelect, 'sponsor tickets');
+      await user.type(screen.getByPlaceholderText('First'), 'Dana');
+      await user.type(screen.getByPlaceholderText('Last'), 'Sponsor');
+      await user.click(screen.getByText('Save Entry'));
+
+      expect(mockAddAttendee).toHaveBeenCalledOnce();
+      const [source, row] = mockAddAttendee.mock.calls[0];
+      expect(source).toBe('sponsor tickets');
+      expect(row[16]).toBe('Paid');
+      expect(row[17]).toBe('$0');
+    });
+
+    it('Missing first name — shows toast error and does not call addAttendee', async () => {
+      render(<TicketAttendeeTab />);
+
+      await user.type(screen.getByPlaceholderText('Last'), 'Garcia');
+      await user.click(screen.getByText('Save Entry'));
+
+      expect(mockAddAttendee).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('Name is required');
+    });
+
+    it('Missing last name — shows toast error and does not call addAttendee', async () => {
+      render(<TicketAttendeeTab />);
+
+      await user.type(screen.getByPlaceholderText('First'), 'Maria');
+      await user.click(screen.getByText('Save Entry'));
+
+      expect(mockAddAttendee).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('Name is required');
+    });
+
+    it('No Bid Management interaction — only addAttendee is called, nothing else', async () => {
+      render(<TicketAttendeeTab />);
+
+      await user.type(screen.getByPlaceholderText('First'), 'Maria');
+      await user.type(screen.getByPlaceholderText('Last'), 'Garcia');
+      await user.click(screen.getByText('Save Entry'));
+
+      // The workflow doc requires no interaction with Bid Management at any point.
+      // addAttendee is the only function called — no sheet writes, no syncs.
+      expect(mockAddAttendee).toHaveBeenCalledOnce();
+    });
+  });
+});

@@ -212,12 +212,15 @@ export const handlers = [
     });
   }),
 
-  // Gmail send handler (used by email-only and email-all receipt endpoints)
+  // Gmail send handler: Intercepts POSTs to the Gmail API so that emailService.ts 
+  // can "send" emails successfully without hitting the real network during receipt email tests.
   http.post('https://gmail.googleapis.com/gmail/v1/users/:userId/messages/send', () => {
     return HttpResponse.json({ id: 'mock-message-id', labelIds: ['SENT'] });
   }),
 
-  // Google OAuth v2 userinfo (emailService uses v2, global handler only covers v3)
+  // Google OAuth v2 userinfo: Intercepts GETs to the v2 userinfo API.
+  // Needed because emailService.ts uses the v2 API (google.oauth2({ version: 'v2' }).userinfo.get())
+  // to resolve the sender's email address, whereas the global app handler uses v3.
   http.get('https://www.googleapis.com/oauth2/v2/userinfo', () => {
     return HttpResponse.json({ email: 'test@example.com', name: 'Test User' });
   })

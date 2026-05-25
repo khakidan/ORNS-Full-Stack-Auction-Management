@@ -1,3 +1,9 @@
+/**
+ * Test suite for the Auction Items management workflow.
+ * Covers endpoints for adding, updating, and deleting individual items,
+ * as well as bulk updating items. It validates re-sequencing logic upon item deletion
+ * and category changes. Also covers Settings Update endpoints.
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app";

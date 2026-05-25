@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calculatePayPalSurcharge } from "./financeUtils";
+import { calculatePayPalSurcharge } from "../utils/financeUtils";
 
 describe("financeUtils - calculatePayPalSurcharge", () => {
   it("keeps penny math exact on normal payments", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { executeGoogleSheetsTransaction, SheetOp } from "./sheetsService";
+import { executeGoogleSheetsTransaction, SheetOp } from "../services/sheetsService";
 import { sheets_v4 } from "googleapis";
 
 describe("sheetsService - executeGoogleSheetsTransaction", () => {

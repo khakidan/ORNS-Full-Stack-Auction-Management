@@ -1,3 +1,12 @@
+/**
+ * Test suite for the Bundle workflow and Gemini Assistant features.
+ * Covers bundle creation, bundle restoration, AI name/description generation, and the assistant logic.
+ *
+ * NOTE: The vi.mock for "../services/genai" handles two different prompt structures:
+ * 1. String contents: Passed by the bundle suggestion routes.
+ * 2. Array contents: Passed by the assistant route (array of message objects).
+ * The mock intercepts these shapes based on whether `args.contents` is a string or not.
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app";
@@ -146,6 +155,28 @@ describe('Bundle Creation workflow', () => {
 
   it("AI name suggestions — empty items array", async () => {
     const response = await request(app).post("/api/bundle/suggest-names").set(authHeader).send({ items: [] });
+    expect(response.status).toBe(400);
+  });
+
+  it("AI description suggestion — happy path", async () => {
+    const response = await request(app).post("/api/bundle/suggest-description").set(authHeader).send({
+      items: [{ name: "Pizza Night", description: "A pizza dinner" }, { name: "Sushi Dinner", description: "A sushi dinner" }]
+    });
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty("description");
+    expect(typeof response.body.description).toBe("string");
+    expect(response.body.description.length).toBeGreaterThan(0);
+  });
+
+  it("AI description suggestion — auth failure", async () => {
+    const response = await request(app).post("/api/bundle/suggest-description").send({
+      items: [{ name: "Pizza Night", description: "A pizza dinner" }, { name: "Sushi Dinner", description: "A sushi dinner" }]
+    });
+    expect(response.status).toBe(401);
+  });
+
+  it("AI description suggestion — empty items array", async () => {
+    const response = await request(app).post("/api/bundle/suggest-description").set(authHeader).send({ items: [] });
     expect(response.status).toBe(400);
   });
 });

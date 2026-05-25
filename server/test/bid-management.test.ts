@@ -1,3 +1,8 @@
+/**
+ * Test suite for the Bid Management workflow.
+ * Covers endpoints related to recording winning bids, checking out, walk-in registrations,
+ * checking in with starting bids, and auction closing & cleanup.
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app";

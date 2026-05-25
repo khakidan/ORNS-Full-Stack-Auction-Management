@@ -39,6 +39,7 @@ export async function setupNewAuction(
   // 1. Calculate dates
   const today = new Date();
   let auctionYear = today.getFullYear();
+  // getMonth() is 0-indexed: > 3 means May or later, so default to next year's auction
   if (today.getMonth() > 3) {
     auctionYear += 1;
   }
@@ -108,14 +109,14 @@ export async function setupNewAuction(
   // 4. Copy specific template files
   onLog(`Copying template files...`);
   const templateFiles = [  
-    { id: "1GO-DvXuFfJLRyGgl9uavQl2Psn3kOPW9KkD8N9GQsvk", parent: volunteerDocsFolderId }, 
-    { id: "1VSCNOc9f_usm0cNlUUyoT9TmKKouTJIOM0IQPSG21UU", parent: volunteerDocsFolderId }, 
-    { id: "1rKooSWG2CxyAGowhjPpgw7-mZs8oklkYGVSpRsAYkyU", parent: newBaseFolderId },      
-    { id: "1qQKGSIZxLK5OuE7uuXs6hQpDQIDc_IFOwP0nr3fXTYc", parent: newBaseFolderId },      
-    { id: "1eA_7adFmclf8e5_PT-dTGgwfsDcNF8GjsA-wnxOFiyU", parent: newBaseFolderId },      
-    { id: "1ON6sSUpQQdmpVsVPPCju-gKk-2Cf97RF2MM-t11Lfac", parent: newBaseFolderId },      
-    { id: "10XqwqwSdjNv0PQfYTYgyCQ8WZBG5EXS-p75vm5lHLFs", parent: newBaseFolderId },      
-    { id: "1ddUrxLA6A3LqUhArhuB3MuOC5z43eJmkts596aiUYOw", parent: newBaseFolderId }       
+    { id: process.env.TEMPLATE_VOLUNTEER_BUSINESS_FOLLOWUP_FAQS_ID!, parent: volunteerDocsFolderId }, 
+    { id: process.env.TEMPLATE_VOLUNTEER_EMAIL_SCRIPT_AND_TALKING_POINTS_ID!, parent: volunteerDocsFolderId }, 
+    { id: process.env.TEMPLATE_NIGHT_OF_AUCTION_VOLUNTEERS_ID!, parent: newBaseFolderId },      
+    { id: process.env.TEMPLATE_REPEAT_DONOR_LETTER_ID!, parent: newBaseFolderId },      
+    { id: process.env.TEMPLATE_NEW_DONOR_LETTER_ID!, parent: newBaseFolderId },      
+    { id: process.env.TEMPLATE_DONATION_FORM_ID!, parent: newBaseFolderId },      
+    { id: process.env.TEMPLATE_PROJECT_MANAGEMENT_TEMPLATE_ID!, parent: newBaseFolderId },      
+    { id: process.env.TEMPLATE_INITIAL_PLANNING_MEETING_ID!, parent: newBaseFolderId }       
   ];
   
   for (const f of templateFiles) {
