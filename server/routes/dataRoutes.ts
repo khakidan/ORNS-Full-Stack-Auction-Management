@@ -267,6 +267,10 @@ export default function createDataRouter() {
   router.post("/sheets/:spreadsheetId/:range", async (req: Request, res: Response, next: NextFunction) => {
     if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
 
+    if (!req.body || !req.body.values) {
+      return res.status(400).json({ error: "Missing body values" });
+    }
+
     try {
       const { spreadsheetId, range } = req.params;
       const client = getAuthenticatedClient(req.session.tokens);
@@ -301,6 +305,10 @@ export default function createDataRouter() {
 
   router.post("/sheets/:spreadsheetId/:range/append", async (req: Request, res: Response, next: NextFunction) => {
     if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+    if (!req.body || !req.body.values) {
+      return res.status(400).json({ error: "Missing body values" });
+    }
 
     try {
       const { spreadsheetId, range } = req.params;

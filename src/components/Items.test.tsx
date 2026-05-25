@@ -28,7 +28,7 @@ describe("Items - Search", () => {
       items: mockItems,
       winners: {},
       loading: false,
-    });
+    } as any);
   });
 
   it("Search finds matching item by name: Type a partial name matching exactly one item → assert only that item is visible", async () => {
