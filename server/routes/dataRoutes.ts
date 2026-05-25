@@ -12,9 +12,9 @@ import {
   bulkUpdateItems,
   ensureFollowUpSheet
 } from '../services/itemService';
-import { listBackups, restoreBackup } from '../services/backupService';
 import { handleAssistantRequest } from '../services/assistantService';
 import { checkIdempotency, saveIdempotency } from '../utils/idempotency';
+import { updateAttendeeField } from '../services/bidderService';
 
 export default function createDataRouter() {
   const router = Router();
@@ -39,43 +39,6 @@ export default function createDataRouter() {
       res.json({ success: true, result });
     } catch (error: any) {
       console.error(`[Sync Route Error] Native synchronization flow failed:`, error);
-      next(error);
-    }
-  });
-
-  // List Auction Backups
-  router.get("/backups/list/:spreadsheetId", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
-    try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
-      const result = await listBackups(sheets, req.params.spreadsheetId);
-      res.json(result);
-    } catch (error: any) {
-      if (error.code === 404) {
-        return res.status(404).json({ error: "Spreadsheet not found. Please check the Spreadsheet ID in Settings." });
-      }
-      next(error);
-    }
-  });
-
-  // Restore Auction Backup
-  router.post("/backups/restore", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
-    const { spreadsheetId, backupSheetName } = req.body;
-    if (!spreadsheetId || !backupSheetName) return res.status(400).json({ error: "Missing required parameters" });
-
-    try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
-      const result = await restoreBackup(sheets, spreadsheetId, backupSheetName);
-      res.json(result);
-    } catch (error: any) {
-      if (error.code === 404) {
-        return res.status(404).json({ error: "Spreadsheet not found. Please check the Spreadsheet ID in Settings." });
-      }
       next(error);
     }
   });
@@ -434,53 +397,6 @@ export default function createDataRouter() {
     }
   });
 
-  router.get("/drive/download/:fileId", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
-    try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const drive = google.drive({ version: "v3", auth: client });
-      const fileId = req.params.fileId;
-
-      const metadata = await drive.files.get({ 
-        fileId, 
-        fields: "id, name, mimeType",
-        supportsAllDrives: true
-      });
-      
-      const fileName = metadata.data.name || "receipt";
-      const mimeType = metadata.data.mimeType;
-
-      console.log(`[Drive API] Downloading ${fileId} (${fileName}) - MimeType: ${mimeType}`);
-
-      if (mimeType === "application/vnd.google-apps.document") {
-        console.log(`[Drive API] Exporting Workspace doc as PDF`);
-        const response = await drive.files.export(
-          { fileId, mimeType: "application/pdf" },
-          { responseType: "stream" }
-        );
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `attachment; filename="${fileName}.pdf"`);
-        response.data.pipe(res);
-      } else {
-        console.log(`[Drive API] Fetching binary content`);
-        const response = await drive.files.get(
-          { fileId, alt: "media", supportsAllDrives: true },
-          { responseType: "stream" }
-        );
-        
-        res.setHeader("Content-Type", mimeType || "application/octet-stream");
-        res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
-        response.data.pipe(res);
-      }
-
-      console.log(`[Drive API] Download started for ${fileId}`);
-    } catch (error: any) {
-      console.error(`[Drive API] Download failure:`, error);
-      next(error);
-    }
-  });
-
   // Gemini Assistant Endpoint
   router.post("/assistant", async (req: Request, res: Response, next: NextFunction) => {
     if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
@@ -501,6 +417,43 @@ export default function createDataRouter() {
       res.status(500).json({ error: error.message, fallback: true });
     }
   });
+
+  // Update Attendee Field Endpoints
+  const updateAttendeeHandler = async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+    const { spreadsheetId, sheet, rowIndex, field, value } = req.body;
+    if (!spreadsheetId || !sheet || rowIndex === undefined || !field) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    try {
+      const client = getAuthenticatedClient(req.session.tokens);
+      const sheets = google.sheets({ version: "v4", auth: client });
+
+      const result = await updateAttendeeField(sheets, {
+        spreadsheetId,
+        sheet,
+        rowIndex: Number(rowIndex),
+        field,
+        value: value !== undefined ? String(value) : ""
+      });
+
+      // Clear Spreadsheet Cache
+      clearCacheForSpreadsheet(spreadsheetId);
+
+      res.json(result);
+    } catch (error: any) {
+      console.error("[Server Error] update-attendee:", error);
+      if (error.statusCode === 400 || error.message?.includes("Invalid field") || error.message?.includes("Row index")) {
+        return res.status(400).json({ error: error.message });
+      }
+      next(error);
+    }
+  };
+
+  router.post("/tickets/update-attendee", updateAttendeeHandler);
+  router.post("/tickets/update-attendee-field", updateAttendeeHandler);
 
   return router;
 }

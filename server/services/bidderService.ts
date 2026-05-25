@@ -315,3 +315,54 @@ export async function checkInBidderWithBid(
 
   return { success: true, bidAdded: true, checkedIn: true };
 }
+
+export interface UpdateAttendeeParams {
+  spreadsheetId: string;
+  sheet: string;
+  rowIndex: number;
+  field: string;
+  value: string;
+}
+
+export async function updateAttendeeField(
+  sheets: sheets_v4.Sheets,
+  params: UpdateAttendeeParams
+): Promise<{ success: boolean }> {
+  const { spreadsheetId, sheet, rowIndex, field, value } = params;
+
+  if (!rowIndex || isNaN(Number(rowIndex)) || Number(rowIndex) < 1) {
+    const error: any = new Error("Row index must be a positive number.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const normalizedSheet = sheet.trim().toLowerCase();
+
+  const fieldMapping: Record<string, string> = {
+    firstName: "A",
+    lastName: "B",
+    email: "C",
+    phone: "D",
+    paymentStatus: normalizedSheet === "tickets" ? "U" : "R"
+  };
+
+  const colLetter = fieldMapping[field];
+  if (!colLetter) {
+    const error: any = new Error(`Invalid field: ${field}`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const range = `'${sheet}'!${colLetter}${rowIndex}`;
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [[value]]
+    }
+  });
+
+  return { success: true };
+}

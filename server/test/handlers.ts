@@ -5,6 +5,7 @@ export let updateCallCount = 0;
 export let lastAppendedRow: any[] = [];
 export let appsScriptCallCount = 0;
 export let lastBulkWritePayload: any[][] = [];
+export let bundleWritePayload: any[][] = [];
 export let bulkWriteCallCount = 0;
 export let productionScriptCallLog: string[] = [];
 
@@ -14,6 +15,7 @@ export function resetHandlersState() {
   lastAppendedRow = [];
   appsScriptCallCount = 0;
   lastBulkWritePayload = [];
+  bundleWritePayload = [];
   bulkWriteCallCount = 0;
   productionScriptCallLog = [];
 }
@@ -86,6 +88,9 @@ export const handlers = [
       if (body.values && body.values.length > 0) {
         lastAppendedRow = body.values[body.values.length - 1];
         lastBulkWritePayload = body.values;
+        if (url.pathname.includes('Auction-Items')) {
+           bundleWritePayload = body.values;
+        }
       }
     } catch(e) {}
     return HttpResponse.json({ updatedRows: 1 });
@@ -127,6 +132,13 @@ export const handlers = [
         { properties: { title: "Auction-Status", sheetId: 103 } },
         { properties: { title: "tickets", sheetId: 104 } }
       ]
+    });
+  }),
+
+  // Gemini API handler
+  http.post('https://generativelanguage.googleapis.com/v1beta/models/:model\\:generateContent', () => {
+    return HttpResponse.json({
+      candidates: [{ content: { parts: [{ text: '["Suggested Bundle Name 1", "Suggested Bundle Name 2"]' }] } }]
     });
   }),
 
@@ -198,5 +210,15 @@ export const handlers = [
         }
       }
     });
+  }),
+
+  // Gmail send handler (used by email-only and email-all receipt endpoints)
+  http.post('https://gmail.googleapis.com/gmail/v1/users/:userId/messages/send', () => {
+    return HttpResponse.json({ id: 'mock-message-id', labelIds: ['SENT'] });
+  }),
+
+  // Google OAuth v2 userinfo (emailService uses v2, global handler only covers v3)
+  http.get('https://www.googleapis.com/oauth2/v2/userinfo', () => {
+    return HttpResponse.json({ email: 'test@example.com', name: 'Test User' });
   })
 ]
