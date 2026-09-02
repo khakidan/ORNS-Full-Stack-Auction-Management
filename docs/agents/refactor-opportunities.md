@@ -11,11 +11,6 @@ feature work belongs in [`ROADMAP.md`](./ROADMAP.md) instead.
 
 ## Tasks To Refactor
 
-- **Migrate `BundlingDialog.tsx`'s ad hoc confirmation dialog(s)** to the
-  shared `src/components/ui/ConfirmationDialog.tsx` (`component-standards.md`).
-  Check first whether "cancel" performs a real action there (the shape
-  that kept `Bidders.tsx`'s pending-payment `AlertDialog` unmigrated) -
-  don't assume it applies.
 - **Migrate the remaining hand-rolled `{loading ? <Loader2 /> : ...}`
   busy-button pattern** to `src/components/ui/LoadingButton.tsx`
   (`component-standards.md`): `BundlingDialog.tsx`, `ConfigSettings.tsx`,
