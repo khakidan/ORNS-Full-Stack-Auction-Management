@@ -33,7 +33,6 @@ directly against the file it names, not estimated.
 | File | Lines | Note |
 | --- | --- | --- |
 | `src/components/ConfigSettings.tsx` | 572 | |
-| `src/components/TicketAttendeeTab.tsx` | 446 | |
 | `src/context/AuctionContext.tsx` | 532 | Large for a context provider - worth checking whether it's holding multiple unrelated concerns that could split into separate contexts/hooks. |
 
 All are over this codebase's own "over 400 lines: almost certainly doing
@@ -71,19 +70,22 @@ icon in place" pattern, not a `Loader2` swap - that claim was stale).
 While migrating, found the identical hand-rolled `{loading ? <Loader2
 .../> : ...}` pattern repeated well beyond those four files. Also
 adopted in `Dashboard.tsx`'s two Special Winners save buttons during
-that file's own refactor; still open in `BundlingDialog.tsx`,
-`ConfigSettings.tsx`, `TicketAttendeeTab.tsx`, and
-`AddAuctionItemDialog.tsx` - a real, broader adoption opportunity beyond
-this item's original scope. Worth a dedicated follow-up pass rather
-than folding into this one, since it touches four more files.
+that file's own refactor; `TicketAttendeeTab.tsx` turned out not to need
+it after its own refactor either - its one text-label busy button (the
+"Confirm Delete" dialog) was replaced by `ConfirmationDialog` instead
+(which handles loading internally), and its remaining `Loader2` usage is
+an icon-only inline save button with no label to swap, which fits
+`IconButton`'s `icon` prop, not `LoadingButton`. Still open in
+`BundlingDialog.tsx`, `ConfigSettings.tsx`, and `AddAuctionItemDialog.tsx`,
+worth a dedicated follow-up pass rather than folding into this one,
+since it touches three more files.
 
 ### Manual template-literal classNames instead of `cn()` (`tailwind-style-guide.md`)
 
 `cn()` (`src/lib/utils.ts`) exists specifically so conditional classes
 don't get built with manual string interpolation. Confirmed by grep,
-4 files still build `className` with a raw template literal instead:
-`AuctionAssistant.tsx`, `BidEntry.tsx`, `ConfigSettings.tsx`,
-`TicketAttendeeTab.tsx`.
+3 files still build `className` with a raw template literal instead:
+`AuctionAssistant.tsx`, `BidEntry.tsx`, `ConfigSettings.tsx`.
 Example (`BidEntry.tsx:99`):
 
 ```tsx
@@ -142,6 +144,27 @@ and the real `server/services/assistantService.ts` backend it would
 presumably call) or delete it; leaving an unreferenced component with a
 real dependency (`react-markdown`) sitting in the tree is confusing for
 the next person who greps for it expecting it to be live.
+
+### Two different `EditableCell` implementations (`component-standards.md`)
+
+`src/components/ui/EditableCell.tsx` (shared, `type: "text" | "textarea" | "select"`,
+Save + Cancel buttons) and `src/components/AttendeeEditableCell.tsx`
+(single-line only, Save button + Escape-to-revert, no Cancel button) are
+two genuinely different implementations of the same "click to edit
+inline" concept, found while splitting up `TicketAttendeeTab.tsx` (the
+latter used to be a local, file-scoped component there). Not merged now
+since reconciling their different Cancel/Escape behavior is a real
+design decision, not a mechanical extraction - flagged here rather than
+guessed at.
+
+### `AddAttendeeDialog`'s "Save Entry" has no loading state (`component-standards.md`)
+
+Found while splitting up `TicketAttendeeTab.tsx`. Unlike `Checkout.tsx`'s
+confirm dialogs (fixed in that file's own refactor - see `CHANGELOG.md`),
+this one's underlying handler (`handleAddSubmit` in
+`hooks/useTicketAttendeeState.ts`) doesn't track a submitting state at
+all yet, so there's no existing state to wire up - a real gap to close,
+not just a wiring fix.
 
 ---
 
