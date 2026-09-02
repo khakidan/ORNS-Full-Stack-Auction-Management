@@ -28,15 +28,6 @@ decision, a doc correction, or an environment fix).
 Concrete, actionable code-level work - each item below was confirmed
 directly against the file it names, not estimated.
 
-### Component size (`react-patterns.md`, `component-standards.md`)
-
-| File | Lines | Note |
-| --- | --- | --- |
-| `src/components/ConfigSettings.tsx` | 572 | |
-
-All are over this codebase's own "over 400 lines: almost certainly doing
-too much" guidance (`react-patterns.md`). Confirmed by `wc -l`.
-
 ### Shared component follow-ups (`component-standards.md`)
 
 Every component originally flagged as missing here has been resolved:
