@@ -4,14 +4,14 @@
 > against `src/index.css`, `components.json`, and `package.json` on
 > 2026-09-02. [`style_guide.md`](./style_guide.md) remains the primary
 > authoritative source per `AGENTS.md`'s registry for this app's visual
-> identity â this document exists alongside it to cover Tailwind-specific
+> identity - this document exists alongside it to cover Tailwind-specific
 > mechanics `style_guide.md` doesn't go into (token wiring, `cn()`,
 > arbitrary values, class ordering). Where the two disagree, `style_guide.md`
 > wins.
 >
 > **One correction worth flagging plainly**: `style_guide.md` currently
 > lists Inter, Space Grotesk/Outfit, and JetBrains Mono/Fira Code as this
-> app's type system. A repo-wide search found none of those â the only
+> app's type system. A repo-wide search found none of those - the only
 > font actually imported or referenced anywhere in `src/` or `index.html`
 > is **Geist Variable** (`@fontsource-variable/geist`, wired as
 > `--font-sans` in `src/index.css`). Treat `style_guide.md`'s font section
@@ -20,7 +20,7 @@
 
 This project uses:
 - Tailwind CSS v4, CSS-first config (`@import "tailwindcss"` in
-  `src/index.css`, via the `@tailwindcss/vite` plugin â no
+  `src/index.css`, via the `@tailwindcss/vite` plugin - no
   `tailwind.config.js`)
 - `@import "shadcn/tailwind.css"` and `@import "tw-animate-css"` layered
   in alongside it
@@ -29,7 +29,7 @@ This project uses:
 
 ---
 
-## Color System â this app uses semantic CSS-variable tokens, not literal hex
+## Color System - this app uses semantic CSS-variable tokens, not literal hex
 
 Unlike some sibling projects, **this app's actual palette is the
 standard shadcn `oklch()` CSS-variable system**, defined in
@@ -41,23 +41,23 @@ colors via the `@theme inline` block: `--color-background`,
 `--color-input`, `--color-ring`, plus `--color-chart-1..5` and a full
 `--color-sidebar-*` set. Every real component in `src/components/ui/`
 (`button.tsx`, `card.tsx`, `badge.tsx`, etc.) is styled with these
-semantic classes â `bg-primary`, `text-muted-foreground`,
+semantic classes - `bg-primary`, `text-muted-foreground`,
 `text-card-foreground`, `bg-destructive/10`, `ring-foreground/10`, and so
-on â not literal hex values.
+on - not literal hex values.
 
 There is exactly **one** literal brand color hardcoded as a token:
 `--color-orns-red: #e31b23`, defined directly in the `@theme inline`
 block in `src/index.css`. Use `text-orns-red` / `bg-orns-red` /
 `border-orns-red` for that specific brand accent; use the semantic tokens
 above for everything else. Don't invent new hardcoded hex values in
-components â if a new brand color is genuinely needed, add it as a named
+components - if a new brand color is genuinely needed, add it as a named
 token in `src/index.css` the same way `orns-red` was added, not as an
 inline `text-[#hexvalue]`.
 
 ### Dark mode infrastructure exists but is not user-facing
 
 `src/index.css` defines a full `.dark` variable set, and `next-themes` is
-a real dependency â but it's wired into exactly one place,
+a real dependency - but it's wired into exactly one place,
 `src/components/ui/sonner.tsx`, to pick the toast color scheme. There is
 no in-app light/dark toggle and no other component reads `next-themes`.
 Don't build new UI assuming a dark-mode toggle is reachable by users;
@@ -88,7 +88,7 @@ Avoid manual string concatenation or template-literal class building.
 Use Tailwind's default spacing scale (`gap-1`/`p-1` for tiny, `gap-4`/`p-4`
 default, `gap-6`/`p-6` for sections, `gap-8`/`p-8` for large). Per
 `style_guide.md`, prefer intentional asymmetry over uniform padding
-everywhere â large workflow sections at `p-8 md:p-10`, dialog/small
+everywhere - large workflow sections at `p-8 md:p-10`, dialog/small
 action areas at `p-4`/`p-6`. Avoid arbitrary spacing values (`mt-[13px]`)
 unless matching an external constraint.
 
@@ -100,7 +100,7 @@ This app derives its radius scale from a single `--radius` variable
 (`0.625rem`) via calc-based tokens already defined in the `@theme inline`
 block: `--radius-sm` through `--radius-4xl`, each a multiple of
 `--radius`. Use the Tailwind classes those generate (`rounded-sm`
-through `rounded-4xl`) rather than arbitrary radius values â the scale is
+through `rounded-4xl`) rather than arbitrary radius values - the scale is
 already richer than the shadcn default four-step scale, so there should
 rarely be a reason to reach for `rounded-[Npx]`.
 
@@ -128,10 +128,10 @@ already exists.
 
 # Class Ordering
 
-Maintain consistent ordering: layout â positioning â sizing â spacing â
-typography â colors â borders â effects â states â responsive modifiers.
+Maintain consistent ordering: layout - positioning - sizing - spacing -
+typography - colors - borders - effects - states - responsive modifiers.
 This is general Tailwind hygiene, not something this app enforces via
-tooling â be consistent within a file at minimum.
+tooling - be consistent within a file at minimum.
 
 ---
 
@@ -139,7 +139,7 @@ tooling â be consistent within a file at minimum.
 
 Avoid `w-[347px]`-style arbitrary values; prefer the default scale.
 Reasonable exceptions: matching an external asset's exact dimensions, or
-a genuinely one-off layout constraint â not a substitute for adding a
+a genuinely one-off layout constraint - not a substitute for adding a
 proper token when the same value is about to be reused.
 
 ---
@@ -149,7 +149,7 @@ proper token when the same value is about to be reused.
 Design mobile-first, using Tailwind's default breakpoints (`sm`, `md`,
 `lg`, `xl`, `2xl`). This app's tables (`Bidders.tsx`, `AuctionItemsTab.tsx`,
 `Checkout.tsx`) are the components most likely to need real responsive
-handling given how data-dense they are â prefer horizontal scroll via
+handling given how data-dense they are - prefer horizontal scroll via
 `ScrollArea` (`src/components/ui/scroll-area.tsx`) over shrinking text.
 
 ---
@@ -165,4 +165,4 @@ hardcoded hex colors, avoid assuming a font family this app doesn't
 actually load (see the Geist Variable correction above).
 
 Before creating a new style, check whether `src/components/ui/` already
-solves it â see `component-standards.md` and `file-reference.md`.
+solves it - see `component-standards.md` and `file-reference.md`.

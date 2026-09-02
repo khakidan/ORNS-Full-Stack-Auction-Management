@@ -5,7 +5,7 @@
 > another project). This document is a supplement to
 > [`style_guide.md`](./style_guide.md) and
 > [`file-reference.md`](./file-reference.md), which remain authoritative
-> for this app's exact visual tokens and directory layout â see
+> for this app's exact visual tokens and directory layout - see
 > `AGENTS.md`'s Documentation Registry. Where anything below conflicts
 > with those two, they win.
 
@@ -18,7 +18,7 @@ visual complexity, reusable patterns, maintainable React code.
 ## What this app actually has
 
 This app's component library is **shadcn generated in the `base-nova`
-style, on `@base-ui/react` primitives** (`components.json`) â not Radix
+style, on `@base-ui/react` primitives** (`components.json`) - not Radix
 directly, and not a from-scratch component set. `src/components/ui/`
 currently contains: `alert-dialog.tsx`, `badge.tsx`, `button.tsx`,
 `card.tsx`, `checkbox.tsx`, `dialog.tsx`, `input.tsx`, `label.tsx`,
@@ -28,7 +28,7 @@ app-specific primitive, `EditableCell.tsx`. Check this list (or
 `file-reference.md`) before assuming a pattern isn't componentized yet.
 
 There is no dedicated `IconButton` component, no `ConfirmationDialog`
-wrapper, and no card-primitives subdirectory â `Card`/`CardHeader`/
+wrapper, and no card-primitives subdirectory - `Card`/`CardHeader`/
 `CardContent`/`CardFooter` from `card.tsx` are used directly. Treat
 absence of a wrapper as a real gap (see
 [`refactor-opportunities.md`](./refactor-opportunities.md)), not as
@@ -38,7 +38,7 @@ There are seven top-level workflow views under `src/components/`
 (`Dashboard.tsx`, `Bidders.tsx`, `Items.tsx`, `BidEntry.tsx`,
 `Checkout.tsx`, `Receipts.tsx`, plus tab/workflow files like
 `AuctionItemsTab.tsx`, `TicketAttendeeTab.tsx`, `ConfigSettings.tsx`,
-`BundlingDialog.tsx`) â these are the real analogues of "page-level"
+`BundlingDialog.tsx`) - these are the real analogues of "page-level"
 components in this codebase, not a generic `PlayerCard`/`EncounterView`
 pattern from another domain.
 
@@ -52,7 +52,7 @@ Every component should have one clear purpose. Several of this app's
 existing top-level views have outgrown that already:
 `AuctionItemsTab.tsx` (969 lines), `Bidders.tsx` and `Checkout.tsx` (644
 lines each), `ConfigSettings.tsx` (572 lines), `Dashboard.tsx` (517
-lines). These aren't hypothetical "avoid this" examples â they're real
+lines). These aren't hypothetical "avoid this" examples - they're real
 files in this repo that mix search/filter UI, table rendering, dialogs,
 and business logic in one component. Splitting them is tracked in
 `refactor-opportunities.md` rather than treated as a rule to apply only
@@ -78,7 +78,7 @@ over configuration-object props. This app's real `Button`
 `default | outline | secondary | ghost | destructive | link`, and `size`
 is `default | xs | sm | lg | icon | icon-xs | icon-sm | icon-lg`. Note
 this is **not** the `intent` prop name used in some other design-system
-docs â in this codebase the prop is `variant`. Use `destructive` for
+docs - in this codebase the prop is `variant`. Use `destructive` for
 Delete/Remove actions, `default` for the primary action in a section,
 `outline`/`ghost` for secondary actions, `link` for text-link-style
 actions.
@@ -106,7 +106,7 @@ Prefer composition, as `Card` already models:
 
 ## Buttons
 
-Buttons represent actions, never navigation â this app has no client-side
+Buttons represent actions, never navigation - this app has no client-side
 router; `App.tsx` manages workflow switching via `WorkflowType` state and
 `history.pushState`, not `<Link>`-style navigation, so there's little
 risk of buttons standing in for links here, but keep the distinction
@@ -119,17 +119,17 @@ is already built into `buttonVariants`), prevent duplicate submissions,
 support keyboard activation, have visible focus states
 (`focus-visible:ring-3 focus-visible:ring-ring/50` is already built in).
 
-There is currently no shared `LoadingButton` component â every busy/spinner
+There is currently no shared `LoadingButton` component - every busy/spinner
 state is hand-rolled per call site with an inline `Loader2` +
 `animate-spin` (seen in `BidEntry.tsx`, `Bidders.tsx`, `Checkout.tsx`,
-`Receipts.tsx`). This is a real duplication â see
+`Receipts.tsx`). This is a real duplication - see
 `refactor-opportunities.md`.
 
 ### Icon-Only Buttons
 
 There is no dedicated `IconButton` component. Icon-only buttons currently
 use `<Button size="icon">` (or `icon-xs`/`icon-sm`/`icon-lg`) directly and
-must still carry an explicit `aria-label` â it is not enforced at the type
+must still carry an explicit `aria-label` - it is not enforced at the type
 level the way it would be with a dedicated wrapper, so this needs manual
 discipline until/unless that wrapper is built.
 
@@ -146,13 +146,13 @@ Avoid `<Input placeholder="..." />` as a stand-in for a label.
 
 This app's `Select` (`src/components/ui/select.tsx`) is built on
 `@base-ui/react/select`, not Radix. Every dropdown in real component code
-already goes through it â a repo-wide check found native `<select>` only
+already goes through it - a repo-wide check found native `<select>` only
 inside test-mock files (`*.test.tsx`), never in actual `src/components/*.tsx`
 UI code. Keep it that way for any new dropdown, name-only choices
 included.
 
 `SelectValue` renders the raw item value unless given explicit `children`
-â watch for this whenever the display text differs from the stored value
+- watch for this whenever the display text differs from the stored value
 (an ID displayed as a name, a status enum displayed as a friendly label).
 
 ### Checkboxes
@@ -169,7 +169,7 @@ independent toggle state, not for actions.
 build their own table body/empty-state/search-bar scaffolding around it
 independently rather than through a shared wrapper. That duplication
 (search input + empty-state text + scroll container repeated per view)
-is real and tracked in `refactor-opportunities.md` â it is not yet
+is real and tracked in `refactor-opportunities.md` - it is not yet
 solved by an existing `DataTableWrapper`-style component in this repo.
 
 ### Empty Tables
@@ -178,7 +178,7 @@ This app already follows the "explain why it's empty" rule in practice:
 e.g. `"No winners found in this category."` (`Checkout.tsx`), `"No
 bidders found matching \"{searchTerm}\""` (`Bidders.tsx`), `"No items
 found."` (`AuctionItemsTab.tsx`), `"No receipts found in this
-folder."` (`Receipts.tsx`). Match this tone for any new empty state â
+folder."` (`Receipts.tsx`). Match this tone for any new empty state -
 name what's empty, and where it's scoped to a search term, echo the term
 back.
 
@@ -188,13 +188,13 @@ back.
 
 This app's dialog primitives are `dialog.tsx`, `alert-dialog.tsx`, and
 `sheet.tsx` (a slide-over panel used for the bundling and edit flows).
-There is no dedicated `ConfirmationDialog` wrapper component â destructive
+There is no dedicated `ConfirmationDialog` wrapper component - destructive
 confirmations are currently built ad hoc from `alert-dialog.tsx` per call
 site (e.g. `BundlingDialog.tsx`). Extracting a shared confirmation dialog
 is a reasonable follow-up, not something already done.
 
 Dialogs must: trap focus, close with Escape, have a clear title, have
-clear actions, return focus after closing â `@base-ui/react`'s dialog
+clear actions, return focus after closing - `@base-ui/react`'s dialog
 primitives handle the mechanics; don't hand-roll focus trapping.
 
 ### Winner-notification toasts (app-specific rule)
@@ -203,7 +203,7 @@ This is a real, load-bearing business rule from `patterns.md`, restated
 here because it's a component-usage rule: when a bidder who has **already
 checked out** wins an item, the toast must use `duration: Infinity` and an
 explicit `action` labeled "I have confirmed", and must name the item won.
-Don't treat this as a generic toast â it needs the persistent variant.
+Don't treat this as a generic toast - it needs the persistent variant.
 
 ---
 
@@ -211,13 +211,13 @@ Don't treat this as a generic toast â it needs the persistent variant.
 
 Toasts (`src/components/ui/sonner.tsx`, via `sonner`) are used for
 successful saves and background sync failures. Note `sonner.tsx` imports
-`useTheme` from `next-themes` to pick its color scheme â this is the one
+`useTheme` from `next-themes` to pick its color scheme - this is the one
 real place `next-themes` is wired into this app; it is not used for a
 user-facing light/dark toggle anywhere else (`style_guide.md` correctly
 says this app runs a single light theme with no in-app theme switcher).
 
 Never use a toast for the winner-notification case above without the
-`duration: Infinity` override â a normal auto-dismissing toast would let a
+`duration: Infinity` override - a normal auto-dismissing toast would let a
 staff member miss a check-out conflict during a live event.
 
 ---
@@ -253,6 +253,6 @@ composition over configuration, semantic HTML, accessible controls. Avoid
 inventing a second button/card/select pattern when this app's real ones
 already cover the case. When a gap genuinely exists (no `IconButton`, no
 `ConfirmationDialog`, no shared table wrapper, no `LoadingButton`),
-building it is legitimate â but check `refactor-opportunities.md` first,
+building it is legitimate - but check `refactor-opportunities.md` first,
 since these specific gaps are already logged there rather than being
 undiscovered.
