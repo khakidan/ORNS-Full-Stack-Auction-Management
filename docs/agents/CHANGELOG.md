@@ -19,6 +19,7 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 - Added `src/components/ui/ConfirmationDialog.tsx`, a shared confirmation dialog (`open`/`onOpenChange`/`title`/`description`/`confirmLabel`/`cancelLabel`/`onConfirm`/`isLoading`/`variant`/`icon` props), first adopted by `AuctionItemsTab.tsx`'s two confirmation dialogs.
 - Added PWA support via `vite-plugin-pwa`: web manifest, service worker (`registerType: 'autoUpdate'`, `devOptions.enabled: true`), and a placeholder icon set in `public/`.
 - Added local dev support for a configurable `PORT` env var (`server.ts`, `.env.example`) so the app can run on a port other than 3000 when that's already taken.
+- Added `npm run dev:watch`, a local-only script (`tsx watch`, excluding `src/**`) that auto-restarts the backend on `server/**` changes. Deliberately a *separate* script from `dev` - `dev` itself is what AI Studio's own live-editing preview runs under the hood (`vite.config.ts`'s `DISABLE_HMR` comment), and an earlier version of this change mistakenly edited `dev` directly, which would have added an ungated restart-on-change watcher to AI Studio's own edit loop and reintroduced the exact flickering/instability `DISABLE_HMR` exists to prevent. Caught before being ported back; `dev` is untouched.
 
 ### Changed
 

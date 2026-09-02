@@ -76,7 +76,8 @@ Safari/iOS requires "Add to Home Screen" from the share sheet.
 
 All core operations are managed via unified npm scripts declared in `package.json`:
 
-*   `npm run dev`: Starts the TypeScript Express development server utilizing `tsx` on port `3000`.
+*   `npm run dev`: Starts the TypeScript Express development server utilizing `tsx` on port `3000`. This exact script is also what AI Studio's own live-editing preview runs under the hood (see `vite.config.ts`'s `DISABLE_HMR` comment) - don't change its behavior here.
+*   `npm run dev:watch`: Same as `npm run dev`, but backend files (`server/**`, `server.ts`) trigger an automatic restart on save via `tsx watch` (excludes `src/**`, which is already handled by Vite's own HMR). Local-only convenience - deliberately a separate script from `dev` rather than a change to it, so AI Studio's environment is unaffected.
 *   `npm run build`: Bundles the React frontend into `dist/` using Vite, and compiles `server.ts` to a standalone, production-ready CommonJS file (`dist/server.cjs`) via `esbuild`.
 *   `npm run start`: Runs the compiled server using standard node environments (`node dist/server.cjs`).
 *   `npm run lint`: Performs static type checks using TypeScript (`tsc --noEmit`).
