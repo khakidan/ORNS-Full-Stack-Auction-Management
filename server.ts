@@ -7,4 +7,4 @@ import { validateEnv } from "./server/utils/validateEnv";
 import { startServer } from "./server/boot";
 
 validateEnv();
-startServer(app, 3000);
+startServer(app, Number(process.env.PORT) || 3000);

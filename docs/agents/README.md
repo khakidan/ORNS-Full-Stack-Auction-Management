@@ -10,6 +10,7 @@ The **ORNS (Oakridge Neighborhood School) Charity Auction Manager** is a high-pe
 *   **Datastore**: Google Sheets API (for core relational databases) combined with Firebase Firestore (for distributed cloud sync of configurations)
 *   **Authentication**: Firebase Authentication (Google OAuth & restricted to `@orns.org` administrative domains)
 *   **Deployment**: Google Cloud Run (containerized server environment)
+*   **PWA**: `vite-plugin-pwa` (installable, offline-capable web app manifest + service worker - see PWA Support below)
 
 ---
 
@@ -40,8 +41,34 @@ The application relies on environment variables registered in a `.env` file (nev
 *   `SESSION_SECRET`: Long cryptographic string for session integrity
 *   `APP_URL`: Dynamic host URL (e.g., `http://localhost:3000` or production container endpoint)
 *   `GEMINI_API_KEY`: Secret token for server-side AI-powered assistant functions
+*   `PORT` (optional): local port to bind to, defaults to `3000` if unset. Cloud Run sets this automatically in deployed environments - only set it locally if `3000` is already taken by another app on your machine (and update `APP_URL` and the OAuth client's Authorized redirect URI, `<APP_URL>/auth/callback`, to match).
 
-Run `npm install`, then `npm run dev` to start the local Express/Vite dev server on port `3000`.
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GEMINI_API_KEY` are hard
+requirements - `server/utils/validateEnv.ts` calls `process.exit(1)` on
+boot if any are missing. Every other var (spreadsheet/script/template/
+Drive IDs) is soft-required - the server boots without them, but the
+corresponding feature is degraded until set (either in `.env` or via the
+in-app Config screen once signed in).
+
+Run `npm install`, then `npm run dev` to start the local Express/Vite dev server (port `3000` by default).
+
+---
+
+## PWA Support
+
+The app is installable as a Progressive Web App via `vite-plugin-pwa`
+(configured in `vite.config.ts`): a generated web manifest + service
+worker (`registerType: 'autoUpdate'`, `devOptions.enabled: true` so
+install/offline behavior is also testable under `npm run dev`, not just
+a production build). Manifest icons live in `public/`
+(`pwa-192x192.png`, `pwa-512x512.png`, `pwa-maskable-512x512.png`,
+`apple-touch-icon.png`, `favicon.ico`) - currently a placeholder "O"
+monogram in the app's `orns-red` brand color, not the real ORNS logo;
+swap them for real artwork whenever that's available. `index.html`
+carries the accompanying `theme-color`/`apple-mobile-web-app-*` meta
+tags. Chrome/Edge will offer an install prompt automatically on
+`localhost` (treated as a secure context) or any real HTTPS deployment;
+Safari/iOS requires "Add to Home Screen" from the share sheet.
 
 ---
 
@@ -72,7 +99,37 @@ npm run test
 
 ## Deployment
 
-The application is deployed on **Google Cloud Run**. When building production containers:
+The application is deployed on **Google Cloud Run**, built and hosted
+through **Google AI Studio** at a live URL
+(`https://orns-auction-manager-37624994705.us-east1.run.app/`). When
+building production containers:
 1. The container compiles the application through `npm run build`.
-2. The server boots via `npm run start` and binds to `0.0.0.0:3000` inside the container.
+2. The server boots via `npm run start` and binds to `0.0.0.0:<PORT>`
+   inside the container (`PORT` defaults to `3000`; Cloud Run sets it
+   automatically to match the container's configured port).
 3. Ingress routing forwards standard HTTPS traffic directly to the container, with cookie sessions preserved securely via the renamed `orns_session` cookie name.
+
+### Relationship between this local checkout and the AI Studio deployment
+
+This local git repository is **not** wired to AI Studio's build/deploy
+pipeline - there is no git remote or CI hook that pushes changes made
+here to the live Cloud Run instance. The AI Studio-hosted instance is
+being treated as the **staging/reference environment**: it is the
+currently-live version of the app, and changes made in this local
+checkout are ported back into AI Studio's own editor by hand once
+verified here. Practical implications for anyone (human or agent)
+working in this repo:
+
+*   Keep changes portable - avoid anything that depends on this specific
+    machine (absolute local paths, machine-specific env values baked
+    into tracked files, dependencies that need a system package manager
+    outside `npm`). `.env` (gitignored) is the right place for anything
+    genuinely local-only, like the `PORT` override for a taken port.
+*   Prefer configuration that reads from environment variables with
+    sane defaults (as `PORT` and `APP_URL` already do) over hardcoded
+    values, so the same code behaves correctly whether it's running
+    locally, in AI Studio's own preview, or on the deployed Cloud Run
+    instance.
+*   Since changes are ported by hand, keep diffs reviewable - avoid
+    sweeping reformatting or unrelated cleanup mixed into a real change,
+    since that makes manual porting back into AI Studio's editor harder.
