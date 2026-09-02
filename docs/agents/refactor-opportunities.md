@@ -32,7 +32,6 @@ directly against the file it names, not estimated.
 
 | File | Lines | Note |
 | --- | --- | --- |
-| `src/components/Checkout.tsx` | 644 | |
 | `src/components/ConfigSettings.tsx` | 572 | |
 | `src/components/Dashboard.tsx` | 517 | |
 | `src/components/TicketAttendeeTab.tsx` | 446 | |
@@ -52,10 +51,17 @@ to apply (no real duplicated card markup existed to consolidate - see
 below is real, verified follow-up adoption at sites beyond the original
 scope - not new components to build.
 
-`src/components/ui/ConfirmationDialog.tsx` exists (a shared
-confirmation dialog, adopted by `AuctionItemsTab.tsx`) but other ad hoc
-destructive confirmations - e.g. in `BundlingDialog.tsx` - haven't been
-migrated to it yet. Worth doing opportunistically.
+`src/components/ui/ConfirmationDialog.tsx` exists (a shared confirmation
+dialog, adopted by `AuctionItemsTab.tsx` and, as of `Checkout.tsx`'s
+refactor, its "Print All Receipts"/"Email All Winners" confirms too -
+which also picked up an `isLoading` state on their confirm buttons that
+the original hand-rolled dialogs never had) but other ad hoc
+confirmations - e.g. in `BundlingDialog.tsx` - still haven't been
+migrated. Worth doing opportunistically. `Bidders.tsx`'s pending-payment
+`AlertDialog` was deliberately *not* migrated (see `CHANGELOG.md`) -
+its "No, Do Not Add" button performs a real action, not just a close, so
+it doesn't fit `ConfirmationDialog`'s cancel-just-closes API. Any future
+migration should check for that same shape before assuming it applies.
 
 `src/components/ui/LoadingButton.tsx` now exists too (`loading`/
 `loadingText`/`icon`/`loaderClassName` props, wraps `Button`), adopted in
@@ -71,20 +77,10 @@ adoption opportunity beyond this item's original scope. Worth a
 dedicated follow-up pass rather than folding into this one, since it
 touches five more files.
 
-### Hardcoded hex colors instead of the `orns-red` token (`tailwind-style-guide.md`)
+### Hardcoded hex colors with no token (`tailwind-style-guide.md`)
 
-This app already defines one literal brand color token,
-`--color-orns-red: #e31b23` (`src/index.css`), specifically so components
-don't need to hardcode that hex value. In practice it's still hardcoded
-as an arbitrary Tailwind value in 2 places instead of using the token
-class:
-
-- `src/components/Checkout.tsx:488,514` - `text-[#e31b23]` / `bg-[#e31b23]`
-
-Fix: replace each with `text-orns-red` / `bg-orns-red`.
-
-Separately, two colors that have **no token at all** are hardcoded as
-arbitrary hex values in `src/components/Dashboard.tsx`:
+Two colors that have **no token at all** are hardcoded as arbitrary hex
+values in `src/components/Dashboard.tsx`:
 
 - `Dashboard.tsx:364,367` - `text-[#10b981]` (an emerald/green, used for a "funds raised" stat)
 - `Dashboard.tsx:442,467,498` - `text-[#0c63d5]` / `bg-[#0c63d5]` (a blue, used for a "leaderboard" call-to-action)

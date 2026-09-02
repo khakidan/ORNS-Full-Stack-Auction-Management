@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 interface ConfirmationDialogProps {
   open: boolean;
@@ -21,6 +22,8 @@ interface ConfirmationDialogProps {
   isLoading?: boolean;
   variant?: "default" | "destructive";
   icon?: ReactNode;
+  /** Extra classes for the confirm button, e.g. a brand-color override. */
+  confirmClassName?: string;
 }
 
 export function ConfirmationDialog({
@@ -34,6 +37,7 @@ export function ConfirmationDialog({
   isLoading = false,
   variant = "default",
   icon,
+  confirmClassName,
 }: ConfirmationDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -59,7 +63,7 @@ export function ConfirmationDialog({
             variant={variant === "destructive" ? "destructive" : "default"}
             onClick={onConfirm}
             disabled={isLoading}
-            className="flex items-center gap-2"
+            className={cn("flex items-center gap-2", confirmClassName)}
           >
             {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             {confirmLabel}
