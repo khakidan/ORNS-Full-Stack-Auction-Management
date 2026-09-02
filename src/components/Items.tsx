@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useAuction } from "@/context/AuctionContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { TableCell, TableHead, TableRow } from "@/components/ui/table";
 import { Tag } from "lucide-react";
 import { toast } from "sonner";
 import { FilterToolbar } from "@/components/FilterToolbar";
+import { DataTableWrapper } from "@/components/DataTableWrapper";
+import type { AuctionItem } from "@/types";
 
 export default function Items() {
   const { items, winners, loading } = useAuction();
@@ -45,48 +46,37 @@ export default function Items() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <ScrollArea className="h-[650px]">
-            <Table className="table-fixed w-full">
-              <TableHeader className="bg-slate-50 sticky top-0 z-10">
-                <TableRow>
-                  <TableHead className="w-[15%] whitespace-normal break-words">Item #</TableHead>
-                  <TableHead className="w-[35%] whitespace-normal break-words">Item Name</TableHead>
-                  <TableHead className="w-[25%] whitespace-normal break-words">Type</TableHead>
-                  <TableHead className="w-[25%] whitespace-normal break-words">Winning Bidder</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  Array.from({ length: 8 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell colSpan={4} className="h-12 animate-pulse" />
-                    </TableRow>
-                  ))
-                ) : filteredItems.length > 0 ? (
-                  filteredItems.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="w-[15%] font-mono font-bold text-primary whitespace-normal break-words">{item.id}</TableCell>
-                      <TableCell className="w-[35%] font-medium whitespace-normal break-words">{item.name}</TableCell>
-                      <TableCell className="w-[25%] text-xs uppercase text-muted-foreground font-semibold whitespace-normal break-words">{item.category || "—"}</TableCell>
-                      <TableCell className="w-[25%] whitespace-normal break-words">
-                        {winners[item.id] ? (
-                          <span className="font-semibold text-emerald-600">{winners[item.id]}</span>
-                        ) : (
-                          <span className="text-muted-foreground text-sm italic">—</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={4} className="h-32 text-center text-muted-foreground text-sm">
-                      {searchTerm ? "No items match your search." : "No items loaded. Check your Spreadsheet ID in Settings."}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </ScrollArea>
+          <DataTableWrapper<AuctionItem>
+            items={filteredItems}
+            loading={loading}
+            columnCount={4}
+            skeletonRowCount={8}
+            scrollAreaClassName="h-[650px]"
+            tableClassName="table-fixed w-full"
+            header={
+              <TableRow>
+                <TableHead className="w-[15%] whitespace-normal break-words">Item #</TableHead>
+                <TableHead className="w-[35%] whitespace-normal break-words">Item Name</TableHead>
+                <TableHead className="w-[25%] whitespace-normal break-words">Type</TableHead>
+                <TableHead className="w-[25%] whitespace-normal break-words">Winning Bidder</TableHead>
+              </TableRow>
+            }
+            renderRow={(item) => (
+              <TableRow key={item.id}>
+                <TableCell className="w-[15%] font-mono font-bold text-primary whitespace-normal break-words">{item.id}</TableCell>
+                <TableCell className="w-[35%] font-medium whitespace-normal break-words">{item.name}</TableCell>
+                <TableCell className="w-[25%] text-xs uppercase text-muted-foreground font-semibold whitespace-normal break-words">{item.category || "—"}</TableCell>
+                <TableCell className="w-[25%] whitespace-normal break-words">
+                  {winners[item.id] ? (
+                    <span className="font-semibold text-emerald-600">{winners[item.id]}</span>
+                  ) : (
+                    <span className="text-muted-foreground text-sm italic">—</span>
+                  )}
+                </TableCell>
+              </TableRow>
+            )}
+            emptyMessage={searchTerm ? "No items match your search." : "No items loaded. Check your Spreadsheet ID in Settings."}
+          />
         </CardContent>
       </Card>
     </div>

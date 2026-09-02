@@ -82,6 +82,7 @@ All core operations are managed via unified npm scripts declared in `package.jso
 *   `npm run start`: Runs the compiled server using standard node environments (`node dist/server.cjs`).
 *   `npm run lint`: Performs static type checks using TypeScript (`tsc --noEmit`).
 *   `npm run test`: Executes the complete test suite with Vitest in runner mode.
+*   `npm run test:quiet`: Same as `npm run test`, but sets `NODE_OPTIONS=--no-experimental-webstorage` to suppress Node's `[DEP...]`/`ExperimentalWarning: localStorage is not available...` noise (Node's own built-in Web Storage feature, unrelated to and not used by jsdom's `window.localStorage` that the tests actually run against). Local-only convenience, deliberately a separate script rather than a change to `test` itself - that flag doesn't exist on older Node versions and would hard-error there instead of just warning, so it's not safe to assume for whatever Node version AI Studio's own environment runs. Uses inline `VAR=value` shell syntax, which needs a POSIX shell (bash/zsh/Git Bash) - not plain Windows `cmd.exe`.
 
 ---
 

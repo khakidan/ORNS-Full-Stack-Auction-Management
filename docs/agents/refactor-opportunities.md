@@ -46,13 +46,6 @@ too much" guidance (`react-patterns.md`). Confirmed by `wc -l`.
 
 Confirmed by grep - real, repeated duplication, not a hypothetical.
 
-**`<DataTableWrapper>`** - A standardized scrollable grid built around
-the existing `src/components/ui/table.tsx` primitives: auto-scroll via
-`ScrollArea`, animated skeleton rows while `loading`, and a stylized
-empty-state fallback. Would consolidate the hand-rolled table
-scaffolding in `Bidders.tsx`, `Items.tsx`, `Checkout.tsx`, and
-`Receipts.tsx`.
-
 **`<StatusStatePlaceholder>`** - A generic empty/unconfigured-state
 card: centered muted icon, bold heading, descriptive text, optional
 action button. Consistent empty-state tone already exists ad hoc -

@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { fetchWithRetry, getBaseUrl } from "@/lib/google-api";
 import { useConfig } from "@/context/ConfigContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableCell, TableHead, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Loader2, FileText, ExternalLink, RefreshCw } from "lucide-react";
+import { FileText, ExternalLink, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+import { DataTableWrapper } from "@/components/DataTableWrapper";
 
 interface DriveFile {
   id: string;
@@ -87,62 +89,55 @@ export default function Receipts() {
           </CardDescription>
         </div>
         <Button variant="outline" size="sm" onClick={fetchFiles} disabled={loading} className="gap-2">
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
           Refresh
         </Button>
       </CardHeader>
       <CardContent>
-        {loading ? (
-          <div className="flex flex-col justify-center items-center py-20 text-slate-500">
-            <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary" />
-            <p>Loading receipts...</p>
-          </div>
-        ) : files.length === 0 ? (
-          <div className="flex flex-col justify-center items-center py-20 text-slate-500 border border-dashed rounded-lg bg-slate-50">
-            <FileText className="w-12 h-12 text-slate-300 mb-4" />
-            <p>No receipts found in this folder.</p>
-          </div>
-        ) : (
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader className="bg-slate-50">
-                <TableRow>
-                  <TableHead className="w-[300px]">Document Name</TableHead>
-                  <TableHead>Last Modified</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {files.map((file) => (
-                  <TableRow key={file.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        {file.iconLink && <img src={file.iconLink} alt="icon" className="w-4 h-4" />}
-                        <span className="truncate max-w-[300px]" title={file.name}>
-                          {file.name}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-slate-500">
-                      {format(new Date(file.modifiedTime), "MMM d, yyyy h:mm a")}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 gap-1"
-                        onClick={() => window.open(file.webViewLink, "_blank")}
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        Open
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+        <DataTableWrapper<DriveFile>
+          items={files}
+          loading={loading}
+          columnCount={3}
+          header={
+            <TableRow>
+              <TableHead className="w-[300px]">Document Name</TableHead>
+              <TableHead>Last Modified</TableHead>
+              <TableHead className="text-right">Action</TableHead>
+            </TableRow>
+          }
+          emptyMessage={
+            <span className="flex flex-col items-center gap-2 text-slate-500">
+              <FileText className="w-8 h-8 text-slate-300" />
+              No receipts found in this folder.
+            </span>
+          }
+          renderRow={(file) => (
+            <TableRow key={file.id}>
+              <TableCell className="font-medium">
+                <div className="flex items-center gap-2">
+                  {file.iconLink && <img src={file.iconLink} alt="icon" className="w-4 h-4" />}
+                  <span className="truncate max-w-[300px]" title={file.name}>
+                    {file.name}
+                  </span>
+                </div>
+              </TableCell>
+              <TableCell className="text-slate-500">
+                {format(new Date(file.modifiedTime), "MMM d, yyyy h:mm a")}
+              </TableCell>
+              <TableCell className="text-right">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1"
+                  onClick={() => window.open(file.webViewLink, "_blank")}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Open
+                </Button>
+              </TableCell>
+            </TableRow>
+          )}
+        />
       </CardContent>
     </Card>
   );

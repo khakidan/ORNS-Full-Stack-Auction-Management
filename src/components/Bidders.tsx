@@ -7,11 +7,11 @@ import { useConfig } from "@/context/ConfigContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableCell, TableHead, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { UserPlus, CheckCircle, UserCheck, Clock, Loader2, ArrowUpDown, ChevronUp, ChevronDown, Ticket, Gavel, AlertCircle } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { FilterToolbar } from "@/components/FilterToolbar";
+import { DataTableWrapper } from "@/components/DataTableWrapper";
 import { toast } from "sonner";
 import { fetchWithRetry, updateSheetData, getBaseUrl, getSheetData, appendSheetData } from "@/lib/google-api";
 import {
@@ -423,67 +423,65 @@ export default function Bidders() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader className="bg-slate-50 sticky top-0 z-10">
-                <TableRow>
-                  <TableHead 
-                    className="w-20 md:w-24 cursor-pointer hover:text-primary transition-colors group px-4"
-                    onClick={() => handleSort("id")}
-                  >
-                    <div className="flex items-center gap-1.5 font-mono">
-                      ID
-                      {sortConfig?.key === "id" ? (
-                        sortConfig.direction === "asc" ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-                      ) : (
-                        <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    className="cursor-pointer hover:text-primary transition-colors group"
-                    onClick={() => handleSort("name")}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      Name
-                      {sortConfig?.key === "name" ? (
-                        sortConfig.direction === "asc" ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-                      ) : (
-                        <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead className="hidden lg:table-cell">Email</TableHead>
-                  <TableHead 
-                    className="cursor-pointer hover:text-primary transition-colors group"
-                    onClick={() => handleSort("status")}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      Status
-                      {sortConfig?.key === "status" ? (
-                        sortConfig.direction === "asc" ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-                      ) : (
-                        <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead className="text-right px-4">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  Array.from({ length: 6 }).map((_, i) => (
-                    <TableRow key={i}><TableCell colSpan={5} className="h-12 animate-pulse" /></TableRow>
-                  ))
-                ) : sortedBidders.length > 0 ? (
-                  <AnimatePresence mode="popLayout">
-                    {sortedBidders.map((bidder) => (
-                      <motion.tr 
+          <DataTableWrapper<Bidder>
+            items={sortedBidders}
+            loading={loading}
+            columnCount={5}
+            skeletonRowCount={6}
+            wrapItemRows={(rows) => <AnimatePresence mode="popLayout">{rows}</AnimatePresence>}
+            header={
+              <TableRow>
+                <TableHead
+                  className="w-20 md:w-24 cursor-pointer hover:text-primary transition-colors group px-4"
+                  onClick={() => handleSort("id")}
+                >
+                  <div className="flex items-center gap-1.5 font-mono">
+                    ID
+                    {sortConfig?.key === "id" ? (
+                      sortConfig.direction === "asc" ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </TableHead>
+                <TableHead
+                  className="cursor-pointer hover:text-primary transition-colors group"
+                  onClick={() => handleSort("name")}
+                >
+                  <div className="flex items-center gap-1.5">
+                    Name
+                    {sortConfig?.key === "name" ? (
+                      sortConfig.direction === "asc" ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </TableHead>
+                <TableHead className="hidden lg:table-cell">Email</TableHead>
+                <TableHead
+                  className="cursor-pointer hover:text-primary transition-colors group"
+                  onClick={() => handleSort("status")}
+                >
+                  <div className="flex items-center gap-1.5">
+                    Status
+                    {sortConfig?.key === "status" ? (
+                      sortConfig.direction === "asc" ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </TableHead>
+                <TableHead className="text-right px-4">Actions</TableHead>
+              </TableRow>
+            }
+            emptyMessage={`No bidders found matching "${searchTerm}"`}
+            renderRow={(bidder) => (
+                      <motion.tr
                         layout
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        key={bidder.id} 
+                        key={bidder.id}
                         className="group hover:bg-slate-50/50 border-b transition-colors"
                       >
                         <TableCell className="font-mono font-bold px-4">{bidder.id}</TableCell>
@@ -597,18 +595,8 @@ export default function Bidders() {
                           </div>
                         </TableCell>
                       </motion.tr>
-                    ))}
-                  </AnimatePresence>
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
-                      No bidders found matching "{searchTerm}"
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+            )}
+          />
         </CardContent>
       </Card>
 
