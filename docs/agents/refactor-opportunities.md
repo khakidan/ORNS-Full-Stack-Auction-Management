@@ -31,7 +31,7 @@ directly against the file it names, not estimated.
 
 | File | Lines | Note |
 | --- | --- | --- |
-| `src/components/AuctionItemsTab.tsx` | 969 | Largest component in the app by a wide margin. Almost certainly mixing table rendering, filter state, dialogs, and business logic - split before adding more to it. |
+| ~~`src/components/AuctionItemsTab.tsx`~~ | ~~969~~ **177** | **Done 2026-09-02.** Split into `AuctionItemsFilterBar.tsx`, `AuctionItemsTable.tsx`, `AuctionItemRow.tsx`, `AuctionItemsBulkActionBar.tsx`, `AddAuctionItemDialog.tsx`, the new shared `ui/ConfirmationDialog.tsx` (used for both its confirm dialogs), state/handlers extracted to `hooks/useAuctionItemsTableState.ts`, and pure pricing math moved to `lib/auctionItemPricing.ts`. Also fixed while in there: the missing `aria-label` and manual-template-literal-className findings below for this file, plus a real `colSpan={6}` bug on an 8-column table (now `colSpan={8}`). All 10 existing `AuctionItemsTab.test.tsx` tests pass unmodified (behavior-based, not implementation-based, per `testing-philosophy.md`) - verified with a full `npx vitest run` (321/321) and `npm run build`. |
 | `src/components/Bidders.tsx` | 644 | |
 | `src/components/Checkout.tsx` | 644 | |
 | `src/components/ConfigSettings.tsx` | 572 | |
@@ -48,13 +48,16 @@ Confirmed by grep - real, repeated duplication, not a hypothetical.
 
 **`<FilterToolbar>`** - Debounced search input + optional multi-select
 filter dropdowns + responsive layout with a real-time status count badge
-(e.g. "Total Items: 100"). `Items.tsx`, `Checkout.tsx`, `Bidders.tsx`,
-and `AuctionItemsTab.tsx` each independently render a
-`<Input placeholder="Search ...">` search box with near-identical
-layout (originally flagged by a prior audit as `Bidders.tsx` lines
-54-66, `Items.tsx` lines 21-37, `Checkout.tsx` lines 39-44; re-verify
-exact line ranges before implementing, since components shift over
-time).
+(e.g. "Total Items: 100"). `Items.tsx`, `Checkout.tsx`, and `Bidders.tsx`
+each independently render a `<Input placeholder="Search ...">` search
+box with near-identical layout (originally flagged by a prior audit as
+`Bidders.tsx` lines 54-66, `Items.tsx` lines 21-37, `Checkout.tsx` lines
+39-44; re-verify exact line ranges before implementing, since components
+shift over time). **Partial progress 2026-09-02**: `AuctionItemsTab.tsx`'s
+own filter bar was extracted into a local `AuctionItemsFilterBar.tsx`
+during that file's refactor - not the same as this shared cross-app
+component, but a smaller step in the same direction, and a real
+component to model the shared one on once built.
 
 **`<DataTableWrapper>`** - A standardized scrollable grid built around
 the existing `src/components/ui/table.tsx` primitives: auto-scroll via
@@ -92,9 +95,14 @@ lookup previews in `BidEntry.tsx` (originally flagged around lines
 enforcement. See the accessibility finding just below - this is not
 theoretical, it has already let 7 unlabeled icon buttons ship.
 
-**`<ConfirmationDialog>`** - No shared wrapper; destructive
-confirmations are built ad hoc from `alert-dialog.tsx` per call site
-(e.g. `BundlingDialog.tsx`).
+~~**`<ConfirmationDialog>`**~~ **Done 2026-09-02.** Built as
+`src/components/ui/ConfirmationDialog.tsx` (`open`/`onOpenChange`/
+`title`/`description`/`confirmLabel`/`cancelLabel`/`onConfirm`/
+`isLoading`/`variant`/`icon` props) and adopted for both of
+`AuctionItemsTab.tsx`'s confirmation dialogs (bulk-update confirm,
+delete-item confirm) as its first real usage. Other ad hoc destructive
+confirmations (e.g. in `BundlingDialog.tsx`) haven't been migrated to it
+yet - worth doing opportunistically.
 
 *Estimated impact* (from the original component-unification audit,
 covering the first five of these): implementing them would cut layout
@@ -106,21 +114,24 @@ assertions) more reliable without touching business logic.
 
 `component-standards.md` requires every icon-only button to carry an
 explicit `aria-label`. A repo-wide check of every real
-`<Button size="icon"...>` usage in `src/components/` found **7 with no
-`aria-label` at all**:
+`<Button size="icon"...>` usage in `src/components/` originally found
+**7 with no `aria-label` at all**; **6 remain** after
+`AuctionItemsTab.tsx`'s delete-item button was fixed during that file's
+2026-09-02 refactor (now `src/components/AuctionItemRow.tsx`, with
+`aria-label={\`Delete ${item.name}\`}`):
 
 - `src/components/AuctionAssistant.tsx:149` - send-message button (only child is a `<Send>` icon)
 - `src/components/DocumentCreationTab.tsx:208` - refresh-files button
 - `src/components/TicketDocumentCreationTab.tsx:128` - refresh-files button
 - `src/components/ui/EditableCell.tsx:102` - edit button
-- `src/components/AuctionItemsTab.tsx:727` - delete-item button
 - `src/components/TicketAttendeeTab.tsx:59` - save-attendee button
 - `src/components/TicketAttendeeTab.tsx:391` - delete-attendee button
+- ~~`src/components/AuctionItemsTab.tsx:727`~~ - delete-item button - **fixed**, now `AuctionItemRow.tsx`
 
 This is a real accessibility gap, not a style nitpick - a screen reader
-user gets an unlabeled button at all 7 sites today. Fixing it is a small,
-mechanical change (add `aria-label="..."` to each); building the
-`<IconButton>` wrapper above would prevent it from recurring.
+user gets an unlabeled button at all 6 remaining sites today. Fixing it
+is a small, mechanical change (add `aria-label="..."` to each); building
+the `<IconButton>` wrapper above would prevent it from recurring.
 
 ### Hardcoded hex colors instead of the `orns-red` token (`tailwind-style-guide.md`)
 
@@ -149,10 +160,14 @@ sites in one file.
 
 `cn()` (`src/lib/utils.ts`) exists specifically so conditional classes
 don't get built with manual string interpolation. Confirmed by grep,
-9 files still build `className` with a raw template literal instead:
-`AuctionItemsTab.tsx`, `AuctionAssistant.tsx`, `BidEntry.tsx`,
-`ConfigSettings.tsx`, `DocumentCreationTab.tsx`, `Receipts.tsx`,
-`Dashboard.tsx`, `TicketAttendeeTab.tsx`, `TicketDocumentCreationTab.tsx`.
+9 files originally built `className` with a raw template literal
+instead; **8 remain** after `AuctionItemsTab.tsx`'s row-selection
+className was fixed during that file's 2026-09-02 refactor (now
+`src/components/AuctionItemRow.tsx`, using
+`cn("group/row border-b transition-colors", isSelected && "bg-primary/5")`):
+`AuctionAssistant.tsx`, `BidEntry.tsx`, `ConfigSettings.tsx`,
+`DocumentCreationTab.tsx`, `Receipts.tsx`, `Dashboard.tsx`,
+`TicketAttendeeTab.tsx`, `TicketDocumentCreationTab.tsx`.
 Example (`Receipts.tsx:90`):
 
 ```tsx
