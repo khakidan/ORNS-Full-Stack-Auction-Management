@@ -59,7 +59,7 @@ All core operations are managed via unified npm scripts declared in `package.jso
 
 ## Test Suite
 
-The codebase enforces a zero-regression policy backed by a robust test suite containing **323 passing tests** across 25 focused files:
+The codebase enforces a zero-regression policy backed by a robust test suite containing **321 passing tests** across 25 focused files (verified with a real `npm run test` run on 2026-09-02, matching `AGENTS.md`'s figure):
 *   **Backend Integration & Units**: Managed by **Vitest**, **supertest**, and **MSW (Mock Service Worker)** to mock Google API payloads and ensure absolute safety across Sheets transactional structures.
 *   **Frontend Interaction**: Managed by **React Testing Library** and **Vitest** to assert interactive transitions, sorting, searching, and conditional warning dialogs.
 

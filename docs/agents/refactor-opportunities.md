@@ -179,6 +179,39 @@ exist, correctly, on the Express backend). Consider either formalizing a
 `src/services/` split or explicitly documenting `lib/` as "pure
 utilities + integration clients."
 
+### The `vendor-utils` build chunk is oversized (`performance.md`)
+
+Found while re-measuring bundle size for `style_guide.md` (see that
+doc's Bundle Optimization section for the full real numbers, from a
+verified `npm install && npm run build` run on 2026-09-02). The
+catch-all `vendor-utils` chunk in `vite.config.ts`'s `manualChunks` is
+851 kB raw / 238 kB gzipped - by far the largest chunk in the app, and
+the main reason the initial JS load (~421 kB gzipped total) sits in
+`performance.md`'s own "warning" band. It sweeps in every dependency
+that isn't `react`/`recharts`/`motion`/`lucide-react`, including two
+genuinely substantial libraries - `firebase` (auth + Firestore SDK) and
+`@base-ui/react` (this app's entire UI primitive library). Giving those
+two their own named chunks in `manualChunks` (the same pattern already
+used for `vendor-react`/`vendor-recharts`/`vendor-motion`/`vendor-lucide`)
+would let the browser cache them independently and make it obvious in
+future builds which dependency is driving bundle growth. A full
+treemap pass (`rollup-plugin-visualizer`, installed temporarily per
+`performance.md`'s own guidance) would confirm the exact split before
+committing to specific new chunk boundaries.
+
+### `AuctionAssistant.tsx` is never imported anywhere (`react-patterns.md`)
+
+`src/components/AuctionAssistant.tsx` exists (it arrived via the
+GitHub-history merge, not written for this local checkout) and pulls in
+`react-markdown`, but a repo-wide search found no import of it from
+`App.tsx` or any other component - it is dead code today. Either wire it
+into the app (it looks like an AI chat-assistant panel, consistent with
+`metadata.json`'s `MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API` capability
+and the real `server/services/assistantService.ts` backend it would
+presumably call) or delete it; leaving an unreferenced component with a
+real dependency (`react-markdown`) sitting in the tree is confusing for
+the next person who greps for it expecting it to be live.
+
 ---
 
 ## Passed Audit Inspection
@@ -244,30 +277,24 @@ so nobody "fixes" something that isn't broken.
 
 ## Out of Scope, but Should be Fixed
 
-Real, confirmed problems that aren't a code refactor - they need a
-decision, a documentation correction, or a working environment this
-audit didn't have.
+Nothing outstanding right now. The three items previously logged here
+were all resolved on 2026-09-02:
 
-- **`style_guide.md`'s font stack is wrong.** It lists Inter, Space
-  Grotesk/Outfit, and JetBrains Mono/Fira Code. A full-repo search found
-  none of these anywhere in `src/`, `index.html`, or `package.json` - the
-  only font in use is **Geist Variable** (`@fontsource-variable/geist`,
-  `src/index.css`'s `--font-sans`). This needs a decision, not a code
-  change: either the doc gets corrected to say Geist, or the app is
-  missing fonts it was supposed to ship - confirm which with whoever
-  wrote the original font spec.
-- **`style_guide.md`'s "under 103 kB critical path" bundle claim is
-  unverified.** `npm run build` could not be run in this environment
-  (missing root `node_modules` for `@tailwindcss/vite` /
-  `@vitejs/plugin-react`). Needs someone with a working `npm install` to
-  re-measure with a clean `npm run build` and either update the doc with
-  real numbers or remove the specific figure until it can be confirmed.
-- **Test count claim mismatch** (`README.md`'s "323 passing tests... 25
-  focused files" vs. `AGENTS.md`'s "321 tests"). The 25-file count
-  checks out by direct listing, but the two docs disagree with each
-  other on the exact test-count number. Needs an actual `npm run test`
-  pass (blocked by the same missing-`node_modules` environment issue
-  above) to settle which is current.
+- `style_guide.md`'s font stack now correctly describes Geist Variable
+  (the only font actually shipped) instead of the never-implemented
+  Inter/Space Grotesk/JetBrains Mono pairing.
+- `style_guide.md`'s bundle-size section now has real, measured numbers
+  from a working `npm install && npm run build` (see that doc's Bundle
+  Optimization section) instead of an unverified "under 103 kB" claim -
+  which also surfaced two new, real findings, logged above under "Tasks
+  To Refactor" (`vendor-utils` chunk sizing, orphaned
+  `AuctionAssistant.tsx`).
+- `README.md`'s test count was corrected from "323" to the real,
+  verified **321** (`npx vitest run`), matching `AGENTS.md`.
+
+New items belong here only when they genuinely need a decision,
+documentation correction, or working environment this audit doesn't
+have access to - not as a place to defer real code fixes.
 
 ---
 
