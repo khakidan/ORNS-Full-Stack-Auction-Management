@@ -91,18 +91,6 @@ reduction, not another chunking change. A full treemap pass
 own guidance) would help confirm the split point before committing to
 a specific lazy-load boundary.
 
-### Two different `EditableCell` implementations (`component-standards.md`)
-
-`src/components/ui/EditableCell.tsx` (shared, `type: "text" | "textarea" | "select"`,
-Save + Cancel buttons) and `src/components/AttendeeEditableCell.tsx`
-(single-line only, Save button + Escape-to-revert, no Cancel button) are
-two genuinely different implementations of the same "click to edit
-inline" concept, found while splitting up `TicketAttendeeTab.tsx` (the
-latter used to be a local, file-scoped component there). Not merged now
-since reconciling their different Cancel/Escape behavior is a real
-design decision, not a mechanical extraction - flagged here rather than
-guessed at.
-
 ### `AddAttendeeDialog`'s "Save Entry" has no loading state (`component-standards.md`)
 
 Found while splitting up `TicketAttendeeTab.tsx`. Unlike `Checkout.tsx`'s

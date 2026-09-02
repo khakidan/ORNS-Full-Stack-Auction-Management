@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AttendeeEditableCell } from "@/components/AttendeeEditableCell";
+import { EditableCell } from "@/components/ui/EditableCell";
 import { Attendee } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -33,11 +33,11 @@ export function AttendeeRow({
       <TableCell>
         <div className="flex flex-col gap-1.5">
           <div className="flex gap-1">
-            <AttendeeEditableCell value={a.firstName} onSave={val => onUpdateField(a, 'firstName', val)} placeholder="First" disabled={isAuctionClosed} />
-            <AttendeeEditableCell value={a.lastName} onSave={val => onUpdateField(a, 'lastName', val)} placeholder="Last" disabled={isAuctionClosed} />
+            <EditableCell value={a.firstName} onSave={val => onUpdateField(a, 'firstName', val)} placeholder="First" disabled={isAuctionClosed} singleLine />
+            <EditableCell value={a.lastName} onSave={val => onUpdateField(a, 'lastName', val)} placeholder="Last" disabled={isAuctionClosed} singleLine />
           </div>
-          <AttendeeEditableCell value={a.email} onSave={val => onUpdateField(a, 'email', val)} placeholder="Email" disabled={isAuctionClosed} />
-          <AttendeeEditableCell value={a.phone} onSave={val => onUpdateField(a, 'phone', val)} placeholder="Phone" disabled={isAuctionClosed} />
+          <EditableCell value={a.email} onSave={val => onUpdateField(a, 'email', val)} placeholder="Email" disabled={isAuctionClosed} singleLine />
+          <EditableCell value={a.phone} onSave={val => onUpdateField(a, 'phone', val)} placeholder="Phone" disabled={isAuctionClosed} singleLine />
         </div>
       </TableCell>
       <TableCell className="text-center">
@@ -62,7 +62,7 @@ export function AttendeeRow({
                   </Badge>
                 )}
               </span>
-              <AttendeeEditableCell value={g.email} onSave={val => onUpdateField(a, 'email', val, g.guestIndex)} placeholder="Guest Email" disabled={isAuctionClosed} />
+              <EditableCell value={g.email} onSave={val => onUpdateField(a, 'email', val, g.guestIndex)} placeholder="Guest Email" disabled={isAuctionClosed} singleLine />
             </div>
           ))}
           {a.guestsInfo.length === 0 && <span className="text-muted-foreground italic text-sm">No guests listed</span>}
