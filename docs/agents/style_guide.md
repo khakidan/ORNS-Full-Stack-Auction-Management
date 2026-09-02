@@ -46,32 +46,39 @@ loaded via dynamic imports:
 Use standard React `<Suspense>` components to wrap these workflows when they are active.
 
 **Real measured bundle size** (`npm install && npm run build`, run
-2026-09-02 - this replaces a previous, unverified "under 103 kB critical
-path" claim that did not match a real build):
+2026-09-02 - updated after splitting `firebase`/`@base-ui/react` out of
+`vendor-utils`, see below):
 
 | Chunk | Raw | Gzip |
 | --- | --- | --- |
-| `index` (main entry) | 102.91 kB | 26.32 kB |
+| `index` (main entry) | 107.67 kB | 29.06 kB |
+| `vendor-firebase` | 450.35 kB | 105.53 kB |
+| `vendor-utils` (catch-all for everything else in `node_modules`) | 263.71 kB | 85.98 kB |
 | `vendor-react` | 194.40 kB | 60.73 kB |
-| `vendor-recharts` | 186.62 kB | 49.53 kB |
+| `vendor-recharts` | 186.67 kB | 49.55 kB |
+| `vendor-base-ui` | 136.57 kB | 46.44 kB |
 | `vendor-motion` | 127.89 kB | 41.94 kB |
 | `vendor-lucide` | 24.13 kB | 5.25 kB |
-| `vendor-utils` (catch-all for everything else in `node_modules`) | 851.07 kB | 237.78 kB |
-| `index.css` | 80.73 kB | 14.08 kB |
-| *Lazy, not part of initial load:* `ConfigSettings` | 13.59 kB | 4.09 kB |
-| *Lazy:* `AuctionTicketsWorkflow` | 17.43 kB | 5.38 kB |
-| *Lazy:* `AuctionItemsWorkflow` | 43.66 kB | 11.75 kB |
+| `index.css` | 79.70 kB | 14.10 kB |
+| *Lazy, not part of initial load:* `ConfigSettings` | 14.99 kB | 4.47 kB |
+| *Lazy:* `AuctionTicketsWorkflow` | 17.89 kB | 5.75 kB |
+| *Lazy:* `AuctionItemsWorkflow` | 45.86 kB | 12.40 kB |
 
 Everything except the three lazy workflow chunks loads on initial page
 load (`App.tsx` eagerly imports `Dashboard`, `Bidders`, `Items`,
 `BidEntry`, `Checkout`, `Receipts`, which pull in `recharts`, `motion`,
-and `lucide-react` immediately). Summed, that is **~421 kB gzipped of
-JS** on the critical path, plus 14 kB of CSS - not under 103 kB. Per
-`performance.md`'s own budget (target <200 kB, warning >300 kB, requires
-review >500 kB), this sits in the warning band, driven almost entirely
-by the 238 kB `vendor-utils` catch-all chunk. Splitting `vendor-utils`
-further (e.g. giving `firebase` and `@base-ui/react` - both real,
-substantial dependencies swept into that one bucket today - their own
-named chunks in `vite.config.ts`'s `manualChunks`) is a reasonable next
-optimization, but is a separate, deliberate performance pass, not a
-one-line doc fix.
+and `lucide-react` immediately, and `useConfig`/`ConfigContext` pull in
+`firebase` for cross-device config sync). Summed, that is **~424 kB
+gzipped of JS** on the critical path, plus 14 kB of CSS - essentially
+unchanged from the previous ~421 kB total, as expected: splitting
+`vendor-utils` into named chunks doesn't reduce bytes shipped on first
+load by itself (nothing here is lazy-loaded), it only makes bundle
+growth attributable per-dependency and lets the browser cache
+`vendor-firebase`/`vendor-base-ui` independently of app-code changes
+between deploys. Per `performance.md`'s own budget (target <200 kB,
+warning >300 kB, requires review >500 kB), the critical path still sits
+in the warning band - reducing the actual byte count would require
+lazy-loading `firebase` (e.g. behind the cloud-sync UI in
+`ConfigSettings.tsx`, since most of the app doesn't need Firestore/Auth
+on first paint) or `@base-ui/react`'s heavier primitives, which is a
+separate, deliberate performance pass, not a chunking change.

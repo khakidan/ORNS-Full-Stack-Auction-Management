@@ -70,25 +70,26 @@ an icon-only inline save button with no label to swap, which fits
 worth a dedicated follow-up pass rather than folding into this one,
 since it touches three more files.
 
-### The `vendor-utils` build chunk is oversized (`performance.md`)
+### Initial JS load still sits in `performance.md`'s warning band (`performance.md`)
 
-Found while re-measuring bundle size for `style_guide.md` (see that
-doc's Bundle Optimization section for the full real numbers, from a
-verified `npm install && npm run build` run on 2026-09-02). The
-catch-all `vendor-utils` chunk in `vite.config.ts`'s `manualChunks` is
-851 kB raw / 238 kB gzipped - by far the largest chunk in the app, and
-the main reason the initial JS load (~421 kB gzipped total) sits in
-`performance.md`'s own "warning" band. It sweeps in every dependency
-that isn't `react`/`recharts`/`motion`/`lucide-react`, including two
-genuinely substantial libraries - `firebase` (auth + Firestore SDK) and
-`@base-ui/react` (this app's entire UI primitive library). Giving those
-two their own named chunks in `manualChunks` (the same pattern already
-used for `vendor-react`/`vendor-recharts`/`vendor-motion`/`vendor-lucide`)
-would let the browser cache them independently and make it obvious in
-future builds which dependency is driving bundle growth. A full
-treemap pass (`rollup-plugin-visualizer`, installed temporarily per
-`performance.md`'s own guidance) would confirm the exact split before
-committing to specific new chunk boundaries.
+`vendor-utils` was split (`firebase` and `@base-ui/react` now have their
+own named `manualChunks` in `vite.config.ts`, alongside the existing
+`vendor-react`/`vendor-recharts`/`vendor-motion`/`vendor-lucide`), so
+per-dependency bundle growth is now attributable and the browser can
+cache `vendor-firebase`/`vendor-base-ui` independently of app-code
+changes between deploys. See `style_guide.md`'s Bundle Optimization
+section for the full real numbers. That said, the actual bytes shipped
+on first load didn't drop (~424 kB gzipped JS, essentially unchanged) -
+splitting chunk boundaries doesn't remove bytes, only lazy-loading does.
+`firebase` (450 kB raw / 106 kB gzipped) is now the single largest
+chunk in the app, and most of it (Firestore + Auth, used only for
+cross-device config sync in `ConfigSettings.tsx`) isn't needed for
+first paint. Lazy-loading `firebase`'s init behind the cloud-sync UI
+(or wherever `ConfigContext.tsx` first needs it) would be the next real
+reduction, not another chunking change. A full treemap pass
+(`rollup-plugin-visualizer`, installed temporarily per `performance.md`'s
+own guidance) would help confirm the split point before committing to
+a specific lazy-load boundary.
 
 ### Two different `EditableCell` implementations (`component-standards.md`)
 
