@@ -11,14 +11,6 @@ feature work belongs in [`ROADMAP.md`](./ROADMAP.md) instead.
 
 ## Tasks To Refactor
 
-- **Lazy-load `firebase`'s init** (Firestore + Auth) behind the
-  cloud-sync UI in `ConfigSettings.tsx`/`ConfigContext.tsx`
-  (`performance.md`). `vendor-firebase` (450 kB raw / 106 kB gzipped) is
-  the single largest chunk and isn't needed for first paint - this is
-  the real next step to bring the initial JS load out of
-  `performance.md`'s warning band (chunk-splitting alone didn't reduce
-  it, see `CHANGELOG.md`). Consider a `rollup-plugin-visualizer`
-  treemap pass first to confirm the split point.
 - **Add a submitting/loading state to `AddAttendeeDialog`'s "Save
   Entry" button** (`component-standards.md`) - `handleAddSubmit` in
   `hooks/useTicketAttendeeState.ts` doesn't track one yet.
@@ -56,6 +48,19 @@ listed so future audits don't have to re-derive this, and so nobody
   `server/routes/authRoutes.ts`.
 - **`vite.config.ts`'s `manualChunks` is a functional matcher**, not a
   static object map (`patterns.md`, `performance.md`).
+- **`firebase`'s init is lazy-loaded, out of the critical path**
+  (`performance.md`) - `ConfigContext.tsx` defers `firebase/app`/`auth`/
+  `firestore` behind a memoized `getFirebase()` (`src/services/firebase.ts`)
+  instead of importing them statically. The deferred chunk itself grew
+  (106 kB → 160 kB gzipped) since neither `@firebase/auth` nor
+  `@firebase/firestore` declares `"sideEffects": false`, so Rollup can't
+  tree-shake their unused exports across an async boundary the way it
+  partially could in one static graph - confirmed via a
+  `rollup-plugin-visualizer` treemap, and `firebase/firestore/lite`
+  isn't a viable swap (it's REST-only; this app's config sync needs
+  `onSnapshot`). Accepted trade-off: the critical path is what matters
+  for `performance.md`'s budget, and it dropped either way (see
+  `CHANGELOG.md`).
 - **Route-level `React.lazy()` code-splitting is in place** for
   `ConfigSettings`, `AuctionTicketsWorkflow`, `AuctionItemsWorkflow`,
   wrapped in `<Suspense>` (`performance.md`, `style_guide.md`).

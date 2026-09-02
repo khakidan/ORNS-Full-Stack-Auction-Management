@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { db, auth } from '@/services/firebase';
-import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from 'firebase/auth';
+import { getFirebase } from '@/services/firebase';
+import type { User } from 'firebase/auth';
 import { toast } from 'sonner';
 
 import { Config } from '@/types';
@@ -38,48 +37,58 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
-      if (user) {
-        // Subscribe to global config
-        const unsubConfig = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data() as Config;
-            setConfig(data);
-            
-            // Mirror to localStorage for components yet to be migrated
-            Object.entries(data).forEach(([key, value]) => {
-              localStorage.setItem(key, value as string);
-            });
-            // Legacy key
-            localStorage.setItem("spreadsheetId", data.bidManagementSpreadsheetId);
-            localStorage.setItem("googleScriptId", data.bidManagementScriptId);
-          }
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+
+    getFirebase().then(({ auth, db, onAuthStateChanged, onSnapshot, doc }) => {
+      if (cancelled) return;
+      unsubscribe = onAuthStateChanged(auth, (user) => {
+        setFirebaseUser(user);
+        if (user) {
+          // Subscribe to global config
+          const unsubConfig = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data() as Config;
+              setConfig(data);
+
+              // Mirror to localStorage for components yet to be migrated
+              Object.entries(data).forEach(([key, value]) => {
+                localStorage.setItem(key, value as string);
+              });
+              // Legacy key
+              localStorage.setItem("spreadsheetId", data.bidManagementSpreadsheetId);
+              localStorage.setItem("googleScriptId", data.bidManagementScriptId);
+            }
+            setLoading(false);
+          }, (error) => {
+            console.error("Firestore Error:", error);
+            if (error.code === 'permission-denied') {
+              toast.error("Permission denied: Sync is only available for @orns.org users.");
+            }
+            setLoading(false);
+          });
+          return () => unsubConfig();
+        } else {
           setLoading(false);
-        }, (error) => {
-          console.error("Firestore Error:", error);
-          if (error.code === 'permission-denied') {
-            toast.error("Permission denied: Sync is only available for @orns.org users.");
-          }
-          setLoading(false);
-        });
-        return () => unsubConfig();
-      } else {
-        setLoading(false);
-      }
+        }
+      });
     });
 
-    return () => unsubscribe();
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, []);
 
   const loginToFirebase = async () => {
+    const { auth, GoogleAuthProvider, signInWithPopup, signOut } = await getFirebase();
     const provider = new GoogleAuthProvider();
     // Suggest domain restriction to Google
     provider.setCustomParameters({
       hd: 'orns.org',
       prompt: 'select_account'
     });
-    
+
     try {
       const result = await signInWithPopup(auth, provider);
       const email = result.user.email;
@@ -100,6 +109,7 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
+      const { db, doc, setDoc, serverTimestamp } = await getFirebase();
       await setDoc(doc(db, 'settings', 'global'), {
         ...newConfig,
         updatedAt: serverTimestamp(),

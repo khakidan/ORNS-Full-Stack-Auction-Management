@@ -46,39 +46,49 @@ loaded via dynamic imports:
 Use standard React `<Suspense>` components to wrap these workflows when they are active.
 
 **Real measured bundle size** (`npm install && npm run build`, run
-2026-09-02 - updated after splitting `firebase`/`@base-ui/react` out of
-`vendor-utils`, see below):
+2026-09-02 - updated after lazy-loading `firebase`'s init, see below):
 
 | Chunk | Raw | Gzip |
 | --- | --- | --- |
-| `index` (main entry) | 107.67 kB | 29.06 kB |
-| `vendor-firebase` | 450.35 kB | 105.53 kB |
+| `index` (main entry) | 108.01 kB | 29.06 kB |
 | `vendor-utils` (catch-all for everything else in `node_modules`) | 263.71 kB | 85.98 kB |
 | `vendor-react` | 194.40 kB | 60.73 kB |
 | `vendor-recharts` | 186.67 kB | 49.55 kB |
-| `vendor-base-ui` | 136.57 kB | 46.44 kB |
+| `vendor-base-ui` | 136.56 kB | 46.44 kB |
 | `vendor-motion` | 127.89 kB | 41.94 kB |
-| `vendor-lucide` | 24.13 kB | 5.25 kB |
+| `vendor-lucide` | 24.12 kB | 5.25 kB |
 | `index.css` | 79.70 kB | 14.10 kB |
-| *Lazy, not part of initial load:* `ConfigSettings` | 14.99 kB | 4.47 kB |
-| *Lazy:* `AuctionTicketsWorkflow` | 17.89 kB | 5.75 kB |
-| *Lazy:* `AuctionItemsWorkflow` | 45.86 kB | 12.40 kB |
+| *Lazy, not part of initial load:* `vendor-firebase` | 691.27 kB | 160.04 kB |
+| *Lazy:* `AuctionItemsWorkflow` | 43.39 kB | 11.83 kB |
+| *Lazy:* `AuctionTicketsWorkflow` | 16.79 kB | 5.39 kB |
+| *Lazy:* `ConfigSettings` | 14.90 kB | 4.45 kB |
+| *Lazy:* `EditableCell` (auto-split - only reachable from the lazy workflow chunks above) | 3.14 kB | 1.36 kB |
+| *Lazy:* `firebase-applet-config.json` | 0.58 kB | 0.36 kB |
 
-Everything except the three lazy workflow chunks loads on initial page
-load (`App.tsx` eagerly imports `Dashboard`, `Bidders`, `Items`,
-`BidEntry`, `Checkout`, `Receipts`, which pull in `recharts`, `motion`,
-and `lucide-react` immediately, and `useConfig`/`ConfigContext` pull in
-`firebase` for cross-device config sync). Summed, that is **~424 kB
-gzipped of JS** on the critical path, plus 14 kB of CSS - essentially
-unchanged from the previous ~421 kB total, as expected: splitting
-`vendor-utils` into named chunks doesn't reduce bytes shipped on first
-load by itself (nothing here is lazy-loaded), it only makes bundle
-growth attributable per-dependency and lets the browser cache
-`vendor-firebase`/`vendor-base-ui` independently of app-code changes
-between deploys. Per `performance.md`'s own budget (target <200 kB,
-warning >300 kB, requires review >500 kB), the critical path still sits
-in the warning band - reducing the actual byte count would require
-lazy-loading `firebase` (e.g. behind the cloud-sync UI in
-`ConfigSettings.tsx`, since most of the app doesn't need Firestore/Auth
-on first paint) or `@base-ui/react`'s heavier primitives, which is a
-separate, deliberate performance pass, not a chunking change.
+`firebase/app`/`auth`/`firestore` are no longer part of the initial
+bundle - `src/services/firebase.ts` defers `initializeApp`/`getAuth`/
+`getFirestore` behind a memoized `getFirebase()` that `ConfigContext.tsx`
+awaits instead of importing them statically, since cross-device config
+sync isn't needed for first paint. Everything except the six lazy
+chunks above loads on initial page load (`App.tsx` eagerly imports
+`Dashboard`, `Bidders`, `Items`, `BidEntry`, `Checkout`, `Receipts`,
+which pull in `recharts`, `motion`, and `lucide-react` immediately).
+Summed, that is **~319 kB gzipped of JS** on the critical path, plus
+14 kB of CSS - down from ~424 kB before this change. Per
+`performance.md`'s own budget (target <200 kB, warning >300 kB,
+requires review >500 kB), this is much closer to target but still
+technically in the warning band; `@base-ui/react`'s heavier primitives
+are the next largest eager chunk if further reduction is wanted.
+
+One real trade-off, not hidden: `vendor-firebase` itself grew once
+deferred (105.53 kB → 160.04 kB gzipped, 450.35 kB → 691.27 kB raw).
+Neither `@firebase/auth` nor `@firebase/firestore` declares
+`"sideEffects": false`, so Rollup loses some export-level tree-shaking
+across the async `import()` boundary that it had when everything sat in
+one static module graph (confirmed with a temporary
+`rollup-plugin-visualizer` pass). `firebase/firestore/lite` isn't a
+viable swap - it's REST-only, and this app's config sync depends on
+`onSnapshot`'s real-time listener. Net effect: users who never touch
+cloud sync now pay zero Firebase cost, instead of ~106 kB gzipped
+unconditionally; users who do trigger it pay more than before, but only
+then.
