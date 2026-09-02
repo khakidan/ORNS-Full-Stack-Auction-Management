@@ -33,7 +33,6 @@ directly against the file it names, not estimated.
 | File | Lines | Note |
 | --- | --- | --- |
 | `src/components/ConfigSettings.tsx` | 572 | |
-| `src/context/AuctionContext.tsx` | 532 | Large for a context provider - worth checking whether it's holding multiple unrelated concerns that could split into separate contexts/hooks. |
 
 All are over this codebase's own "over 400 lines: almost certainly doing
 too much" guidance (`react-patterns.md`). Confirmed by `wc -l`.
