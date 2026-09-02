@@ -3,9 +3,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Receipts from "./Receipts";
-import { fetchWithRetry, getBaseUrl } from "@/lib/google-api";
+import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 
-vi.mock("@/lib/google-api", () => ({
+vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => [] }),
   getBaseUrl: vi.fn(() => "http://localhost:3000")
 }));

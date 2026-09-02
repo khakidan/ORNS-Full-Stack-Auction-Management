@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, updateSheetData, getBaseUrl, deleteAuctionItem } from "@/lib/google-api";
+import { fetchWithRetry, updateSheetData, getBaseUrl, deleteAuctionItem } from "@/services/google-api";
 import { parseDollar, calculateAutoBids, ValueCalculationTier } from "@/lib/auctionItemPricing";
 import { AuctionItem } from "@/types";
 

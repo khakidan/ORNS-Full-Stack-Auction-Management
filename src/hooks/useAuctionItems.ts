@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getSheetData } from "@/lib/google-api";
+import { getSheetData } from "@/services/google-api";
 import { AuctionItem } from "@/types";
 import { getCategoryBase } from "@/lib/categoryHelpers";
 import { toast } from "sonner";

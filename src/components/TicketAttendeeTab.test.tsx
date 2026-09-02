@@ -60,7 +60,7 @@ vi.mock("@/components/ui/dialog", () => ({
 }));
 
 // Mock Google Sheets/API functions
-vi.mock("@/lib/google-api", () => ({
+vi.mock("@/services/google-api", () => ({
   updateSheetData: vi.fn(() => Promise.resolve({ success: true })),
   getSheetData: vi.fn(() => Promise.resolve([])),
 }));

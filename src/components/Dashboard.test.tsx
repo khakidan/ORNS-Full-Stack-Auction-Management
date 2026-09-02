@@ -47,7 +47,7 @@ vi.mock("sonner", () => ({
 }));
 
 // Google API mock to prevent network requests
-vi.mock("@/lib/google-api", () => ({
+vi.mock("@/services/google-api", () => ({
   getSheetData: vi.fn(() => Promise.resolve({ values: [] })),
   updateSheetData: vi.fn(() => Promise.resolve({})),
   appendSheetData: vi.fn(() => Promise.resolve({})),

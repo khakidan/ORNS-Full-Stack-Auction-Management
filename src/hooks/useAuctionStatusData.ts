@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl, getSheetData } from "@/lib/google-api";
+import { fetchWithRetry, getBaseUrl, getSheetData } from "@/services/google-api";
 
 export function useAuctionStatusData(spreadsheetId: string, bidManagementSheet: string, bidderNumbersSheet: string) {
   const [isAuctionClosed, setIsAuctionClosed] = useState(false);

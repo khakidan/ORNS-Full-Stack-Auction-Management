@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { getSheetData, updateSheetData, appendSheetData } from "@/lib/google-api";
+import { getSheetData, updateSheetData, appendSheetData } from "@/services/google-api";
 import { Bidder } from "@/types";
 
 interface UseDashboardStateArgs {

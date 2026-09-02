@@ -62,7 +62,7 @@ vi.mock("@/context/ConfigContext", () => ({
   }),
 }));
 
-vi.mock("@/lib/google-api", () => ({
+vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
   updateSheetData: vi.fn().mockResolvedValue({}),
   appendSheetData: vi.fn().mockResolvedValue({}),

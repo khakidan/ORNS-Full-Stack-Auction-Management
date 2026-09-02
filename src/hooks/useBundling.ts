@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl } from "@/lib/google-api";
+import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { AuctionItem } from "@/types";
 
 interface BundlingSelection {

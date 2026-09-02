@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getAuthStatus, getAuthUrl, logout } from "@/lib/google-api";
+import { getAuthStatus, getAuthUrl, logout } from "@/services/google-api";
 import { toast } from "sonner";
 
 export function useGoogleAuth() {

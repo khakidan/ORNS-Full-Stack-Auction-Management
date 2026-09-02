@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { getSheetData } from "@/lib/google-api";
+import { getSheetData } from "@/services/google-api";
 import { parseItemRows } from "@/lib/itemParsing";
 import { AuctionItem } from "@/types";
 

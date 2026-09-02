@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl } from "@/lib/google-api";
+import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { getBidderAttendeeInfo } from "@/lib/bidderAttendeeInfo";
 import { Bidder, Attendee } from "@/types";
 

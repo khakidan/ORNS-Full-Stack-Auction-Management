@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useAuction } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
-import { getSheetData, updateSheetData } from "@/lib/google-api";
+import { getSheetData, updateSheetData } from "@/services/google-api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

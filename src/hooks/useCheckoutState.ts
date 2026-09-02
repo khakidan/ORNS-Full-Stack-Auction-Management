@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, getSheetData, getBaseUrl } from "@/lib/google-api";
+import { fetchWithRetry, getSheetData, getBaseUrl } from "@/services/google-api";
 import { Bidder, AuctionItem, Attendee } from "@/types";
 
 export interface WinnerRecord {

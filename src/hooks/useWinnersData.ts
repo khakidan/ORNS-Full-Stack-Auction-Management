@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl, getSheetData } from "@/lib/google-api";
+import { fetchWithRetry, getBaseUrl, getSheetData } from "@/services/google-api";
 import { Bidder } from "@/types";
 
 export function useWinnersData(spreadsheetId: string, bidders: Bidder[], bidManagementSheet: string, bidderNumbersSheet: string) {

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { PlaySquare, Download, Package, RefreshCw, AlertCircle, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
-import { getBaseUrl } from "@/lib/google-api";
+import { getBaseUrl } from "@/services/google-api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AuctionItemsTab from "./AuctionItemsTab";
 import DocumentCreationTab from "./DocumentCreationTab";

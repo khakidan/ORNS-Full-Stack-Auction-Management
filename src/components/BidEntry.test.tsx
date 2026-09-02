@@ -4,10 +4,10 @@ import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import userEvent from "@testing-library/user-event";
 import BidEntry from "./BidEntry";
-import { fetchWithRetry } from "@/lib/google-api";
+import { fetchWithRetry } from "@/services/google-api";
 import { toast } from "sonner";
 
-vi.mock("@/lib/google-api", () => ({
+vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn(),
   getBaseUrl: vi.fn(() => "http://localhost:3000"),
   getSheetData: vi.fn(),

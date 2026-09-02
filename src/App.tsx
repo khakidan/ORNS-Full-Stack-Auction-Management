@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, lazy, Suspense } from "react";
-import { fetchWithRetry, getBaseUrl } from "@/lib/google-api";
+import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { useConfig } from "@/context/ConfigContext";
 import { useGoogleAuth } from "@/hooks/useGoogleAuth";
 import { Button } from "@/components/ui/button";

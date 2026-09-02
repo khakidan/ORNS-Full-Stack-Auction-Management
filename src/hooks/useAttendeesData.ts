@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { appendSheetData, clearSheetData, getSheetData } from "@/lib/google-api";
+import { appendSheetData, clearSheetData, getSheetData } from "@/services/google-api";
 import { parseAttendeeRows } from "@/lib/attendeeParsing";
 import { Attendee } from "@/types";
 

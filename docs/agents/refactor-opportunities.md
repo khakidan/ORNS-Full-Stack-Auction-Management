@@ -70,17 +70,6 @@ an icon-only inline save button with no label to swap, which fits
 worth a dedicated follow-up pass rather than folding into this one,
 since it touches three more files.
 
-### Architecture: `src/lib/` mixes pure and impure code (`react-patterns.md`)
-
-`categoryHelpers.ts` and `utils.ts` are genuinely pure; `google-api.ts`
-(network calls, `localStorage`, retry/backoff) and `firebase.ts` (live
-SDK client init) are not. There is no `src/services/` directory, so the
-`lib -> services -> hooks -> components` layering described in
-`react-patterns.md` doesn't fully exist on the frontend yet (it does
-exist, correctly, on the Express backend). Consider either formalizing a
-`src/services/` split or explicitly documenting `lib/` as "pure
-utilities + integration clients."
-
 ### The `vendor-utils` build chunk is oversized (`performance.md`)
 
 Found while re-measuring bundle size for `style_guide.md` (see that

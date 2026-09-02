@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { updateSheetData } from "@/lib/google-api";
+import { updateSheetData } from "@/services/google-api";
 import { Attendee } from "@/types";
 
 interface NewAttendeeEntry {

@@ -77,7 +77,7 @@ vi.mock("sonner", () => ({
 }));
 
 // Google-api mock
-vi.mock("@/lib/google-api", () => ({
+vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn(),
   updateSheetData: vi.fn(),
   getBaseUrl: vi.fn(() => "http://localhost:3000"),

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getAuthStatus } from "@/lib/google-api";
+import { getAuthStatus } from "@/services/google-api";
 
 /**
  * Tracks whether the backend's Google API client is authenticated, and
