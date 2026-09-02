@@ -4,206 +4,109 @@ Running list of concrete, verified work items for this codebase - not
 aspirational ideas, but things confirmed against the real code. When an
 item is done, remove it from this file entirely - the paper trail for
 completed work lives in [`CHANGELOG.md`](./CHANGELOG.md), not here. This
-file only ever reflects the current, outstanding backlog.
-
-This file absorbed [ROADMAP.md](./ROADMAP.md)'s former "Frontend UI
-Audit & Component Unification Plan" section - `ROADMAP.md` keeps only
-forward-looking feature milestones now; refactor items belong here.
-
-**2026-09-02 audit**: a full pass against
-[`component-standards.md`](./component-standards.md),
-[`patterns.md`](./patterns.md), [`performance.md`](./performance.md),
-[`react-patterns.md`](./react-patterns.md), [`style_guide.md`](./style_guide.md),
-[`tailwind-style-guide.md`](./tailwind-style-guide.md), and
-[`testing-philosophy.md`](./testing-philosophy.md) against the real
-`src/`/`server/` code. Findings are sorted into three sections below:
-things that need code changes, things that were checked and are already
-correct, and things that need fixing but aren't a code refactor (a
-decision, a doc correction, or an environment fix).
+file only ever reflects the current, outstanding backlog. Net-new
+feature work belongs in [`ROADMAP.md`](./ROADMAP.md) instead.
 
 ---
 
 ## Tasks To Refactor
 
-Concrete, actionable code-level work - each item below was confirmed
-directly against the file it names, not estimated.
-
-### Shared component follow-ups (`component-standards.md`)
-
-Every component originally flagged as missing here has been resolved:
-`FilterToolbar`, `DataTableWrapper`, `StatusStatePlaceholder`,
-`LoadingButton`, `IconButton`, and `ConfirmationDialog` were built and
-adopted at their named call sites; `AttendeeLookupCard` turned out not
-to apply (no real duplicated card markup existed to consolidate - see
-`CHANGELOG.md`) and was dropped rather than force-built. What's left
-below is real, verified follow-up adoption at sites beyond the original
-scope - not new components to build.
-
-`src/components/ui/ConfirmationDialog.tsx` exists (a shared confirmation
-dialog, adopted by `AuctionItemsTab.tsx` and, as of `Checkout.tsx`'s
-refactor, its "Print All Receipts"/"Email All Winners" confirms too -
-which also picked up an `isLoading` state on their confirm buttons that
-the original hand-rolled dialogs never had) but other ad hoc
-confirmations - e.g. in `BundlingDialog.tsx` - still haven't been
-migrated. Worth doing opportunistically. `Bidders.tsx`'s pending-payment
-`AlertDialog` was deliberately *not* migrated (see `CHANGELOG.md`) -
-its "No, Do Not Add" button performs a real action, not just a close, so
-it doesn't fit `ConfirmationDialog`'s cancel-just-closes API. Any future
-migration should check for that same shape before assuming it applies.
-
-`src/components/ui/LoadingButton.tsx` now exists too (`loading`/
-`loadingText`/`icon`/`loaderClassName` props, wraps `Button`), adopted in
-`BidEntry.tsx`, `Bidders.tsx`, and `Checkout.tsx` - the doc's original
-named scope for this item, though `Receipts.tsx` turned out not to apply
-(its refresh button already used a different, correct "spin the same
-icon in place" pattern, not a `Loader2` swap - that claim was stale).
-While migrating, found the identical hand-rolled `{loading ? <Loader2
-.../> : ...}` pattern repeated well beyond those four files. Also
-adopted in `Dashboard.tsx`'s two Special Winners save buttons during
-that file's own refactor; `TicketAttendeeTab.tsx` turned out not to need
-it after its own refactor either - its one text-label busy button (the
-"Confirm Delete" dialog) was replaced by `ConfirmationDialog` instead
-(which handles loading internally), and its remaining `Loader2` usage is
-an icon-only inline save button with no label to swap, which fits
-`IconButton`'s `icon` prop, not `LoadingButton`. Still open in
-`BundlingDialog.tsx`, `ConfigSettings.tsx`, and `AddAuctionItemDialog.tsx`,
-worth a dedicated follow-up pass rather than folding into this one,
-since it touches three more files.
-
-### Initial JS load still sits in `performance.md`'s warning band (`performance.md`)
-
-`vendor-utils` was split (`firebase` and `@base-ui/react` now have their
-own named `manualChunks` in `vite.config.ts`, alongside the existing
-`vendor-react`/`vendor-recharts`/`vendor-motion`/`vendor-lucide`), so
-per-dependency bundle growth is now attributable and the browser can
-cache `vendor-firebase`/`vendor-base-ui` independently of app-code
-changes between deploys. See `style_guide.md`'s Bundle Optimization
-section for the full real numbers. That said, the actual bytes shipped
-on first load didn't drop (~424 kB gzipped JS, essentially unchanged) -
-splitting chunk boundaries doesn't remove bytes, only lazy-loading does.
-`firebase` (450 kB raw / 106 kB gzipped) is now the single largest
-chunk in the app, and most of it (Firestore + Auth, used only for
-cross-device config sync in `ConfigSettings.tsx`) isn't needed for
-first paint. Lazy-loading `firebase`'s init behind the cloud-sync UI
-(or wherever `ConfigContext.tsx` first needs it) would be the next real
-reduction, not another chunking change. A full treemap pass
-(`rollup-plugin-visualizer`, installed temporarily per `performance.md`'s
-own guidance) would help confirm the split point before committing to
-a specific lazy-load boundary.
-
-### `AddAttendeeDialog`'s "Save Entry" has no loading state (`component-standards.md`)
-
-Found while splitting up `TicketAttendeeTab.tsx`. Unlike `Checkout.tsx`'s
-confirm dialogs (fixed in that file's own refactor - see `CHANGELOG.md`),
-this one's underlying handler (`handleAddSubmit` in
-`hooks/useTicketAttendeeState.ts`) doesn't track a submitting state at
-all yet, so there's no existing state to wire up - a real gap to close,
-not just a wiring fix.
-
-### Orphaned `/api/assistant` backend endpoint (`react-patterns.md`)
-
-`src/components/AuctionAssistant.tsx` (the never-imported chat-assistant
-panel this endpoint existed to serve) was deleted per an explicit product
-decision - this app needs AI-assisted auction-item name/description
-suggestions (already live and unaffected, via `BundlingDialog.tsx` /
-`hooks/useBundling.ts` / `/api/bundle/suggest-*`), not a chat panel.
-That leaves `server/routes/dataRoutes.ts`'s `/api/assistant` route and
-`server/services/assistantService.ts` with no remaining caller in the
-app, though `server/test/bundle.test.ts`'s "Gemini Assistant workflow"
-describe block (5 tests) still exercises the route directly. Left as-is
-rather than deleted alongside the frontend - removing a tested backend
-endpoint wasn't part of what was asked, and it's a bigger, more
-consequential call than deleting the dead frontend component was. Worth
-a deliberate decision (delete the route/service/tests together, or keep
-the endpoint in case a future assistant surfaces reuses it) rather than
-assuming.
+- **Migrate `BundlingDialog.tsx`'s ad hoc confirmation dialog(s)** to the
+  shared `src/components/ui/ConfirmationDialog.tsx` (`component-standards.md`).
+  Check first whether "cancel" performs a real action there (the shape
+  that kept `Bidders.tsx`'s pending-payment `AlertDialog` unmigrated) -
+  don't assume it applies.
+- **Migrate the remaining hand-rolled `{loading ? <Loader2 /> : ...}`
+  busy-button pattern** to `src/components/ui/LoadingButton.tsx`
+  (`component-standards.md`): `BundlingDialog.tsx`, `ConfigSettings.tsx`,
+  `AddAuctionItemDialog.tsx`.
+- **Lazy-load `firebase`'s init** (Firestore + Auth) behind the
+  cloud-sync UI in `ConfigSettings.tsx`/`ConfigContext.tsx`
+  (`performance.md`). `vendor-firebase` (450 kB raw / 106 kB gzipped) is
+  the single largest chunk and isn't needed for first paint - this is
+  the real next step to bring the initial JS load out of
+  `performance.md`'s warning band (chunk-splitting alone didn't reduce
+  it, see `CHANGELOG.md`). Consider a `rollup-plugin-visualizer`
+  treemap pass first to confirm the split point.
+- **Add a submitting/loading state to `AddAttendeeDialog`'s "Save
+  Entry" button** (`component-standards.md`) - `handleAddSubmit` in
+  `hooks/useTicketAttendeeState.ts` doesn't track one yet.
+- **Decide whether to delete or keep the orphaned `/api/assistant`
+  backend route** (`react-patterns.md`) - `server/routes/dataRoutes.ts`,
+  `server/services/assistantService.ts`, and the 5 tests in
+  `server/test/bundle.test.ts`'s "Gemini Assistant workflow" block, now
+  that its only frontend consumer (`AuctionAssistant.tsx`) is deleted.
 
 ---
 
 ## Passed Audit Inspection
 
-Checked directly against the standards docs and confirmed correct as of
-this audit - listed so future audits don't have to re-derive this, and
-so nobody "fixes" something that isn't broken.
+Checked directly against the standards docs and confirmed correct -
+listed so future audits don't have to re-derive this, and so nobody
+"fixes" something that isn't broken.
 
-- **No native `<select>` in real components** (`component-standards.md`).
-  A repo-wide search found native `<select>` only inside test-mock files
-  (`*.test.tsx`); every real dropdown goes through
-  `src/components/ui/select.tsx`.
-- **Winner-notification toast rule implemented correctly** (`patterns.md`).
-  The `duration: Infinity` + `"I have confirmed"` action pattern for a
-  checked-out bidder winning an item is present and correct in
-  `Bidders.tsx`, `Checkout.tsx`, `Dashboard.tsx` (two call sites), and
-  the analogous manual-copy confirmation in `ConfigSettings.tsx`.
-- **Bundle restoration and category re-sequencing implemented correctly,
-  and server-side** (`patterns.md`). `server/services/bundleService.ts`
-  correctly sets a restored bundle row to `"Inactive"`, clears its
-  sequential ID, and calls `resequenceCategoryIds()` on both the
-  create-bundle and restore-bundle paths - matching the rule exactly, and
-  correctly kept out of client code.
-- **PayPal surcharges never calculated client-side** (`patterns.md`).
-  No surcharge percentage, flat fee, or related math was found anywhere
-  in `src/`; it lives only in `server/services/paypal.ts` /
-  `server/utils/financeUtils.ts` via `PayPalService.calculatePayPalSurcharge`.
+- **No native `<select>`** outside test-mock files (`component-standards.md`) -
+  every real dropdown goes through `src/components/ui/select.tsx`.
+- **Winner-notification toast rule implemented correctly**
+  (`patterns.md`) - the `duration: Infinity` + `"I have confirmed"`
+  action pattern is present in `Bidders.tsx`, `Checkout.tsx`,
+  `Dashboard.tsx` (×2), and `ConfigSettings.tsx`'s analogous manual-copy
+  confirmation.
+- **Bundle restoration and category re-sequencing are server-side and
+  correct** (`patterns.md`) - `server/services/bundleService.ts` sets a
+  restored bundle to `"Inactive"`, clears its sequential ID, and calls
+  `resequenceCategoryIds()` on both the create- and restore-bundle
+  paths.
+- **PayPal surcharges are never calculated client-side** (`patterns.md`) -
+  lives only in `server/services/paypal.ts` /
+  `server/utils/financeUtils.ts`.
 - **Session cookie name is `orns_session`, not `__session`**
-  (`patterns.md`), confirmed in `server/app.ts` and
+  (`patterns.md`) - confirmed in `server/app.ts` and
   `server/routes/authRoutes.ts`.
-- **`vite.config.ts`'s `manualChunks` is the required functional
-  matcher**, not a static object map (`patterns.md`, `performance.md`).
+- **`vite.config.ts`'s `manualChunks` is a functional matcher**, not a
+  static object map (`patterns.md`, `performance.md`).
 - **Route-level `React.lazy()` code-splitting is in place** for
-  `ConfigSettings`, `AuctionTicketsWorkflow`, and `AuctionItemsWorkflow`,
+  `ConfigSettings`, `AuctionTicketsWorkflow`, `AuctionItemsWorkflow`,
   wrapped in `<Suspense>` (`performance.md`, `style_guide.md`).
-- **No direct `fetch()` calls in components, hooks, or context** outside
-  `src/lib/google-api.ts` (`react-patterns.md`'s server/client boundary
-  rule) - every network call actually goes through `fetchWithRetry`/`getBaseUrl`.
-- **No derived-state duplication anti-pattern found**
-  (`react-patterns.md`). No component stores a `filtered`/computed value
-  in a second `useState` synced via an effect; filtering/sorting is
-  computed directly in render (or via `useMemo` - see next item).
-- **Memoization is applied where it actually matters, and skipped where
-  it doesn't** (`performance.md`, `react-patterns.md`).
-  Both the auction items table and the bidders table wrap their
-  filter/sort in `useMemo` (`hooks/useAuctionItemsTableState.ts`,
-  `hooks/useBiddersState.ts`) - the latter's filter also calls
-  `getBidderAttendeeInfo()` per row, itself an array scan over
-  `attendees`, so the O(n\*m) cost is real enough to be worth memoizing.
-  Lighter, cheaper filters elsewhere in the app still run directly in
-  render without one. This matches the docs' "don't memoize by default,
-  do it where it's warranted" guidance rather than over- or
-  under-applying it uniformly.
+- **No direct `fetch()` calls outside `src/services/google-api.ts`**
+  (`react-patterns.md`) - every network call goes through
+  `fetchWithRetry`/`getBaseUrl`.
+- **No derived-state duplication anti-pattern** (`react-patterns.md`) -
+  no component syncs a computed value into a second `useState` via an
+  effect.
+- **Memoization applied where it matters, skipped where it doesn't**
+  (`performance.md`, `react-patterns.md`) - `hooks/useAuctionItemsTableState.ts`
+  and `hooks/useBiddersState.ts` wrap their filter/sort in `useMemo`
+  (the latter's filter also does an O(n×m) `getBidderAttendeeInfo()`
+  scan); lighter filters elsewhere correctly run unmemoized in render.
 - **`useEffect` usage stays scoped to real external synchronization**
-  (`react-patterns.md`) - 1-3 effects per file across every component
-  that uses them, no effects found computing a value that could live in
-  render.
-- **Test assertions are not shallow placeholders where they look
-  bare** (`testing-philosophy.md`). Every bare `.toHaveBeenCalled()` in
-  the suite is either a `.not.toHaveBeenCalled()` negative assertion
-  (which correctly needs no payload check) or `server/test/middleware.test.ts`
-  confirming Express `next()` was invoked to pass a request through
-  (which also has no meaningful payload to check) - not a stand-in for a
-  real payload assertion that got skipped.
+  (`react-patterns.md`) - 1-3 effects per file, none computing a value
+  that could live in render.
+- **Test assertions aren't shallow placeholders where they look bare**
+  (`testing-philosophy.md`) - every bare `.toHaveBeenCalled()` is either
+  a `.not.toHaveBeenCalled()` negative assertion or
+  `server/test/middleware.test.ts` confirming `next()` fired, neither of
+  which has a meaningful payload to check.
 
 ---
 
 ## Out of Scope, but Should be Fixed
 
-Nothing outstanding right now.
-
-Items belong here only when they genuinely need a decision,
-documentation correction, or working environment this audit doesn't
-have access to - not as a place to defer real code fixes.
+Nothing outstanding right now. Items belong here only when they
+genuinely need a decision, doc correction, or environment this audit
+doesn't have access to - not as a place to defer real code fixes.
 
 ---
 
 ## How to use this file
 
-When picking up a task and you notice it touches one of the items in
-"Tasks To Refactor," it's reasonable to extract the relevant piece as
-part of that task - but don't turn an unrelated bug fix into a drive-by
-rewrite of an unrelated file. Log new findings the same way: file,
-concrete evidence (line count, grep hit, failed command), sorted into
-the right one of the three sections above - not a vague "this could be
-cleaner." When an item is finished, remove it from this file entirely
-and record what happened in `CHANGELOG.md` instead - this file should
-only ever show the current, outstanding backlog, never a history of
-what's already done.
+- Touching a file that also has an open item here? Fold the fix in -
+  but don't turn an unrelated bug fix into a drive-by rewrite of an
+  unrelated file.
+- Log new findings the same way: concrete evidence (line count, grep
+  hit, failed command), sorted into the right section above - not a
+  vague "this could be cleaner."
+- When an item is finished, remove it from this file entirely and
+  record what happened in `CHANGELOG.md` instead. This file only ever
+  shows the current, outstanding backlog - never a history of what's
+  already done.
