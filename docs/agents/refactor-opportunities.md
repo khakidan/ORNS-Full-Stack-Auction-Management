@@ -42,16 +42,18 @@ directly against the file it names, not estimated.
 All are over this codebase's own "over 400 lines: almost certainly doing
 too much" guidance (`react-patterns.md`). Confirmed by `wc -l`.
 
-### Missing shared components (`component-standards.md`)
+### Shared component follow-ups (`component-standards.md`)
 
-Confirmed by grep - real, repeated duplication, not a hypothetical.
+Every component originally flagged as missing here has been resolved:
+`FilterToolbar`, `DataTableWrapper`, `StatusStatePlaceholder`,
+`LoadingButton`, `IconButton`, and `ConfirmationDialog` were built and
+adopted at their named call sites; `AttendeeLookupCard` turned out not
+to apply (no real duplicated card markup existed to consolidate - see
+`CHANGELOG.md`) and was dropped rather than force-built. What's left
+below is real, verified follow-up adoption at sites beyond the original
+scope - not new components to build.
 
-**`<IconButton>`** - No dedicated wrapper; icon-only buttons use
-`<Button size="icon">` directly with no type-level `aria-label`
-enforcement. See the accessibility finding just below - this is not
-theoretical, it has already let unlabeled icon buttons ship.
-
-`src/components/ui/ConfirmationDialog.tsx` now exists (a shared
+`src/components/ui/ConfirmationDialog.tsx` exists (a shared
 confirmation dialog, adopted by `AuctionItemsTab.tsx`) but other ad hoc
 destructive confirmations - e.g. in `BundlingDialog.tsx` - haven't been
 migrated to it yet. Worth doing opportunistically.
@@ -69,23 +71,6 @@ While migrating, found the identical hand-rolled `{loading ? <Loader2
 adoption opportunity beyond this item's original scope. Worth a
 dedicated follow-up pass rather than folding into this one, since it
 touches five more files.
-
-### Icon-only buttons missing `aria-label` (`component-standards.md`)
-
-`component-standards.md` requires every icon-only button to carry an
-explicit `aria-label`. A repo-wide check of every real
-`<Button size="icon"...>` usage in `src/components/` found **4 with no
-`aria-label` at all**:
-
-- `src/components/AuctionAssistant.tsx:149` - send-message button (only child is a `<Send>` icon)
-- `src/components/ui/EditableCell.tsx:102` - edit button
-- `src/components/TicketAttendeeTab.tsx:59` - save-attendee button
-- `src/components/TicketAttendeeTab.tsx:391` - delete-attendee button
-
-This is a real accessibility gap, not a style nitpick - a screen reader
-user gets an unlabeled button at all 4 sites today. Fixing it is a small,
-mechanical change (add `aria-label="..."` to each); building the
-`<IconButton>` wrapper above would prevent it from recurring.
 
 ### Hardcoded hex colors instead of the `orns-red` token (`tailwind-style-guide.md`)
 

@@ -3,6 +3,7 @@ import { Loader2, Package, RotateCcw, Trash2 } from "lucide-react";
 import { TableCell } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/IconButton";
 import { Badge } from "@/components/ui/badge";
 import { EditableCell } from "@/components/ui/EditableCell";
 import { AuctionItem } from "@/types";
@@ -147,15 +148,13 @@ export function AuctionItemRow({
       </TableCell>
       <TableCell className="align-top text-center px-2">
         {!isAuctionClosed && (
-          <Button
-            size="icon"
+          <IconButton
             variant="ghost"
             aria-label={`Delete ${item.name || "item"}`}
+            icon={<Trash2 className="h-4 w-4" />}
             className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover/row:opacity-100 transition-opacity"
             onClick={() => onDeleteRequest(item)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          />
         )}
       </TableCell>
     </motion.tr>

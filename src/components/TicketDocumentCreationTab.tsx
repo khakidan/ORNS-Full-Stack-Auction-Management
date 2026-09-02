@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/IconButton";
 import { PlaySquare, Download, FileText, Loader2, ExternalLink, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { fetchWithRetry, getBaseUrl } from "@/lib/google-api";
@@ -127,9 +128,13 @@ export default function TicketDocumentCreationTab() {
                 Files recently generated for the auction.
               </CardDescription>
             </div>
-            <Button variant="ghost" size="icon" aria-label="Refresh files" onClick={fetchFiles} disabled={loadingFiles || isInvalidFolder}>
-              <RefreshCw className={cn("w-4 h-4", loadingFiles && "animate-spin")} />
-            </Button>
+            <IconButton
+              variant="ghost"
+              aria-label="Refresh files"
+              icon={<RefreshCw className={cn("w-4 h-4", loadingFiles && "animate-spin")} />}
+              onClick={fetchFiles}
+              disabled={loadingFiles || isInvalidFolder}
+            />
           </CardHeader>
           <CardContent>
             {isInvalidFolder ? (

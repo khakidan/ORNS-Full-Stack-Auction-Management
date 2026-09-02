@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/IconButton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useAuction } from "@/context/AuctionContext";
@@ -56,9 +57,14 @@ const EditableCell = ({ value: initialValue, onSave, placeholder = "N/A", disabl
           disabled={saving}
           className="h-8 min-w-[100px] text-sm px-2"
         />
-        <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={handleSave} disabled={saving}>
-          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Check className="w-3.5 h-3.5" />}
-        </Button>
+        <IconButton
+          variant="ghost"
+          aria-label="Save"
+          className="h-8 w-8 text-green-600"
+          icon={saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+          onClick={handleSave}
+          disabled={saving}
+        />
       </div>
     );
   }
@@ -387,14 +393,13 @@ export default function TicketAttendeeTab() {
                         </TableCell>
                         <TableCell>
                            {!isAuctionClosed && (
-                             <Button 
-                               size="icon" 
-                               variant="ghost" 
+                             <IconButton
+                               variant="ghost"
+                               aria-label={`Delete ${a.firstName} ${a.lastName}`}
+                               icon={<Trash2 className="w-3.5 h-3.5" />}
                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
                                onClick={() => setAttendeeToDelete(a)}
-                             >
-                               <Trash2 className="w-3.5 h-3.5" />
-                             </Button>
+                             />
                            )}
                         </TableCell>
                       </TableRow>

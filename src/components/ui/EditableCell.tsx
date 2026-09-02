@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/IconButton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -98,14 +99,13 @@ export function EditableCell({
         {value || <span className="text-muted-foreground italic">Empty</span>}
       </span>
       {!disabled && (
-        <Button 
-          size="icon" 
-          variant="ghost" 
-          className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" 
+        <IconButton
+          variant="ghost"
+          aria-label="Edit"
+          icon={<Edit2 className="h-3 w-3" />}
+          className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
           onClick={() => setIsEditing(true)}
-        >
-          <Edit2 className="h-3 w-3" />
-        </Button>
+        />
       )}
     </div>
   );

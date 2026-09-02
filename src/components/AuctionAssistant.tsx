@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuction } from "@/context/AuctionContext";
 import { fetchWithRetry, getBaseUrl } from "@/lib/google-api";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/IconButton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Send, Bot, User, Loader2, Sparkles } from "lucide-react";
@@ -146,9 +146,7 @@ export default function AuctionAssistant({ open, setOpen }: { open: boolean; set
               onChange={(e) => setInput(e.target.value)}
               disabled={loading}
             />
-            <Button type="submit" size="icon" disabled={loading || !input.trim()}>
-              <Send className="w-4 h-4" />
-            </Button>
+            <IconButton type="submit" aria-label="Send message" icon={<Send className="w-4 h-4" />} disabled={loading || !input.trim()} />
           </form>
         </div>
       </SheetContent>
