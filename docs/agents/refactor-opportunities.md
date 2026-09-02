@@ -11,10 +11,6 @@ feature work belongs in [`ROADMAP.md`](./ROADMAP.md) instead.
 
 ## Tasks To Refactor
 
-- **Migrate the remaining hand-rolled `{loading ? <Loader2 /> : ...}`
-  busy-button pattern** to `src/components/ui/LoadingButton.tsx`
-  (`component-standards.md`): `BundlingDialog.tsx`, `ConfigSettings.tsx`,
-  `AddAuctionItemDialog.tsx`.
 - **Lazy-load `firebase`'s init** (Firestore + Auth) behind the
   cloud-sync UI in `ConfigSettings.tsx`/`ConfigContext.tsx`
   (`performance.md`). `vendor-firebase` (450 kB raw / 106 kB gzipped) is

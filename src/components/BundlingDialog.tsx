@@ -7,6 +7,7 @@ import {
   DialogFooter 
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/LoadingButton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -18,7 +19,7 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Package, Wand2, Loader2, Check } from "lucide-react";
+import { Package, Wand2 } from "lucide-react";
 import { AuctionItem } from "@/types";
 
 interface BundlingDialogProps {
@@ -67,16 +68,17 @@ export function BundlingDialog({
             <div className="space-y-2">
               <Label className="text-sm font-bold flex items-center justify-between">
                 <span>Bundle Name *</span>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <LoadingButton
+                  variant="ghost"
+                  size="sm"
                   className="h-7 text-xs text-primary hover:text-primary animate-pulse flex items-center gap-1"
                   onClick={getAiSuggestions}
-                  disabled={loadingSuggestions}
+                  loading={loadingSuggestions}
+                  icon={<Wand2 className="w-3 h-3" />}
+                  loaderClassName="w-3 h-3"
                 >
-                  {loadingSuggestions ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
                   Ask Gemini for Ideas
-                </Button>
+                </LoadingButton>
               </Label>
               
               {aiSuggestions.length > 0 && (
@@ -126,16 +128,17 @@ export function BundlingDialog({
             <div className="space-y-2">
               <Label className="text-sm font-bold text-muted-foreground flex items-center justify-between">
                 <span>Description</span>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <LoadingButton
+                  variant="ghost"
+                  size="sm"
                   className="h-7 text-xs text-primary hover:text-primary flex items-center gap-1"
                   onClick={getAiDescriptionSuggestion}
-                  disabled={loadingDescription}
+                  loading={loadingDescription}
+                  icon={<Wand2 className="w-3 h-3" />}
+                  loaderClassName="w-3 h-3"
                 >
-                  {loadingDescription ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
                   Ask Gemini for Description
-                </Button>
+                </LoadingButton>
               </Label>
               <Textarea 
                 className="min-h-[150px] text-xs font-mono"
@@ -164,14 +167,14 @@ export function BundlingDialog({
 
         <DialogFooter className="bg-slate-50 -mx-6 -mb-6 p-6">
           <Button variant="outline" onClick={() => setIsBundling(false)}>Cancel</Button>
-          <Button 
-            onClick={executeBundle} 
-            disabled={isExecutingBundle}
+          <LoadingButton
+            onClick={executeBundle}
+            loading={isExecutingBundle}
+            icon={<Package className="w-4 h-4" />}
             className="bg-primary text-white hover:bg-primary/90 flex items-center gap-2"
           >
-            {isExecutingBundle ? <Loader2 className="w-4 h-4 animate-spin" /> : <Package className="w-4 h-4" />}
             Confirm Bundle & Merge Rows
-          </Button>
+          </LoadingButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

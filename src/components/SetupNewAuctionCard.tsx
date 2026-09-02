@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
+import { LoadingButton } from "@/components/ui/LoadingButton";
+import { RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
 
 interface SetupNewAuctionCardProps {
   isOpen: boolean;
@@ -32,15 +32,16 @@ export default function SetupNewAuctionCard({ isOpen, onToggle, isSettingUpNewAu
           <p className="text-sm text-muted-foreground">
             This workflow will back up your current master spreadsheets to last year's folder, create the new year's folder structure, and automatically clear the rows in your data sheets so that they are completely empty and ready to be populated for the upcoming auction.
           </p>
-          <Button
+          <LoadingButton
             variant="destructive"
-            disabled={isSettingUpNewAuction}
+            loading={isSettingUpNewAuction}
+            loadingText="Setting Up..."
+            icon={<RefreshCw className="w-4 h-4" />}
             onClick={onRun}
             className="gap-2"
           >
-            {isSettingUpNewAuction ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            {isSettingUpNewAuction ? "Setting Up..." : "Run New Auction Setup"}
-          </Button>
+            Run New Auction Setup
+          </LoadingButton>
         </div>
       </CardContent>
       )}

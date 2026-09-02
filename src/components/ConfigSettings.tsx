@@ -1,5 +1,5 @@
-import { Button } from "@/components/ui/button";
-import { Save, Loader2 } from "lucide-react";
+import { LoadingButton } from "@/components/ui/LoadingButton";
+import { Save } from "lucide-react";
 import { useConfigSettingsState } from "@/hooks/useConfigSettingsState";
 import CloudSyncStatusCard from "./CloudSyncStatusCard";
 import OAuthRedirectHelperCard from "./OAuthRedirectHelperCard";
@@ -53,10 +53,15 @@ export default function ConfigSettings() {
       <TicketPricingCard config={config} setConfig={setConfig} />
 
       <div className="flex flex-col sm:flex-row gap-3 pt-6 pb-6">
-        <Button onClick={handleSave} disabled={savingSettings} className="flex-1 gap-2 h-12 text-md">
-          {savingSettings ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+        <LoadingButton
+          onClick={handleSave}
+          loading={savingSettings}
+          icon={<Save className="w-5 h-5" />}
+          loaderClassName="w-5 h-5"
+          className="flex-1 gap-2 h-12 text-md"
+        >
           Save Configuration
-        </Button>
+        </LoadingButton>
       </div>
 
       <ManualCopyDialog open={showManualCopyDialog} onOpenChange={setShowManualCopyDialog} auctionYear={auctionYear} />
