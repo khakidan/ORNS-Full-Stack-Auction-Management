@@ -46,17 +46,6 @@ too much" guidance (`react-patterns.md`). Confirmed by `wc -l`.
 
 Confirmed by grep - real, repeated duplication, not a hypothetical.
 
-**`<FilterToolbar>`** - Debounced search input + optional multi-select
-filter dropdowns + responsive layout with a real-time status count badge
-(e.g. "Total Items: 100"). `Items.tsx`, `Checkout.tsx`, and `Bidders.tsx`
-each independently render a `<Input placeholder="Search ...">` search
-box with near-identical layout (originally flagged by a prior audit as
-`Bidders.tsx` lines 54-66, `Items.tsx` lines 21-37, `Checkout.tsx` lines
-39-44; re-verify exact line ranges before implementing, since components
-shift over time). `src/components/AuctionItemsFilterBar.tsx` is a real,
-already-built local example of this exact shape to model the shared
-component on.
-
 **`<DataTableWrapper>`** - A standardized scrollable grid built around
 the existing `src/components/ui/table.tsx` primitives: auto-scroll via
 `ScrollArea`, animated skeleton rows while `loading`, and a stylized
@@ -91,17 +80,17 @@ lookup previews in `BidEntry.tsx` (originally flagged around lines
 **`<IconButton>`** - No dedicated wrapper; icon-only buttons use
 `<Button size="icon">` directly with no type-level `aria-label`
 enforcement. See the accessibility finding just below - this is not
-theoretical, it has already let 7 unlabeled icon buttons ship.
+theoretical, it has already let unlabeled icon buttons ship.
 
 `src/components/ui/ConfirmationDialog.tsx` now exists (a shared
 confirmation dialog, adopted by `AuctionItemsTab.tsx`) but other ad hoc
 destructive confirmations - e.g. in `BundlingDialog.tsx` - haven't been
 migrated to it yet. Worth doing opportunistically.
 
-*Estimated impact* (from the original component-unification audit,
-covering the first five of these): implementing them would cut layout
-boilerplate in the core workflow components by roughly 20-30%, and
-would make the existing interaction tests (table rendering, handler
+*Estimated impact* (from the original component-unification audit):
+implementing these would cut layout boilerplate in the core workflow
+components by roughly 20-30%, and would make the existing interaction
+tests (table rendering, handler
 assertions) more reliable without touching business logic.
 
 ### Icon-only buttons missing `aria-label` (`component-standards.md`)

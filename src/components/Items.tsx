@@ -2,10 +2,10 @@ import { useState } from "react";
 import { useAuction } from "@/context/AuctionContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tag, Search } from "lucide-react";
+import { Tag } from "lucide-react";
 import { toast } from "sonner";
+import { FilterToolbar } from "@/components/FilterToolbar";
 
 export default function Items() {
   const { items, winners, loading } = useAuction();
@@ -19,22 +19,16 @@ export default function Items() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="flex flex-1 items-center gap-4 w-full">
-          <div className="relative flex-1 md:max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search items by box number or name..."
-              className="pl-9"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+      <FilterToolbar
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search items by box number or name..."
+        trailing={
+          <div className="text-sm font-medium text-muted-foreground bg-white px-3 py-1.5 rounded border border-slate-200 shadow-sm">
+            Total Items: <span className="text-orns-red font-bold">{items.length}</span>
           </div>
-        </div>
-        <div className="text-sm font-medium text-muted-foreground bg-white px-3 py-1.5 rounded border border-slate-200 shadow-sm">
-          Total Items: <span className="text-[#e31b23] font-bold">{items.length}</span>
-        </div>
-      </div>
+        }
+      />
 
       <Card>
         <CardHeader>

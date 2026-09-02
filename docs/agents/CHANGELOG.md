@@ -6,6 +6,7 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Added
 
+- Added `src/components/FilterToolbar.tsx`, a shared search/filter bar (`searchValue`/`onSearchChange`/`searchPlaceholder`, optional `filters` and `trailing` slots) consolidating the near-identical hand-rolled search bars in `Items.tsx`, `Checkout.tsx`, and `Bidders.tsx`. Adopted in all three; `AuctionItemsTab`'s distinct labeled-field variant (`AuctionItemsFilterBar.tsx`) was left as-is since its layout genuinely differs. All 32 tests across the three affected files pass unmodified (including `Bidders.test.tsx`'s exact-select-order assertions); full suite 321/321, `npm run build` clean.
 - Created a modular documentation system in `/docs/agents/` to break down the monolithic `AGENTS.md` and `README.md` files into organized subfiles.
 - Added `/docs/agents/CHANGELOG.md` to track feature updates, bug fixes, and system improvements.
 - Added `/docs/agents/ROADMAP.md` outlining future developments and system-wide structural proposals.

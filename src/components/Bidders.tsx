@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, UserPlus, CheckCircle, UserCheck, Clock, Loader2, ArrowUpDown, ChevronUp, ChevronDown, Ticket, Gavel, AlertCircle } from "lucide-react";
+import { UserPlus, CheckCircle, UserCheck, Clock, Loader2, ArrowUpDown, ChevronUp, ChevronDown, Ticket, Gavel, AlertCircle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { FilterToolbar } from "@/components/FilterToolbar";
 import { toast } from "sonner";
 import { fetchWithRetry, updateSheetData, getBaseUrl, getSheetData, appendSheetData } from "@/lib/google-api";
 import {
@@ -282,19 +283,14 @@ export default function Bidders() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
-        <div className="flex flex-col md:flex-row gap-4 w-full lg:max-w-4xl items-center">
-          <div className="relative w-full md:max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search bidders..."
-              className="pl-9 h-10"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-2 w-full md:w-auto">
+      <FilterToolbar
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search bidders..."
+        searchClassName="md:max-w-xs"
+        searchInputClassName="h-10"
+        filters={
+          <>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="h-10 w-[150px]">
                 <Filter className="w-3.5 h-3.5 mr-2 opacity-70" />
@@ -330,10 +326,10 @@ export default function Bidders() {
                 <SelectItem value="staff">Staff</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-        </div>
-
-        <div className="flex gap-2 w-full md:w-auto">
+          </>
+        }
+        trailing={
+          <>
           {!isAuctionClosed && (
             <Dialog open={isWalkInOpen} onOpenChange={setIsWalkInOpen}>
               <DialogTrigger
@@ -415,8 +411,9 @@ export default function Bidders() {
               Auction Closed (Read Only)
             </Badge>
           )}
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <Card>
         <CardHeader className="px-4 py-6 md:px-6">

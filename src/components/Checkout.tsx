@@ -8,8 +8,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Handshake, Receipt, Mail, CheckCircle2, Loader2, Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Handshake, Receipt, Mail, CheckCircle2, Loader2 } from "lucide-react";
+import { FilterToolbar } from "@/components/FilterToolbar";
 
 import { Bidder, AuctionItem, Attendee } from "@/types";
 
@@ -388,25 +388,22 @@ export default function Checkout() {
           </Button>
         </div>
         <div className="text-sm font-medium text-muted-foreground bg-white px-3 py-1.5 rounded border border-slate-200 shadow-sm w-full sm:w-auto text-center">
-          Total Winners: <span className="text-[#e31b23] font-bold">{winners.length}</span>
+          Total Winners: <span className="text-orns-red font-bold">{winners.length}</span>
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between mb-6">
-        <div className="relative w-full md:max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search winners..."
-            className="pl-9"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <Button variant="outline" onClick={handleRefresh} disabled={fetchingWinners}>
-          {fetchingWinners ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Handshake className="w-4 h-4 mr-2" />}
-          Refresh Results
-        </Button>
-      </div>
+      <FilterToolbar
+        className="mb-6"
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search winners..."
+        trailing={
+          <Button variant="outline" onClick={handleRefresh} disabled={fetchingWinners}>
+            {fetchingWinners ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Handshake className="w-4 h-4 mr-2" />}
+            Refresh Results
+          </Button>
+        }
+      />
 
       <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)}>
         <TabsList className="grid w-full grid-cols-2 mb-6">
