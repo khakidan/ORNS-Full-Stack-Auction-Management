@@ -14,6 +14,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { Loader2, LayoutDashboard, RefreshCw, Users, ShoppingBag, CreditCard, Handshake, WalletCards, Settings, LogOut, FileText, Ticket, Package, ClipboardList, PanelLeftClose, Menu, ArrowUp, AlertCircle, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { cn } from "@/lib/utils";
 import Dashboard from "./components/Dashboard";
 import Bidders from "./components/Bidders";
 import Items from "./components/Items";
@@ -232,17 +233,19 @@ export default function App() {
       </AnimatePresence>
 
       {/* Sidebar Navigation */}
-      <aside 
-        className={`bg-background border-r border-border shrink-0 flex-col fixed md:sticky inset-y-0 left-0 md:h-screen z-50 flex overflow-hidden transition-all duration-300 shadow-xl md:shadow-none
-          ${isMobileMenuOpen ? 'translate-x-0 w-64' : '-translate-x-full md:translate-x-0'}
-          ${isSidebarOpen ? 'md:w-64' : 'md:w-16'}`}
+      <aside
+        className={cn(
+          "bg-background border-r border-border shrink-0 flex-col fixed md:sticky inset-y-0 left-0 md:h-screen z-50 flex overflow-hidden transition-all duration-300 shadow-xl md:shadow-none",
+          isMobileMenuOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0",
+          isSidebarOpen ? "md:w-64" : "md:w-16"
+        )}
       >
-        <div className={`h-16 flex items-center border-b shrink-0 ${isSidebarOpen ? 'px-4 justify-between' : 'justify-center'}`}>
-          <div className={`flex items-center gap-2 overflow-hidden whitespace-nowrap ${(!isSidebarOpen && !isMobileMenuOpen) && 'hidden'}`}>
+        <div className={cn("h-16 flex items-center border-b shrink-0", isSidebarOpen ? "px-4 justify-between" : "justify-center")}>
+          <div className={cn("flex items-center gap-2 overflow-hidden whitespace-nowrap", (!isSidebarOpen && !isMobileMenuOpen) && "hidden")}>
             <WalletCards className="w-6 h-6 shrink-0 text-primary" />
             <span className="text-lg font-bold tracking-tight">ORNS Auction</span>
           </div>
-          <Button variant="ghost" size="icon" className={`shrink-0 h-8 w-8 hidden md:flex ${isSidebarOpen ? 'ml-2' : ''}`} onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+          <Button variant="ghost" size="icon" className={cn("shrink-0 h-8 w-8 hidden md:flex", isSidebarOpen ? "ml-2" : "")} onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
             {isSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </Button>
           <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8 md:hidden" onClick={() => setIsMobileMenuOpen(false)}>
@@ -255,7 +258,7 @@ export default function App() {
           
           <Button 
             variant={activeWorkflow === 'items' ? 'secondary' : 'ghost'} 
-            className={`justify-start gap-3 h-10 ${(isSidebarOpen || isMobileMenuOpen) ? 'w-full' : 'w-10 px-0 justify-center'}`} 
+            className={cn("justify-start gap-3 h-10", (isSidebarOpen || isMobileMenuOpen) ? "w-full" : "w-10 px-0 justify-center")}
             onClick={() => { setActiveWorkflow('items'); setIsMobileMenuOpen(false); }}
             title="Auction Items"
           >
@@ -265,7 +268,7 @@ export default function App() {
 
           <Button 
             variant={activeWorkflow === 'tickets' ? 'secondary' : 'ghost'} 
-            className={`justify-start gap-3 h-10 ${(isSidebarOpen || isMobileMenuOpen) ? 'w-full' : 'w-10 px-0 justify-center'}`} 
+            className={cn("justify-start gap-3 h-10", (isSidebarOpen || isMobileMenuOpen) ? "w-full" : "w-10 px-0 justify-center")}
             onClick={() => { setActiveWorkflow('tickets'); setIsMobileMenuOpen(false); }}
             title="Auction Tickets"
           >
@@ -275,7 +278,7 @@ export default function App() {
           
           <Button 
             variant={activeWorkflow === 'bids' ? 'secondary' : 'ghost'} 
-            className={`justify-start gap-3 h-10 ${(isSidebarOpen || isMobileMenuOpen) ? 'w-full' : 'w-10 px-0 justify-center'}`} 
+            className={cn("justify-start gap-3 h-10", (isSidebarOpen || isMobileMenuOpen) ? "w-full" : "w-10 px-0 justify-center")}
             onClick={() => { setActiveWorkflow('bids'); setIsMobileMenuOpen(false); }}
             title="Bid Management"
           >
@@ -288,7 +291,7 @@ export default function App() {
 
           <Button 
             variant={activeWorkflow === 'settings' ? 'secondary' : 'ghost'} 
-            className={`justify-start gap-3 h-10 ${(isSidebarOpen || isMobileMenuOpen) ? 'w-full' : 'w-10 px-0 justify-center'}`} 
+            className={cn("justify-start gap-3 h-10", (isSidebarOpen || isMobileMenuOpen) ? "w-full" : "w-10 px-0 justify-center")}
             onClick={() => { setActiveWorkflow('settings'); setIsMobileMenuOpen(false); }}
             title="Configuration"
           >
@@ -300,7 +303,7 @@ export default function App() {
         <div className="p-3 border-t shrink-0 flex flex-col items-center">
           <Button 
             variant="ghost" 
-            className={`justify-start gap-3 text-muted-foreground hover:text-destructive ${(isSidebarOpen || isMobileMenuOpen) ? 'w-full' : 'w-10 px-0 justify-center'}`} 
+            className={cn("justify-start gap-3 text-muted-foreground hover:text-destructive", (isSidebarOpen || isMobileMenuOpen) ? "w-full" : "w-10 px-0 justify-center")}
             onClick={handleLogout}
             title="Sign Out"
           >

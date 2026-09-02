@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Send, Bot, User, Loader2, Sparkles } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import ReactMarkdown from "react-markdown";
+import { cn } from "@/lib/utils";
 
 interface Message {
   role: "user" | "model";
@@ -100,19 +101,21 @@ export default function AuctionAssistant({ open, setOpen }: { open: boolean; set
         <ScrollArea className="flex-1 p-4" ref={scrollRef}>
           <div className="space-y-4">
             {messages.map((msg, i) => (
-              <div 
-                key={i} 
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              <div
+                key={i}
+                className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}
               >
-                <div className={`flex gap-3 max-w-[85%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                  <div className={`mt-1 h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${
+                <div className={cn("flex gap-3 max-w-[85%]", msg.role === "user" ? "flex-row-reverse" : "flex-row")}>
+                  <div className={cn(
+                    "mt-1 h-8 w-8 rounded-full flex items-center justify-center shrink-0",
                     msg.role === "user" ? "bg-slate-200" : "bg-primary/20"
-                  }`}>
+                  )}>
                     {msg.role === "user" ? <User className="w-4 h-4" /> : <Sparkles className="w-4 h-4 text-primary" />}
                   </div>
-                  <div className={`rounded-2xl px-4 py-2 text-sm ${
+                  <div className={cn(
+                    "rounded-2xl px-4 py-2 text-sm",
                     msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-slate-100"
-                  }`}>
+                  )}>
                     <div className="markdown-body">
                       <ReactMarkdown>{msg.text}</ReactMarkdown>
                     </div>

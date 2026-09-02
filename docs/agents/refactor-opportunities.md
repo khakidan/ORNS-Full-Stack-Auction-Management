@@ -70,27 +70,6 @@ an icon-only inline save button with no label to swap, which fits
 worth a dedicated follow-up pass rather than folding into this one,
 since it touches three more files.
 
-### Manual template-literal classNames instead of `cn()` (`tailwind-style-guide.md`)
-
-`cn()` (`src/lib/utils.ts`) exists specifically so conditional classes
-don't get built with manual string interpolation. Confirmed by grep,
-3 files still build `className` with a raw template literal instead:
-`AuctionAssistant.tsx`, `BidEntry.tsx`, `ConfigSettings.tsx`.
-Example (`BidEntry.tsx:99`):
-
-```tsx
-<p className={`text-sm mt-1 ${selectedBidder.checkedIn ? 'text-green-600' : 'text-amber-600'}`}>
-```
-
-should be:
-
-```tsx
-<p className={cn("text-sm mt-1", selectedBidder.checkedIn ? "text-green-600" : "text-amber-600")}>
-```
-
-Low risk, high-volume cleanup - safe to do incrementally whenever one of
-these files is already being touched for something else.
-
 ### Architecture: `src/lib/` mixes pure and impure code (`react-patterns.md`)
 
 `categoryHelpers.ts` and `utils.ts` are genuinely pure; `google-api.ts`

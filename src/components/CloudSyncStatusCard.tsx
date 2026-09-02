@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Cloud, CloudOff, LogIn } from "lucide-react";
 import type { User } from "firebase/auth";
+import { cn } from "@/lib/utils";
 
 interface CloudSyncStatusCardProps {
   firebaseUser: User | null;
@@ -10,7 +11,7 @@ interface CloudSyncStatusCardProps {
 
 export default function CloudSyncStatusCard({ firebaseUser, loginToFirebase }: CloudSyncStatusCardProps) {
   return (
-    <Card className={`${firebaseUser ? 'border-emerald-200 bg-emerald-50/10' : 'border-amber-200 bg-amber-50/10'}`}>
+    <Card className={cn(firebaseUser ? "border-emerald-200 bg-emerald-50/10" : "border-amber-200 bg-amber-50/10")}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">

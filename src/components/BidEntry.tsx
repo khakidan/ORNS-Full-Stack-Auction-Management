@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/LoadingButton";
 import { toast } from "sonner";
 import { Gavel, Search, User } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function BidEntry() {
   const { bidders, items, recordWinningBid } = useAuction();
@@ -96,7 +97,7 @@ export default function BidEntry() {
               <Input className="pl-10" placeholder="e.g. 142" value={bidderId} onChange={e => setBidderId(e.target.value)} disabled={submitting} />
             </div>
             {selectedBidder && (
-              <p className={`text-sm mt-1 ${selectedBidder.checkedIn ? 'text-green-600' : 'text-amber-600'}`}>
+              <p className={cn("text-sm mt-1", selectedBidder.checkedIn ? "text-green-600" : "text-amber-600")}>
                 {selectedBidder.firstName} {selectedBidder.lastName}
                 {!selectedBidder.checkedIn && !selectedBidder.isProxy && " — NOT CHECKED IN"}
               </p>
