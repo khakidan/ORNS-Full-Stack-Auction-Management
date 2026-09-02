@@ -101,19 +101,6 @@ treemap pass (`rollup-plugin-visualizer`, installed temporarily per
 `performance.md`'s own guidance) would confirm the exact split before
 committing to specific new chunk boundaries.
 
-### `AuctionAssistant.tsx` is never imported anywhere (`react-patterns.md`)
-
-`src/components/AuctionAssistant.tsx` exists (it arrived via the
-GitHub-history merge, not written for this local checkout) and pulls in
-`react-markdown`, but a repo-wide search found no import of it from
-`App.tsx` or any other component - it is dead code today. Either wire it
-into the app (it looks like an AI chat-assistant panel, consistent with
-`metadata.json`'s `MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API` capability
-and the real `server/services/assistantService.ts` backend it would
-presumably call) or delete it; leaving an unreferenced component with a
-real dependency (`react-markdown`) sitting in the tree is confusing for
-the next person who greps for it expecting it to be live.
-
 ### Two different `EditableCell` implementations (`component-standards.md`)
 
 `src/components/ui/EditableCell.tsx` (shared, `type: "text" | "textarea" | "select"`,
@@ -134,6 +121,24 @@ this one's underlying handler (`handleAddSubmit` in
 `hooks/useTicketAttendeeState.ts`) doesn't track a submitting state at
 all yet, so there's no existing state to wire up - a real gap to close,
 not just a wiring fix.
+
+### Orphaned `/api/assistant` backend endpoint (`react-patterns.md`)
+
+`src/components/AuctionAssistant.tsx` (the never-imported chat-assistant
+panel this endpoint existed to serve) was deleted per an explicit product
+decision - this app needs AI-assisted auction-item name/description
+suggestions (already live and unaffected, via `BundlingDialog.tsx` /
+`hooks/useBundling.ts` / `/api/bundle/suggest-*`), not a chat panel.
+That leaves `server/routes/dataRoutes.ts`'s `/api/assistant` route and
+`server/services/assistantService.ts` with no remaining caller in the
+app, though `server/test/bundle.test.ts`'s "Gemini Assistant workflow"
+describe block (5 tests) still exercises the route directly. Left as-is
+rather than deleted alongside the frontend - removing a tested backend
+endpoint wasn't part of what was asked, and it's a bigger, more
+consequential call than deleting the dead frontend component was. Worth
+a deliberate decision (delete the route/service/tests together, or keep
+the endpoint in case a future assistant surfaces reuses it) rather than
+assuming.
 
 ---
 
