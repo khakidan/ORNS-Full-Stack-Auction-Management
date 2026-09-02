@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/LoadingButton";
 import { toast } from "sonner";
 import { Handshake, Receipt, Mail, CheckCircle2, Loader2 } from "lucide-react";
 import { FilterToolbar } from "@/components/FilterToolbar";
@@ -370,23 +371,25 @@ export default function Checkout() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between bg-slate-50 p-4 rounded-lg border border-slate-200">
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          <Button
+          <LoadingButton
             onClick={() => setShowPrintConfirm(true)}
-            disabled={isPrintingAll}
-            className="bg-[#e31b23] text-white hover:bg-[#e31b23]/90 font-medium w-full sm:w-auto"
+            loading={isPrintingAll}
+            loadingText="Printing Batch..."
+            icon={<Receipt className="w-4 h-4" />}
+            className="bg-orns-red text-white hover:bg-orns-red/90 font-medium w-full sm:w-auto"
           >
-            {isPrintingAll ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Receipt className="w-4 h-4 mr-2" />}
-            {isPrintingAll ? "Printing Batch..." : "Print All Receipts"}
-          </Button>
-          <Button
+            Print All Receipts
+          </LoadingButton>
+          <LoadingButton
             variant="outline"
             onClick={() => setShowEmailConfirm(true)}
-            disabled={isEmailingAll}
+            loading={isEmailingAll}
+            loadingText="Sending Emails..."
+            icon={<Mail className="w-4 h-4" />}
             className="w-full sm:w-auto"
           >
-            {isEmailingAll ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Mail className="w-4 h-4 mr-2" />}
-            {isEmailingAll ? "Sending Emails..." : "Email All Winners"}
-          </Button>
+            Email All Winners
+          </LoadingButton>
         </div>
         <div className="text-sm font-medium text-muted-foreground bg-white px-3 py-1.5 rounded border border-slate-200 shadow-sm w-full sm:w-auto text-center">
           Total Winners: <span className="text-orns-red font-bold">{winners.length}</span>
@@ -399,10 +402,9 @@ export default function Checkout() {
         onSearchChange={setSearchTerm}
         searchPlaceholder="Search winners..."
         trailing={
-          <Button variant="outline" onClick={handleRefresh} disabled={fetchingWinners}>
-            {fetchingWinners ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Handshake className="w-4 h-4 mr-2" />}
+          <LoadingButton variant="outline" onClick={handleRefresh} loading={fetchingWinners} icon={<Handshake className="w-4 h-4" />}>
             Refresh Results
-          </Button>
+          </LoadingButton>
         }
       />
 
@@ -537,14 +539,14 @@ export default function Checkout() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowPaymentDialog(false)}>Cancel</Button>
-            <Button 
-              onClick={confirmMarkPaid} 
-              disabled={!paymentMethod || isSubmittingPayment}
-              className="bg-[#e31b23] text-white hover:bg-[#e31b23]/90"
+            <LoadingButton
+              onClick={confirmMarkPaid}
+              disabled={!paymentMethod}
+              loading={isSubmittingPayment}
+              className="bg-orns-red text-white hover:bg-orns-red/90"
             >
-              {isSubmittingPayment && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               Confirm Payment
-            </Button>
+            </LoadingButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -585,27 +587,31 @@ function WinnerCard({ winner, hasEmail, processingId, handleEmailReceipt, handle
         </ul>
       </CardContent>
       <CardFooter className="pt-4 border-t flex-wrap gap-2 bg-slate-50/50">
-        <Button
+        <LoadingButton
           variant="outline"
           size="sm"
           className="flex-1 min-w-[100px] gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => handleEmailReceipt(winner)}
           disabled={!hasEmail || (!!processingId && processingId.startsWith(`${winner.bidderId}-`))}
+          loading={processingId === `${winner.bidderId}-email`}
+          loadingText="Sending..."
+          icon={<Mail className="w-4 h-4" />}
           title={!hasEmail ? "No email on file for this bidder" : ""}
         >
-          {processingId === `${winner.bidderId}-email` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-          {processingId === `${winner.bidderId}-email` ? "Sending..." : "Email Receipt"}
-        </Button>
-        <Button
+          Email Receipt
+        </LoadingButton>
+        <LoadingButton
           variant="outline"
           size="sm"
           className="flex-1 min-w-[100px] gap-2"
           onClick={() => handlePrintReceipt(winner)}
           disabled={!!processingId && processingId.startsWith(`${winner.bidderId}-`)}
+          loading={processingId === `${winner.bidderId}-print`}
+          loadingText="Printing..."
+          icon={<Receipt className="w-4 h-4" />}
         >
-          {processingId === `${winner.bidderId}-print` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Receipt className="w-4 h-4" />}
-          {processingId === `${winner.bidderId}-print` ? "Printing..." : "Print Receipt"}
-        </Button>
+          Print Receipt
+        </LoadingButton>
         {winner.paid ? (
           <div className="w-full py-2 text-center text-emerald-600 font-medium flex items-center justify-center gap-2">
             <CheckCircle2 className="w-4 h-4" /> Paid
@@ -615,15 +621,16 @@ function WinnerCard({ winner, hasEmail, processingId, handleEmailReceipt, handle
             <Loader2 className="w-4 h-4 animate-spin" /> Pending Verification
           </div>
         ) : (
-          <Button
+          <LoadingButton
             size="sm"
             className="w-full gap-2"
             onClick={() => handleMarkPaid(winner)}
             disabled={!!processingId && processingId.startsWith(`${winner.bidderId}-`)}
+            loading={processingId === `${winner.bidderId}-pay`}
+            icon={<CheckCircle2 className="w-4 h-4" />}
           >
-            {processingId === `${winner.bidderId}-pay` ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
             Checkout
-          </Button>
+          </LoadingButton>
         )}
       </CardFooter>
     </Card>

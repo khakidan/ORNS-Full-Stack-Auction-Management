@@ -46,12 +46,6 @@ too much" guidance (`react-patterns.md`). Confirmed by `wc -l`.
 
 Confirmed by grep - real, repeated duplication, not a hypothetical.
 
-**`<LoadingButton>`** - Wraps `Button` to natively handle busy/submitting
-state: auto-disable plus a spinning `Loader2` icon. No such component
-exists today; busy buttons are hand-rolled per call site with inline
-`Loader2` + `animate-spin` across `BidEntry.tsx`, `Bidders.tsx`,
-`Checkout.tsx`, `Receipts.tsx`.
-
 **`<AttendeeLookupCard>`** - A contextual preview card for a parsed
 Bidder or AuctionItem: name, status badges ("Checked In", "Proxy",
 "Checked Out"), associated transactional data. Would consolidate the
@@ -67,6 +61,20 @@ theoretical, it has already let unlabeled icon buttons ship.
 confirmation dialog, adopted by `AuctionItemsTab.tsx`) but other ad hoc
 destructive confirmations - e.g. in `BundlingDialog.tsx` - haven't been
 migrated to it yet. Worth doing opportunistically.
+
+`src/components/ui/LoadingButton.tsx` now exists too (`loading`/
+`loadingText`/`icon`/`loaderClassName` props, wraps `Button`), adopted in
+`BidEntry.tsx`, `Bidders.tsx`, and `Checkout.tsx` - the doc's original
+named scope for this item, though `Receipts.tsx` turned out not to apply
+(its refresh button already used a different, correct "spin the same
+icon in place" pattern, not a `Loader2` swap - that claim was stale).
+While migrating, found the identical hand-rolled `{loading ? <Loader2
+.../> : ...}` pattern repeated well beyond those four files, in
+`BundlingDialog.tsx`, `ConfigSettings.tsx`, `Dashboard.tsx`,
+`TicketAttendeeTab.tsx`, and `AddAuctionItemDialog.tsx` - a real, broader
+adoption opportunity beyond this item's original scope. Worth a
+dedicated follow-up pass rather than folding into this one, since it
+touches five more files.
 
 *Estimated impact* (from the original component-unification audit):
 implementing these would cut layout boilerplate in the core workflow
@@ -95,11 +103,11 @@ mechanical change (add `aria-label="..."` to each); building the
 
 This app already defines one literal brand color token,
 `--color-orns-red: #e31b23` (`src/index.css`), specifically so components
-don't need to hardcode that hex value. In practice it's hardcoded as an
-arbitrary Tailwind value in 6 places instead of using the token class:
+don't need to hardcode that hex value. In practice it's still hardcoded
+as an arbitrary Tailwind value in 2 places instead of using the token
+class:
 
-- `src/components/Items.tsx:35` - `text-[#e31b23]`
-- `src/components/Checkout.tsx:375,391,488,514,545` - `text-[#e31b23]` / `bg-[#e31b23]` (5 occurrences)
+- `src/components/Checkout.tsx:488,514` - `text-[#e31b23]` / `bg-[#e31b23]`
 
 Fix: replace each with `text-orns-red` / `bg-orns-red`.
 

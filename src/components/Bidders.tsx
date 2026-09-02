@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TableCell, TableHead, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { UserPlus, CheckCircle, UserCheck, Clock, Loader2, ArrowUpDown, ChevronUp, ChevronDown, Ticket, Gavel, AlertCircle } from "lucide-react";
+import { UserPlus, CheckCircle, UserCheck, Clock, ArrowUpDown, ChevronUp, ChevronDown, Ticket, Gavel, AlertCircle } from "lucide-react";
 import { FilterToolbar } from "@/components/FilterToolbar";
 import { DataTableWrapper } from "@/components/DataTableWrapper";
+import { LoadingButton } from "@/components/ui/LoadingButton";
 import { toast } from "sonner";
 import { fetchWithRetry, updateSheetData, getBaseUrl, getSheetData, appendSheetData } from "@/lib/google-api";
 import {
@@ -391,16 +392,9 @@ export default function Bidders() {
                     <Button type="button" variant="outline" onClick={() => setIsWalkInOpen(false)}>
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={isSubmittingWalkIn}>
-                      {isSubmittingWalkIn ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Creating...
-                        </>
-                      ) : (
-                        "Create Ticket"
-                      )}
-                    </Button>
+                    <LoadingButton type="submit" loading={isSubmittingWalkIn} loadingText="Creating...">
+                      Create Ticket
+                    </LoadingButton>
                   </DialogFooter>
                 </form>
               </DialogContent>
@@ -613,15 +607,14 @@ export default function Bidders() {
             <AlertDialogCancel disabled={isAddingTicketToReceipt} onClick={() => confirmPendingCheckIn(false)}>
               No, Do Not Add
             </AlertDialogCancel>
-            <Button
+            <LoadingButton
               variant="default"
-              disabled={isAddingTicketToReceipt}
+              loading={isAddingTicketToReceipt}
               onClick={() => confirmPendingCheckIn(true)}
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
             >
-              {isAddingTicketToReceipt && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Yes, Add to Receipt
-            </Button>
+            </LoadingButton>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

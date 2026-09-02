@@ -6,9 +6,9 @@ import { getSheetData, updateSheetData } from "@/lib/google-api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/LoadingButton";
 import { toast } from "sonner";
-import { Gavel, Loader2, Search, User } from "lucide-react";
+import { Gavel, Search, User } from "lucide-react";
 
 export default function BidEntry() {
   const { bidders, items, recordWinningBid } = useAuction();
@@ -109,9 +109,9 @@ export default function BidEntry() {
             <Input type="number" step="0.01" placeholder="150.00" value={price} onChange={e => setPrice(e.target.value)} disabled={submitting} />
           </div>
 
-          <Button type="submit" className="w-full h-12 text-lg" disabled={submitting}>
-            {submitting ? <Loader2 className="animate-spin" /> : "Record Winning Bid"}
-          </Button>
+          <LoadingButton type="submit" className="w-full h-12 text-lg" loading={submitting} loadingText={null} loaderClassName="">
+            Record Winning Bid
+          </LoadingButton>
         </form>
       </CardContent>
     </Card>
