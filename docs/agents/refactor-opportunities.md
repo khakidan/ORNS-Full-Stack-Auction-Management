@@ -32,7 +32,6 @@ directly against the file it names, not estimated.
 
 | File | Lines | Note |
 | --- | --- | --- |
-| `src/components/Bidders.tsx` | 644 | |
 | `src/components/Checkout.tsx` | 644 | |
 | `src/components/ConfigSettings.tsx` | 572 | |
 | `src/components/Dashboard.tsx` | 517 | |
@@ -205,12 +204,15 @@ so nobody "fixes" something that isn't broken.
   computed directly in render (or via `useMemo` - see next item).
 - **Memoization is applied where it actually matters, and skipped where
   it doesn't** (`performance.md`, `react-patterns.md`).
-  The auction items table - the one large table that also does
-  client-side sorting - wraps its filter/sort in `useMemo`
-  (`hooks/useAuctionItemsTableState.ts`); the lighter `Bidders.tsx`
-  filter runs directly in render without one. This matches the docs'
-  "don't memoize by default, do it where it's warranted" guidance rather
-  than over- or under-applying it uniformly.
+  Both the auction items table and the bidders table wrap their
+  filter/sort in `useMemo` (`hooks/useAuctionItemsTableState.ts`,
+  `hooks/useBiddersState.ts`) - the latter's filter also calls
+  `getBidderAttendeeInfo()` per row, itself an array scan over
+  `attendees`, so the O(n\*m) cost is real enough to be worth memoizing.
+  Lighter, cheaper filters elsewhere in the app still run directly in
+  render without one. This matches the docs' "don't memoize by default,
+  do it where it's warranted" guidance rather than over- or
+  under-applying it uniformly.
 - **`useEffect` usage stays scoped to real external synchronization**
   (`react-patterns.md`) - 1-3 effects per file across every component
   that uses them, no effects found computing a value that could live in
