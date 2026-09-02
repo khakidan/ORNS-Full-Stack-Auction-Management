@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { fetchWithRetry, getBaseUrl } from "@/lib/google-api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { StatusStatePlaceholder } from "@/components/ui/StatusStatePlaceholder";
+import { cn } from "@/lib/utils";
 
 import { useAuction } from "@/context/AuctionContext";
 
@@ -205,24 +207,28 @@ export default function DocumentCreationTab() {
                 Files recently generated for the auction.
               </CardDescription>
             </div>
-            <Button variant="ghost" size="icon" onClick={fetchFiles} disabled={loadingFiles || isInvalidFolder}>
-              <RefreshCw className={`w-4 h-4 ${loadingFiles ? 'animate-spin' : ''}`} />
+            <Button variant="ghost" size="icon" aria-label="Refresh files" onClick={fetchFiles} disabled={loadingFiles || isInvalidFolder}>
+              <RefreshCw className={cn("w-4 h-4", loadingFiles && "animate-spin")} />
             </Button>
           </CardHeader>
           <CardContent>
             {isInvalidFolder ? (
-              <div className="text-center py-12 border-2 border-dashed rounded-lg">
-                <p className="text-muted-foreground mb-2">For Print Folder ID not configured.</p>
-                <p className="text-xs">Set it in the Configuration {'>'} Styling & Files section.</p>
-              </div>
+              <StatusStatePlaceholder
+                bordered
+                icon={<FileText />}
+                description={
+                  <>
+                    For Print Folder ID not configured.
+                    <p className="text-xs mt-1">Set it in the Configuration {'>'} Styling & Files section.</p>
+                  </>
+                }
+              />
             ) : loadingFiles ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-primary/30" />
               </div>
             ) : files.length === 0 ? (
-              <div className="text-center py-12 border-2 border-dashed rounded-lg">
-                <p className="text-muted-foreground">No files found in the For Print folder.</p>
-              </div>
+              <StatusStatePlaceholder bordered icon={<FileText />} description="No files found in the For Print folder." />
             ) : (
               <div className="rounded-md border overflow-hidden">
                 <Table>

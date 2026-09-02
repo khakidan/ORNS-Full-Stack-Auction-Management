@@ -46,18 +46,6 @@ too much" guidance (`react-patterns.md`). Confirmed by `wc -l`.
 
 Confirmed by grep - real, repeated duplication, not a hypothetical.
 
-**`<StatusStatePlaceholder>`** - A generic empty/unconfigured-state
-card: centered muted icon, bold heading, descriptive text, optional
-action button. Consistent empty-state tone already exists ad hoc -
-`"No winners found in this category."` (`Checkout.tsx`), `"No bidders
-found matching \"{searchTerm}\""` (`Bidders.tsx`), `"No items found."`
-(`AuctionItemsTab.tsx`), `"No receipts found in this folder."`
-(`Receipts.tsx`), `"No files found in the For Print folder."`
-(`DocumentCreationTab.tsx`, `TicketDocumentCreationTab.tsx`) - but each
-is a separate hand-written `<p>`/`<div>`, not a shared component
-(originally flagged as `Items.tsx` lines 87-91 and `Receipts.tsx` lines
-63-75/100-110; re-verify line ranges before implementing).
-
 **`<LoadingButton>`** - Wraps `Button` to natively handle busy/submitting
 state: auto-disable plus a spinning `Loader2` icon. No such component
 exists today; busy buttons are hand-rolled per call site with inline
@@ -90,18 +78,16 @@ assertions) more reliable without touching business logic.
 
 `component-standards.md` requires every icon-only button to carry an
 explicit `aria-label`. A repo-wide check of every real
-`<Button size="icon"...>` usage in `src/components/` found **6 with no
+`<Button size="icon"...>` usage in `src/components/` found **4 with no
 `aria-label` at all**:
 
 - `src/components/AuctionAssistant.tsx:149` - send-message button (only child is a `<Send>` icon)
-- `src/components/DocumentCreationTab.tsx:208` - refresh-files button
-- `src/components/TicketDocumentCreationTab.tsx:128` - refresh-files button
 - `src/components/ui/EditableCell.tsx:102` - edit button
 - `src/components/TicketAttendeeTab.tsx:59` - save-attendee button
 - `src/components/TicketAttendeeTab.tsx:391` - delete-attendee button
 
 This is a real accessibility gap, not a style nitpick - a screen reader
-user gets an unlabeled button at all 6 sites today. Fixing it is a small,
+user gets an unlabeled button at all 4 sites today. Fixing it is a small,
 mechanical change (add `aria-label="..."` to each); building the
 `<IconButton>` wrapper above would prevent it from recurring.
 
@@ -132,20 +118,19 @@ sites in one file.
 
 `cn()` (`src/lib/utils.ts`) exists specifically so conditional classes
 don't get built with manual string interpolation. Confirmed by grep,
-8 files still build `className` with a raw template literal instead:
+5 files still build `className` with a raw template literal instead:
 `AuctionAssistant.tsx`, `BidEntry.tsx`, `ConfigSettings.tsx`,
-`DocumentCreationTab.tsx`, `Receipts.tsx`, `Dashboard.tsx`,
-`TicketAttendeeTab.tsx`, `TicketDocumentCreationTab.tsx`.
-Example (`Receipts.tsx:90`):
+`Dashboard.tsx`, `TicketAttendeeTab.tsx`.
+Example (`BidEntry.tsx:99`):
 
 ```tsx
-<RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+<p className={`text-sm mt-1 ${selectedBidder.checkedIn ? 'text-green-600' : 'text-amber-600'}`}>
 ```
 
 should be:
 
 ```tsx
-<RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+<p className={cn("text-sm mt-1", selectedBidder.checkedIn ? "text-green-600" : "text-amber-600")}>
 ```
 
 Low risk, high-volume cleanup - safe to do incrementally whenever one of

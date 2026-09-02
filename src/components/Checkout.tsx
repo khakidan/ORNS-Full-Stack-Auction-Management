@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Handshake, Receipt, Mail, CheckCircle2, Loader2 } from "lucide-react";
 import { FilterToolbar } from "@/components/FilterToolbar";
+import { StatusStatePlaceholder } from "@/components/ui/StatusStatePlaceholder";
 
 import { Bidder, AuctionItem, Attendee } from "@/types";
 
@@ -631,11 +632,10 @@ function WinnerCard({ winner, hasEmail, processingId, handleEmailReceipt, handle
 
 function EmptyWinnersState() {
   return (
-    <div className="col-span-full py-20 text-center space-y-4">
-      <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto">
-        <Receipt className="w-8 h-8 text-slate-300" />
-      </div>
-      <div className="text-muted-foreground">No winners found in this category.</div>
-    </div>
+    <StatusStatePlaceholder
+      className="col-span-full"
+      icon={<Receipt />}
+      description="No winners found in this category."
+    />
   );
 }
