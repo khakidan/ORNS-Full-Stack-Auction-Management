@@ -16,7 +16,7 @@ that list. Treat the two together as the current backlog.
 ## Component size (P2 â readability & rendering)
 
 | File | Lines | Note |
-|---|---|---|
+| --- | --- | --- |
 | `src/components/AuctionItemsTab.tsx` | 969 | Largest component in the app by a wide margin. Almost certainly mixing table rendering, filter state, dialogs, and business logic â split before adding more to it. |
 | `src/components/Bidders.tsx` | 644 | |
 | `src/components/Checkout.tsx` | 644 | |
