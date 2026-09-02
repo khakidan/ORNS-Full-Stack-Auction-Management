@@ -33,7 +33,6 @@ directly against the file it names, not estimated.
 | File | Lines | Note |
 | --- | --- | --- |
 | `src/components/ConfigSettings.tsx` | 572 | |
-| `src/components/Dashboard.tsx` | 517 | |
 | `src/components/TicketAttendeeTab.tsx` | 446 | |
 | `src/context/AuctionContext.tsx` | 532 | Large for a context provider - worth checking whether it's holding multiple unrelated concerns that could split into separate contexts/hooks. |
 
@@ -70,33 +69,21 @@ named scope for this item, though `Receipts.tsx` turned out not to apply
 (its refresh button already used a different, correct "spin the same
 icon in place" pattern, not a `Loader2` swap - that claim was stale).
 While migrating, found the identical hand-rolled `{loading ? <Loader2
-.../> : ...}` pattern repeated well beyond those four files, in
-`BundlingDialog.tsx`, `ConfigSettings.tsx`, `Dashboard.tsx`,
-`TicketAttendeeTab.tsx`, and `AddAuctionItemDialog.tsx` - a real, broader
-adoption opportunity beyond this item's original scope. Worth a
-dedicated follow-up pass rather than folding into this one, since it
-touches five more files.
-
-### Hardcoded hex colors with no token (`tailwind-style-guide.md`)
-
-Two colors that have **no token at all** are hardcoded as arbitrary hex
-values in `src/components/Dashboard.tsx`:
-
-- `Dashboard.tsx:364,367` - `text-[#10b981]` (an emerald/green, used for a "funds raised" stat)
-- `Dashboard.tsx:442,467,498` - `text-[#0c63d5]` / `bg-[#0c63d5]` (a blue, used for a "leaderboard" call-to-action)
-
-Per `tailwind-style-guide.md`, a repeated color like this should become a
-named token in `src/index.css` (the same way `orns-red` was added)
-rather than staying a copy-pasted arbitrary hex value across 5 call
-sites in one file.
+.../> : ...}` pattern repeated well beyond those four files. Also
+adopted in `Dashboard.tsx`'s two Special Winners save buttons during
+that file's own refactor; still open in `BundlingDialog.tsx`,
+`ConfigSettings.tsx`, `TicketAttendeeTab.tsx`, and
+`AddAuctionItemDialog.tsx` - a real, broader adoption opportunity beyond
+this item's original scope. Worth a dedicated follow-up pass rather
+than folding into this one, since it touches four more files.
 
 ### Manual template-literal classNames instead of `cn()` (`tailwind-style-guide.md`)
 
 `cn()` (`src/lib/utils.ts`) exists specifically so conditional classes
 don't get built with manual string interpolation. Confirmed by grep,
-5 files still build `className` with a raw template literal instead:
+4 files still build `className` with a raw template literal instead:
 `AuctionAssistant.tsx`, `BidEntry.tsx`, `ConfigSettings.tsx`,
-`Dashboard.tsx`, `TicketAttendeeTab.tsx`.
+`TicketAttendeeTab.tsx`.
 Example (`BidEntry.tsx:99`):
 
 ```tsx
