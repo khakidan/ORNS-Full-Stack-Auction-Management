@@ -1,9 +1,10 @@
 # Refactor Opportunities
 
 Running list of concrete, verified work items for this codebase - not
-aspirational ideas, but things confirmed against the real code. Check
-items off (or move them to `CHANGELOG.md`) as they're done rather than
-deleting the row, so the audit trail survives.
+aspirational ideas, but things confirmed against the real code. When an
+item is done, remove it from this file entirely - the paper trail for
+completed work lives in [`CHANGELOG.md`](./CHANGELOG.md), not here. This
+file only ever reflects the current, outstanding backlog.
 
 This file absorbed [ROADMAP.md](./ROADMAP.md)'s former "Frontend UI
 Audit & Component Unification Plan" section - `ROADMAP.md` keeps only
@@ -31,7 +32,6 @@ directly against the file it names, not estimated.
 
 | File | Lines | Note |
 | --- | --- | --- |
-| ~~`src/components/AuctionItemsTab.tsx`~~ | ~~969~~ **177** | **Done 2026-09-02.** Split into `AuctionItemsFilterBar.tsx`, `AuctionItemsTable.tsx`, `AuctionItemRow.tsx`, `AuctionItemsBulkActionBar.tsx`, `AddAuctionItemDialog.tsx`, the new shared `ui/ConfirmationDialog.tsx` (used for both its confirm dialogs), state/handlers extracted to `hooks/useAuctionItemsTableState.ts`, and pure pricing math moved to `lib/auctionItemPricing.ts`. Also fixed while in there: the missing `aria-label` and manual-template-literal-className findings below for this file, plus a real `colSpan={6}` bug on an 8-column table (now `colSpan={8}`). All 10 existing `AuctionItemsTab.test.tsx` tests pass unmodified (behavior-based, not implementation-based, per `testing-philosophy.md`) - verified with a full `npx vitest run` (321/321) and `npm run build`. |
 | `src/components/Bidders.tsx` | 644 | |
 | `src/components/Checkout.tsx` | 644 | |
 | `src/components/ConfigSettings.tsx` | 572 | |
@@ -53,11 +53,9 @@ each independently render a `<Input placeholder="Search ...">` search
 box with near-identical layout (originally flagged by a prior audit as
 `Bidders.tsx` lines 54-66, `Items.tsx` lines 21-37, `Checkout.tsx` lines
 39-44; re-verify exact line ranges before implementing, since components
-shift over time). **Partial progress 2026-09-02**: `AuctionItemsTab.tsx`'s
-own filter bar was extracted into a local `AuctionItemsFilterBar.tsx`
-during that file's refactor - not the same as this shared cross-app
-component, but a smaller step in the same direction, and a real
-component to model the shared one on once built.
+shift over time). `src/components/AuctionItemsFilterBar.tsx` is a real,
+already-built local example of this exact shape to model the shared
+component on.
 
 **`<DataTableWrapper>`** - A standardized scrollable grid built around
 the existing `src/components/ui/table.tsx` primitives: auto-scroll via
@@ -95,14 +93,10 @@ lookup previews in `BidEntry.tsx` (originally flagged around lines
 enforcement. See the accessibility finding just below - this is not
 theoretical, it has already let 7 unlabeled icon buttons ship.
 
-~~**`<ConfirmationDialog>`**~~ **Done 2026-09-02.** Built as
-`src/components/ui/ConfirmationDialog.tsx` (`open`/`onOpenChange`/
-`title`/`description`/`confirmLabel`/`cancelLabel`/`onConfirm`/
-`isLoading`/`variant`/`icon` props) and adopted for both of
-`AuctionItemsTab.tsx`'s confirmation dialogs (bulk-update confirm,
-delete-item confirm) as its first real usage. Other ad hoc destructive
-confirmations (e.g. in `BundlingDialog.tsx`) haven't been migrated to it
-yet - worth doing opportunistically.
+`src/components/ui/ConfirmationDialog.tsx` now exists (a shared
+confirmation dialog, adopted by `AuctionItemsTab.tsx`) but other ad hoc
+destructive confirmations - e.g. in `BundlingDialog.tsx` - haven't been
+migrated to it yet. Worth doing opportunistically.
 
 *Estimated impact* (from the original component-unification audit,
 covering the first five of these): implementing them would cut layout
@@ -114,11 +108,8 @@ assertions) more reliable without touching business logic.
 
 `component-standards.md` requires every icon-only button to carry an
 explicit `aria-label`. A repo-wide check of every real
-`<Button size="icon"...>` usage in `src/components/` originally found
-**7 with no `aria-label` at all**; **6 remain** after
-`AuctionItemsTab.tsx`'s delete-item button was fixed during that file's
-2026-09-02 refactor (now `src/components/AuctionItemRow.tsx`, with
-`aria-label={\`Delete ${item.name}\`}`):
+`<Button size="icon"...>` usage in `src/components/` found **6 with no
+`aria-label` at all**:
 
 - `src/components/AuctionAssistant.tsx:149` - send-message button (only child is a `<Send>` icon)
 - `src/components/DocumentCreationTab.tsx:208` - refresh-files button
@@ -126,12 +117,11 @@ explicit `aria-label`. A repo-wide check of every real
 - `src/components/ui/EditableCell.tsx:102` - edit button
 - `src/components/TicketAttendeeTab.tsx:59` - save-attendee button
 - `src/components/TicketAttendeeTab.tsx:391` - delete-attendee button
-- ~~`src/components/AuctionItemsTab.tsx:727`~~ - delete-item button - **fixed**, now `AuctionItemRow.tsx`
 
 This is a real accessibility gap, not a style nitpick - a screen reader
-user gets an unlabeled button at all 6 remaining sites today. Fixing it
-is a small, mechanical change (add `aria-label="..."` to each); building
-the `<IconButton>` wrapper above would prevent it from recurring.
+user gets an unlabeled button at all 6 sites today. Fixing it is a small,
+mechanical change (add `aria-label="..."` to each); building the
+`<IconButton>` wrapper above would prevent it from recurring.
 
 ### Hardcoded hex colors instead of the `orns-red` token (`tailwind-style-guide.md`)
 
@@ -160,11 +150,7 @@ sites in one file.
 
 `cn()` (`src/lib/utils.ts`) exists specifically so conditional classes
 don't get built with manual string interpolation. Confirmed by grep,
-9 files originally built `className` with a raw template literal
-instead; **8 remain** after `AuctionItemsTab.tsx`'s row-selection
-className was fixed during that file's 2026-09-02 refactor (now
-`src/components/AuctionItemRow.tsx`, using
-`cn("group/row border-b transition-colors", isSelected && "bg-primary/5")`):
+8 files still build `className` with a raw template literal instead:
 `AuctionAssistant.tsx`, `BidEntry.tsx`, `ConfigSettings.tsx`,
 `DocumentCreationTab.tsx`, `Receipts.tsx`, `Dashboard.tsx`,
 `TicketAttendeeTab.tsx`, `TicketDocumentCreationTab.tsx`.
@@ -271,8 +257,9 @@ so nobody "fixes" something that isn't broken.
   computed directly in render (or via `useMemo` - see next item).
 - **Memoization is applied where it actually matters, and skipped where
   it doesn't** (`performance.md`, `react-patterns.md`).
-  `AuctionItemsTab.tsx` - the one large table that also does client-side
-  sorting - wraps its filter/sort in `useMemo`; the lighter `Bidders.tsx`
+  The auction items table - the one large table that also does
+  client-side sorting - wraps its filter/sort in `useMemo`
+  (`hooks/useAuctionItemsTableState.ts`); the lighter `Bidders.tsx`
   filter runs directly in render without one. This matches the docs'
   "don't memoize by default, do it where it's warranted" guidance rather
   than over- or under-applying it uniformly.
@@ -292,22 +279,9 @@ so nobody "fixes" something that isn't broken.
 
 ## Out of Scope, but Should be Fixed
 
-Nothing outstanding right now. The three items previously logged here
-were all resolved on 2026-09-02:
+Nothing outstanding right now.
 
-- `style_guide.md`'s font stack now correctly describes Geist Variable
-  (the only font actually shipped) instead of the never-implemented
-  Inter/Space Grotesk/JetBrains Mono pairing.
-- `style_guide.md`'s bundle-size section now has real, measured numbers
-  from a working `npm install && npm run build` (see that doc's Bundle
-  Optimization section) instead of an unverified "under 103 kB" claim -
-  which also surfaced two new, real findings, logged above under "Tasks
-  To Refactor" (`vendor-utils` chunk sizing, orphaned
-  `AuctionAssistant.tsx`).
-- `README.md`'s test count was corrected from "323" to the real,
-  verified **321** (`npx vitest run`), matching `AGENTS.md`.
-
-New items belong here only when they genuinely need a decision,
+Items belong here only when they genuinely need a decision,
 documentation correction, or working environment this audit doesn't
 have access to - not as a place to defer real code fixes.
 
@@ -318,7 +292,10 @@ have access to - not as a place to defer real code fixes.
 When picking up a task and you notice it touches one of the items in
 "Tasks To Refactor," it's reasonable to extract the relevant piece as
 part of that task - but don't turn an unrelated bug fix into a drive-by
-rewrite of `AuctionItemsTab.tsx`. Log new findings the same way: file,
+rewrite of an unrelated file. Log new findings the same way: file,
 concrete evidence (line count, grep hit, failed command), sorted into
 the right one of the three sections above - not a vague "this could be
-cleaner."
+cleaner." When an item is finished, remove it from this file entirely
+and record what happened in `CHANGELOG.md` instead - this file should
+only ever show the current, outstanding backlog, never a history of
+what's already done.
