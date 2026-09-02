@@ -1,0 +1,31 @@
+{
+  "entities": {
+    "Config": {
+      "title": "Application Configuration",
+      "description": "Global settings for the auction app",
+      "type": "object",
+      "properties": {
+        "auctionItemsSpreadsheetId": { "type": "string" },
+        "auctionTicketsSpreadsheetId": { "type": "string" },
+        "bidManagementSpreadsheetId": { "type": "string" },
+        "bidderNumbersSheet": { "type": "string" },
+        "auctionItemsSheet": { "type": "string" },
+        "bidManagementSheet": { "type": "string" },
+        "receiptFolderId": { "type": "string" },
+        "forPrintFolderId": { "type": "string" },
+        "ornsLogoId": { "type": "string" },
+        "ticketPrice": { "type": "string" },
+        "auctionItemsScriptId": { "type": "string" },
+        "auctionTicketsScriptId": { "type": "string" },
+        "bidManagementScriptId": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "settings": {
+      "schema": "Config",
+      "description": "Collection holding application configuration"
+    }
+  }
+}

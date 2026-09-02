@@ -1,0 +1,137 @@
+import { Router, Request, Response, NextFunction } from 'express';
+import { google } from 'googleapis';
+import { getAuthenticatedClient } from '../services/oauth';
+import { checkIdempotency, saveIdempotency } from '../utils/idempotency';
+import { clearCacheForSpreadsheet } from '../utils/sheetCache';
+import { 
+  suggestBundleNames, 
+  suggestBundleDescription, 
+  processBundle, 
+  restoreBundle 
+} from '../services/bundleService';
+
+export default function createBundleRouter() {
+  const router = Router();
+
+  router.post("/suggest-names", async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
+    if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+
+    const { items } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "No items provided" });
+    }
+
+    try {
+      const result = await suggestBundleNames({ items });
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/suggest-description", async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
+    if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+
+    const { items } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "No items provided" });
+    }
+
+    try {
+      const result = await suggestBundleDescription({ items });
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/process", async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+    const { 
+      spreadsheetId, 
+      targetIds, 
+      newName, 
+      newDescription, 
+      targetCategory, 
+      value, 
+      openingBid, 
+      minRaise, 
+      donor, 
+      itemType, 
+      bundleEventToken, 
+      timestamp, 
+      idempotencyKey 
+    } = req.body;
+
+    if (!spreadsheetId || !targetIds || !targetIds.length || !newName || !targetCategory) {
+      return res.status(400).json({ error: "Missing required parameters" });
+    }
+
+    const cached = checkIdempotency(req, res, idempotencyKey);
+    if (cached) return;
+
+    try {
+      const client = getAuthenticatedClient(req.session.tokens);
+      const sheets = google.sheets({ version: "v4", auth: client });
+
+      const result = await processBundle(sheets, {
+        spreadsheetId,
+        targetIds,
+        newName,
+        newDescription,
+        targetCategory,
+        value,
+        openingBid,
+        minRaise,
+        donor,
+        itemType,
+        bundleEventToken,
+        timestamp
+      });
+
+      clearCacheForSpreadsheet(spreadsheetId);
+      saveIdempotency(idempotencyKey, result);
+      res.json(result);
+    } catch (error: any) {
+      next(error);
+    }
+  });
+
+  router.post("/restore", async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
+
+    const { spreadsheetId, targetBundleToken, idempotencyKey } = req.body;
+    
+    if (!spreadsheetId || !targetBundleToken) {
+      return res.status(400).json({ error: "Missing required parameters" });
+    }
+
+    const cached = checkIdempotency(req, res, idempotencyKey);
+    if (cached) return;
+
+    try {
+      const client = getAuthenticatedClient(req.session.tokens);
+      const sheets = google.sheets({ version: "v4", auth: client });
+
+      const result = await restoreBundle(sheets, {
+        spreadsheetId,
+        targetBundleToken
+      });
+
+      clearCacheForSpreadsheet(spreadsheetId);
+      saveIdempotency(idempotencyKey, result);
+      res.json(result);
+    } catch (error: any) {
+      if (error.message.includes("Active bundle not found")) {
+        return res.status(404).json({ error: error.message });
+      }
+      next(error);
+    }
+  });
+
+  return router;
+}
+
