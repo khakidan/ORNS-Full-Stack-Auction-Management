@@ -40,6 +40,7 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 - Corrected `style_guide.md`'s font stack (claimed Inter/Space Grotesk/JetBrains Mono; the app only ever shipped Geist Variable) and its bundle-size claim (unverified "under 103 kB critical path" replaced with real measured numbers, ~421 kB gzipped, from a working `npm install && npm run build`).
 - Corrected `README.md`'s test count (323 → verified 321, matching `AGENTS.md`).
 - Corrected `schema.md`'s Firestore "Shared Config Schema" section, which described fields (`activeSpreadsheetId`, `syncStatus`, `paypalSurchargePercentage`, etc.) that don't exist anywhere in the real `Config` type consumed by `src/context/ConfigContext.tsx`.
+- Removed the `<AttendeeLookupCard>` item from `refactor-opportunities.md`'s "Missing shared components" list without building it. Unlike the other four items in that list (all had genuine, verified duplicated JSX to consolidate), this one didn't hold up on inspection: `BidEntry.tsx`'s "lookup preview" is just two plain `<p>` tags with no card/badge markup, and `Bidders.tsx`'s attendee info (`getBidderAttendeeInfo`) is inline badge logic embedded in the main table's row cells, not a separate duplicated lookup-card pattern. Building a new card component here would have been net-new UI design work, not a dedup - a real decision point, taken to the user rather than assumed; the answer was to skip it and correct the backlog instead.
 
 ### Fixed
 

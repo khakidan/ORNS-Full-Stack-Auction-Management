@@ -46,12 +46,6 @@ too much" guidance (`react-patterns.md`). Confirmed by `wc -l`.
 
 Confirmed by grep - real, repeated duplication, not a hypothetical.
 
-**`<AttendeeLookupCard>`** - A contextual preview card for a parsed
-Bidder or AuctionItem: name, status badges ("Checked In", "Proxy",
-"Checked Out"), associated transactional data. Would consolidate the
-lookup previews in `BidEntry.tsx` (originally flagged around lines
-88-105) and the attendee-verification flows in `Bidders.tsx`.
-
 **`<IconButton>`** - No dedicated wrapper; icon-only buttons use
 `<Button size="icon">` directly with no type-level `aria-label`
 enforcement. See the accessibility finding just below - this is not
@@ -75,12 +69,6 @@ While migrating, found the identical hand-rolled `{loading ? <Loader2
 adoption opportunity beyond this item's original scope. Worth a
 dedicated follow-up pass rather than folding into this one, since it
 touches five more files.
-
-*Estimated impact* (from the original component-unification audit):
-implementing these would cut layout boilerplate in the core workflow
-components by roughly 20-30%, and would make the existing interaction
-tests (table rendering, handler
-assertions) more reliable without touching business logic.
 
 ### Icon-only buttons missing `aria-label` (`component-standards.md`)
 
