@@ -31,19 +31,38 @@ This sheet tracks all event registrations, active bidders, and their checkout/pa
 
 Firestore is utilized to synchronize system configuration, active operational paths, and spreadsheet links in real-time.
 
-### Collection: `config`
-*   **Document ID**: `global` (or specified deployment profiles)
-*   **Fields**:
+### Collection: `settings`
+
+*   **Document ID**: `global`
+*   **Fields** (verified directly against the real `Config` type consumed by
+    `src/context/ConfigContext.tsx` on 2026-09-02 - this replaces a
+    previous version of this section that listed fields, such as
+    `activeSpreadsheetId`/`syncStatus`/`paypalSurchargePercentage`, that
+    don't exist anywhere in the actual `Config` type):
+
     ```json
     {
-      "activeSpreadsheetId": "string (Google Sheet ID)",
-      "syncStatus": "string (Idle | Syncing | Error)",
-      "lastSyncedAt": "timestamp",
-      "paypalSurchargePercentage": "number (e.g., 2.9)",
-      "paypalFlatFee": "number (e.g., 0.30)",
-      "activeAdminTabs": "array of strings"
+      "auctionItemsSpreadsheetId": "string (Google Sheet ID)",
+      "auctionTicketsSpreadsheetId": "string (Google Sheet ID)",
+      "bidManagementSpreadsheetId": "string (Google Sheet ID)",
+      "bidderNumbersSheet": "string (sheet/tab name, default 'Bidder-Numbers')",
+      "auctionItemsSheet": "string (sheet/tab name, default 'Auction-Items')",
+      "bidManagementSheet": "string (sheet/tab name, default 'Bid-Management')",
+      "receiptFolderId": "string (Google Drive folder ID)",
+      "forPrintFolderId": "string (Google Drive folder ID)",
+      "ornsLogoId": "string (Google Drive file ID)",
+      "ticketPrice": "string (default '35')",
+      "auctionItemsScriptId": "string (Apps Script deployment ID)",
+      "auctionTicketsScriptId": "string (Apps Script deployment ID)",
+      "bidManagementScriptId": "string (Apps Script deployment ID)",
+      "updatedAt": "timestamp (server-set on save)",
+      "updatedBy": "string (email of the saving admin)"
     }
     ```
+*   On load, `ConfigContext.tsx` mirrors every field into `localStorage`
+    (plus two legacy keys, `spreadsheetId` and `googleScriptId`) for
+    components not yet reading from context directly. `saveConfig()`
+    requires an authenticated Firebase user and rejects writes otherwise.
 
 ---
 

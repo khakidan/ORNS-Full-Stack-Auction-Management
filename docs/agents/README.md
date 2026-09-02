@@ -41,7 +41,7 @@ The application relies on environment variables registered in a `.env` file (nev
 *   `APP_URL`: Dynamic host URL (e.g., `http://localhost:3000` or production container endpoint)
 *   `GEMINI_API_KEY`: Secret token for server-side AI-powered assistant functions
 
-For step-by-step local execution instructions and troubleshooting guidelines on macOS or Windows, please refer directly to [LOCAL_SETUP.md](LOCAL_SETUP.md).
+Run `npm install`, then `npm run dev` to start the local Express/Vite dev server on port `3000`.
 
 ---
 

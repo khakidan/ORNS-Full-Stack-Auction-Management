@@ -8,10 +8,6 @@ This document details the decoupled, highly structured layout of the **ORNS Char
 
 ```
 ├── README.md                  # High-level overview and stack definition
-├── LOCAL_SETUP.md             # Guide to configuring and running the application locally
-├── BACKEND_DOCUMENTATION.md   # Complete endpoint pathways and server-side descriptions
-├── USER_GUIDE.md              # User interaction workflows and operational guidelines
-├── security_spec.md           # Security parameters, authentication rules, and cookie specs
 ├── package.json               # Dependencies, build pipeline, and execution script declarations
 ├── tsconfig.json              # TypeScript compilation specifications
 ├── vite.config.ts             # React build pipeline, asset code-splitting, and server proxies
