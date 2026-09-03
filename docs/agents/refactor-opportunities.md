@@ -266,8 +266,6 @@ for any of these - confirmed by grep. Ranked by risk:
   coverage.
 - **`src/lib/bidderAttendeeInfo.ts`** - primary-vs-guest name/email
   matching that drives the pending-check-in badge logic.
-- **`src/hooks/useAuctionStatusData.ts:14`** - the `val === false ||
-  val === "FALSE"` boolean coercion gating the entire post-auction UI.
 - Lower priority but real gaps: `src/lib/auctionItemPricing.ts` (pure,
   trivial to test, 7 untested tier branches), `useConfigSettingsState.extractId`
   (4 regex branches, only ever exercised with pre-clean input in the
@@ -401,10 +399,28 @@ be worked through:
    new value). Sanity-checked the new Follow-Up tests catch a real
    regression too (temporarily disabled the checked-out-bidder
    `appendSheetData` call, confirmed the relevant test failed, reverted).
-5. **`src/hooks/useAuctionStatusData.ts`** - already listed above in
-   this section (the `val === false || val === "FALSE"` coercion); also
-   covers the `close-and-cleanup` trigger itself, which has no dedicated
-   hook-level test even though the server route it calls does.
+5. ~~`src/hooks/useAuctionStatusData.ts`~~ - **done, and this closes out
+   the whole Bid-Management hardening plan.** Same situation as item 2
+   (`useBiddersData.ts`): only ever consumed through `AuctionContext.tsx`,
+   which every component test mocks wholesale, so no component-test path
+   reached this hook's real code. Added
+   `src/hooks/useAuctionStatusData.test.ts` (13 tests) via `renderHook`,
+   the same pattern already established for item 2. Covers
+   `fetchAuctionStatus`'s `val === false || val === "FALSE"` coercion
+   with a parametrized case for each real cell shape it can see
+   (boolean `false`, string `"FALSE"`, boolean `true`, string `"TRUE"`,
+   and the never-actually-matching lowercase `"false"`, which the sheet
+   never writes but is worth pinning since a case-sensitivity slip here
+   would silently gate the entire post-auction UI), plus the no-
+   spreadsheetId/fetch-failure/empty-values no-op paths; and
+   `requestCloseAuction`'s success path (with and without a non-zero
+   `count`, which gates a second toast), the server-error and network-
+   throw failure paths (both must return `false` and leave
+   `isAuctionClosed` untouched, not just toast), and the no-spreadsheetId
+   short-circuit. Sanity-checked before trusting: temporarily loosened
+   the coercion to just `val === false` (dropping the `"FALSE"` string
+   case) and confirmed exactly the one relevant parametrized case
+   failed, reverted.
 
 Also flagged during the inventory but deliberately left out of this
 sequence: `server/services/emailService.ts:processEmail` does a direct
