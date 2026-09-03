@@ -5,8 +5,15 @@
  */
 
 class GoogleAIStudio {
-    constructor () {
-        this._itemManager = null;
+    /**
+     * @param {Object} [overrides] Optional dependency injection, used by unit
+     *   tests. `itemManager` replaces the lazily-constructed
+     *   `new AuctionItemManager()` outright, letting tests supply one built
+     *   from a fake sheet without needing a real spreadsheet at all.
+     *   Production call sites (`new GoogleAIStudio()`) never pass this.
+     */
+    constructor ( overrides = {} ) {
+        this._itemManager = overrides.itemManager || null;
     }
 
     /**

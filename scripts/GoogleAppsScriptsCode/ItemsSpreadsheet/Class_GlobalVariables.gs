@@ -3,8 +3,19 @@
  * configuration so every subclass has access to `this.config`.
  */
 class GlobalVariables {
-    constructor () {
-        this.activeSpreadSheet = SpreadsheetApp.getActiveSpreadsheet();
+    /**
+     * @param {Object} [overrides] Optional dependency/config injection, used
+     *   by unit tests to avoid touching the real active spreadsheet or its
+     *   _Settings tab. Production call sites (`new GlobalVariables()`, or a
+     *   subclass's `super()` with no args) never pass this.
+     * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [overrides.activeSpreadSheet]
+     *   Replaces `SpreadsheetApp.getActiveSpreadsheet()`.
+     * @param {Object} [overrides.config]
+     *   Replaces the real `_Settings` tab read entirely when given (skips
+     *   touching `overrides.activeSpreadSheet`/the real one for it).
+     */
+    constructor ( overrides = {} ) {
+        this.activeSpreadSheet = overrides.activeSpreadSheet || SpreadsheetApp.getActiveSpreadsheet();
         this.bidNumbersString = "Bidder-Numbers";
         this.donatedByCharLimit = 32;
         this.currentYear = new Date().getFullYear();
@@ -24,26 +35,30 @@ class GlobalVariables {
             donatedBy: "", minRaise: "", openingBid: "", grouped: "", phyOrCert: ""
         };
 
-        // ── Load _Settings ──────────────────────────────────────────────────
-        const requiredKeys = [
-            'auctionLogoID',
-            'auctionDevFolderID',
-            'auctionTicketSheetsID',
-            'avery8163LabelTemplateID',
-            'liveAuctionBgImgID',
-            'ornsLogoID'
-        ];
+        if ( overrides.config !== undefined ) {
+            this.config = overrides.config;
+        } else {
+            // ── Load _Settings ──────────────────────────────────────────────────
+            const requiredKeys = [
+                'auctionLogoID',
+                'auctionDevFolderID',
+                'auctionTicketSheetsID',
+                'avery8163LabelTemplateID',
+                'liveAuctionBgImgID',
+                'ornsLogoID'
+            ];
 
-        let settingsSheet = this.activeSpreadSheet.getSheetByName( '_Settings' );
-        if ( !settingsSheet ) {
-            // SettingsManager is responsible for the full UI workflow, but the creation of the tab itself lives here so construction never leaves a half-initialized object.
-            this.createEmptySettingsTab_( requiredKeys );
-            settingsSheet = this.activeSpreadSheet.getSheetByName( '_Settings' );
+            let settingsSheet = this.activeSpreadSheet.getSheetByName( '_Settings' );
+            if ( !settingsSheet ) {
+                // SettingsManager is responsible for the full UI workflow, but the creation of the tab itself lives here so construction never leaves a half-initialized object.
+                this.createEmptySettingsTab_( requiredKeys );
+                settingsSheet = this.activeSpreadSheet.getSheetByName( '_Settings' );
+            }
+
+            this.config = {};
+            settingsSheet.getDataRange().getValues()
+                .forEach( row => { this.config[ row[ 0 ] ] = row[ 1 ]; } );
         }
-
-        this.config = {};
-        settingsSheet.getDataRange().getValues()
-            .forEach( row => { this.config[ row[ 0 ] ] = row[ 1 ]; } );
     }
 
     /**
@@ -52,18 +67,18 @@ class GlobalVariables {
      * @param {string[]} keys
      */
     createEmptySettingsTab_ ( keys ) {
-        try {
-            SpreadsheetApp.getUi().alert(
+        // Guard against calling UI in API context (no UI when this runs
+        // because the web app called an api* bridge function).
+        let ui = null;
+        try { ui = SpreadsheetApp.getUi(); } catch ( e ) { }
+
+        if ( ui ) {
+            ui.alert(
                 'Configuration Error',
                 'The "_Settings" tab was missing and has been created.\n' +
                 'Please run "Set File & Folder Locations" before continuing.',
-                SpreadsheetApp.getUi().ButtonSet.OK
+                ui.ButtonSet.OK
             );
-        } catch ( e ) {
-            // SpreadsheetApp.getUi() throws when there's no UI context - e.g.
-            // when this constructor runs because the web app called one of the
-            // api* bridge functions via the Apps Script API. The thrown Error
-            // below still surfaces a clear message to that caller either way.
         }
 
         const sheet = this.activeSpreadSheet.insertSheet( '_Settings' );

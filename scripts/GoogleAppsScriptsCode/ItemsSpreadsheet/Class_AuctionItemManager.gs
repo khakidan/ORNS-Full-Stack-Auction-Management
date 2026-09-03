@@ -4,8 +4,13 @@
  * exposing individual AuctionItem instances to Document Generators.
  */
 class AuctionItemManager extends GlobalVariables {
-    constructor () {
-        super();
+    /**
+     * @param {Object} [overrides] Optional dependency injection, forwarded to
+     *   `GlobalVariables` (activeSpreadSheet/config). Production call sites
+     *   (`new AuctionItemManager()`) never pass this.
+     */
+    constructor ( overrides = {} ) {
+        super( overrides );
         this.auctionItemsString = 'Auction-Items';
     }
 

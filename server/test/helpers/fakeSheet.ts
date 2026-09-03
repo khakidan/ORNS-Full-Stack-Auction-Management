@@ -1,9 +1,10 @@
 /**
  * A minimal in-memory fake of the Apps Script Spreadsheet/Sheet/Range API
- * surface that GlobalVariables-derived classes and PayPalSweeper.gs's
- * checkPendingPayPalInvoices actually use, for injecting into their
- * `overrides.activeSpreadSheet`. Only implements what's needed by those
- * call sites - not a general-purpose Sheets API mock.
+ * surface that GlobalVariables-derived classes across both the
+ * BidManagementSpreadsheet and ItemsSpreadsheet reference copies actually
+ * use, for injecting into their `overrides.activeSpreadSheet`. Only
+ * implements what's needed by those call sites - not a general-purpose
+ * Sheets API mock.
  */
 
 function makeChainStub(): any {
@@ -29,7 +30,7 @@ export class FakeSheet {
     return { getValues: () => snapshot };
   }
 
-  getRange(a: number | string, b?: number, _numRows?: number, _numCols?: number): any {
+  getRange(a: number | string, b?: number, numRows?: number, numCols?: number): any {
     if (typeof a === "string") {
       // e.g. "A1:F1" - only used for header formatting, chain-safe no-op.
       return makeChainStub();
@@ -37,6 +38,26 @@ export class FakeSheet {
     const row = a;
     const col = b as number;
     const data = this.data;
+
+    // Bounded multi-row/col range, e.g. getRange(2, 1, lastRow - 1, lastCol)
+    // - used by AuctionItemManager/ValidationManager's lazy `range` getters.
+    // Real Apps Script pads short rows with "" up to numCols, never undefined.
+    if (numRows !== undefined && numCols !== undefined) {
+      const rows = data.slice(row - 1, row - 1 + numRows).map((r) => {
+        const padded = [...r];
+        while (padded.length < numCols) padded.push("");
+        return padded.slice(0, numCols);
+      });
+      return {
+        getValues: () => rows,
+        setValues: (values: any[][]) => {
+          values.forEach((v, i) => {
+            data[row - 1 + i] = [...v];
+          });
+        },
+      };
+    }
+
     return {
       setValue: (v: any) => {
         data[row - 1][col - 1] = v;
@@ -48,6 +69,14 @@ export class FakeSheet {
         return this;
       },
     };
+  }
+
+  getLastRow() {
+    return this.data.length;
+  }
+
+  getLastColumn() {
+    return this.data.reduce((max, row) => Math.max(max, row.length), 0);
   }
 
   appendRow(row: any[]) {

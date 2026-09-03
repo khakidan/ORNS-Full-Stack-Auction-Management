@@ -506,29 +506,77 @@ pattern used for Bid-Management), then close the Node-side gaps.
    confirming every file parses and every `extends` chain resolves with
    no errors - not a full test run, just confirming nothing was broken
    syntactically before moving on to real test infrastructure.
-5. **Build the two-tier test infrastructure for the 8 `api*` bridge
-   functions** (`apiCreateBundlingDoc`, `apiCreateItemLabels`,
-   `apiCreateSlideshow`, `apiCreateBiddingGuideCoverPage`,
-   `apiCreateBiddingGuideInnerPages`, `apiCreateBidSheets`,
-   `apiCreateCatalog`, `apiCreateTableTents`) - currently zero
-   testability infrastructure exists in this script at all (no
-   `overrides = {}` pattern anywhere, unlike the already-refactored
-   `BidManagementSpreadsheet/Class_GlobalVariables.gs`/
-   `Class_GoogleAIStudio.gs`). Needs the same injectable-overrides
-   refactor applied to `GlobalVariables`/`AuctionItemManager` at
-   minimum, plus new fake `DriveApp`/`DocumentApp`/`SlidesApp` mocks
-   (a new mock surface - Bid-Management's tests only ever needed a fake
-   Sheet, never Drive/Docs/Slides).
-6. **Close the Node-side gaps once the `.gs` side is testable** -
-   `server/test/production.test.ts`'s 18 tests only assert "was the
-   Apps Script function called," never the actual `folderId` parameter
-   forwarded, and never exercise `productionRoutes.ts`'s
-   `result.success === false` → 400 branch or its missing-`scriptId` →
-   400 branch (both real, currently-untested code paths). And
-   `src/components/DocumentCreationTab.tsx` - the UI driving all 8
-   generation buttons, the auction-closed disabling, the folder-not-
-   configured guard, and the generated-files list fetch/refresh - has
-   zero test coverage at all.
+5. ~~Build the two-tier test infrastructure for the 8 `api*` bridge
+   functions~~ - **done, with a deliberate scope decision.** Applied the
+   same `overrides = {}` injectable-dependency pattern used for
+   Bid-Management to `Class_GlobalVariables.gs` (`activeSpreadSheet`/
+   `config`, including the same "guard `getUi()` in API context" fix
+   already applied to Bid-Management's copy), `Class_AuctionItemManager.gs`
+   (forwards overrides to `super()`), and `Class_GoogleAIStudio.gs` (new
+   `itemManager` override, replacing the lazily-constructed
+   `new AuctionItemManager()` outright). Extended the shared
+   `server/test/helpers/fakeSheet.ts` (used by both scripts now) with
+   `getLastRow()`/`getLastColumn()` and the bounded multi-row/col
+   `getRange(row, col, numRows, numCols)` form `AuctionItemManager`
+   needs - `FakeSheet` previously only supported single-cell
+   `getRange(row, col)`. Built both tiers for the **data layer only**
+   (`AuctionItemManager.getValidSortedItems()`, `AuctionItem`'s
+   display-fallback helpers, and `GoogleAIStudio._executeGeneration`/
+   `itemManager` - exactly where the Live-item-filtering bug lived and
+   where a regression would silently corrupt every generated document):
+   `server/test/gs-items-auction-item-manager.test.ts` (10 tests) and
+   `server/test/gs-items-google-ai-studio.test.ts` (5 tests) on the Node
+   side, `scripts/GoogleAppsScriptsCode/ItemsSpreadsheet/AuctionItemManager_UnitTests.gs`
+   (`runItemsSpreadsheetUnitTests`, 10 tests) as the native tier - the
+   user should run it once from the editor after copying it over.
+   **Deliberately NOT covered**: the 8 `create*` methods' actual document
+   output. Each constructs a real `DocumentApp`/`SlidesApp`/`DriveApp`-
+   backed generator with long chains of builder calls
+   (`insertParagraph().setHeading().setAlignment().setAttributes()...`,
+   `insertShape().getText().setText().getTextStyle()...`) across 7
+   different generator classes; faithfully faking that whole surface was
+   judged not worth the effort versus the safety it buys, the same
+   scoping call already made for Bid-Management's `ReceiptDoc`. Every
+   test file was executed against the real combined source in Node
+   before being trusted, and each new/changed assertion was sanity-
+   checked against a deliberately reintroduced bug before being trusted
+   (the `'inactive'`-only status filter, `_executeGeneration` re-
+   throwing instead of catching) - both caught cleanly, then reverted.
+   Test count: 408 → 423 (275 → 290 backend); updated the count
+   everywhere it's asserted. **Reference-copy work only - needs to be
+   manually copied into the live Apps Script editor before the native
+   test file can run there** (`Class_GlobalVariables.gs`,
+   `Class_AuctionItemManager.gs`, `Class_GoogleAIStudio.gs`,
+   `AuctionItemManager_UnitTests.gs`). `tsc --noEmit` clean; full suite
+   423/423, `npm run build` clean.
+6. ~~Close the Node-side gaps once the `.gs` side is testable~~ -
+   **done, closing out the whole Items-spreadsheet hardening plan.**
+   `server/test/production.test.ts`'s happy-path tests now assert
+   `lastAppsScriptParams` matches the real `folderId` sent (previously
+   only checked "was the function called"), and 2 new tests cover
+   `productionRoutes.ts`'s `result.success === false` → 400 branch
+   (distinct from the already-tested `response.data.error` → 500 branch
+   - the Apps Script execution itself can succeed while the function's
+   own return value is a business-logic failure) and its missing-
+   `scriptId` → 400 branch, both previously untested. Added
+   `src/components/DocumentCreationTab.test.tsx` (16 tests, zero
+   coverage before this) - the file-list fetch on mount and its
+   not-configured/404/other-error paths, the Refresh button, all 8
+   generation buttons individually parametrized (button text, real
+   endpoint, `functionName` used as the toast id, and the toast's label
+   text, since the toast message differs from several buttons' visible
+   text - e.g. "Create Item Labels Document" the button vs. "Create
+   Item Labels" the toast), the auction-closed disabling, the server-
+   side generation-failure error toast, and the missing-Items-
+   spreadsheet-ID guard. Every new/changed assertion sanity-checked
+   against a deliberately reintroduced bug before being trusted (the
+   `success: false` → 400 branch, the missing-`scriptId` guard, the
+   `folderId` payload, the auction-closed `disabled` prop) - all caught
+   cleanly, then reverted. Test count: 423 → 441 (290 → 292 backend,
+   133 → 149 frontend); updated the count everywhere it's asserted.
+   Purely Node/React test additions - no `.gs` files touched, so
+   nothing needs copying to the live script for this item. `tsc
+   --noEmit` clean; full suite 441/441, `npm run build` clean.
 
 Missing edge-case coverage on business-critical flows that already have
 *some* test coverage:

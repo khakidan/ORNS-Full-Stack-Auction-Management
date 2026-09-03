@@ -12,7 +12,7 @@ import { app } from "../app";
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
 import { resetHandlersState, productionScriptCallLog,
-         appsScriptCallCount } from "./handlers";
+         appsScriptCallCount, lastAppsScriptParams } from "./handlers";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -95,6 +95,11 @@ describe("Document and Presentation Creation workflow", () => {
         expect(response.status).toBe(200);
         expect(productionScriptCallLog).toContain(funcName);
         expect(appsScriptCallCount).toBe(1);
+        // Confirms the folderId actually reaches the Apps Script call as a
+        // parameter, not just that some function got called - a payload
+        // handling bug (wrong key, wrong array position) wouldn't have
+        // failed this test before this assertion existed.
+        expect(lastAppsScriptParams).toEqual((payload as any).folderId !== undefined ? [(payload as any).folderId] : []);
       });
 
       it("auth failure - returns 401 when unauthenticated", async () => {
@@ -126,5 +131,46 @@ describe("Document and Presentation Creation workflow", () => {
 
     expect(response.status).toBe(500);
     expect(response.body?.success).not.toBe(true);
+  });
+
+  it("returns 400 (not 200/500) when the Apps Script function itself runs but reports success: false", async () => {
+    // Distinct from the 500 case above: the Apps Script execution itself
+    // succeeded (script.scripts.run didn't error), but the function's own
+    // return value is a business-logic failure - e.g. GoogleAIStudio's
+    // _executeGeneration caught a thrown error inside the generator and
+    // returned { success: false, error } instead of letting it propagate.
+    server.use(
+      http.post("https://script.googleapis.com/v1/scripts/:scriptId\\:run", () => {
+        return HttpResponse.json({
+          response: {
+            result: { success: false, error: "Auction-Items sheet is empty" }
+          }
+        });
+      })
+    );
+
+    const response = await request(app)
+      .post("/api/production/item-entry/catalog")
+      .set(authHeader)
+      .send({ folderId: "test-folder-id" });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ success: false, error: "Auction-Items sheet is empty" });
+  });
+
+  it("returns 400 when the target environment's script ID isn't configured", async () => {
+    const originalScriptId = process.env.SCRIPT_ID_ITEM_ENTRY;
+    delete process.env.SCRIPT_ID_ITEM_ENTRY;
+
+    const response = await request(app)
+      .post("/api/production/item-entry/catalog")
+      .set(authHeader)
+      .send({ folderId: "test-folder-id" });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: "Missing Target Environment Script ID" });
+    expect(appsScriptCallCount).toBe(0);
+
+    process.env.SCRIPT_ID_ITEM_ENTRY = originalScriptId;
   });
 });
