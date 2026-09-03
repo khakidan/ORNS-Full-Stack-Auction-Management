@@ -77,20 +77,17 @@ each area.
   hardcoding is ever revisited. Needs a decision on which of the two
   (the hardcoding, or the write) is "correct" before fixing either.
 - **Optimistic-update rollbacks restore a whole stale snapshot instead
-  of reverting just the failed change** - `src/hooks/useWinnersData.ts:63-64,107-108`
-  is the clearest instance: `recordWinningBid` captures
-  `previousWinners`/`previousTotal` from the render closure, and on
-  failure restores them absolutely. Two bids recorded in quick
-  succession (before a re-render) both capture the same baseline; if
-  the second fails, its rollback erases the first bid's already-committed
-  change too. Same shape in `useBiddersData.ts:40/58,67/85`,
+  of reverting just the failed change** - two bids/edits recorded in
+  quick succession (before a re-render) both capture the same pre-update
+  baseline; if the second fails, its rollback erases the first's
+  already-committed change too. Same shape in `useBiddersData.ts:40/58,67/85`,
   `useCheckoutState.ts:313/372`, `useTicketAttendeeState.ts:79/100,108/120`,
   `useAttendeesData.ts` (`addAttendee`/`removeAttendee`). Fix: make
   rollbacks functional and scoped to the one entity (e.g.
   `setWinners(prev => ({...prev, [itemId]: previousValue}))`) instead
-  of restoring a captured array/object wholesale. (`useAuctionItemsTableState.ts`'s
-  own instance of this bug is already fixed - see CHANGELOG.md - the
-  files listed above are what's still open.)
+  of restoring a captured array/object wholesale, matching the fix
+  already applied to `useAuctionItemsTableState.ts`'s `handleUpdate` and
+  `useWinnersData.ts`'s `recordWinningBid` - see CHANGELOG.md for both.
 - **`useGoogleAuth`'s auth check runs inside a `setState` updater**
   (`src/hooks/useGoogleAuth.ts:35-42`) - `checkAuth()` is called from
   within the `setAuthenticated` updater function; React (especially
@@ -205,10 +202,6 @@ each area.
 Zero test file imports the real module (not a `vi.mock()` of its path)
 for any of these - confirmed by grep. Ranked by risk:
 
-- **`src/hooks/useWinnersData.ts`** - the column-pair parse itself is now
-  covered via `src/lib/bidGridParsing.test.ts`, but `fetchWinners`'s
-  bidder-name lookup and `recordWinningBid`'s optimistic-update/rollback
-  path around `totalRaised`, the app's headline number, remain untested.
 - **`src/hooks/useAttendeesData.ts`** - add/remove optimistic update +
   rollback, plus its own hardcoded column indices.
 - **`src/context/ConfigContext.tsx`** - Firestore snapshot→localStorage

@@ -37,9 +37,11 @@ export function useWinnersData(spreadsheetId: string, bidders: Bidder[], bidMana
       throw new Error("Spreadsheet ID not configured");
     }
 
-    // 1. Store previous state
-    const previousWinners = { ...winners };
-    const previousTotal = totalRaised;
+    // 1. Store just this item's previous value (undefined if it had no
+    // winner yet), so a failure only reverts this one entry - not the
+    // whole map. A second bid recorded before this one settles must not
+    // have its own already-committed change wiped out by this rollback.
+    const previousWinnerForItem = winners[itemId];
 
     // Find bidder name for optimistic UI
     const bidder = bidders.find(b => b.id === bidderId);
@@ -81,9 +83,18 @@ export function useWinnersData(spreadsheetId: string, bidders: Bidder[], bidMana
       })
       .catch(e => {
         console.error("Bid sync failed", e);
-        // 4. Rollback
-        setWinners(previousWinners);
-        setTotalRaised(previousTotal);
+        // 4. Rollback - scoped to just this item/amount, not a captured
+        // whole-map snapshot.
+        setWinners(prev => {
+          const next = { ...prev };
+          if (previousWinnerForItem === undefined) {
+            delete next[itemId];
+          } else {
+            next[itemId] = previousWinnerForItem;
+          }
+          return next;
+        });
+        setTotalRaised(prev => prev - price);
         toast.error(`Failed to sync updates—retrying... local state reverted.`);
       });
   };
