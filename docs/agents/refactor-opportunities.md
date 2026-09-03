@@ -36,16 +36,6 @@ each area.
   `finally` block, and `handleRefresh` has no `finally` of its own to
   cover that path. Fix: move the guard inside the `try`, or wrap
   `handleRefresh` in its own `try/finally`.
-- **`ConfigContext.tsx`'s Firestore config listener is never
-  unsubscribed** (`src/context/ConfigContext.tsx:49-70`) - the
-  `return () => unsubConfig()` at line 70 is returned from inside the
-  `onAuthStateChanged` *callback*, whose return value Firebase ignores
-  (that's not how the effect-cleanup contract works for a nested
-  callback). Every sign-out→sign-in cycle stacks another live listener
-  that's never torn down. Fix: hold `unsubConfig` in a variable in the
-  outer scope and call it from the effect's own cleanup and before
-  resubscribing. Note: `patterns.md` marks this file "do not edit" -
-  raise with the user before touching it.
 - **OAuth `postMessage` listener doesn't check `event.origin`**
   (`src/hooks/useApiAuthStatus.ts:24-31`, `src/hooks/useGoogleAuth.ts:12-26`) -
   both listeners trust `event.data.tokens` from any `postMessage`
@@ -204,10 +194,6 @@ each area.
 Zero test file imports the real module (not a `vi.mock()` of its path)
 for any of these - confirmed by grep. Ranked by risk:
 
-- **`src/context/ConfigContext.tsx`** - Firestore snapshot→localStorage
-  mirroring, the `permission-denied` toast branch, and the `@orns.org`
-  domain-enforcement + forced-signout logic. Security-relevant, zero
-  coverage.
 - **`src/lib/bidderAttendeeInfo.ts`** - primary-vs-guest name/email
   matching that drives the pending-check-in badge logic.
 - Lower priority but real gaps: `useConfigSettingsState.extractId`

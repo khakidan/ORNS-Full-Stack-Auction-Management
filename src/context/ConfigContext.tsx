@@ -39,14 +39,25 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
+    // Held in the outer scope (not a local inside the onAuthStateChanged
+    // callback) so it can actually be torn down - a `return () => ...`
+    // from inside that nested callback is not a real effect cleanup;
+    // Firebase ignores it, so the listener it created was never
+    // unsubscribed on sign-out/re-sign-in or unmount.
+    let unsubConfig: (() => void) | undefined;
 
     getFirebase().then(({ auth, db, onAuthStateChanged, onSnapshot, doc }) => {
       if (cancelled) return;
       unsubscribe = onAuthStateChanged(auth, (user) => {
+        // Tear down any previous config listener before starting a new
+        // one, so a sign-out -> sign-in cycle doesn't stack listeners.
+        unsubConfig?.();
+        unsubConfig = undefined;
+
         setFirebaseUser(user);
         if (user) {
           // Subscribe to global config
-          const unsubConfig = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
+          unsubConfig = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
             if (docSnap.exists()) {
               const data = docSnap.data() as Config;
               setConfig(data);
@@ -67,7 +78,6 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
             }
             setLoading(false);
           });
-          return () => unsubConfig();
         } else {
           setLoading(false);
         }
@@ -77,6 +87,7 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
       unsubscribe?.();
+      unsubConfig?.();
     };
   }, []);
 
