@@ -1,6 +1,7 @@
 import { sheets_v4 } from "googleapis";
 import { getCategoryBase, resequenceCategoryIds } from "../utils/categoryHelpers";
 import { clearCacheForSpreadsheet } from "../utils/sheetCache";
+import { calculateMinRaiseAmount } from "../utils/minRaiseHelpers";
 
 export interface AddItemParams {
   spreadsheetId: string;
@@ -17,17 +18,8 @@ export function calculateBidAmounts(value: string, valueCalculations: {minRange:
   if (numericValue <= 0) return { openingBid: "", minRaise: "" };
 
   const openingBid = "$" + (numericValue * 0.45).toFixed(2);
-  let raiseAmount = 5;
-  
-  if (valueCalculations && valueCalculations.length > 0) {
-    const sorted = [...valueCalculations].sort((a, b) => a.minRange - b.minRange);
-    for (const tier of sorted) {
-      if (numericValue >= tier.minRange) {
-        raiseAmount = tier.minRaise;
-      }
-    }
-  }
-  
+  const raiseAmount = calculateMinRaiseAmount(numericValue, valueCalculations || []);
+
   return { openingBid, minRaise: "$" + raiseAmount.toFixed(2) };
 }
 

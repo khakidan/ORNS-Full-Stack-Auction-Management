@@ -79,7 +79,7 @@ describe('Bundle Creation workflow', () => {
             values: [["Category", "Base"], ["Food", "800"]]
           });
         }
-        if (range.includes("Value%20Calculations")) {
+        if (range.includes("Value Calculations")) {
           return HttpResponse.json({
             values: [["Min Range", "Min Raise"], ["0", "5"]]
           });
@@ -111,11 +111,31 @@ describe('Bundle Creation workflow', () => {
     expect(bundleWritePayload[3][9]).toBe("Active");
     expect(bundleWritePayload[3][2]).toBe("Test Bundle");
     expect(bundleWritePayload[3][1]).toBe("Food");
+    // Manually-entered value/openingBid/minRaise/donor/itemType are respected
+    // as-is, not silently recomputed from the item data or tier table.
+    expect(bundleWritePayload[3][4]).toBe("$200.00");
+    expect(bundleWritePayload[3][5]).toBe("90");
+    expect(bundleWritePayload[3][6]).toBe("20");
+    expect(bundleWritePayload[3][7]).toBe("Donor");
+    expect(bundleWritePayload[3][8]).toBe("Auction");
     // Same bundle token
     const token = bundleWritePayload[1][10];
     expect(token).toBeTruthy();
     expect(bundleWritePayload[2][10]).toBe(token);
     expect(bundleWritePayload[3][10]).toBe(token);
+  });
+
+  it("falls back to the Value-Calculations tier table only when minRaise isn't provided", async () => {
+    const { minRaise, ...bodyWithoutMinRaise } = validProcessBody;
+
+    const response = await request(app)
+      .post("/api/bundle/process")
+      .set(authHeader)
+      .send({ ...bodyWithoutMinRaise, idempotencyKey: crypto.randomUUID() });
+
+    expect(response.status).toBe(200);
+    // The mocked "Value Calculations" sheet has one tier: min range 0 -> $5.00.
+    expect(bundleWritePayload[3][6]).toBe("$5.00");
   });
 
   it("Idempotency — duplicate bundle submission", async () => {

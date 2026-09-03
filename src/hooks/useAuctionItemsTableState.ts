@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { fetchWithRetry, updateSheetData, getBaseUrl, deleteAuctionItem } from "@/services/google-api";
 import { parseDollar, calculateAutoBids, ValueCalculationTier } from "@/lib/auctionItemPricing";
@@ -104,6 +104,29 @@ export function useAuctionItemsTableState(
     return sortableItems;
   }, [items, sortConfig, searchTerm, selectedCategory, selectedItemType]);
 
+  // Prunes selectedRows whenever the filtered/sorted view narrows (search,
+  // category, or type filter changes), so a bundle action can't silently
+  // include an item that's no longer visible in the table. Widening the
+  // view back out (including via resetFilters) never removes a selected
+  // item's rowIndex from sortedItems, so nothing gets pruned in that
+  // direction - selections only survive as long as the item stays visible.
+  useEffect(() => {
+    const visibleRowIndexes = new Set(sortedItems.map(item => item.rowIndex));
+    setSelectedRows(prev => {
+      let changed = false;
+      const pruned: BundlingSelection = {};
+      for (const key of Object.keys(prev)) {
+        const rowIndex = Number(key);
+        if (prev[rowIndex] && visibleRowIndexes.has(rowIndex)) {
+          pruned[rowIndex] = true;
+        } else if (prev[rowIndex]) {
+          changed = true;
+        }
+      }
+      return changed ? pruned : prev;
+    });
+  }, [sortedItems]);
+
   const toggleAll = () => {
     if (selectedItemsCount === sortedItems.length && sortedItems.length > 0) {
       setSelectedRows({});
@@ -206,7 +229,24 @@ export function useAuctionItemsTableState(
     const targetItem = items.find(i => i.rowIndex === rowIndex);
     if (!targetItem) return;
 
-    const previousItems = [...items];
+    // Captured per-field, not a whole-array snapshot - a rollback here must
+    // only revert what THIS call changed on THIS row. Restoring a captured
+    // full-array snapshot would also erase any other row's edit that
+    // happened to commit in the window between this optimistic update and
+    // its own failure.
+    const previousFieldValue = targetItem[field];
+    const previousOpeningBid = targetItem.openingBid;
+    const previousMinRaise = targetItem.minRaise;
+
+    const rollbackThisRow = () => {
+      setItems(prev => prev.map(item => {
+        if (item.rowIndex !== rowIndex) return item;
+        const restored = { ...item, [field]: previousFieldValue };
+        if (updateOpening) restored.openingBid = previousOpeningBid;
+        if (updateRaise) restored.minRaise = previousMinRaise;
+        return restored;
+      }));
+    };
 
     let finalValueToSave = value;
     if (field === 'value' && value) {
@@ -276,7 +316,7 @@ export function useAuctionItemsTableState(
         fetchData();
       } catch (e: any) {
         console.error("Failed to sync category update", e);
-        setItems(previousItems);
+        rollbackThisRow();
         toast.error("Failed to update category: " + e.message);
       }
       return;
@@ -295,8 +335,7 @@ export function useAuctionItemsTableState(
       .then(() => toast.success('Saved successfully'))
       .catch(e => {
         console.error(e);
-        // Rollback
-        setItems(previousItems);
+        rollbackThisRow();
         toast.error("Failed to sync updates—retrying... local state reverted.");
       });
   };

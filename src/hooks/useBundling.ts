@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
+import { parseDollar, calculateAutoBids } from "@/lib/auctionItemPricing";
 import { AuctionItem } from "@/types";
 
 interface BundlingSelection {
@@ -23,41 +24,6 @@ export function useBundling(
   const [loadingDescription, setLoadingDescription] = useState(false);
   const [isExecutingBundle, setIsExecutingBundle] = useState(false);
 
-  const parseDollar = (val: string) => {
-    if (!val) return 0;
-    const parsed = parseFloat(val.replace(/[^0-9.-]+/g, ""));
-    return isNaN(parsed) ? 0 : parsed;
-  };
-
-  const calculateAutoBids = (valStr: string) => {
-    const v = parseDollar(valStr);
-    let opening = "";
-    let raise = "";
-    if (v > 0) {
-      opening = `$${(v * 0.45).toFixed(2)}`;
-      
-      let calculatedRaise = 5;
-      if (valueCalculations.length > 0) {
-        const sorted = [...valueCalculations].sort((a,b) => a.minRange - b.minRange);
-        for (const tier of sorted) {
-          if (v >= tier.minRange) {
-            calculatedRaise = tier.minRaise;
-          }
-        }
-      } else {
-        if (v < 150) calculatedRaise = 5;
-        else if (v < 300) calculatedRaise = 10;
-        else if (v < 450) calculatedRaise = 15;
-        else if (v < 600) calculatedRaise = 20;
-        else if (v < 750) calculatedRaise = 30;
-        else if (v < 900) calculatedRaise = 40;
-        else calculatedRaise = 50;
-      }
-      raise = `$${calculatedRaise.toFixed(2)}`;
-    }
-    return { opening, raise };
-  };
-
   const handleRestoreBundle = async (tokenToRestore: string = restoreBundleId) => {
     if (!tokenToRestore) return;
     setRestoreBundleId(tokenToRestore);
@@ -75,10 +41,10 @@ export function useBundling(
         })
       });
 
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || `Failed to restore bundle (status ${res.status})`);
 
-      toast.success(`Bundle restored! Items: ${data.ui_history_log.original_item_names.join(', ')}`);
+      toast.success(`Bundle restored! Items: ${data.ui_history_log?.original_item_names?.join(', ') || "unknown"}`);
       setRestoreBundleId("");
       onBundleComplete();
     } catch (e: any) {
@@ -101,7 +67,7 @@ export function useBundling(
     const mergedDonor = Array.from(new Set(selectedItems.map(i => i.donor).filter(Boolean))).join(', ');
     const commonCategory = selectedItems[0].category;
     
-    const { opening, raise } = calculateAutoBids(totalValue.toString());
+    const { opening, raise } = calculateAutoBids(totalValue.toString(), valueCalculations);
 
     setBundleDetails({
       category: commonCategory,
@@ -192,8 +158,7 @@ export function useBundling(
       const ts = new Date().toLocaleString('en-US', { hour12: false }).replace(/\//g, '-');
       const bundleEventToken = "BND-" + ts.replace(/[^0-9]/g, '');
 
-      // Background sync
-      fetchWithRetry(`${getBaseUrl()}/api/bundle/process`, {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/bundle/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -210,20 +175,15 @@ export function useBundling(
           bundleEventToken,
           idempotencyKey
         })
-      })
-      .then(async (res) => {
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-
-        toast.success(`Items bundled into "${data.ui_history_log.bundle_item_name}" successfully! Token: ${data.ui_history_log.bundle_token}`);
-        setBundleDetails({});
-        setIsBundling(false);
-        onBundleComplete(); 
-      })
-      .catch((e: any) => {
-        console.error("Bundle Error", e);
-        toast.error("Failed to sync updates—retrying... local state reverted.");
       });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || `Failed to bundle items (status ${res.status})`);
+
+      toast.success(`Items bundled into "${data.ui_history_log?.bundle_item_name || bundleDetails.name}" successfully! Token: ${data.ui_history_log?.bundle_token || bundleEventToken}`);
+      setBundleDetails({});
+      setIsBundling(false);
+      onBundleComplete();
     } catch (e: any) {
       console.error(e);
       toast.error("Failed to sync updates—retrying... local state reverted.");

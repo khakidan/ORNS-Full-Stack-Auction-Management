@@ -52,10 +52,45 @@ describe("Add Auction Item workflow", () => {
     expect(lastAppendedRow[1]).toBe("Food"); // Category
     expect(lastAppendedRow[2]).toBe("Dinner for Two"); // Name
     expect(lastAppendedRow[5]).toBe("$45.00"); // Opening Bid (45% of 100)
+    expect(lastAppendedRow[6]).toBe("$5.00"); // Min Raise ($100 falls in the "0" tier)
     expect(lastAppendedRow[9]).toBe("Active"); // Status
     expect(lastAppendedRow[10]).toBe(""); // Bundle ID
     expect(lastAppendedRow[11]).toBe(""); // Bundled Date
     expect(lastAppendedRow.length).toBe(12);
+  });
+
+  it("falls back to the same tiered min-raise ladder bundleService.ts uses when no Value Calculations tab is configured", async () => {
+    // Previously itemService.ts fell back to a flat $5 here while
+    // bundleService.ts fell back to a 7-tier ladder - adding a $500 item
+    // and bundling items totaling $500 produced different minimum raises
+    // whenever no "Value Calculations" tab existed. Both now share
+    // calculateMinRaiseAmount() from utils/minRaiseHelpers.ts.
+    server.use(
+      http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+        const url = new URL(request.url);
+        const range = decodeURIComponent(url.pathname.split('/').pop() || "");
+        if (range.includes("Value Calculations")) {
+          return HttpResponse.json({ values: [] }); // no tab configured
+        }
+        if (range.includes("Categories")) {
+          return HttpResponse.json({ values: [["Category", "Base"], ["Food", "800"]] });
+        }
+        if (range.includes("Auction-Items")) {
+          return HttpResponse.json({ values: [["ID", "Cat", "Name", "Desc", "Val", "OB", "MR", "Don", "Type", "Status", "Bid", "Date"]] });
+        }
+        return HttpResponse.json({ values: [] });
+      })
+    );
+
+    const response = await request(app)
+      .post("/api/auction/add-item")
+      .set(authHeader)
+      .send({ ...validItemBody, value: "$500.00", idempotencyKey: crypto.randomUUID() });
+
+    expect(response.status).toBe(200);
+    // $500 falls in the 450-600 tier of the shared hardcoded ladder -> $20.00,
+    // not itemService.ts's old flat $5.00 fallback.
+    expect(lastAppendedRow[6]).toBe("$20.00");
   });
 
   it("handles idempotency - duplicate submission", async () => {

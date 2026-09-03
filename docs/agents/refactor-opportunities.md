@@ -34,14 +34,26 @@ Sorted by severity within each area.
   `.createIndividualReceipt` use a separate, parameterized code path on
   the same class. Needs the same outright-delete-vs-keep-as-fallback
   decision as the rest of that cleanup.
-- **Bundle creation silently drops a manually-entered min raise**
-  (`server/services/bundleService.ts:158-170,225`) - `minRaise` is
-  destructured out of `req.body` in `bundleRoutes.ts:61,88` and typed
-  on `ProcessBundleParams`, but `processBundle`'s own destructure never
-  lists it, so `cleanMinRaise` is always recomputed from the tier table,
-  discarding any admin override with no warning. Fix: `const cleanMinRaise
-  = minRaise || calculateMinRaise(parsedValue, valueCalculations);`
-  matching how `openingBid` is handled one line above.
+- ~~Bundle creation silently drops a manually-entered min raise~~ -
+  **done.** `minRaise` was destructured out of `req.body` in
+  `bundleRoutes.ts` and typed on `ProcessBundleParams`, but
+  `processBundle`'s own destructure never listed it, so `cleanMinRaise`
+  was always recomputed from the tier table, discarding any admin
+  override with no warning. Fixed to `const cleanMinRaise = minRaise ||
+  calculateMinRaise(...)`, matching how `openingBid` is already handled
+  one line above. Found while fixing: `server/test/bundle.test.ts`'s
+  happy-path test already sent `minRaise: "20"` in its payload but
+  never asserted it (nor `value`/`openingBid`/`donor`/`itemType`)
+  landed correctly in the written row - added those assertions, plus a
+  new test for the no-`minRaise`-provided fallback path. That new test
+  itself first failed against the *real* tier fixture with the wrong
+  expected value, which exposed a second, independent bug: the same
+  test file's own MSW mock checked `range.includes("Value%20Calculations")`
+  against an already-`decodeURIComponent`'d string, so that branch
+  could never match - the "Value Calculations" tier fixture had been
+  silently unreachable in every bundle test, including the original
+  happy path. Fixed the match condition too. Both fixes sanity-checked
+  against reintroduced bugs before trusting them.
 - **Checkout's refresh spinner can get stuck forever**
   (`src/hooks/useCheckoutState.ts:109-179`) - `handleRefresh` sets
   `fetchingWinners(true)`, but `loadWinners` early-returns at its own
@@ -59,15 +71,22 @@ Sorted by severity within each area.
   outer scope and call it from the effect's own cleanup and before
   resubscribing. Note: `patterns.md` marks this file "do not edit" -
   raise with the user before touching it.
-- **Bundle creation button can be double-submitted**
-  (`src/hooks/useBundling.ts:186-232`) - `executeBundle` fires
-  `fetchWithRetry(...)` without `await`, so the `finally {
-  setIsExecutingBundle(false) }` runs in the same tick, re-enabling the
-  now-`LoadingButton`-gated "Confirm Bundle & Merge Rows" button
-  immediately. The idempotency key is regenerated per call, so the
-  server can't dedupe a rapid double-click into two bundles. Fix: await
-  the fetch (or move the `finally` into the promise chain's own
-  `.finally()`).
+- ~~Bundle creation button can be double-submitted~~ - **done.**
+  `executeBundle` fired `fetchWithRetry(...)` without `await`, so the
+  `finally { setIsExecutingBundle(false) }` ran in the same tick,
+  re-enabling the `LoadingButton`-gated "Confirm Bundle & Merge Rows"
+  button immediately - and since the idempotency key is regenerated per
+  call, the server couldn't dedupe a rapid double-click into two
+  bundles. Fixed by awaiting the fetch inline (matching the sibling
+  `handleRestoreBundle`'s already-correct shape) instead of a
+  fire-and-forget `.then()/.catch()` chain. Added
+  `src/hooks/useBundling.test.ts` (this hook is only ever consumed
+  through `AuctionItemsTab.tsx`, and both
+  `AuctionItemsTab.test.tsx`/`BundlingDialog.test.tsx` mock it wholesale,
+  so none of its real logic had ever run under the test suite - tested
+  directly via `renderHook`) with a deferred-promise test proving
+  `isExecutingBundle` stays `true` for the whole duration of the
+  request, not just until the fetch call is issued.
 - **OAuth `postMessage` listener doesn't check `event.origin`**
   (`src/hooks/useApiAuthStatus.ts:24-31`, `src/hooks/useGoogleAuth.ts:12-26`) -
   both listeners trust `event.data.tokens` from any `postMessage`
@@ -106,32 +125,52 @@ Sorted by severity within each area.
   succession (before a re-render) both capture the same baseline; if
   the second fails, its rollback erases the first bid's already-committed
   change too. Same shape in `useBiddersData.ts:40/58,67/85`,
-  `useCheckoutState.ts:313/372`, `useAuctionItemsTableState.ts:142/195,209/299`,
-  `useTicketAttendeeState.ts:79/100,108/120`. Fix: make rollbacks
-  functional and scoped to the one entity (e.g. `setWinners(prev =>
-  ({...prev, [itemId]: previousValue}))`) instead of restoring a
-  captured array/object wholesale.
+  `useCheckoutState.ts:313/372`, `useTicketAttendeeState.ts:79/100,108/120`.
+  Fix: make rollbacks functional and scoped to the one entity (e.g.
+  `setWinners(prev => ({...prev, [itemId]: previousValue}))`) instead
+  of restoring a captured array/object wholesale.
+  ~~`useAuctionItemsTableState.ts:209/299`'s `handleUpdate` instance
+  fixed~~ - **done** (in scope for the Items-spreadsheet hardening
+  pass; the other files above are out of scope and still open).
+  Replaced its captured-whole-array `previousItems` rollback with a
+  `rollbackThisRow()` closure that restores only the one row's changed
+  field(s) (`value`/`openingBid`/`minRaise`, or `category`) by
+  `rowIndex`, so editing two different cells in quick succession can no
+  longer have one's failure wipe out the other's already-committed
+  change. `executeBulkUpdate`'s own whole-array rollback (a different
+  function in the same file) was deliberately left as-is - it's a
+  single atomic batch operation across multiple rows, so reverting the
+  whole pre-batch snapshot on failure is the semantically correct
+  behavior there, not an instance of this bug.
 - **`useGoogleAuth`'s auth check runs inside a `setState` updater**
   (`src/hooks/useGoogleAuth.ts:35-42`) - `checkAuth()` is called from
   within the `setAuthenticated` updater function; React (especially
   StrictMode) can invoke updaters more than once, doubling
   `/auth/status` requests. Fix: call `checkAuth()` from the interval
   body directly, not from inside a state updater.
-- **`useAuctionItemsTableState`'s selection isn't reconciled with
-  filters** (`src/hooks/useAuctionItemsTableState.ts:107-129`) -
-  `selectedRows` survives filter/search changes and isn't pruned by
-  `resetFilters`, while `useBundling.ts:93,121,190` re-derives the
-  selected-items list against the *unfiltered* `items` array. Select
-  rows, change the category filter, and the bundle action can silently
-  include items no longer visible in the table. Fix: prune
-  `selectedRows` to the currently-filtered set whenever filters change.
-- **`useBundling.ts`'s restore/execute handlers assume response shape
-  without checking `res.ok`** (`src/hooks/useBundling.ts:81,218`) -
-  `data.ui_history_log.original_item_names.join(...)` throws on any
-  response missing that field, turning a successful restore into a
-  "Failed to restore bundle: Cannot read properties of undefined" toast.
-  Fix: check `res.ok` first and optional-chain the log-message
-  construction with a fallback.
+- ~~`useAuctionItemsTableState`'s selection isn't reconciled with
+  filters~~ - **done.** `selectedRows` survived filter/search changes
+  and wasn't pruned, while `useBundling.ts`'s `openBundlingModal`/
+  `executeBundle` re-derive the selected-items list against the
+  *unfiltered* `items` array - selecting rows, changing the category
+  filter, and bundling could silently include items no longer visible
+  in the table. Fixed with a `useEffect` keyed on `sortedItems` that
+  prunes any selected `rowIndex` no longer present in the filtered
+  view; deliberately general rather than special-casing `resetFilters`
+  - widening the filtered view (including via `resetFilters`) never
+  removes an item from `sortedItems`, so nothing gets pruned in that
+  direction, only when the view actually narrows.
+- ~~`useBundling.ts`'s restore/execute handlers assume response shape
+  without checking `res.ok`~~ - **done.**
+  `data.ui_history_log.original_item_names.join(...)` (and the
+  equivalent in `executeBundle`) threw on any response missing that
+  field, turning a successful-looking non-200 response into a "Cannot
+  read properties of undefined" toast instead of a real error message.
+  Both now check `res.ok`/`data.error` before reading `ui_history_log`,
+  with a status-code fallback message and optional-chained field
+  access. Sanity-checked by reverting to the old `if (data.error)
+  throw` check alone and confirming the new "not-ok-with-no-error-field"
+  test failed, then reverted.
 - **`useAuctionItems.ts` duplicates `src/lib/itemParsing.ts` and the
   two have drifted** (`src/hooks/useAuctionItems.ts:59-95`) - inline
   reimplementation of the same header-detection parser, but `status`
@@ -139,12 +178,17 @@ Sorted by severity within each area.
   filter is `item.id && item.name` vs `item.id || item.name`. The same
   sheet parsed through either path yields a different item set. Fix:
   replace the block with `parseItemRows(data.values)`.
-- **`useBundling.ts` duplicates `src/lib/auctionItemPricing.ts`
-  byte-for-byte** (`src/hooks/useBundling.ts:26-59` vs
-  `src/lib/auctionItemPricing.ts:6-38`) - `parseDollar`/`calculateAutoBids`
+- ~~`useBundling.ts` duplicates `src/lib/auctionItemPricing.ts`
+  byte-for-byte~~ - **done.** `parseDollar`/`calculateAutoBids` were
   copied verbatim instead of imported (`useAuctionItemsTableState.ts`
-  already imports the lib version). Fix: import it here too and delete
-  the local copy.
+  already imported the lib version) - now imports both from
+  `@/lib/auctionItemPricing` and deletes the local copies; the one call
+  site was updated to pass `valueCalculations` as the lib function's
+  second parameter instead of closing over it. Also closed the
+  "7 untested tier branches" gap this same file flags below: added
+  `src/lib/auctionItemPricing.test.ts` (20 tests) covering `parseDollar`
+  and every one of `calculateAutoBids`'s tier boundaries, both with and
+  without a configured Value-Calculations table.
 
 ### Redundant/duplicated logic
 
@@ -161,13 +205,21 @@ Sorted by severity within each area.
   Currently correct everywhere, but a candidate for a small
   `requireAuth` Express middleware so a future new route can't forget
   it.
-- **Divergent "minimum raise" fallback tables** -
-  `server/services/itemService.ts:15-32` (`calculateBidAmounts`) falls
-  back to a flat `$5` when no `valueCalculations` are configured;
-  `server/services/bundleService.ts:98-119` (`calculateMinRaise`) has a
-  hardcoded 7-tier ladder instead. Adding an item vs. bundling one at
-  the same value produces different minimum raises when no "Value
-  Calculations" tab is configured. Reconcile to one shared table.
+- ~~Divergent "minimum raise" fallback tables~~ - **done.**
+  `itemService.ts`'s `calculateBidAmounts` fell back to a flat `$5`
+  when no `valueCalculations` were configured; `bundleService.ts`'s
+  `calculateMinRaise` had a hardcoded 7-tier ladder instead - adding an
+  item vs. bundling one at the same value produced different minimum
+  raises whenever no "Value Calculations" tab was configured.
+  Extracted the shared logic (the 7-tier ladder was the correct one -
+  it matches what a real "Value Calculations" tab's own default rows
+  look like) into `server/utils/minRaiseHelpers.ts`'s
+  `calculateMinRaiseAmount()`; both services now delegate to it. Added
+  a test to `items.test.ts` proving a $500 item with no Value
+  Calculations tab now gets the same `$20.00` a $500 bundle would
+  (previously `$5.00`), and strengthened its happy-path test with a
+  `minRaise` assertion it was missing (present in the request payload
+  the whole time, just never checked).
 - **`useApiAuthStatus.ts` and `useGoogleAuth.ts` independently
   duplicate the same auth-status + `OAUTH_AUTH_SUCCESS` listener flow** -
   both mount at the same time (from `AuctionContext` and `App.tsx`
@@ -282,10 +334,11 @@ for any of these - confirmed by grep. Ranked by risk:
   coverage.
 - **`src/lib/bidderAttendeeInfo.ts`** - primary-vs-guest name/email
   matching that drives the pending-check-in badge logic.
-- Lower priority but real gaps: `src/lib/auctionItemPricing.ts` (pure,
-  trivial to test, 7 untested tier branches), `useConfigSettingsState.extractId`
+- Lower priority but real gaps: `useConfigSettingsState.extractId`
   (4 regex branches, only ever exercised with pre-clean input in the
   existing test), `useAuctionItems.ts`, `useApiAuthStatus.ts`/`useGoogleAuth.ts`.
+  (`src/lib/auctionItemPricing.ts` closed - see the Items-spreadsheet
+  hardening entries above.)
 
 Existing tests that would rate SHALLOW/CIRCULAR/SMOKE under
 `testing-philosophy.md`'s own definitions, with the fix each needs:

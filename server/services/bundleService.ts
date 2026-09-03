@@ -1,6 +1,7 @@
 import { sheets_v4 } from "googleapis";
 import { genAI } from "../services/genai";
 import { getCategoryBase, resequenceCategoryIds } from "../utils/categoryHelpers";
+import { calculateMinRaiseAmount } from "../utils/minRaiseHelpers";
 
 export interface SuggestNamesParams {
   items: Array<{ name: string; description?: string }>;
@@ -98,24 +99,7 @@ export async function suggestBundleDescription(params: SuggestDescriptionParams)
 function calculateMinRaise(value: number, tiers: { minRange: number; minRaise: number }[]): string {
   if (value <= 0) return "$5.00";
 
-  let calculatedRaise = 5;
-  if (tiers.length > 0) {
-    const sorted = [...tiers].sort((a, b) => a.minRange - b.minRange);
-    for (const tier of sorted) {
-      if (value >= tier.minRange) {
-        calculatedRaise = tier.minRaise;
-      }
-    }
-  } else {
-    if (value < 150) calculatedRaise = 5;
-    else if (value < 300) calculatedRaise = 10;
-    else if (value < 450) calculatedRaise = 15;
-    else if (value < 600) calculatedRaise = 20;
-    else if (value < 750) calculatedRaise = 30;
-    else if (value < 900) calculatedRaise = 40;
-    else calculatedRaise = 50;
-  }
-  return `$${calculatedRaise.toFixed(2)}`;
+  return `$${calculateMinRaiseAmount(value, tiers).toFixed(2)}`;
 }
 
 /**
@@ -133,6 +117,7 @@ export async function processBundle(
     targetCategory,
     value,
     openingBid,
+    minRaise,
     donor,
     itemType,
     bundleEventToken: clientBundleToken,
@@ -192,7 +177,7 @@ export async function processBundle(
   const parsedValue = value ? parseFloat(value.replace(/[^0-9.-]+/g, "")) : totalValue;
   const finalValueStr = parsedValue > 0 ? `$${parsedValue.toFixed(2)}` : "";
   const cleanOpeningBid = openingBid ? openingBid : (parsedValue > 0 ? `$${(parsedValue * 0.45).toFixed(2)}` : "");
-  const cleanMinRaise = calculateMinRaise(parsedValue, valueCalculations);
+  const cleanMinRaise = minRaise || calculateMinRaise(parsedValue, valueCalculations);
   
   const finalDonor = donor || Array.from(new Set(originalDonors)).join(" / ");
   const finalItemType = itemType || (originalItemTypes.length === 1 ? originalItemTypes[0] : "Both");
