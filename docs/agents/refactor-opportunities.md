@@ -152,13 +152,6 @@ Sorted by severity within each area.
 
 ### Dead code
 
-- **`src/components/OAuthRedirectHelperCard.tsx`'s entire card is
-  permanently hidden** (`<Card className="hidden">`) - still mounted
-  from `ConfigSettings.tsx` with live props computed by
-  `useConfigSettingsState` (redirectUri, copySuccess, onCopy), so the
-  hook keeps doing work for UI nobody can ever see. Needs a decision:
-  deliberately disabled (delete the render call + associated hook
-  state) or an accidental leftover `hidden` class.
 - **`DocumentCreationTab.tsx`/`TicketDocumentCreationTab.tsx` both
   import `Badge` but never render it** - confirmed unused in both
   files' JSX.

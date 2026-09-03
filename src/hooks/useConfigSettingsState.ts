@@ -43,14 +43,11 @@ export function useConfigSettingsState() {
   }, [remoteConfig]);
 
   const [savingSettings, setSavingSettings] = useState(false);
-  const [copySuccess, setCopySuccess] = useState(false);
   const [isSettingUpNewAuction, setIsSettingUpNewAuction] = useState(false);
   const [showManualCopyDialog, setShowManualCopyDialog] = useState(false);
   const [auctionYear, setAuctionYear] = useState<number | null>(null);
   const [isAuctionConfigOpen, setIsAuctionConfigOpen] = useState(false);
   const [isSetupNewAuctionOpen, setIsSetupNewAuctionOpen] = useState(false);
-
-  const redirectUri = `${window.location.origin}/auth/callback`;
 
   const handleSetupNewAuction = async () => {
     if (!window.confirm("Are you SURE you want to create a new auction instance? This will clear all data in the master spreadsheets!")) {
@@ -154,22 +151,6 @@ export function useConfigSettingsState() {
     }
   };
 
-  const copyToClipboard = async () => {
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(redirectUri);
-        setCopySuccess(true);
-        toast.success("Redirect URI copied to clipboard");
-        setTimeout(() => setCopySuccess(false), 2000);
-      } else {
-        throw new Error("Clipboard API not available");
-      }
-    } catch (err) {
-      console.error("Clipboard error:", err);
-      toast.error("Failed to copy. Please select and copy the text manually.");
-    }
-  };
-
   const handleSave = async () => {
     setSavingSettings(true);
 
@@ -248,7 +229,6 @@ export function useConfigSettingsState() {
     firebaseUser,
     loginToFirebase,
     savingSettings,
-    copySuccess,
     isSettingUpNewAuction,
     showManualCopyDialog,
     setShowManualCopyDialog,
@@ -257,9 +237,7 @@ export function useConfigSettingsState() {
     setIsAuctionConfigOpen,
     isSetupNewAuctionOpen,
     setIsSetupNewAuctionOpen,
-    redirectUri,
     handleSetupNewAuction,
-    copyToClipboard,
     handleSave,
   };
 }

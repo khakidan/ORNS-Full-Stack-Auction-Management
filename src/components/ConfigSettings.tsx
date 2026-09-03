@@ -2,7 +2,6 @@ import { LoadingButton } from "@/components/ui/LoadingButton";
 import { Save } from "lucide-react";
 import { useConfigSettingsState } from "@/hooks/useConfigSettingsState";
 import CloudSyncStatusCard from "./CloudSyncStatusCard";
-import OAuthRedirectHelperCard from "./OAuthRedirectHelperCard";
 import SetupNewAuctionCard from "./SetupNewAuctionCard";
 import AuctionConfigurationCard from "./AuctionConfigurationCard";
 import TicketPricingCard from "./TicketPricingCard";
@@ -15,7 +14,6 @@ export default function ConfigSettings() {
     firebaseUser,
     loginToFirebase,
     savingSettings,
-    copySuccess,
     isSettingUpNewAuction,
     showManualCopyDialog,
     setShowManualCopyDialog,
@@ -24,17 +22,13 @@ export default function ConfigSettings() {
     setIsAuctionConfigOpen,
     isSetupNewAuctionOpen,
     setIsSetupNewAuctionOpen,
-    redirectUri,
     handleSetupNewAuction,
-    copyToClipboard,
     handleSave,
   } = useConfigSettingsState();
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <CloudSyncStatusCard firebaseUser={firebaseUser} loginToFirebase={loginToFirebase} />
-
-      <OAuthRedirectHelperCard redirectUri={redirectUri} copySuccess={copySuccess} onCopy={copyToClipboard} />
 
       <SetupNewAuctionCard
         isOpen={isSetupNewAuctionOpen}
