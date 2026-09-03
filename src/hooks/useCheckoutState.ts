@@ -301,10 +301,14 @@ export function useCheckoutState({
     setIsSubmittingPayment(true);
     const winner = winnerToPay;
 
-    let mappedMethod = "UNKNOWN";
-    if (paymentMethod === "Cash") mappedMethod = "CASH";
-    else if (paymentMethod === "Check") mappedMethod = "CHECK";
-    else if (paymentMethod === "Credit Card/PayPal") mappedMethod = "PAYPAL";
+    // Apps Script's recordPayment() does an exact-case match against these
+    // lowercase values (confirmed against Class_GoogleAIStudio.gs and the
+    // team's own manual API_PAYPAL_TESTS.gs) - anything else throws
+    // "Unknown checkout payment method specified" and rolls back.
+    let mappedMethod = "cash";
+    if (paymentMethod === "Cash") mappedMethod = "cash";
+    else if (paymentMethod === "Check") mappedMethod = "check";
+    else if (paymentMethod === "Credit Card/PayPal") mappedMethod = "credit_card";
 
     const method = paymentMethod;
 
@@ -314,7 +318,7 @@ export function useCheckoutState({
     // Perform optimistic update locally immediately
     setWinners(prev => prev.map(w => {
       if (w.bidderId === winner.bidderId) {
-        return { ...w, paid: mappedMethod !== "PAYPAL", paymentPending: mappedMethod === "PAYPAL" };
+        return { ...w, paid: mappedMethod !== "credit_card", paymentPending: mappedMethod === "credit_card" };
       }
       return w;
     }));

@@ -190,7 +190,7 @@ export async function checkoutMarkPaid(
     scriptId: scriptId,
     requestBody: {
       function: "apiRecordPayment",
-      parameters: [String(bidderId), paymentMethod || "CASH"],
+      parameters: [String(bidderId), paymentMethod || "cash"],
       devMode: true,
     },
   });

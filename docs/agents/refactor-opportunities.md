@@ -22,6 +22,49 @@ Sorted by severity within each area.
 
 ### Correctness bugs
 
+- **Receipt totals shown to bidders don't match what PayPal actually
+  charges** (`scripts/GoogleAppsScriptsCode/Class_ReceiptManager.gs:127-130`
+  vs `Class_PayPalService.gs:53-65`) - the emailed and printed receipt
+  both compute the bidder's total via `calculateAdjustedTotalWithFees`
+  (2.2% + $0.30), but the actual PayPal invoice `createAndSendInvoice`
+  creates is priced via `calculatePayPalSurcharge` (3.49% + $0.49 - the
+  same rate this Node app's `server/utils/financeUtils.ts` correctly
+  uses). A bidder is told one number and charged a higher one; the gap
+  grows with bid size. Needs a decision on which formula is actually
+  correct before fixing (confirm with PayPal's real merchant rate), then
+  point `calculateAdjustedTotalWithFees`'s two call sites
+  (`Class_ReceiptManager.gs:192`, `Class_ReceiptDoc.gs:49`) at
+  `calculatePayPalSurcharge` instead - or delete
+  `calculateAdjustedTotalWithFees` entirely if it's simply the wrong,
+  superseded formula.
+- **`PayPalSweeper.gs`'s invoice-ID regex likely never matches, so the
+  background PayPal-reconciliation loop may never actually run**
+  (`scripts/GoogleAppsScriptsCode/PayPalSweeper.gs:41-44`) - it looks
+  for the substring `"inv-"` in Column J's URL and reconstructs the ID
+  as `"INV2-" + match[1]`, but `Class_PayPalService.gs`'s own
+  `extractInvoiceIdFromUrl` (never called by the sweeper at all)
+  documents the real URL shape as a `#`-fragment
+  (`.../invoice/p/#INV2-XXXX-...`), which contains no `"inv-"`
+  substring. If that's the actual shape stored in Column J, every
+  pending row hits `if (!invoiceId) { ...continue; }` and is silently
+  skipped forever - the "keep checking until it clears" workflow this
+  app depends on for PayPal payments would never reconcile anything.
+  Needs one real Column-J URL value to confirm before fixing; if
+  confirmed, the fix is to call `extractInvoiceIdFromUrl` from the
+  sweeper instead of its own inline regex.
+- **A stale, conflicting duplicate of the checkout bridge class exists
+  in the repo** (`scripts/API-BidManagement.gs`'s `class GoogleAIStudio`
+  vs `scripts/GoogleAppsScriptsCode/Class_GoogleAIStudio.gs`'s) - the
+  user confirmed `GoogleAppsScriptsCode/` is what's actually deployed;
+  the top-level `scripts/API-BidManagement.gs` (along with `API-Items.gs`/
+  `API-Tickets.gs`, not yet checked against their `GoogleAppsScriptsCode/`
+  equivalents) predates it and defines a `recordPayment` with materially
+  different behavior (marks credit-card payments paid immediately with
+  no PayPal verification at all, vs. the live version's real status
+  check + sweeper hand-off). Two classes with the same name can't
+  coexist in one Apps Script project, so this can only be a stale copy -
+  but it's confusing and risks someone reading/testing the wrong
+  version. Remove the stale top-level files once confirmed superseded.
 - **Bundle creation silently drops a manually-entered min raise**
   (`server/services/bundleService.ts:158-170,225`) - `minRaise` is
   destructured out of `req.body` in `bundleRoutes.ts:61,88` and typed

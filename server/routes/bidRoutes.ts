@@ -87,7 +87,7 @@ export default function createBidRouter() {
         spreadsheetId,
         ticketsSpreadsheetId,
         bidderNumbersSheet,
-        paymentMethod: paymentMethod || "CASH",
+        paymentMethod: paymentMethod || "cash",
         attendeeInfo
       });
 
