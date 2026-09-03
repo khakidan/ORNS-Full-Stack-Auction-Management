@@ -114,9 +114,12 @@ describe("Checkout", () => {
     expect(fetchWithRetry).toHaveBeenCalledWith(
       expect.stringContaining("/receipts/generate-all"),
       expect.objectContaining({
-        method: "POST"
+        method: "POST",
+        body: expect.stringContaining('"spreadsheetId":"mock-spreadsheet-id"')
       })
     );
+    const printBody = JSON.parse(vi.mocked(fetchWithRetry).mock.calls[0][1]!.body as string);
+    expect(printBody).toEqual({ spreadsheetId: "mock-spreadsheet-id", receiptFolderId: "mock-folder-id" });
   });
 
   it("Email All Winners button calls the correct endpoint", async () => {
@@ -139,9 +142,12 @@ describe("Checkout", () => {
     expect(fetchWithRetry).toHaveBeenCalledWith(
       expect.stringContaining("/receipts/email-all"),
       expect.objectContaining({
-        method: "POST"
+        method: "POST",
+        body: expect.stringContaining('"spreadsheetId":"mock-spreadsheet-id"')
       })
     );
+    const emailBody = JSON.parse(vi.mocked(fetchWithRetry).mock.calls[0][1]!.body as string);
+    expect(emailBody).toEqual({ spreadsheetId: "mock-spreadsheet-id" });
   });
 
   it("Per-bidder receipt buttons", async () => {

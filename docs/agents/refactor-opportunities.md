@@ -185,10 +185,6 @@ Existing tests that would rate SHALLOW/CIRCULAR/SMOKE under
   (`ticketPrice`) out of nine that `handleSave` normalizes; fixture IDs
   are already clean so `extractId`'s branches never fire. Needs an
   assertion on a URL-shaped input and its extracted ID.
-- `src/components/Checkout.test.tsx:114-119,139-144` - asserts only
-  `expect.objectContaining({ method: "POST" })`, never the request
-  body; the file's own `:170-176` shows the right pattern
-  (`body: expect.stringContaining(...)`) - apply it here too.
 - `src/components/Receipts.test.tsx:86` - uses `expect.anything()`,
   the literal placeholder `testing-philosophy.md` calls out as not a
   real assertion.
