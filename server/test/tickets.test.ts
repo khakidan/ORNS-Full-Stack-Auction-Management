@@ -348,6 +348,109 @@ describe('Guest Bidder Number Assignment workflow', () => {
   });
 });
 
+describe('Sync guard against re-syncing after walk-ins', () => {
+  // A walk-in registered directly against Bid-Management (bidderService.ts's
+  // registerWalkInBidder) appends a row to the 'tickets' sheet with
+  // paymentMethod (column T, index 19) set to the "Auction Checkout"
+  // marker. Re-running sync after that exists would rebuild Bidder-Numbers
+  // from scratch and could reassign/duplicate that person's already-in-use
+  // bidder number - see CHANGELOG.md.
+  const spreadsheetId = 'sync-spread-id';
+  const ticketsSpreadsheetId = 'sync-tickets-id';
+
+  beforeEach(() => {
+    resetHandlersState();
+  });
+
+  afterEach(() => {
+    resetHandlersState();
+    server.resetHandlers();
+  });
+
+  it('refuses to sync and names the walk-in when one has already been registered', async () => {
+    const walkInRow = new Array(20).fill('');
+    walkInRow[0] = 'Wanda';
+    walkInRow[1] = 'Walkin';
+    walkInRow[19] = 'Auction Checkout';
+
+    server.use(
+      http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+        const url = new URL(request.url);
+        const range = decodeURIComponent(url.pathname.split('/').pop() || '');
+
+        if (range.includes('Settings')) {
+          return HttpResponse.json({ values: [['Setting Key', 'Value']] });
+        }
+        if (range.includes('tickets')) {
+          return HttpResponse.json({
+            values: [
+              ['First Name', 'Last Name'],
+              walkInRow
+            ]
+          });
+        }
+        return HttpResponse.json({ values: [] });
+      })
+    );
+
+    const response = await request(app)
+      .post('/api/bidders/sync')
+      .set(authHeader)
+      .send({
+        spreadsheetId,
+        auctionImportSheetID: 'dummy-import',
+        auctionTicketSheetsID: ticketsSpreadsheetId
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Wanda Walkin');
+    expect(response.body.error).toContain('Cannot re-sync');
+  });
+
+  it('proceeds normally when no walk-in marker is present', async () => {
+    server.use(
+      http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+        const url = new URL(request.url);
+        const range = decodeURIComponent(url.pathname.split('/').pop() || '');
+
+        if (range.includes('Settings')) {
+          return HttpResponse.json({ values: [['Setting Key', 'Value']] });
+        }
+        if (range.includes('tickets')) {
+          return HttpResponse.json({
+            values: [
+              ['First Name', 'Last Name'],
+              ['Alice', 'One']
+            ]
+          });
+        }
+        return HttpResponse.json({ values: [] });
+      }),
+      http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId', () => {
+        return HttpResponse.json({
+          sheets: [
+            { properties: { title: 'Bidder-Numbers', sheetId: 101 } },
+            { properties: { title: 'Bid-Management', sheetId: 102 } },
+            { properties: { title: 'Auction-Items', sheetId: 103 } }
+          ]
+        });
+      })
+    );
+
+    const response = await request(app)
+      .post('/api/bidders/sync')
+      .set(authHeader)
+      .send({
+        spreadsheetId,
+        auctionImportSheetID: 'dummy-import',
+        auctionTicketSheetsID: ticketsSpreadsheetId
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+  });
+});
+
 describe('Update Attendee Field workflow', () => {
   const spreadsheetId = 'test-spreadsheet-id';
   

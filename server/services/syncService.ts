@@ -32,6 +32,32 @@ export async function performSheetSync(client: any, spreadsheetId: string, custo
     throw new Error("Missing 'auctionTicketSheetsID' in settings. Please configure settings first.");
   }
 
+  // Step 1.5: Refuse to re-sync once a walk-in bidder has already been
+  // registered directly against Bid-Management (see bidderService.ts's
+  // registerWalkInBidder, which appends a "Auction Checkout" payment-method
+  // marker in column T of the 'tickets' sheet). A full sync rebuilds
+  // Bidder-Numbers from scratch, which would reassign or duplicate that
+  // person's bidder number relative to the ID already recorded against
+  // their existing Bid-Management bids - exactly the kind of drift that
+  // could let someone win an item under a number that isn't really theirs.
+  console.log("[Sync Guard] Checking for already-registered walk-in bidders...");
+  const walkInCheckRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: auctionTicketSheetsID,
+    range: "'tickets'!A:T"
+  }).catch(() => ({ data: { values: [] } }));
+  const walkInCheckRows = walkInCheckRes.data.values || [];
+  const walkInNames = walkInCheckRows.slice(1)
+    .filter((row: any[]) => String(row?.[19] || "").trim() === "Auction Checkout")
+    .map((row: any[]) => `${row[0] || ""} ${row[1] || ""}`.trim())
+    .filter(Boolean);
+  if (walkInNames.length > 0) {
+    throw new Error(
+      `Cannot re-sync: ${walkInNames.length} walk-in bidder(s) have already been registered directly (${walkInNames.join(", ")}). ` +
+      `Re-running "Set Up Bid Management App" would rebuild Bidder-Numbers from scratch and could reassign or duplicate their ` +
+      `bidder number, breaking bids already recorded against it. Only run sync before any walk-ins are registered.`
+    );
+  }
+
   // Step 2: Query sheet list of spreadsheet
   console.log("[Sync Step 2] Inspecting target spreadsheet sheet tabs...");
   const meta = await sheets.spreadsheets.get({ spreadsheetId });

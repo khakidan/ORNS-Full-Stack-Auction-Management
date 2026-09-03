@@ -33,10 +33,17 @@ export default function createDataRouter() {
       console.log(`[Sync Route] Initiating Native Node.js sheet setup for spreadsheet: ${spreadsheetId}...`);
       
       const result = await performSheetSync(client, spreadsheetId, auctionImportSheetID, auctionTicketSheetsID);
-      
+
       res.json({ success: true, result });
     } catch (error: any) {
       console.error(`[Sync Route Error] Native synchronization flow failed:`, error);
+      // Surface expected, actionable failures (missing settings, the
+      // already-registered-walk-in guard) with their real message intact -
+      // the generic errorHandler's {error: "Internal Server Error"} shape
+      // would otherwise swallow it, since the frontend reads `result.error`.
+      if (error.message.includes("Cannot re-sync") || error.message.includes("Missing '")) {
+        return res.status(400).json({ error: error.message });
+      }
       next(error);
     }
   });
