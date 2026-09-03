@@ -193,12 +193,14 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
         const data = sheet.getDataRange().getValues();
         let targetRowIndex = -1;
         let invoiceUrlCell = "";
+        let invoicedAmountCell = 0;
 
         // Locate bidder row
         for ( let i = 1; i < data.length; i++ ) {
             if ( String( data[ i ][ 0 ] ).trim() === String( bidderId ).trim() ) {
                 targetRowIndex = i + 1; // 1-based sheet row coordinate
                 invoiceUrlCell = data[ i ][ 9 ]; // Column J (0-indexed 9) holds the Invoice URL
+                invoicedAmountCell = data[ i ][ 10 ] || 0; // Column K (0-indexed 10) holds the Invoiced Amount
                 break;
             }
         }
@@ -207,12 +209,8 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
             return { success: false, error: "Bidder ID not found" };
         }
 
-        // Extract invoice ID out of URL pattern
-        let invoiceId = "";
-        if ( invoiceUrlCell && invoiceUrlCell.includes( "inv-" ) ) {
-            const match = invoiceUrlCell.match( /inv-([^&\s?]+)/i );
-            if ( match ) invoiceId = "INV2-" + match[ 1 ];
-        }
+        const paypal = new PayPalService();
+        const invoiceId = paypal.extractInvoiceIdFromUrl( invoiceUrlCell );
 
         // --- BRANCH 1: Offline Payment Methods (Instant Checkout Completion) ---
         if ( paymentMethod === "cash" || paymentMethod === "check" ) {
@@ -223,8 +221,7 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
             sheet.getRange( targetRowIndex, 12 ).clearContent(); // Column L: Clear any stale timestamp
 
             try {
-                const paypal = new PayPalService();
-                if ( invoiceId ) paypal.recordExternalPayment( invoiceId, label );
+                if ( invoiceId ) paypal.recordOfflinePayment( invoiceId, label, parseFloat( invoicedAmountCell ) || 0 );
             } catch ( e ) {
                 console.warn( "PayPal physical payment recording bypassed/failed: " + e.message );
                 return { success: true, deferred: false, paypalRecorded: false };
@@ -235,7 +232,6 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
         // --- BRANCH 2: Credit Card / PayPal (Live Gate Verification) ---
         if ( paymentMethod === "credit_card" ) {
             try {
-                const paypal = new PayPalService();
                 let liveStatus = "UNPAID";
 
                 if ( invoiceId ) {

@@ -36,12 +36,12 @@ function checkPendingPayPalInvoices () {
             const timestampStr = data[ i ][ 11 ];  // Column L (11) -> Checkout Timestamp
             const rowNumber = i + 1;
 
-            // Parse out Invoice ID from link reference
-            let invoiceId = "";
-            if ( invoiceUrlCell && invoiceUrlCell.includes( "inv-" ) ) {
-                const match = invoiceUrlCell.match( /inv-([^&\s?]+)/i );
-                if ( match ) invoiceId = "INV2-" + match[ 1 ];
-            }
+            // Parse out Invoice ID from link reference. Uses PayPalService's
+            // shared extractor (handles both production "#INV2-..." and
+            // sandbox "#inv-..." URL shapes) instead of a narrower inline
+            // regex that only matched the sandbox format and silently
+            // skipped every production row.
+            const invoiceId = paypal.extractInvoiceIdFromUrl( invoiceUrlCell );
 
             if ( !invoiceId ) {
                 console.warn( `Row ${ rowNumber }: Flagged pending but missing evaluable Invoice ID extraction pattern.` );

@@ -67,30 +67,45 @@ class PayPalService {
     /**
      * Parses the PayPal Invoice ID out of a checkout URL stored in Column J.
      *
-     * PayPal invoice URLs take one of two shapes:
-     *   https://www.sandbox.paypal.com/invoice/p/#INV2-XXXX-XXXX-XXXX-XXXX
-     *   https://www.paypal.com/invoice/p/#INV2-XXXX-XXXX-XXXX-XXXX
+     * PayPal invoice URLs take one of two shapes depending on environment
+     * (confirmed against real Bid-Management data):
+     *   Production: https://www.paypal.com/invoice/p/#INV2-XXXX-XXXX-XXXX-XXXX
+     *   Sandbox:    https://www.sandbox.paypal.com/invoice/p/#inv-XXXX-XXXX-XXXX-XXXX
      *
-     * The fragment after the # is exactly the invoice ID the v2 API accepts
-     * for cancel, record-payment, etc.
+     * The fragment after the # is the invoice ID, but sandbox renders it with
+     * a lowercase "inv-" prefix instead of "INV2-" - the v2 Invoicing API
+     * only accepts the "INV2-" form, so that prefix is normalized here.
      *
      * @param {string} url  The checkout URL stored in Column J.
-     * @returns {string|null}  The invoice ID, or null if it cannot be parsed.
+     * @returns {string|null}  The API-callable invoice ID, or null if it cannot be parsed.
      */
     extractInvoiceIdFromUrl ( url ) {
         if ( !url || typeof url !== 'string' ) return null;
 
+        let fragment = null;
+
         // Primary path: ID is the URL fragment (everything after #)
         const hashIndex = url.indexOf( '#' );
         if ( hashIndex !== -1 ) {
-            const fragment = url.substring( hashIndex + 1 ).trim();
-            if ( fragment.length > 0 ) return fragment;
+            const raw = url.substring( hashIndex + 1 ).trim();
+            if ( raw.length > 0 ) fragment = raw;
         }
 
         // Fallback: take the last non-empty path segment
         // (handles any future URL shape that drops the fragment)
-        const parts = url.split( '/' ).filter( p => p.length > 0 );
-        return parts.length > 0 ? parts[ parts.length - 1 ] : null;
+        if ( !fragment ) {
+            const parts = url.split( '/' ).filter( p => p.length > 0 );
+            fragment = parts.length > 0 ? parts[ parts.length - 1 ] : null;
+        }
+
+        if ( !fragment ) return null;
+
+        // Normalize sandbox's "inv-" prefix to the API's "INV2-" resource-ID prefix
+        if ( /^inv-/i.test( fragment ) && !/^inv2-/i.test( fragment ) ) {
+            return 'INV2-' + fragment.substring( 4 );
+        }
+
+        return fragment;
     }
 
     /**
