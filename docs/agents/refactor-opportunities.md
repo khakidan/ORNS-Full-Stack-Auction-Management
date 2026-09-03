@@ -64,15 +64,15 @@ each area.
   quick succession (before a re-render) both capture the same pre-update
   baseline; if the second fails, its rollback erases the first's
   already-committed change too. Still open in
-  `useCheckoutState.ts:313/372` and
   `useTicketAttendeeState.ts:79/100,108/120`. Fix: make rollbacks
   functional and scoped to the one entity (e.g.
   `setWinners(prev => ({...prev, [itemId]: previousValue}))`) instead
   of restoring a captured array/object wholesale, matching the fix
   already applied to `useAuctionItemsTableState.ts`'s `handleUpdate`,
   `useWinnersData.ts`'s `recordWinningBid`, `useAttendeesData.ts`'s
-  `addAttendee`/`removeAttendee`, and `useBiddersData.ts`'s
-  `checkInBidder`/`markBidderAsProxy` - see CHANGELOG.md for all four.
+  `addAttendee`/`removeAttendee`, `useBiddersData.ts`'s
+  `checkInBidder`/`markBidderAsProxy`, and `useCheckoutState.ts`'s
+  `confirmMarkPaid` - see CHANGELOG.md for all five.
 - **`server/services/emailService.ts:processEmail` does a direct
   triple-sheet read of Bid-Management data** with no defensive parsing
   - only reachable through the already-hardened receipt-email path, so

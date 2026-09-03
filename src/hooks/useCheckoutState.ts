@@ -295,7 +295,10 @@ export function useCheckoutState({
 
     const method = paymentMethod;
 
-    const previousWinners = [...winners];
+    // Just this winner's previous paid/paymentPending values, not a whole
+    // captured array snapshot - a second winner marked paid while this
+    // one is still in flight must not be erased by this rollback.
+    const previousWinnerState = { paid: winner.paid, paymentPending: winner.paymentPending };
     const bidderInfo = bidders.find(b => b.id === winner.bidderId);
 
     // Perform optimistic update locally immediately
@@ -354,7 +357,7 @@ export function useCheckoutState({
       })
       .catch((error: any) => {
         console.error("[Checkout] Sync error:", error);
-        setWinners(previousWinners);
+        setWinners(prev => prev.map(w => w.bidderId === winner.bidderId ? { ...w, ...previousWinnerState } : w));
         toast.error(`Failed to sync updates—retrying... local state reverted.`);
       })
       .finally(() => {
