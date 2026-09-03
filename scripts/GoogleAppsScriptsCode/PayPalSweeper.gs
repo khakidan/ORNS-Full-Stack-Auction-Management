@@ -1,10 +1,18 @@
 /**
  * Background Cron Loop bound to Time-Driven Trigger.
- * Scans for provisional checkouts, reconciles statuses via PayPal, 
+ * Scans for provisional checkouts, reconciles statuses via PayPal,
  * or escalates failures to the Follow-Up destination.
+ *
+ * @param {Object} [overrides] Optional dependency injection, used by unit
+ *   tests. The real trigger always calls this with zero args.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [overrides.activeSpreadSheet]
+ *   Replaces `SpreadsheetApp.getActiveSpreadsheet()`.
+ * @param {Object} [overrides.paypalService] Replaces `new PayPalService()`.
+ * @param {number} [overrides.now] Replaces `new Date().getTime()` - lets
+ *   tests control the 10-minute escalation threshold deterministically.
  */
-function checkPendingPayPalInvoices () {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+function checkPendingPayPalInvoices ( overrides = {} ) {
+    const ss = overrides.activeSpreadSheet || SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName( 'Bidder-Numbers' );
     if ( !sheet ) {
         console.error( "Sweeper missing target tab execution anchor: 'Bidder-Numbers'" );
@@ -12,15 +20,17 @@ function checkPendingPayPalInvoices () {
     }
 
     const data = sheet.getDataRange().getValues();
-    const now = new Date().getTime();
+    const now = overrides.now !== undefined ? overrides.now : new Date().getTime();
     const TEN_MINUTES_MS = 10 * 60 * 1000;
 
-    let paypal = null;
-    try {
-        paypal = new PayPalService();
-    } catch ( e ) {
-        console.error( "Failed to initialize PayPal service engine for background sweeping: " + e.message );
-        return;
+    let paypal = overrides.paypalService || null;
+    if ( !paypal ) {
+        try {
+            paypal = new PayPalService();
+        } catch ( e ) {
+            console.error( "Failed to initialize PayPal service engine for background sweeping: " + e.message );
+            return;
+        }
     }
 
     // Evaluate sheet rows bottom-up to preserve safety during potential row operations

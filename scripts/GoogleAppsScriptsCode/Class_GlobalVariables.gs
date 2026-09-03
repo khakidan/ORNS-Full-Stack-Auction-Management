@@ -4,35 +4,50 @@
  * Also holds shared string constants and UI banding colors.
  */
 class GlobalVariables {
-    constructor () {
-        this.activeSpreadSheet = SpreadsheetApp.getActiveSpreadsheet();
+    /**
+     * @param {Object} [overrides] Optional dependency/config injection, used
+     *   by unit tests to avoid touching the real active spreadsheet or its
+     *   _Settings tab. Production call sites (`new GlobalVariables()`, or a
+     *   subclass's `super()` with no args) never pass this.
+     * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [overrides.activeSpreadSheet]
+     *   Replaces `SpreadsheetApp.getActiveSpreadsheet()`.
+     * @param {Object} [overrides.config]
+     *   Replaces the real `_Settings` tab read entirely when given (skips
+     *   touching `overrides.activeSpreadSheet`/the real one for it).
+     */
+    constructor ( overrides = {} ) {
+        this.activeSpreadSheet = overrides.activeSpreadSheet || SpreadsheetApp.getActiveSpreadsheet();
 
         // ── Sheet name constants ─────────────────────────────────────────────
         this.bidManagementString = 'Bid-Management';
         this.bidNumbersString = 'Bidder-Numbers';
         this.auctionItemsString = 'Auction-Items';
 
-        // ── Load _Settings dynamically on every execution ────────────────────
-        const requiredKeys = [
-            'auctionImportSheetID',
-            'auctionTicketSheetsID',
-            'ornsLogoID',
-            'receiptFolderID',
-            'ticketPrice'
-        ];
+        if ( overrides.config !== undefined ) {
+            this.config = overrides.config;
+        } else {
+            // ── Load _Settings dynamically on every execution ────────────────────
+            const requiredKeys = [
+                'auctionImportSheetID',
+                'auctionTicketSheetsID',
+                'ornsLogoID',
+                'receiptFolderID',
+                'ticketPrice'
+            ];
 
-        let settingsSheet = this.activeSpreadSheet.getSheetByName( '_Settings' );
-        if ( !settingsSheet ) {
-            this.createEmptySettingsTab_( requiredKeys );
-            settingsSheet = this.activeSpreadSheet.getSheetByName( '_Settings' );
-        }
-
-        this.config = {};
-        settingsSheet.getDataRange().getValues().forEach( row => {
-            if ( row[ 0 ] && row[ 0 ] !== 'Setting Key' ) {
-                this.config[ row[ 0 ] ] = row[ 1 ];
+            let settingsSheet = this.activeSpreadSheet.getSheetByName( '_Settings' );
+            if ( !settingsSheet ) {
+                this.createEmptySettingsTab_( requiredKeys );
+                settingsSheet = this.activeSpreadSheet.getSheetByName( '_Settings' );
             }
-        } );
+
+            this.config = {};
+            settingsSheet.getDataRange().getValues().forEach( row => {
+                if ( row[ 0 ] && row[ 0 ] !== 'Setting Key' ) {
+                    this.config[ row[ 0 ] ] = row[ 1 ];
+                }
+            } );
+        }
 
         this.currentYear = new Date().getFullYear();
     }

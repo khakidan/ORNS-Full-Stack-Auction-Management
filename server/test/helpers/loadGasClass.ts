@@ -20,8 +20,18 @@ import vm from "vm";
  * since there's nothing to mock or control about them.
  */
 export function loadGasClass<T = new (...args: any[]) => any>(relativePathFromRepoRoot: string, className: string): T {
-  const filePath = path.resolve(__dirname, "../../../", relativePathFromRepoRoot);
-  const source = fs.readFileSync(filePath, "utf8");
+  return loadGasClasses([relativePathFromRepoRoot], [className])[className] as T;
+}
+
+/**
+ * Like `loadGasClass`, but evaluates multiple .gs files into ONE shared vm
+ * context before extracting the requested exports - needed when one file's
+ * top-level `class X extends Y` requires Y to already exist in scope (e.g.
+ * GoogleAIStudio extends GlobalVariables, both real .gs files). Files are
+ * concatenated in the given order, so list base classes before subclasses.
+ */
+export function loadGasClasses(relativePathsFromRepoRoot: string[], exportNames: string[]): Record<string, any> {
+  const sources = relativePathsFromRepoRoot.map((p) => fs.readFileSync(path.resolve(__dirname, "../../../", p), "utf8"));
 
   const sandbox: Record<string, unknown> = {
     console,
@@ -30,8 +40,15 @@ export function loadGasClass<T = new (...args: any[]) => any>(relativePathFromRe
     },
   };
   vm.createContext(sandbox);
-  const script = new vm.Script(`${source}\nglobalThis.__loadGasClass_export__ = ${className};`, { filename: filePath });
+
+  const exportLines = exportNames.map((name) => `globalThis.__loadGasClass_export_${name}__ = ${name};`).join("\n");
+  const combined = `${sources.join("\n")}\n${exportLines}`;
+  const script = new vm.Script(combined, { filename: relativePathsFromRepoRoot.join(" + ") });
   script.runInContext(sandbox);
 
-  return sandbox.__loadGasClass_export__ as T;
+  const result: Record<string, any> = {};
+  for (const name of exportNames) {
+    result[name] = sandbox[`__loadGasClass_export_${name}__`];
+  }
+  return result;
 }

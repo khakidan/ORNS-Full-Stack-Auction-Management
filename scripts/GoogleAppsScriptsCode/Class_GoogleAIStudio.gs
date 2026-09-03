@@ -5,9 +5,16 @@
  * matching the rest of the auction management system architecture.
  */
 class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVariables'
-    constructor () {
-        super();
-        // Initialization hook ready for future instance contexts
+    /**
+     * @param {Object} [overrides] Optional dependency injection, used by unit
+     *   tests - forwarded to `GlobalVariables` (activeSpreadSheet/config) plus
+     *   an optional `paypalService` instance `recordPayment` uses in place of
+     *   constructing its own `new PayPalService()`. Production call sites
+     *   (`new GoogleAIStudio()`) never pass this.
+     */
+    constructor ( overrides = {} ) {
+        super( overrides );
+        this.paypalService = overrides.paypalService || null;
     }
 
     /**
@@ -209,7 +216,7 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
             return { success: false, error: "Bidder ID not found" };
         }
 
-        const paypal = new PayPalService();
+        const paypal = this.paypalService || new PayPalService();
         const invoiceId = paypal.extractInvoiceIdFromUrl( invoiceUrlCell );
 
         // --- BRANCH 1: Offline Payment Methods (Instant Checkout Completion) ---
