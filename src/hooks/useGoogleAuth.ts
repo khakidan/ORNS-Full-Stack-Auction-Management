@@ -107,5 +107,5 @@ export function useGoogleAuth() {
     await checkAuth();
   };
 
-  return { authenticated, handleLogin, handleLogout, checkAuth };
+  return { authenticated, handleLogin, handleLogout };
 }

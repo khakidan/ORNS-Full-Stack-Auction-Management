@@ -81,7 +81,7 @@ function BackToTop() {
 export default function App() {
   const { config } = useConfig();
   const { isAuctionClosed, closeAuction } = useAuction();
-  const { authenticated, handleLogin, checkAuth, handleLogout } = useGoogleAuth();
+  const { authenticated, handleLogin, handleLogout } = useGoogleAuth();
   const [activeWorkflow, setActiveWorkflow] = useState<WorkflowType>(() => {
     const pathWorkflow = getWorkflowFromPath(window.location.pathname);
     if (pathWorkflow) return pathWorkflow;

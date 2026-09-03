@@ -152,10 +152,6 @@ Sorted by severity within each area.
 
 ### Dead code
 
-- **`useGoogleAuth`'s `checkAuth` is exported and destructured in
-  `App.tsx:84` but never called** - confirmed by grep, the only
-  consumer never invokes it. Stop returning it from the hook (or wire
-  it up if a manual re-check was actually intended somewhere).
 - **`src/components/OAuthRedirectHelperCard.tsx`'s entire card is
   permanently hidden** (`<Card className="hidden">`) - still mounted
   from `ConfigSettings.tsx` with live props computed by
