@@ -38,4 +38,16 @@ describe("financeUtils - calculatePayPalSurcharge", () => {
     expect(result.total).toBe(5.69);
     expect(result.surcharge).toBe(0.69);
   });
+
+  it("throws instead of silently returning a nonsensical negative invoice total for a negative bid amount", () => {
+    // Without this guard, calculatePayPalSurcharge(-1) used to return
+    // { total: -0.53, surcharge: 0.47 } - a negative dollar amount to
+    // invoice someone for, which would have been baked straight into a
+    // real receipt/invoice email (server/services/emailService.ts's
+    // processEmail, the only caller). A negative bid total only happens
+    // from corrupted/malformed sheet data (a bad price cell), so this is
+    // meant to fail loudly rather than silently send a bogus amount.
+    expect(() => calculatePayPalSurcharge(-1)).toThrow(/must not be negative/);
+    expect(() => calculatePayPalSurcharge(-0.01)).toThrow(/must not be negative/);
+  });
 });

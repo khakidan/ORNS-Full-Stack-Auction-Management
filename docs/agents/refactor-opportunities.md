@@ -217,12 +217,6 @@ for any of these - confirmed by grep. Ranked by risk:
   "Check In." The pending-payment confirm path, the
   `/api/auction/check-in-with-bid` call, its `bidValue: parseFloat(ticketPrice)
   || 35` fallback, and the failure/rollback path are all untested.
-- **PayPal surcharge** - `financeUtils.test.ts` covers $0/$5/$100/$10,000
-  with exact penny math, but not a negative input;
-  `calculatePayPalSurcharge(-1)` currently returns a negative total
-  with a positive surcharge with no guard. Given `AGENTS.md` names this
-  the single authoritative fee path, worth a guard + test.
-
 Existing tests that would rate SHALLOW/CIRCULAR/SMOKE under
 `testing-philosophy.md`'s own definitions, with the fix each needs:
 

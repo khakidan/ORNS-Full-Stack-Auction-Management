@@ -38,8 +38,15 @@ export async function processAllEmails(client: OAuth2Client, spreadsheetId: stri
         const id = String(numData[i][0] || "").trim();
         const email = String(numData[i][3] || "").trim();
         if (id && email) {
-            const r = await processEmail(client, spreadsheetId, id);
-            if (r.success) sentCount++;
+            try {
+                const r = await processEmail(client, spreadsheetId, id);
+                if (r.success) sentCount++;
+            } catch (e: any) {
+                // One bidder's bad/corrupted data (e.g. a negative item price
+                // reaching calculatePayPalSurcharge) must not abort the whole
+                // batch and silently skip every remaining bidder's receipt.
+                console.error(`[processAllEmails] Failed to email bidder ${id}:`, e.message || e);
+            }
         }
     }
     return sentCount;
