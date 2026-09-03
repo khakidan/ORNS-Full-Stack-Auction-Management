@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { fetchWithRetry, getBaseUrl, getSheetData } from "@/services/google-api";
+import { parseBidGrid } from "@/lib/bidGridParsing";
 import { Bidder } from "@/types";
 
 export function useWinnersData(spreadsheetId: string, bidders: Bidder[], bidManagementSheet: string, bidderNumbersSheet: string) {
@@ -11,42 +12,19 @@ export function useWinnersData(spreadsheetId: string, bidders: Bidder[], bidMana
     if (!spreadsheetId || bidders.length === 0) return;
     try {
       const data = await getSheetData(spreadsheetId, `${bidManagementSheet}!A:ZZ`);
-
-      if (!data || !data.values || data.values.length < 4) {
-        setWinners({});
-        setTotalRaised(0);
-        return;
-      }
-
-      const header = data.values[0];
-      const newWinners: Record<string, string> = {};
-      let total = 0;
+      const wins = parseBidGrid(data?.values);
 
       // Bidder cache for faster lookup
       const bidderCache = new Map(bidders.map(b => [b.id, b]));
 
-      // Column pair loop
-      for (let j = 0; j < header.length; j += 2) {
-        const bidderId = header[j]?.toString();
-        if (!bidderId) continue;
-
-        const bidder = bidderCache.get(bidderId);
-        const bidderName = bidder ? `${bidder.firstName} ${bidder.lastName}` : `Bidder ${bidderId}`;
-
-        for (let i = 3; i < data.values.length; i++) {
-          const row = data.values[i];
-          if (row && row[j]) {
-            const itemId = row[j].toString();
-            newWinners[itemId] = bidderName;
-
-            const priceVal = row[j + 1];
-            const price = parseFloat(priceVal?.toString().replace(/[^0-9.]/g, "") || "0");
-            if (!isNaN(price)) {
-              total += price;
-            }
-          }
-        }
+      const newWinners: Record<string, string> = {};
+      let total = 0;
+      for (const win of wins) {
+        const bidder = bidderCache.get(win.bidderId);
+        newWinners[win.itemId] = bidder ? `${bidder.firstName} ${bidder.lastName}` : `Bidder ${win.bidderId}`;
+        total += win.price;
       }
+
       setWinners(newWinners);
       setTotalRaised(total);
     } catch (e) {

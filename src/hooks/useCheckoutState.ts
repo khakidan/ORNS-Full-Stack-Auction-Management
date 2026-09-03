@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { fetchWithRetry, getSheetData, getBaseUrl } from "@/services/google-api";
+import { parseBidGrid } from "@/lib/bidGridParsing";
 import { Bidder, AuctionItem, Attendee } from "@/types";
 
 export interface WinnerRecord {
@@ -120,46 +121,28 @@ export function useCheckoutState({
       }
 
       const sheetName = bidManagementSheet;
-      const data = await getSheetData(spreadsheetId, `${sheetName}!1:100`);
+      const data = await getSheetData(spreadsheetId, `${sheetName}!A:ZZ`);
+      const wins = parseBidGrid(data?.values);
 
-      if (!data.values || data.values.length < 4) {
-        setWinners([]);
-        return;
+      const byBidder = new Map<string, { id: string; name: string; price: number }[]>();
+      for (const win of wins) {
+        const itemInfo = items.find(it => it.id === win.itemId);
+        const wonItems = byBidder.get(win.bidderId) ?? [];
+        wonItems.push({ id: win.itemId, name: itemInfo?.name || "Unknown Item", price: win.price });
+        byBidder.set(win.bidderId, wonItems);
       }
 
-      const header = data.values[0] as string[];
       const itemsList: WinnerRecord[] = [];
-
-      for (let j = 0; j < header.length; j += 2) {
-        const bidderId = header[j]?.toString();
-        if (!bidderId) continue;
-
-        const wonItems: { id: string; name: string; price: number }[] = [];
-        let total = 0;
-
-        for (let i = 3; i < data.values.length; i++) {
-          const row = data.values[i];
-          if (row && row[j] && row[j + 1]) {
-            const itemId = row[j].toString();
-            const priceVal = row[j + 1]?.toString().replace(/[^0-9.]/g, "") || "0";
-            const price = parseFloat(priceVal) || 0;
-            const itemInfo = items.find(it => it.id === itemId);
-            wonItems.push({ id: itemId, name: itemInfo?.name || "Unknown Item", price });
-            total += price;
-          }
-        }
-
-        if (wonItems.length > 0) {
-          const bidderInfo = bidders.find(b => b.id === bidderId);
-          itemsList.push({
-            bidderId,
-            name: bidderInfo ? `${bidderInfo.firstName} ${bidderInfo.lastName}` : `Bidder ${bidderId}`,
-            total,
-            items: wonItems,
-            paid: bidderInfo?.paid || false,
-            paymentPending: !!bidderInfo?.checkoutTimestamp && !bidderInfo?.paid
-          });
-        }
+      for (const [bidderId, wonItems] of byBidder) {
+        const bidderInfo = bidders.find(b => b.id === bidderId);
+        itemsList.push({
+          bidderId,
+          name: bidderInfo ? `${bidderInfo.firstName} ${bidderInfo.lastName}` : `Bidder ${bidderId}`,
+          total: wonItems.reduce((sum, it) => sum + it.price, 0),
+          items: wonItems,
+          paid: bidderInfo?.paid || false,
+          paymentPending: !!bidderInfo?.checkoutTimestamp && !bidderInfo?.paid
+        });
       }
       setWinners(itemsList);
     } catch (error) {

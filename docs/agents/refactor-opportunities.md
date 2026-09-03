@@ -146,15 +146,6 @@ Sorted by severity within each area.
   The Attendance pie chart's "Not Present" slice therefore overlaps
   with checked-out/proxy bidders. Fix: subtract `proxyBidders.length`
   too.
-- **Two independent, disagreeing implementations of the same
-  Bid-Management column-pair parse** (`src/hooks/useCheckoutState.ts:134-151`
-  vs `src/hooks/useWinnersData.ts:29-49`) - different range bounds
-  (`!1:100` vs `!A:ZZ`, while the server itself writes bids scanning
-  `!1:300` per `server/services/auctionService.ts:83`) and different
-  cell guards (`row[j] && row[j+1]` vs `row[j]` alone), so the two
-  screens can compute different totals for the same data on a large
-  enough auction. Fix: extract one `parseBidGrid()` into `src/lib/` and
-  use it in both places.
 - **`useAuctionItems.ts` duplicates `src/lib/itemParsing.ts` and the
   two have drifted** (`src/hooks/useAuctionItems.ts:59-95`) - inline
   reimplementation of the same header-detection parser, but `status`
@@ -277,8 +268,10 @@ for any of these - confirmed by grep. Ranked by risk:
 - **`src/lib/itemParsing.ts`** - header-name detection via substring
   `.includes()` matching with positional fallbacks; one drifted header
   name silently binds the wrong column.
-- **`src/hooks/useWinnersData.ts`** - the column-pair walk that computes
-  `totalRaised`, the app's headline number.
+- **`src/hooks/useWinnersData.ts`** - the column-pair parse itself is now
+  covered via `src/lib/bidGridParsing.test.ts`, but `fetchWinners`'s
+  bidder-name lookup and `recordWinningBid`'s optimistic-update/rollback
+  path around `totalRaised`, the app's headline number, remain untested.
 - **`src/hooks/useBiddersData.ts`** - check-in/proxy optimistic updates
   and their rollback-on-failure paths; `Bidders.test.tsx` mocks
   `checkInBidder` as a bare `vi.fn()`, so the real rollback logic never
