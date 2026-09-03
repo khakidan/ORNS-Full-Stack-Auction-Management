@@ -178,13 +178,9 @@ each area.
 
 ### Test coverage gaps (`testing-philosophy.md`)
 
-Existing tests that would rate SHALLOW/CIRCULAR/SMOKE under
-`testing-philosophy.md`'s own definitions, with the fix each needs:
-
-- `src/components/ConfigSettings.test.tsx:141-157` - asserts one field
-  (`ticketPrice`) out of nine that `handleSave` normalizes; fixture IDs
-  are already clean so `extractId`'s branches never fire. Needs an
-  assertion on a URL-shaped input and its extracted ID.
+Nothing outstanding right now - every gap and SHALLOW/CIRCULAR/SMOKE-rated
+test flagged in this section has been closed. See `CHANGELOG.md` for the
+individual fixes.
 
 ---
 

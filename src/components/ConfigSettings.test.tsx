@@ -155,4 +155,26 @@ describe("ConfigSettings", () => {
       );
     });
   });
+
+  it("clicking Save Configuration extracts the bare ID from a pasted Google Sheets URL, not the raw URL", async () => {
+    // Every existing "Save Configuration" test leaves the ID fields at
+    // their already-clean fixture values, so extractId's URL-parsing
+    // regex branches (useConfigSettingsState.ts) never actually fire -
+    // handleSave would happily save a raw, unusable URL as the
+    // "spreadsheet ID" without this.
+    render(<ConfigSettings />);
+
+    fireEvent.click(screen.getByText("Auction Configuration"));
+    fireEvent.change(screen.getByLabelText("3. Bid Management Spreadsheet ID"), {
+      target: { value: "https://docs.google.com/spreadsheets/d/1AbC-XyZ_123/edit#gid=0" },
+    });
+
+    fireEvent.click(screen.getByText("Save Configuration"));
+
+    await waitFor(() => {
+      expect(mockSaveConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ bidManagementSpreadsheetId: "1AbC-XyZ_123" })
+      );
+    });
+  });
 });
