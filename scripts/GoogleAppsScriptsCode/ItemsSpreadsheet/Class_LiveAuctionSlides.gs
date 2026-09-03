@@ -180,7 +180,6 @@ class LiveAuctionSlides extends SlidesService {
     // ── Public orchestrator ──────────────────────────────────────────────────
     generatePresentation () {
         this.createFileForLiveAuctionPresentation_();
-        // this.giveUserHeadsUpAboutLoadingTime_();
         this.writeTitleSlide_();
         this.removeInitialSlide_();
         this.writeDisclaimerSlide_();
@@ -188,8 +187,4 @@ class LiveAuctionSlides extends SlidesService {
         this.writeOpenAppealSlides_();
         this.slides.saveAndClose();
     }
-}
-
-function createNewPresentation () {
-    new LiveAuctionSlides( new AuctionItemManager() ).generatePresentation();
 }

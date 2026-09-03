@@ -78,15 +78,6 @@ class DriveService extends GlobalStyles {
         return this._ornsLogoBlob;
     }
 
-    // ── UI ───────────────────────────────────────────────────────────────────
-    giveUserHeadsUpAboutLoadingTime_ () {
-        new UIManager().showLoadingToast(
-            'This may take 2–3 minutes. Please keep this spreadsheet open.',
-            'Processing Request...',
-            15
-        );
-    }
-
     /**
      * Moves any Drive file to the configured auction folder.
      * Retries up to 3 times to handle Drive propagation delays.

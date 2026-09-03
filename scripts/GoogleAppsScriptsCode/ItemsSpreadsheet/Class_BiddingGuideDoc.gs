@@ -129,22 +129,13 @@ class BiddingGuideDoc extends DocService {
 
     // ── Public orchestrators ─────────────────────────────────────────────────
     generateCoverPage () {
-        // this.giveUserHeadsUpAboutLoadingTime_();
         this.writeBidSheetTableNameAndNumber_();
         this.doc.saveAndClose();
     }
 
     generateInnerPages () {
-        // this.giveUserHeadsUpAboutLoadingTime_();
         this.setupScheduleOfEventsPage_();
         this.loopThroughAllLiveAuctionItems_();
         this.doc.saveAndClose();
     }
-}
-
-function createNewBiddingGuideCoverPage () {
-    new BiddingGuideDoc( 'Auction Bidding Guide Cover Page', new AuctionItemManager() ).generateCoverPage();
-}
-function createNewBiddingGuideInnerPages () {
-    new BiddingGuideDoc( 'Auction Bidding Guide Inner Pages', new AuctionItemManager() ).generateInnerPages();
 }

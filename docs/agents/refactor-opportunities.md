@@ -252,22 +252,61 @@ Sorted by severity within each area.
   "local state reverted" wording for `executeBundle`, which has no
   optimistic update to revert at all, and nothing anywhere actually
   retries. Standardize on one accurate constant.
-- **`ItemsSpreadsheet/menu.gs`'s custom menu is now disabled (per the
-  same "app is the single source of use" policy applied to
-  Bid-Management), orphaning ~12 menu-only wrapper functions** -
-  `printAuctionItemsForBundling`, `requestSequentialBundles`,
+- ~~`ItemsSpreadsheet/menu.gs`'s custom menu was disabled, orphaning
+  ~12 menu-only wrapper functions~~ - **done, per the user's go-ahead
+  (same call as Bid-Management's now-deleted manager classes).**
+  Deleted `printAuctionItemsForBundling`, `requestSequentialBundles`,
   `printLabelsForAuctionItems`, `setAuctionIDsOnImportSheet`,
   `createNewBiddingGuideCoverPage`, `createNewBiddingGuideInnerPages`,
-  `createBidSheets`, `createNewCatalog`, `createTableTents`,
+  `createBidSheets` (the global menu-only function - distinct from
+  `GoogleAIStudio.createBidSheets(folderID)`, the live method
+  `apiCreateBidSheets` calls, which is untouched), `createNewCatalog`,
+  `createTableTents` (same distinction as `createBidSheets`),
   `createNewPresentation`, `updateFileOrFolderLocations`,
-  `fixEmptyCategorySheet`. Each duplicates the same generation logic
-  the corresponding `api*` bridge function in `Class_GoogleAIStudio.gs`
-  already calls (different global name, its own fresh
-  `new AuctionItemManager()`, no `_executeGeneration` error wrapper).
-  Same deferred decision as Bid-Management's now-deleted manager
-  classes: delete outright vs. keep as inert fallback - hold off until
-  the Items-spreadsheet hardening plan's testing phase is done, same
-  sequencing as before.
+  `fixEmptyCategorySheet`. Several of these were the *only* caller of
+  their parent class, so - matching the Bid-Management precedent of
+  deleting the whole orphaned class, not just the wrapper - also
+  deleted `Class_BundlingWorkflowManager.gs`, `Class_ValidationManager.gs`,
+  `Class_AuctionCategory.gs` (only ever used by `ValidationManager`),
+  and `Class_SettingsManager.gs` entirely (confirmed via grep that
+  every remaining reference to each was a stale comment, not real
+  code). This cascaded one level further: `Class_UIManager.gs` had
+  exactly one real caller left after those four deletions -
+  `DriveService.giveUserHeadsUpAboutLoadingTime_()`, which was already
+  unreachable itself (every call site in the doc generators was
+  commented out) - so deleted `Class_UIManager.gs` and that dead
+  method too. Also deleted `menu.gs`'s `createCustomMenu()` and its
+  menu-label constants (every function it referenced was now gone,
+  and a dead function full of dangling string references is worse
+  than not having it - same reasoning already applied to
+  Bid-Management's `menu.gs`), leaving only the `onOpen`/`onInstall`
+  no-ops. Sanity-checked by loading the full remaining 18-file `.gs`
+  folder into a sandboxed Node `vm` context (all parse and resolve
+  cleanly, file count matches disk exactly) and re-running
+  `AuctionItemManager_UnitTests.gs` against the real combined source
+  (still 10/10). **Reference-copy deletions only - none of this was
+  ever live-critical (the manual menu it served was already disabled),
+  so nothing needs to change in the live Apps Script editor for
+  correctness, though the user may want to delete the same files there
+  too for consistency.**
+- **`Class_ValidationManager.gs`'s `findMatchingCategoryValue_()`
+  assumed the "Categories" sheet's row order exactly matched the
+  hardcoded `this.categories` array order** - used the same loop
+  index `j` for both, so manually reordering rows in the live
+  Categories tab would silently assign item IDs from the wrong
+  category's base number. Noted during the original read-through but
+  never logged; now moot - this class was deleted above as part of
+  the orphaned-code cleanup (it was menu-only, unreachable either way).
+  Recorded here only so the historical read-through's findings aren't
+  silently lost.
+- **`Class_AuctionItem.gs`'s constructor has no length guard on
+  `rowData`** - `rowData[0].toString()` etc. assume all 12 columns are
+  present; if the real Auction-Items sheet ever has fewer than 12
+  populated columns, `bundleID`/`bundledDateTime` become `undefined`
+  instead of `""`, silently breaking the `=== ''` fallback checks in
+  `getDisplayValue()`/`getDisplayOpeningBid()`/`getDisplayMinRaise()`.
+  Low probability (the app always writes all 12 columns), not fixed -
+  flagged for awareness if this class is touched again.
 
 ### Code quality
 

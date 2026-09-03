@@ -88,7 +88,3 @@ class CatalogDoc extends DocService {
         this.doc.saveAndClose();
     }
 }
-
-function createNewCatalog () {
-    new CatalogDoc( 'Auction Catalog', new AuctionItemManager() ).generateCatalog();
-}

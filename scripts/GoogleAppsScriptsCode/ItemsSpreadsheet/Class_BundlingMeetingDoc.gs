@@ -2,9 +2,6 @@
  * Document Generator. Produces a printable table listing every auction item
  * so the bundling team can annotate it by hand during their meeting.
  *
- * The interactive bundling workflow (prompts, sheet edits) lives in
- * BundlingWorkflowManager — this class only handles the printed document.
- *
  * @param {string}             fileName
  * @param {AuctionItemManager} itemManager
  */
@@ -70,8 +67,4 @@ class BundlingMeetingDoc extends DocService {
         this.loopThroughAllAuctionItemsForBundlingDocument();
         this.doc.saveAndClose();
     }
-}
-
-function printAuctionItemsForBundling () {
-    new BundlingMeetingDoc( 'Items Up For Auction', new AuctionItemManager() ).generateBundlingDoc();
 }

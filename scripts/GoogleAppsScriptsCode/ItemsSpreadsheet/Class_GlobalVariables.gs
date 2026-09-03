@@ -50,7 +50,8 @@ class GlobalVariables {
 
             let settingsSheet = this.activeSpreadSheet.getSheetByName( '_Settings' );
             if ( !settingsSheet ) {
-                // SettingsManager is responsible for the full UI workflow, but the creation of the tab itself lives here so construction never leaves a half-initialized object.
+                // The tab is created here (rather than in a dedicated settings
+                // manager) so construction never leaves a half-initialized object.
                 this.createEmptySettingsTab_( requiredKeys );
                 settingsSheet = this.activeSpreadSheet.getSheetByName( '_Settings' );
             }

@@ -90,7 +90,3 @@ class BidSheetDoc extends DocService {
         this.doc.saveAndClose();
     }
 }
-
-function createBidSheets () {
-    new BidSheetDoc( 'Bid Sheets', new AuctionItemManager() ).generateBidSheets();
-}

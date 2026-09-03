@@ -112,7 +112,3 @@ class PackagingLabelsDoc extends DocService {
         this.labelDoc.saveAndClose();
     }
 }
-
-function printLabelsForAuctionItems () {
-    new PackagingLabelsDoc( new AuctionItemManager() ).generateLabels();
-}

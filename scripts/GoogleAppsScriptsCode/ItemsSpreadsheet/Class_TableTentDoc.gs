@@ -51,7 +51,3 @@ class TableTentDoc extends DocService {
         this.doc.saveAndClose();
     }
 }
-
-function createTableTents () {
-    new TableTentDoc( 'Table Tents', new AuctionItemManager() ).generateTableTents();
-}
