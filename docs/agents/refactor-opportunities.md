@@ -205,9 +205,6 @@ each area.
 Zero test file imports the real module (not a `vi.mock()` of its path)
 for any of these - confirmed by grep. Ranked by risk:
 
-- **`src/lib/itemParsing.ts`** - header-name detection via substring
-  `.includes()` matching with positional fallbacks; one drifted header
-  name silently binds the wrong column.
 - **`src/hooks/useWinnersData.ts`** - the column-pair parse itself is now
   covered via `src/lib/bidGridParsing.test.ts`, but `fetchWinners`'s
   bidder-name lookup and `recordWinningBid`'s optimistic-update/rollback

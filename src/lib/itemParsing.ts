@@ -21,8 +21,8 @@ export function parseItemRows(values: string[][]): AuctionItem[] {
   const valIdx = getCol(["value", "fair market"], 4);
   const openIdx = getCol(["opening bid", "starting bid"], 5);
   const minIdx = getCol(["min raise", "increment"], 6);
-  const donorIdx = getCol(["donor"], 7);
-  const typeIdx = getCol(["item type", "type"], 8);
+  const donorIdx = getCol(["donor", "donated"], 7);
+  const typeIdx = getCol(["item type", "type", "physical", "cert"], 8);
   const statusIdx = getCol(["status"], 9);
   const bundleIdIdx = getCol(["bundle id", "bundled with"], 10);
   const bundledIdx = getCol(["bundled datetime", "bundled"], 11);
