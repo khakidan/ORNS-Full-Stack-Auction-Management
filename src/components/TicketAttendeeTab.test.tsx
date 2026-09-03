@@ -357,10 +357,15 @@ describe('TicketAttendeeTab - Search', () => {
       const [source, row] = mockAddAttendee.mock.calls[0];
       expect(source).toBe('staff tickets');
       expect(row[0]).toBe('John');
-      expect(row[16]).toBe('Paid'); // payment status (auto-set)
-      expect(row[17]).toBe('$0');   // total paid
-      expect(row[19]).toBe('');     // payment method column NOT written for staff
-      expect(row[20]).toBe('');     // payment status column NOT written here for staff
+      // Column order matches parseAttendeeRows' own unshifted pm/ps/tp
+      // columns (Q/R/S) for staff/sponsor sheets - confirmed against
+      // updateAttendeeField's fieldMapping, which independently maps
+      // paymentStatus to column R (index 17) for non-"tickets" sheets.
+      expect(row[16]).toBe('Comp'); // payment method (auto-set)
+      expect(row[17]).toBe('Paid'); // payment status (auto-set)
+      expect(row[18]).toBe('$0');   // total paid
+      expect(row[19]).toBe('');     // general-sheet payment method column NOT written for staff
+      expect(row[20]).toBe('');     // general-sheet payment status column NOT written for staff
     });
 
     it('Sponsor — calls addAttendee with source "sponsor tickets" and Paid status', async () => {
@@ -375,8 +380,9 @@ describe('TicketAttendeeTab - Search', () => {
       expect(mockAddAttendee).toHaveBeenCalledOnce();
       const [source, row] = mockAddAttendee.mock.calls[0];
       expect(source).toBe('sponsor tickets');
-      expect(row[16]).toBe('Paid');
-      expect(row[17]).toBe('$0');
+      expect(row[16]).toBe('Comp'); // payment method
+      expect(row[17]).toBe('Paid'); // payment status
+      expect(row[18]).toBe('$0');   // total paid
     });
 
     it('Missing first name — shows toast error and does not call addAttendee', async () => {

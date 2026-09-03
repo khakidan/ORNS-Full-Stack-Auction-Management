@@ -17,21 +17,6 @@ each area.
 
 ### Correctness bugs
 
-- **New staff/sponsor attendee entries write payment fields to the
-  wrong semantics** (`src/hooks/useTicketAttendeeState.ts:140-142`) -
-  writes `row[16] = "Paid"` (commented "Payment Status") and `row[17] =
-  "$0"` (commented "Total Paid"), but `server/services/bidderService.ts:346`'s
-  canonical `fieldMapping` says the *paymentStatus* column for
-  non-general sheets is R (index 17) - so this writes a dollar amount
-  into the status column and a status string into an unmapped one.
-  Currently masked because `src/lib/attendeeParsing.ts:45-47` hardcodes
-  `paymentMethod`/`paymentStatus`/`totalPaid` to `"Comp"`/`"Paid"`/`"$0"`
-  for every non-general row regardless of actual cell contents - so
-  today this doesn't show wrong data, but the write is backwards
-  relative to the one column any other code path (`updatePaymentStatus`)
-  actually reads/writes, and would surface immediately if the parser's
-  hardcoding is ever revisited. Needs a decision on which of the two
-  (the hardcoding, or the write) is "correct" before fixing either.
 - **`server/services/emailService.ts:processEmail` does a direct
   triple-sheet read of Bid-Management data** with no defensive parsing
   - only reachable through the already-hardened receipt-email path, so

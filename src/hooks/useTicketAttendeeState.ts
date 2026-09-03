@@ -144,8 +144,18 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
       row[4] = newEntry.tickets;
 
       if (newEntry.source !== 'tickets') {
-        row[16] = "Paid"; // Payment Status
-        row[17] = "$0";   // Total Paid
+        // Column order here matches parseAttendeeRows' own unshifted
+        // pm/ps/tp columns (Q/R/S) for staff/sponsor sheets - confirmed
+        // against updateAttendeeField's fieldMapping, which independently
+        // maps paymentStatus to column R (index 17) for non-"tickets"
+        // sheets. Values match the parser's own hardcoded Comp/Paid/$0
+        // for these sheets (staff/sponsors get free tickets), so the raw
+        // sheet stays consistent with what the app displays even though
+        // parseAttendeeRows doesn't actually read these columns back for
+        // staff/sponsor rows today.
+        row[16] = "Comp"; // Payment Method
+        row[17] = "Paid"; // Payment Status
+        row[18] = "$0";   // Total Paid
       } else {
         row[19] = "Manual";
         row[20] = "Pending";
