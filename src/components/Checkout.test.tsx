@@ -198,4 +198,161 @@ describe("Checkout", () => {
     expect(await screen.findByText("No winners found in this category.")).toBeTruthy();
     expect(screen.queryByText("Jane Doe")).toBeFalsy();
   });
+
+  describe("Mark paid / payment method dialog", () => {
+    it("opens the payment method dialog showing the bidder's name and total", async () => {
+      render(<Checkout />);
+      await screen.findByText("Jane Doe");
+
+      await userEvent.click(screen.getAllByText("Checkout")[0]);
+
+      expect(await screen.findByText("Select Payment Method")).toBeTruthy();
+      const dialog = screen.getByRole("dialog");
+      expect(within(dialog).getByText(/How is Jane Doe paying/)).toBeTruthy();
+      expect(within(dialog).getByText("$50.00")).toBeTruthy(); // Jane (bidder 101) won only item1
+    });
+
+    it("Confirm Payment is disabled until a method is selected", async () => {
+      render(<Checkout />);
+      await screen.findByText("Jane Doe");
+      await userEvent.click(screen.getAllByText("Checkout")[0]);
+      await screen.findByText("Select Payment Method");
+
+      const confirmBtn = screen.getByText("Confirm Payment").closest("button") as HTMLButtonElement;
+      expect(confirmBtn.disabled).toBe(true);
+      await userEvent.click(screen.getByText("Cash"));
+      expect(confirmBtn.disabled).toBe(false);
+    });
+
+    // Regression test for a real production bug: this app used to send
+    // "CASH"/"CHECK"/"PAYPAL" (uppercase, and "PAYPAL" instead of
+    // "credit_card") to /api/auction/checkout-mark-paid, which the live
+    // Apps Script bridge (Class_GoogleAIStudio.gs's recordPayment) only
+    // ever recognized as lowercase "cash"/"check"/"credit_card" - every
+    // checkout failed. Pin the exact string sent for each option so this
+    // can't silently regress again.
+    it.each([
+      ["Cash", "cash"],
+      ["Check", "check"],
+      ["Credit Card / PayPal", "credit_card"],
+    ])("sends paymentMethod %s as the exact string %s the live Apps Script bridge expects", async (label, expected) => {
+      vi.mocked(fetchWithRetry).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true }),
+      } as Response);
+
+      render(<Checkout />);
+      await screen.findByText("Jane Doe");
+      await userEvent.click(screen.getAllByText("Checkout")[0]);
+      await screen.findByText("Select Payment Method");
+
+      await userEvent.click(screen.getByText(label));
+      await userEvent.click(screen.getByText("Confirm Payment"));
+
+      await waitFor(() => {
+        expect(fetchWithRetry).toHaveBeenCalledWith(
+          expect.stringContaining("/api/auction/checkout-mark-paid"),
+          expect.objectContaining({
+            method: "POST",
+            body: expect.stringContaining(`"paymentMethod":"${expected}"`),
+          })
+        );
+      });
+    });
+
+    it("marks the bidder Paid immediately for an offline (cash/check) confirmation", async () => {
+      vi.mocked(fetchWithRetry).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true }),
+      } as Response);
+
+      render(<Checkout />);
+      await screen.findByText("Jane Doe");
+      await userEvent.click(screen.getAllByText("Checkout")[0]);
+      await screen.findByText("Select Payment Method");
+      await userEvent.click(screen.getByText("Cash"));
+      await userEvent.click(screen.getByText("Confirm Payment"));
+
+      await waitFor(() => {
+        expect(screen.getByText("Paid")).toBeTruthy();
+      });
+    });
+
+    it("shows Pending Verification (not Paid) when the server defers a credit-card checkout to the PayPal sweeper", async () => {
+      vi.mocked(fetchWithRetry).mockResolvedValueOnce({
+        ok: true,
+        status: 202,
+        json: async () => ({ success: true, deferred: true }),
+      } as Response);
+
+      render(<Checkout />);
+      await screen.findByText("Jane Doe");
+      await userEvent.click(screen.getAllByText("Checkout")[0]);
+      await screen.findByText("Select Payment Method");
+      await userEvent.click(screen.getByText("Credit Card / PayPal"));
+      await userEvent.click(screen.getByText("Confirm Payment"));
+
+      await waitFor(() => {
+        expect(screen.getByText("Pending Verification")).toBeTruthy();
+      });
+      expect(screen.queryByText("Paid")).toBeFalsy();
+    });
+
+    it("rolls back the optimistic update and shows an error toast when the checkout request fails", async () => {
+      vi.mocked(fetchWithRetry).mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: "Unknown checkout payment method specified: cash" }),
+      } as Response);
+
+      render(<Checkout />);
+      await screen.findByText("Jane Doe");
+      await userEvent.click(screen.getAllByText("Checkout")[0]);
+      await screen.findByText("Select Payment Method");
+      await userEvent.click(screen.getByText("Cash"));
+      await userEvent.click(screen.getByText("Confirm Payment"));
+
+      // Optimistic "Paid" state should be reverted back to the Checkout button
+      await waitFor(() => {
+        expect(screen.getAllByText("Checkout").length).toBeGreaterThan(0);
+      });
+      expect(screen.queryByText("Paid")).toBeFalsy();
+
+      const { toast } = await import("sonner");
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("reverted"));
+    });
+
+    it("shows a high-value confirmation warning instead of the payment dialog when the bidder won a Special-Winners item", async () => {
+      vi.mocked(getSheetData).mockImplementation((_spreadsheetId: string, range: string) => {
+        if (range.startsWith("Special-Winners")) {
+          return Promise.resolve({ values: [["Gift Basket", "101"]] });
+        }
+        if (range.includes("Bid-Management")) {
+          return Promise.resolve({
+            values: [
+              ["101", "Info", "102", "Info"],
+              ["Header", "Details", "Header", "Details"],
+              ["More", "Stuff", "More", "Stuff"],
+              ["item1", "$50.00", "item2", "$75.00"],
+            ],
+          });
+        }
+        return Promise.resolve({ values: [] });
+      });
+
+      render(<Checkout />);
+      await screen.findByText("Jane Doe");
+      await userEvent.click(screen.getAllByText("Checkout")[0]);
+
+      const { toast } = await import("sonner");
+      expect(toast.warning).toHaveBeenCalledWith(
+        expect.stringContaining("High-Value Alert"),
+        expect.objectContaining({ description: expect.stringContaining("Gift Basket") })
+      );
+      // The payment dialog itself should not have opened yet
+      expect(screen.queryByText("Select Payment Method")).toBeFalsy();
+    });
+  });
 });

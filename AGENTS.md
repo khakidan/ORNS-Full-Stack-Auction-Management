@@ -71,9 +71,9 @@ To keep developer directives clean, maintainable, and modular, the monolithic Ag
 For the complete guidelines and background, see [`/docs/agents/patterns.md`](./docs/agents/patterns.md).
 
 1.  **File Preservation**: **NEVER DELETE `server/routes/bidRoutes.ts`**. This managing endpoint handles critical transactional bid logs. Do not edit core SDK files (`src/services/firebase.ts`, `src/context/ConfigContext.tsx`, `firestore.rules`).
-2.  **Testing Mandate**: Always run tests and verify that all **360 tests continue to pass green**. Tests must be run in two partition batches to avoid memory sandbox timeouts:
+2.  **Testing Mandate**: Always run tests and verify that all **369 tests continue to pass green**. Tests must be run in two partition batches to avoid memory sandbox timeouts:
     *   **Backend (272 tests)**: `npx vitest run server/test/`
-    *   **Frontend (88 tests)**: `npx vitest run src/`
+    *   **Frontend (97 tests)**: `npx vitest run src/`
 3.  **Session Cookie Rules**: Session cookie **MUST** remain named **`orns_session`**. Do not revert it to `__session`.
 4.  **Code Splitting Rules**: The `manualChunks` function inside `vite.config.ts` must use the dynamic functional matcher structure.
 5.  **PayPal Surcharges**: NEVER calculate fees client-side; always utilize `PayPalService.calculatePayPalSurcharge` server-side.

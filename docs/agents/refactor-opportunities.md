@@ -330,12 +330,6 @@ Missing edge-case coverage on business-critical flows that already have
   "Check In." The pending-payment confirm path, the
   `/api/auction/check-in-with-bid` call, its `bidValue: parseFloat(ticketPrice)
   || 35` fallback, and the failure/rollback path are all untested.
-- **Checkout mark-paid** - well covered server-side
-  (`server/test/bid-management.test.ts:324-339`), untested client-side:
-  the Cash/Check/Credit-Card→CASH/CHECK/PAYPAL mapping, the optimistic
-  `paid` split, the 202-vs-200 divergent state write, and the
-  high-value Special-Winners interstitial (deliberately stubbed to `[]`
-  in the existing "happy path" test).
 - **Bundle create/restore** - thorough server-side
   (`server/test/bundle.test.ts`), zero client-side: `AuctionItemsTab.test.tsx`
   and `BundlingDialog.test.tsx` both mock `useBundling` wholesale, so
