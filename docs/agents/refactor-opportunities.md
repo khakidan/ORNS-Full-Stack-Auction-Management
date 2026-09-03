@@ -351,15 +351,35 @@ be worked through:
    commented out both `setBidders(previousBidders)` rollback calls,
    confirmed 3 tests failed, reverted) and re-ran 5x to confirm no
    flakiness before trusting them.
-3. **Verify `bidRoutes.ts`'s transactional multi-sheet writes are
-   actually well-tested, not just tested** - `recordWinningBid`,
-   `closeAuctionAndCleanup`, `registerWalkInBidder`,
-   `checkInBidderWithBid` (`server/services/auctionService.ts`,
-   `server/services/bidderService.ts`) all have existing coverage in
-   `server/test/bid-management.test.ts`/`tickets.test.ts`, but that
-   coverage hasn't been rated against `testing-philosophy.md`'s
-   GOOD/SHALLOW/CIRCULAR/SMOKE criteria yet - needs a real pass before
-   this can be called "hardened" rather than just "covered."
+3. ~~Verify `bidRoutes.ts`'s transactional multi-sheet writes are
+   actually well-tested, not just tested~~ - **done.** Rated all four
+   against `testing-philosophy.md`'s GOOD/SHALLOW/CIRCULAR/SMOKE
+   criteria. `recordWinningBid`'s test was fine on inspection - the real
+   write is a single `[[itemId, price]]` row, so its
+   `arrayContaining` assertion is nearly exact for that shape, not
+   loose. `registerWalkInBidder` already asserts specific
+   field-by-field payload values. `checkInBidderWithBid`'s own describe
+   block in `bid-management.test.ts` is just a 401 auth check, but its
+   real happy-path coverage lives in `tickets.test.ts`'s "Ticket
+   Payment Status workflow" (asserts the actual ticket-bid write
+   payload) - a confusing split across two files, but not an actual
+   coverage gap. `closeAuctionAndCleanup` was the one real SHALLOW
+   test: it only asserted `updateCallCount >= 1`, and its own mock data
+   didn't even give the "winner" bidder a real win (the win indicator
+   was placed under the `Price` column instead of the bidder-ID
+   column), so the test would have passed identically whether or not
+   the winner-exclusion logic worked at all. Replaced with 2 tests
+   using a corrected 4-bidder dataset (winner / non-winner / never-
+   checked-in / already-checked-out) that pin the exact `count` in the
+   response and the exact `values.batchUpdate` payload (which row,
+   which range, which bidders excluded and why). Added a
+   `valuesBatchUpdateRequests` capture array to `handlers.ts` for this
+   endpoint (`sheets.spreadsheets.values.batchUpdate`, distinct from
+   the sheet-structural `spreadsheets.batchUpdate` captured for item 1
+   above - same-looking URL pattern, different Sheets API endpoint).
+   Sanity-checked the new tests catch a real regression (temporarily
+   dropped the `!winnersSet.has(id)` exclusion, confirmed the count
+   assertion failed, reverted).
 4. **`src/hooks/useDashboardState.ts`'s Special-Winners/Follow-Up
    read+write** - `fetchFollowUpRecords`, the `Special-Winners` fetch
    effect, `saveGiftCardWinner`, `saveRaffleWinner`. Zero test coverage;

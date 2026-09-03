@@ -6,7 +6,7 @@ This document details the exact execution parameters required to run the test su
 
 ## The Sandbox Constraint
 
-Running the full test suite (386 tests) as a single execution block will exceed memory limits and trigger a **command timeout** in AI Studio's sandbox. 
+Running the full test suite (387 tests) as a single execution block will exceed memory limits and trigger a **command timeout** in AI Studio's sandbox. 
 
 To prevent execution freezes and ensure continuous status verification, the test suite is strictly partitioned into two operational batches.
 
@@ -15,7 +15,7 @@ To prevent execution freezes and ensure continuous status verification, the test
 ## Execution Guide
 
 ### Batch 1: Backend Layer
-Contains 274 integration and unit tests validating route pathways, middleware hooks, crypto managers, Sheets mocking configurations, and (via a Node `vm`-based harness loading the real source) the Google Apps Script reference copy's PayPal service, checkout bridge, and background reconciliation sweeper.
+Contains 275 integration and unit tests validating route pathways, middleware hooks, crypto managers, Sheets mocking configurations, and (via a Node `vm`-based harness loading the real source) the Google Apps Script reference copy's PayPal service, checkout bridge, and background reconciliation sweeper.
 
 ```bash
 npx vitest run server/test/
@@ -36,8 +36,8 @@ Always execute both batches and confirm the final aggregates prior to declaring 
 
 | Batch Name | Path Parameter | Target Tests Count |
 |---|---|---|
-| **Batch 1 (Backend)** | `server/test/` | **274 passed** |
+| **Batch 1 (Backend)** | `server/test/` | **275 passed** |
 | **Batch 2 (Frontend)** | `src/` | **112 passed** |
-| **Combined Aggregate** | *All Test Files* | **386 passed** |
+| **Combined Aggregate** | *All Test Files* | **387 passed** |
 
 *Do not run a bare `npx vitest run` without specifying these directory boundaries.*

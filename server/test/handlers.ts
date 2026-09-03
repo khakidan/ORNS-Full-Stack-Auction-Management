@@ -11,6 +11,7 @@ export let bulkWriteCallCount = 0;
 export let productionScriptCallLog: string[] = [];
 export let clearedRanges: { spreadsheetId: string; range: string }[] = [];
 export let sheetBatchUpdateRequests: { spreadsheetId: string; requests: any[] }[] = [];
+export let valuesBatchUpdateRequests: { spreadsheetId: string; data: any[] }[] = [];
 
 export function resetHandlersState() {
   appendCallCount = 0;
@@ -24,6 +25,7 @@ export function resetHandlersState() {
   productionScriptCallLog = [];
   clearedRanges = [];
   sheetBatchUpdateRequests = [];
+  valuesBatchUpdateRequests = [];
 }
 
 export const handlers = [
@@ -104,8 +106,13 @@ export const handlers = [
     return HttpResponse.json({ updatedRows: 1 });
   }),
 
-  // Google Sheets batch update handler
-  http.post('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values:batchUpdate', () => {
+  // Google Sheets values.batchUpdate handler (multi-range value writes, e.g. closeAuctionAndCleanup)
+  http.post('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values:batchUpdate', async ({ params, request }) => {
+    const body = await request.clone().json().catch(() => ({})) as any;
+    valuesBatchUpdateRequests.push({
+      spreadsheetId: String(params.spreadsheetId),
+      data: body?.data || []
+    });
     return HttpResponse.json({ totalUpdatedRows: 1 });
   }),
 

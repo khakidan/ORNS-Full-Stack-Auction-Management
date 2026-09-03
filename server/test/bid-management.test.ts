@@ -10,7 +10,7 @@ import { server } from "./setup";
 import { http, HttpResponse } from "msw";
 import { resetHandlersState, lastBulkWritePayload, updateCallCount,
          appendCallCount, appsScriptCallCount, lastAppendedRow,
-         lastAppsScriptParams } from "./handlers";
+         lastAppsScriptParams, valuesBatchUpdateRequests } from "./handlers";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -219,7 +219,11 @@ describe("bidRoutes - /api/bidders/walk-in", () => {
 });
 
 describe("bidRoutes - /api/auction/close-and-cleanup", () => {
-  it("closes auction and calculates winners successfully", async () => {
+  beforeEach(() => {
+    resetHandlersState();
+  });
+
+  it("checks out only the non-winners who are checked in and not already checked out - not winners, not un-checked-in bidders, not already-checked-out bidders", async () => {
     server.use(
       http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
         const url = new URL(request.url);
@@ -228,18 +232,20 @@ describe("bidRoutes - /api/auction/close-and-cleanup", () => {
           return HttpResponse.json({
             values: [
               ["ID", "Name", "", "", "Checked In", "", "Checked Out"],
-              ["1001", "Winner", "", "", "TRUE", "", "FALSE"],
-              ["1002", "Non-Winner", "", "", "TRUE", "", "FALSE"]
+              ["1001", "Winner", "", "", "TRUE", "", "FALSE"],        // row 2: has a winning bid below - must be left alone
+              ["1002", "Non-Winner", "", "", "TRUE", "", "FALSE"],    // row 3: no wins, checked in, not checked out - the only one that should get checked out
+              ["1003", "Not-Checked-In", "", "", "FALSE", "", "FALSE"], // row 4: never checked in - must be left alone
+              ["1004", "Already-Out", "", "", "TRUE", "", "TRUE"]     // row 5: already checked out - must be left alone
             ]
           });
         }
         if (range.includes("Bid-Management")) {
             return HttpResponse.json({
             values: [
-              ["1001", "Price", "1002", "Price"],
-              ["Total", "", "", ""],
-              ["", "", "", ""],
-              ["", "100", "", ""] // 1001 won something
+              ["1001", "Price"],
+              ["Total", ""],
+              ["", ""],
+              ["I01", "100"] // 1001's bidder-ID column (index 0) has a real win here - 1002/1003/1004 have no column at all, so they're non-winners by construction
             ]
           });
         }
@@ -258,7 +264,45 @@ describe("bidRoutes - /api/auction/close-and-cleanup", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
-    expect(updateCallCount).toBeGreaterThanOrEqual(1);
+    // Exactly one bidder (1002) should have been queued for checkout.
+    expect(response.body.count).toBe(1);
+
+    const bidMgmtUpdates = valuesBatchUpdateRequests.filter(r => r.spreadsheetId === "ss-id");
+    expect(bidMgmtUpdates).toHaveLength(1);
+    expect(bidMgmtUpdates[0].data).toEqual([
+      { range: "'Bidder-Numbers'!G3:H3", values: [[true, true]] }
+    ]);
+  });
+
+  it("closes the auction with a count of 0 and issues no batch update when there is nothing to clean up", async () => {
+    server.use(
+      http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+        const url = new URL(request.url);
+        const range = url.pathname.split('/').pop() || "";
+        if (range.includes("Bidder-Numbers")) {
+          return HttpResponse.json({
+            values: [
+              ["ID", "Name", "", "", "Checked In", "", "Checked Out"],
+              ["1001", "Already-Out", "", "", "TRUE", "", "TRUE"]
+            ]
+          });
+        }
+        return HttpResponse.json({ values: [] });
+      })
+    );
+
+    const response = await request(app)
+      .post("/api/auction/close-and-cleanup")
+      .set(authHeader)
+      .send({
+        spreadsheetId: "ss-id-empty",
+        bidderNumbersSheet: "Bidder-Numbers",
+        bidManagementSheet: "Bid-Management"
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.count).toBe(0);
+    expect(valuesBatchUpdateRequests.filter(r => r.spreadsheetId === "ss-id-empty")).toHaveLength(0);
   });
 
   it("returns 400 for missing parameters", async () => {
