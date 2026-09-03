@@ -66,8 +66,8 @@ function checkPendingPayPalInvoices ( overrides = {} ) {
                 // ✅ FIX: Accept both standard credit card 'PAID' and manual 'MARKED_AS_PAID' states
                 if ( currentLiveStatus === "PAID" || currentLiveStatus === "MARKED_AS_PAID" ) {
                     // Success resolution
-                    sheet.getRange( rowNumber, 7 ).setValue( true );  // Column G: Paid? -> Checked
-                    sheet.getRange( rowNumber, 8 ).setValue( true );  // Column H: Checked Out? -> Checked
+                    sheet.getRange( rowNumber, 7 ).setValue( true );  // Column G: Checked Out? -> Checked
+                    sheet.getRange( rowNumber, 8 ).setValue( true );  // Column H: Paid? -> Checked
                     sheet.getRange( rowNumber, 9 ).setValue( "Credit Card / PayPal" ); // Column I
                     sheet.getRange( rowNumber, 12 ).clearContent(); // Column L: Clear timestamp
                     console.log( `Bidder #${ bidderId } reconciled successfully via background sweeper.` );
@@ -108,8 +108,8 @@ function checkPendingPayPalInvoices ( overrides = {} ) {
                         ] );
 
                         // Update source row state marking complete-fault variant
-                        sheet.getRange( rowNumber, 7 ).setValue( false ); // G: Paid stays false
-                        sheet.getRange( rowNumber, 8 ).setValue( false ); // H: Checked out stays false
+                        sheet.getRange( rowNumber, 7 ).setValue( false ); // G: Checked out stays false
+                        sheet.getRange( rowNumber, 8 ).setValue( false ); // H: Paid stays false
                         sheet.getRange( rowNumber, 9 ).setValue( "Failed Verification - Follow Up Required" ); // Column I
                         sheet.getRange( rowNumber, 12 ).clearContent(); // Column L: Clear timestamp
                     }

@@ -21,10 +21,11 @@ const { GoogleAIStudio } = loadGasClasses(
   ["GlobalVariables", "GoogleAIStudio"]
 );
 
-// Column layout of a Bidder-Numbers row (0-indexed):
+// Column layout of a Bidder-Numbers row (0-indexed), matching
+// Class_BidderManager.gs's real header write (copyBiddersToBidderSheet):
 // A id, B firstName, C lastName, D email, E checkedIn, F proxy,
-// G paid, H checkedOut, I methodLabel, J invoiceUrl, K invoicedAmount, L timestamp
-const HEADER = ["ID", "First", "Last", "Email", "CheckedIn", "Proxy", "Paid", "CheckedOut", "Method", "InvoiceURL", "Amount", "Timestamp"];
+// G checkedOut, H paid, I methodLabel, J invoiceUrl, K invoicedAmount, L timestamp
+const HEADER = ["ID", "First", "Last", "Email", "CheckedIn", "Proxy", "CheckedOut", "Paid", "Method", "InvoiceURL", "Amount", "Timestamp"];
 
 function makeBidderRow(overrides: Partial<Record<string, any>> = {}) {
   const row = ["101", "Jane", "Doe", "jane@example.com", true, false, false, false, "", "", 0, ""];
@@ -55,8 +56,8 @@ describe("GoogleAIStudio.recordPayment - offline payment methods (cash/check)", 
     const result = studio.recordPayment("101", "cash");
 
     expect(result).toEqual({ success: true, deferred: false, paypalRecorded: true });
-    expect(sheet.data[1][6]).toBe(true); // G: Paid
-    expect(sheet.data[1][7]).toBe(true); // H: Checked Out
+    expect(sheet.data[1][6]).toBe(true); // G: Checked Out
+    expect(sheet.data[1][7]).toBe(true); // H: Paid
     expect(sheet.data[1][8]).toBe("Cash"); // I: Method label
     expect(sheet.data[1][11]).toBe(""); // L: timestamp cleared
     expect(recordOfflinePayment).toHaveBeenCalledWith("INV2-AAAA-BBBB-CCCC-DDDD", "Cash", 104.12);
@@ -88,7 +89,7 @@ describe("GoogleAIStudio.recordPayment - offline payment methods (cash/check)", 
     const result = studio.recordPayment("101", "cash");
 
     expect(result).toEqual({ success: true, deferred: false, paypalRecorded: false });
-    expect(sheet.data[1][6]).toBe(true); // still marked paid in the sheet
+    expect(sheet.data[1][6]).toBe(true); // still marked checked out (and paid) in the sheet
   });
 
   it("skips the PayPal call entirely (and still reports paypalRecorded: true) when there's no invoice ID", () => {
@@ -122,8 +123,8 @@ describe("GoogleAIStudio.recordPayment - credit_card (live PayPal gate)", () => 
     const result = studio.recordPayment("101", "credit_card");
 
     expect(result).toEqual({ success: true, deferred: false, status: "PAID" });
-    expect(sheet.data[1][6]).toBe(true); // G: Paid
-    expect(sheet.data[1][7]).toBe(true); // H: Checked Out
+    expect(sheet.data[1][6]).toBe(true); // G: Checked Out
+    expect(sheet.data[1][7]).toBe(true); // H: Paid
     expect(sheet.data[1][8]).toBe("Credit Card / PayPal");
     expect(sheet.data[1][11]).toBe(""); // timestamp cleared
   });
@@ -138,8 +139,8 @@ describe("GoogleAIStudio.recordPayment - credit_card (live PayPal gate)", () => 
     const result = studio.recordPayment("101", "credit_card");
 
     expect(result).toEqual({ success: true, deferred: true, status: "SENT" });
-    expect(sheet.data[1][6]).toBe(false); // G: Paid stays false
-    expect(sheet.data[1][7]).toBe(false); // H: Checked Out stays false
+    expect(sheet.data[1][6]).toBe(false); // G: Checked Out stays false
+    expect(sheet.data[1][7]).toBe(false); // H: Paid stays false
     expect(sheet.data[1][8]).toBe("PayPal Verification Pending");
     expect(typeof sheet.data[1][11]).toBe("string");
     expect(sheet.data[1][11]).not.toBe(""); // timestamp stamped

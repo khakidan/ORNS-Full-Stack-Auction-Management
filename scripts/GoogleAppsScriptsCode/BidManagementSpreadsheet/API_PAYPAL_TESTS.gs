@@ -352,14 +352,14 @@ function testCronJobSweeper () {
     console.log( "--- 3. Verifying Spreadsheet Cell Reconciliation ---" );
     SpreadsheetApp.flush();
 
-    const isPaidField = sheet.getRange( testRowIndex, 7 ).getValue();        // Col G
-    const isCheckedOutField = sheet.getRange( testRowIndex, 8 ).getValue();   // Col H
+    const isCheckedOutField = sheet.getRange( testRowIndex, 7 ).getValue();   // Col G
+    const isPaidField = sheet.getRange( testRowIndex, 8 ).getValue();        // Col H
     const settlementMethod = sheet.getRange( testRowIndex, 9 ).getValue();    // Col I
     const trailingTimestamp = sheet.getRange( testRowIndex, 12 ).getValue();  // Col L
 
     console.log( `📊 Post-Run Cell State Analysis:` );
-    console.log( `   ➔ Col G (Paid?):        ${ isPaidField }   (Expected: true)` );
-    console.log( `   ➔ Col H (Checked Out?): ${ isCheckedOutField }   (Expected: true)` );
+    console.log( `   ➔ Col G (Checked Out?): ${ isCheckedOutField }   (Expected: true)` );
+    console.log( `   ➔ Col H (Paid?):        ${ isPaidField }   (Expected: true)` );
     console.log( `   ➔ Col I (Method Label): "${ settlementMethod }" (Expected: "Credit Card / PayPal")` );
     console.log( `   ➔ Col L (Timestamp):    "${ trailingTimestamp }" (Expected: Clear / Empty)` );
 

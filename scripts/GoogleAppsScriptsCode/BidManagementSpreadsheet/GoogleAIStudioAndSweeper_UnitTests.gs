@@ -54,10 +54,11 @@ function gasTests_fakeSpreadsheet_ () {
     };
 }
 
-// Column layout of a Bidder-Numbers row (0-indexed):
+// Column layout of a Bidder-Numbers row (0-indexed), matching
+// Class_BidderManager.gs's real header write (copyBiddersToBidderSheet):
 // A id, B firstName, C lastName, D email, E checkedIn, F proxy,
-// G paid, H checkedOut, I methodLabel, J invoiceUrl, K invoicedAmount, L timestamp
-const GAS_TESTS_HEADER = [ 'ID', 'First', 'Last', 'Email', 'CheckedIn', 'Proxy', 'Paid', 'CheckedOut', 'Method', 'InvoiceURL', 'Amount', 'Timestamp' ];
+// G checkedOut, H paid, I methodLabel, J invoiceUrl, K invoicedAmount, L timestamp
+const GAS_TESTS_HEADER = [ 'ID', 'First', 'Last', 'Email', 'CheckedIn', 'Proxy', 'CheckedOut', 'Paid', 'Method', 'InvoiceURL', 'Amount', 'Timestamp' ];
 
 function gasTests_bidderRow_ ( overrides ) {
     const row = [ '101', 'Jane', 'Doe', 'jane@example.com', true, false, false, false, '', '', 0, '' ];
@@ -89,8 +90,8 @@ function gasTests_recordPayment_offlineSuccess_ () {
     const result = studio.recordPayment( '101', 'cash' );
 
     paypalTests_assertEqual_( result, { success: true, deferred: false, paypalRecorded: true }, 'cash payment should return success/paypalRecorded true' );
-    paypalTests_assertEqual_( sheet.data[ 1 ][ 6 ], true, 'Column G should be marked paid' );
-    paypalTests_assertEqual_( sheet.data[ 1 ][ 7 ], true, 'Column H should be marked checked out' );
+    paypalTests_assertEqual_( sheet.data[ 1 ][ 6 ], true, 'Column G should be marked checked out' );
+    paypalTests_assertEqual_( sheet.data[ 1 ][ 7 ], true, 'Column H should be marked paid' );
     paypalTests_assertEqual_( sheet.data[ 1 ][ 8 ], 'Cash', 'Column I should say Cash' );
     paypalTests_assertEqual_( recordedArgs, [ 'INV2-X', 'Cash', 104.12 ], 'recordOfflinePayment should be called with the invoice ID, label, and amount' );
 }
@@ -110,7 +111,7 @@ function gasTests_recordPayment_offlineSurvivesPayPalFailure_ () {
     const result = studio.recordPayment( '101', 'cash' );
 
     paypalTests_assertEqual_( result, { success: true, deferred: false, paypalRecorded: false }, 'should still succeed at the sheet level even if PayPal recording throws' );
-    paypalTests_assertEqual_( sheet.data[ 1 ][ 6 ], true, 'bidder should still be marked paid in the sheet' );
+    paypalTests_assertEqual_( sheet.data[ 1 ][ 6 ], true, 'bidder should still be marked checked out/paid in the sheet' );
 }
 
 function gasTests_recordPayment_creditCardPaidNow_ () {
@@ -128,7 +129,7 @@ function gasTests_recordPayment_creditCardPaidNow_ () {
     const result = studio.recordPayment( '101', 'credit_card' );
 
     paypalTests_assertEqual_( result, { success: true, deferred: false, status: 'PAID' }, 'should resolve instantly when PayPal already shows PAID' );
-    paypalTests_assertEqual_( sheet.data[ 1 ][ 6 ], true, 'Column G should be marked paid' );
+    paypalTests_assertEqual_( sheet.data[ 1 ][ 6 ], true, 'Column G should be marked checked out' );
     paypalTests_assertEqual_( sheet.data[ 1 ][ 8 ], 'Credit Card / PayPal', 'Column I should say Credit Card / PayPal' );
 }
 

@@ -175,8 +175,8 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
     //   }
 
     //   // Mark as checked out & paid in sheet
-    //   bidderSheet.getRange(targetRowIndex, 7).setValue(true); // Col G (Paid Checkbox)
-    //   bidderSheet.getRange(targetRowIndex, 8).setValue(true); // Col H (Checked Out Checkbox)
+    //   bidderSheet.getRange(targetRowIndex, 7).setValue(true); // Col G (Checked Out Checkbox)
+    //   bidderSheet.getRange(targetRowIndex, 8).setValue(true); // Col H (Paid Checkbox)
     //   bidderSheet.getRange(targetRowIndex, 9).setValue(displayLabel); // Col I (Method Label)
 
     //   console.log(`apiRecordPayment: Bidder ${sanitizedId} marked as paid via ${displayLabel}.`);
@@ -222,8 +222,8 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
         // --- BRANCH 1: Offline Payment Methods (Instant Checkout Completion) ---
         if ( paymentMethod === "cash" || paymentMethod === "check" ) {
             const label = paymentMethod === "cash" ? "Cash" : "Check";
-            sheet.getRange( targetRowIndex, 7 ).setValue( true );  // Column G: Paid? -> Checked
-            sheet.getRange( targetRowIndex, 8 ).setValue( true );  // Column H: Checked Out? -> Checked
+            sheet.getRange( targetRowIndex, 7 ).setValue( true );  // Column G: Checked Out? -> Checked
+            sheet.getRange( targetRowIndex, 8 ).setValue( true );  // Column H: Paid? -> Checked
             sheet.getRange( targetRowIndex, 9 ).setValue( label ); // Column I: Method Label
             sheet.getRange( targetRowIndex, 12 ).clearContent(); // Column L: Clear any stale timestamp
 
@@ -247,15 +247,15 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
 
                 if ( liveStatus === "PAID" ) {
                     // Instant validation success path
-                    sheet.getRange( targetRowIndex, 7 ).setValue( true );  // Column G: Paid?
-                    sheet.getRange( targetRowIndex, 8 ).setValue( true );  // Column H: Checked Out?
+                    sheet.getRange( targetRowIndex, 7 ).setValue( true );  // Column G: Checked Out?
+                    sheet.getRange( targetRowIndex, 8 ).setValue( true );  // Column H: Paid?
                     sheet.getRange( targetRowIndex, 9 ).setValue( "Credit Card / PayPal" ); // Column I
                     sheet.getRange( targetRowIndex, 12 ).clearContent(); // Column L: Clear timestamp
                     return { success: true, deferred: false, status: "PAID" };
                 } else {
                     // Deferred validation path: hand-off to the background Sweeper Trigger
-                    sheet.getRange( targetRowIndex, 7 ).setValue( false ); // Column G: Paid? -> Unchecked
-                    sheet.getRange( targetRowIndex, 8 ).setValue( false ); // Column H: Checked Out? -> Unchecked
+                    sheet.getRange( targetRowIndex, 7 ).setValue( false ); // Column G: Checked Out? -> Unchecked
+                    sheet.getRange( targetRowIndex, 8 ).setValue( false ); // Column H: Paid? -> Unchecked
                     sheet.getRange( targetRowIndex, 9 ).setValue( "PayPal Verification Pending" ); // Column I: System string
                     sheet.getRange( targetRowIndex, 12 ).setValue( new Date().toISOString() ); // Column L (Index 11): ISO timestamp
 

@@ -17,10 +17,11 @@ const { checkPendingPayPalInvoices } = loadGasClasses(
   ["checkPendingPayPalInvoices"]
 );
 
-// Column layout of a Bidder-Numbers row (0-indexed):
+// Column layout of a Bidder-Numbers row (0-indexed), matching
+// Class_BidderManager.gs's real header write (copyBiddersToBidderSheet):
 // A id, B firstName, C lastName, D email, E checkedIn, F proxy,
-// G paid, H checkedOut, I methodLabel, J invoiceUrl, K invoicedAmount, L timestamp
-const HEADER = ["ID", "First", "Last", "Email", "CheckedIn", "Proxy", "Paid", "CheckedOut", "Method", "InvoiceURL", "Amount", "Timestamp"];
+// G checkedOut, H paid, I methodLabel, J invoiceUrl, K invoicedAmount, L timestamp
+const HEADER = ["ID", "First", "Last", "Email", "CheckedIn", "Proxy", "CheckedOut", "Paid", "Method", "InvoiceURL", "Amount", "Timestamp"];
 
 function pendingRow(overrides: Record<number, any> = {}) {
   const row = ["101", "Jane", "Doe", "jane@example.com", true, false, false, false, "PayPal Verification Pending", "https://www.paypal.com/invoice/p/#INV2-X", 104.12, ""];
@@ -44,8 +45,8 @@ describe("checkPendingPayPalInvoices - reconciliation", () => {
       getInvoiceStatus: vi.fn().mockReturnValue("PAID"),
     });
 
-    expect(sheet.data[1][6]).toBe(true); // G: Paid
-    expect(sheet.data[1][7]).toBe(true); // H: Checked Out
+    expect(sheet.data[1][6]).toBe(true); // G: Checked Out
+    expect(sheet.data[1][7]).toBe(true); // H: Paid
     expect(sheet.data[1][8]).toBe("Credit Card / PayPal");
     expect(sheet.data[1][11]).toBe(""); // L: timestamp cleared
   });

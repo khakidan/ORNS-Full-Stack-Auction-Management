@@ -32,24 +32,6 @@ Sorted by severity within each area.
   `server/routes/productionRoutes.ts`'s `/tickets/bidder-labels` route that
   was silently sending every printed label doc to the developer's old
   working folder instead of the For-Print folder.
-- **`BidManagementSpreadsheet/Class_GoogleAIStudio.gs`'s `recordPayment()`
-  and `PayPalSweeper.gs` both comment columns G/H backwards** - both say
-  `// Column G: Paid?` / `// Column H: Checked Out?`, but the actual header
-  `Class_BidderManager.gs` writes (`copyBiddersToBidderSheet()`, matching
-  `syncService.ts`'s Node-side header exactly) is G=Checked Out, H=Paid.
-  Investigated this after an earlier session flagged it as a possible
-  11-vs-12-column data mismatch between the two `BidderManager`s - that
-  turned out to be a misread; both really do write the same 11-column
-  layout. The real issue is just this comment/column-index swap, and it's
-  currently harmless: every write site (`recordPayment`'s three branches,
-  `PayPalSweeper.gs`'s resolution path) always sets G and H to the *same*
-  value together, so nothing anywhere reads one independently of the
-  other - but that's incidental, not enforced, and the next person who
-  trusts the comments and adds code that reads/writes only one of the two
-  would introduce a real bug. Worth a follow-up pass to either fix the
-  comments to match reality or swap the writes to match the comments
-  (doesn't matter which, as long as code and header agree) - out of scope
-  here since it's Bid-Management, not Tickets, and isn't a live bug today.
 - **`Class_ReceiptManager.gs`'s own `createIndividualReceipt()`/
   `createAllReceipts()` prototype methods (lines ~224/282) are now
   unreachable** - they were only ever called by the global wrapper
