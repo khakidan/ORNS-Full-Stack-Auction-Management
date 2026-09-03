@@ -132,13 +132,6 @@ Sorted by severity within each area.
   "Failed to restore bundle: Cannot read properties of undefined" toast.
   Fix: check `res.ok` first and optional-chain the log-message
   construction with a fallback.
-- **Dashboard's "Not Present" count includes proxy bidders as absent**
-  (`src/hooks/useDashboardState.ts:181` vs `:164`) - computed as
-  `totalBidders - checkedInCount`, while the "unattended bidders" list
-  one line away correctly excludes proxies (`!checkedIn && !isProxy`).
-  The Attendance pie chart's "Not Present" slice therefore overlaps
-  with checked-out/proxy bidders. Fix: subtract `proxyBidders.length`
-  too.
 - **`useAuctionItems.ts` duplicates `src/lib/itemParsing.ts` and the
   two have drifted** (`src/hooks/useAuctionItems.ts:59-95`) - inline
   reimplementation of the same header-detection parser, but `status`
@@ -380,10 +373,34 @@ be worked through:
    Sanity-checked the new tests catch a real regression (temporarily
    dropped the `!winnersSet.has(id)` exclusion, confirmed the count
    assertion failed, reverted).
-4. **`src/hooks/useDashboardState.ts`'s Special-Winners/Follow-Up
-   read+write** - `fetchFollowUpRecords`, the `Special-Winners` fetch
-   effect, `saveGiftCardWinner`, `saveRaffleWinner`. Zero test coverage;
-   `Dashboard.test.tsx` only covers derived stat widgets.
+4. ~~`src/hooks/useDashboardState.ts`'s Special-Winners/Follow-Up
+   read+write~~ - **done.** `fetchFollowUpRecords`, the `Special-Winners`
+   fetch effect, `saveGiftCardWinner`, `saveRaffleWinner`. Unlike
+   `useBiddersData.ts` (item 2), this hook is NOT hidden behind a
+   fully-mocked context in `Dashboard.test.tsx` - only its
+   `@/services/google-api` dependency is mocked, so the real hook code
+   already ran under the existing tests, just unexercised past the
+   initial mount effect. Added 8 tests directly to `Dashboard.test.tsx`
+   (no new `renderHook` file needed): loading and resolving an existing
+   Special-Winners bidder ID's name on mount; saving a winner who hasn't
+   checked out (writes `Special-Winners!B2`/`B3` only); saving one who
+   *has* checked out (also appends a `Follow-Up!A:C` row, fires the
+   checked-out warning toast, and re-fetches the follow-up list);
+   the bidder-not-found error path; the write-failure error path; and
+   the "Refresh Lists" button re-fetching and rendering real Follow-Up
+   records. Found and fixed a real bug while writing these: the
+   already-logged "Not Present" pie-slice finding (below in "Passed" -
+   moved here) - `bidderStats`'s `totalBidders - checkedInCount` double-
+   counted proxy bidders as "absent" even though the sibling
+   `unattendedBidders` list one line away correctly excludes them; fixed
+   by subtracting `proxyBidders.length` too, and updated the one
+   existing `Dashboard.test.tsx` assertion that had been pinning the
+   buggy value (`"Not Present: 4"` → `"Not Present: 3"` for the file's
+   10-bidder/1-proxy mock fixture - confirmed by temporarily reverting
+   the fix and watching that exact assertion fail before trusting the
+   new value). Sanity-checked the new Follow-Up tests catch a real
+   regression too (temporarily disabled the checked-out-bidder
+   `appendSheetData` call, confirmed the relevant test failed, reverted).
 5. **`src/hooks/useAuctionStatusData.ts`** - already listed above in
    this section (the `val === false || val === "FALSE"` coercion); also
    covers the `close-and-cleanup` trigger itself, which has no dedicated

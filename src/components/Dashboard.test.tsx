@@ -3,7 +3,8 @@
  */
 import React from "react";
 import "@testing-library/jest-dom";
-import { render, screen, act, within } from "@testing-library/react";
+import { render, screen, act, within, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import Dashboard from "./Dashboard";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 
@@ -52,6 +53,12 @@ vi.mock("@/services/google-api", () => ({
   updateSheetData: vi.fn(() => Promise.resolve({})),
   appendSheetData: vi.fn(() => Promise.resolve({})),
 }));
+
+import { getSheetData, updateSheetData, appendSheetData } from "@/services/google-api";
+const mockedGetSheetData = vi.mocked(getSheetData);
+const mockedUpdateSheetData = vi.mocked(updateSheetData);
+const mockedAppendSheetData = vi.mocked(appendSheetData);
+import { toast } from "sonner";
 
 // Mock UI ScrollArea safely
 vi.mock("@/components/ui/scroll-area", () => ({
@@ -193,7 +200,9 @@ describe("Dashboard - Widget Display", () => {
     // Verify actual statistical count elements of the Pie component mock
     expect(screen.getByTestId("pie-slice-Checked In")).toHaveTextContent("Checked In: 6");
     expect(screen.getByTestId("pie-slice-Checked Out")).toHaveTextContent("Checked Out: 3");
-    expect(screen.getByTestId("pie-slice-Not Present")).toHaveTextContent("Not Present: 4");
+    // 10 total - 6 checked in - 1 proxy (Jack, tracked separately in the
+    // Proxy Bidders widget, not double-counted here as "absent") = 3.
+    expect(screen.getByTestId("pie-slice-Not Present")).toHaveTextContent("Not Present: 3");
   });
 
   it("Proxy Bidders: Assert the widget shows the proxy bidder count (1)", async () => {
@@ -205,5 +214,207 @@ describe("Dashboard - Widget Display", () => {
     // Jack Reacher should be listed as the proxy bidder
     expect(screen.getByText("#10")).toBeInTheDocument();
     expect(screen.getByText("Jack Reacher")).toBeInTheDocument();
+  });
+});
+
+// Alice (id 1) is checked in but not checked out - a normal save.
+// Diana (id 4) is already checked out - saving her as a special winner
+// must also add a Follow-Up row, per useDashboardState.ts's
+// saveGiftCardWinner/saveRaffleWinner.
+function mockSpecialWinners(giftCardId: string, raffleId: string) {
+  mockedGetSheetData.mockImplementation((_spreadsheetId: string, range: string) => {
+    if (range.startsWith("Special-Winners")) {
+      return Promise.resolve({ values: [["$500 Amazon Gift Card", giftCardId], ["50/50 Raffle", raffleId]] });
+    }
+    if (range.startsWith("Follow-Up")) {
+      return Promise.resolve({ values: [] });
+    }
+    return Promise.resolve({ values: [] });
+  });
+}
+
+describe("Dashboard - Special Winners & Follow-Up", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedGetSheetData.mockResolvedValue({ values: [] });
+    mockedUpdateSheetData.mockResolvedValue({});
+    mockedAppendSheetData.mockResolvedValue({});
+  });
+
+  it("loads existing Special-Winners on mount and resolves the winner's name", async () => {
+    mockSpecialWinners("1", "2"); // Alice, Bob
+
+    await act(async () => {
+      render(<Dashboard />);
+    });
+
+    const gcField = screen.getByLabelText("$500 Amazon Gift Card").closest("div")!.parentElement!;
+    await waitFor(() => {
+      expect(within(gcField).getByText(/Winner:/)).toHaveTextContent("Winner: Alice Smith");
+    });
+    const raffleField = screen.getByLabelText("50/50 Raffle").closest("div")!.parentElement!;
+    expect(within(raffleField).getByText(/Winner:/)).toHaveTextContent("Winner: Bob Jones");
+  });
+
+  it("saves a gift card winner who hasn't checked out: writes Special-Winners!B2 only, no Follow-Up row", async () => {
+    mockSpecialWinners("1", ""); // Alice - checkedOut: false
+    const user = userEvent.setup();
+
+    await act(async () => {
+      render(<Dashboard />);
+    });
+    await waitFor(() => expect(screen.getByLabelText("$500 Amazon Gift Card")).toHaveValue("1"));
+
+    const gcField = screen.getByLabelText("$500 Amazon Gift Card").closest("div")!;
+    await act(async () => {
+      await user.click(within(gcField).getByRole("button", { name: "Save" }));
+    });
+
+    await waitFor(() => {
+      expect(updateSheetData).toHaveBeenCalledWith("test-spreadsheet-id", "Special-Winners!B2", [["1"]]);
+    });
+    expect(appendSheetData).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith("Updated $500 Amazon Gift Card winner");
+  });
+
+  it("saves an already-checked-out gift card winner: also appends a Follow-Up row and warns, then refreshes the follow-up list", async () => {
+    mockSpecialWinners("4", ""); // Diana - checkedOut: true
+    const user = userEvent.setup();
+
+    await act(async () => {
+      render(<Dashboard />);
+    });
+    await waitFor(() => expect(screen.getByLabelText("$500 Amazon Gift Card")).toHaveValue("4"));
+
+    const getSheetDataCallsBeforeSave = mockedGetSheetData.mock.calls.length;
+
+    const gcField = screen.getByLabelText("$500 Amazon Gift Card").closest("div")!;
+    await act(async () => {
+      await user.click(within(gcField).getByRole("button", { name: "Save" }));
+    });
+
+    await waitFor(() => {
+      expect(updateSheetData).toHaveBeenCalledWith("test-spreadsheet-id", "Special-Winners!B2", [["4"]]);
+    });
+    expect(appendSheetData).toHaveBeenCalledWith(
+      "test-spreadsheet-id",
+      "Follow-Up!A:C",
+      [["4", "$500 Amazon Gift Card", ""]]
+    );
+    expect(toast.warning).toHaveBeenCalledWith(
+      "Checked Out Warning",
+      expect.objectContaining({
+        description: expect.stringContaining("Diana Prince won \"$500 Amazon Gift Card\" but has already checked out.")
+      })
+    );
+    // The follow-up list is refetched after the append, beyond the initial mount fetch.
+    await waitFor(() => {
+      expect(mockedGetSheetData.mock.calls.length).toBeGreaterThan(getSheetDataCallsBeforeSave);
+    });
+  });
+
+  it("shows an error and writes nothing when the loaded winner ID doesn't match any bidder", async () => {
+    mockSpecialWinners("999", ""); // no such bidder
+    const user = userEvent.setup();
+
+    await act(async () => {
+      render(<Dashboard />);
+    });
+    await waitFor(() => expect(screen.getByLabelText("$500 Amazon Gift Card")).toHaveValue("999"));
+
+    const gcField = screen.getByLabelText("$500 Amazon Gift Card").closest("div")!;
+    await act(async () => {
+      await user.click(within(gcField).getByRole("button", { name: "Save" }));
+    });
+
+    expect(toast.error).toHaveBeenCalledWith("Bidder ID not found");
+    expect(updateSheetData).not.toHaveBeenCalled();
+    expect(appendSheetData).not.toHaveBeenCalled();
+  });
+
+  it("shows an error toast (not a crash) when the Special-Winners write itself fails", async () => {
+    mockSpecialWinners("1", "");
+    mockedUpdateSheetData.mockRejectedValue(new Error("Sheets API quota exceeded"));
+    const user = userEvent.setup();
+
+    await act(async () => {
+      render(<Dashboard />);
+    });
+    await waitFor(() => expect(screen.getByLabelText("$500 Amazon Gift Card")).toHaveValue("1"));
+
+    const gcField = screen.getByLabelText("$500 Amazon Gift Card").closest("div")!;
+    await act(async () => {
+      await user.click(within(gcField).getByRole("button", { name: "Save" }));
+    });
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("Failed to save winner: Sheets API quota exceeded");
+    });
+  });
+
+  it("saves the raffle winner independently of the gift card field", async () => {
+    mockSpecialWinners("", "2"); // Bob, raffle only
+    const user = userEvent.setup();
+
+    await act(async () => {
+      render(<Dashboard />);
+    });
+    await waitFor(() => expect(screen.getByLabelText("50/50 Raffle")).toHaveValue("2"));
+
+    const raffleField = screen.getByLabelText("50/50 Raffle").closest("div")!;
+    await act(async () => {
+      await user.click(within(raffleField).getByRole("button", { name: "Save" }));
+    });
+
+    await waitFor(() => {
+      expect(updateSheetData).toHaveBeenCalledWith("test-spreadsheet-id", "Special-Winners!B3", [["2"]]);
+    });
+    expect(toast.success).toHaveBeenCalledWith("Updated 50/50 Raffle winner");
+  });
+
+  it("Refresh Lists re-fetches Follow-Up records and renders them in the Post-Checkout Item Wins panel", async () => {
+    let followUpCallCount = 0;
+    mockedGetSheetData.mockImplementation((_spreadsheetId: string, range: string) => {
+      if (range.startsWith("Follow-Up")) {
+        followUpCallCount++;
+        if (followUpCallCount === 1) {
+          return Promise.resolve({ values: [] }); // initial mount: nothing yet
+        }
+        return Promise.resolve({
+          values: [
+            ["Header", "Header", "Header"],
+            ["4", "item-101", "50"], // Diana (id 4) - already checked out, so she won't also appear in "Still Need to Check Out"
+          ],
+        });
+      }
+      return Promise.resolve({ values: [] });
+    });
+    const user = userEvent.setup();
+
+    await act(async () => {
+      render(<Dashboard />);
+    });
+
+    await act(async () => {
+      await user.click(screen.getByRole("button", { name: /Refresh Lists/i }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("#4 Diana Prince")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Won Item: item-101")).toBeInTheDocument();
+  });
+
+  it("swallows a failed follow-up fetch without crashing (records stay empty)", async () => {
+    mockedGetSheetData.mockImplementation((_spreadsheetId: string, range: string) => {
+      if (range.startsWith("Follow-Up")) return Promise.reject(new Error("network down"));
+      return Promise.resolve({ values: [] });
+    });
+
+    await act(async () => {
+      render(<Dashboard />);
+    });
+
+    expect(screen.getByText("No items have been assigned to checked-out bidders yet.")).toBeInTheDocument();
   });
 });
