@@ -516,18 +516,3 @@ class ReceiptManager extends GlobalVariables {
         return invoiceResult.checkoutUrl;
     }
 }
-
-function createAllReceipts () { new ReceiptManager().createAllReceipts(); }
-function createIndividualReceipt () { new ReceiptManager().createIndividualReceipt(); }
-
-function testCreateIndividualReceipt () {
-    const mgr = new ReceiptManager();
-    mgr.enableTestMode( 'sage.dan@gmail.com' );
-    mgr.createIndividualReceipt();
-}
-
-function testCreateAllReceipts () {
-    const mgr = new ReceiptManager();
-    mgr.enableTestMode( 'sage.dan@gmail.com' );
-    mgr.createAllReceipts();
-}

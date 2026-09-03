@@ -22,25 +22,18 @@ Sorted by severity within each area.
 
 ### Correctness bugs
 
-- **Two data-model classes in `scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/` are
-  never instantiated anywhere** - `Class_AuctionItem.gs`'s `AuctionItem`
-  and `Class_Bidder.gs`'s `Bidder` (confirmed by grep across the whole
-  folder: zero `new AuctionItem(...)`/`new Bidder(...)` calls). Every
-  manager class works directly with raw sheet row arrays instead of
-  these models. Needs a decision on whether to delete them from this
-  repo's reference copy (and, separately, whether they're worth
-  removing from the live script too).
-- **The manual-menu manager classes are now fully orphaned in the live
-  script, since the custom "Auction" menu was disabled** (`menu.gs`'s
-  `onOpen`/`onInstall` are now no-ops, per the user's direction that
-  this app is the single source of use and the spreadsheet is data
-  storage only) - `Class_CheckInManager.gs`, `Class_CheckOutManager.gs`,
-  `Class_BidEntryManager.gs`, `Class_AuctionSetupManager.gs`,
-  `Class_SettingsManager.gs`, and their support classes (`UIManager`,
-  `UIStrings`) had no other entry point. `createCustomMenu()` itself is
-  intentionally left defined (just never called) as a manual fallback.
-  Needs a decision on whether to delete these classes outright too, or
-  leave them in place as inert fallback code.
+- **`Class_ReceiptManager.gs`'s own `createIndividualReceipt()`/
+  `createAllReceipts()` prototype methods (lines ~224/282) are now
+  unreachable** - they were only ever called by the global wrapper
+  functions of the same name, which were deleted as part of removing
+  the now-orphaned manual-menu code (see CHANGELOG.md). Left in place
+  rather than deleted in that same pass, since they're substantial,
+  self-contained, UI-prompt-driven methods (not one-line wrappers) and
+  weren't part of what was explicitly scoped for deletion. `ReceiptManager`
+  itself stays very much alive - `GoogleAIStudio.createAllReceipts`/
+  `.createIndividualReceipt` use a separate, parameterized code path on
+  the same class. Needs the same outright-delete-vs-keep-as-fallback
+  decision as the rest of that cleanup.
 - **Bundle creation silently drops a manually-entered min raise**
   (`server/services/bundleService.ts:158-170,225`) - `minRaise` is
   destructured out of `req.body` in `bundleRoutes.ts:61,88` and typed

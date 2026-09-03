@@ -248,5 +248,3 @@ class BidderManager extends GlobalVariables {
         return [ header, ...dataRows ];
     }
 }
-
-function setupBiddersSheet () { new BidderManager().copyBiddersToBidderSheet(); }
