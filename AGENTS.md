@@ -43,7 +43,7 @@ To keep developer directives clean, maintainable, and modular, the monolithic Ag
     *   Detailed instructions for auction operations, bidding procedures, ticket sales, registration, and PayPal checkout.
 
 9.  **[Sandbox-Safe Testing & Batches (testing-batches.md)](./docs/agents/testing-batches.md)**
-    *   Step-by-step procedures to run tests in partition batches (272 backend, 105 frontend) to prevent sandboxed environment command timeouts.
+    *   Step-by-step procedures to run tests in partition batches (274 backend, 105 frontend) to prevent sandboxed environment command timeouts.
 
 10. **[Testing Philosophy & Quality Standards (testing-philosophy.md)](./docs/agents/testing-philosophy.md)**
     *   Kent C. Dodds prime directive and test quality ratings (GOOD, SHALLOW, CIRCULAR, SMOKE).
@@ -71,8 +71,8 @@ To keep developer directives clean, maintainable, and modular, the monolithic Ag
 For the complete guidelines and background, see [`/docs/agents/patterns.md`](./docs/agents/patterns.md).
 
 1.  **File Preservation**: **NEVER DELETE `server/routes/bidRoutes.ts`**. This managing endpoint handles critical transactional bid logs. Do not edit core SDK files (`src/services/firebase.ts`, `src/context/ConfigContext.tsx`, `firestore.rules`).
-2.  **Testing Mandate**: Always run tests and verify that all **377 tests continue to pass green**. Tests must be run in two partition batches to avoid memory sandbox timeouts:
-    *   **Backend (272 tests)**: `npx vitest run server/test/`
+2.  **Testing Mandate**: Always run tests and verify that all **379 tests continue to pass green**. Tests must be run in two partition batches to avoid memory sandbox timeouts:
+    *   **Backend (274 tests)**: `npx vitest run server/test/`
     *   **Frontend (105 tests)**: `npx vitest run src/`
 3.  **Session Cookie Rules**: Session cookie **MUST** remain named **`orns_session`**. Do not revert it to `__session`.
 4.  **Code Splitting Rules**: The `manualChunks` function inside `vite.config.ts` must use the dynamic functional matcher structure.

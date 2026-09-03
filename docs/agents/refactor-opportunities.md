@@ -309,6 +309,56 @@ Existing tests that would rate SHALLOW/CIRCULAR/SMOKE under
   entirely - any future test clicking a confirm button in this file
   will silently no-op and still pass.
 
+**Planned sequence: hardening every remaining Bid-Management API call**
+(2026-09-02). The checkout/PayPal payment workflow (`recordPayment`,
+`checkPendingPayPalInvoices`, `PayPalService`, receipt generation via
+`ReceiptManager`, and the winners/bid-grid parsing in
+`useCheckoutState.ts`/`useWinnersData.ts`) is already fully audited and
+hardened - see CHANGELOG.md. This is the follow-on plan for everything
+else that talks to the Bid-Management spreadsheet, in the order it'll
+be worked through:
+
+1. ~~`server/services/auctionSetupService.ts:196-233`'s year-end reset~~ -
+   **done.** Fixed a real gap found while writing the tests: every
+   failure in step 6 (delete/clear/update against the master
+   spreadsheets) only reached `console.error`, invisible in the actual
+   setup-wizard UI, while the template-copy and spreadsheet-backup steps
+   right above it already surfaced failures via `onLog` - now all of
+   step 6 does too, so a failed Bid-Management reset (quota error,
+   permissions, etc.) shows up in the streamed log instead of silently
+   leaving stale data in a spreadsheet the operator was told was reset.
+   `server/test/auction-setup.test.ts` now pins the exact
+   `batchUpdate`/`clear`/`update` payloads (which sheetIds get deleted
+   and which don't, e.g. `Auction-Status`/`tickets` must survive) and
+   asserts the failure-visibility fix via a simulated 429.
+2. **`src/hooks/useBiddersData.ts`'s `checkInBidder`/`markBidderAsProxy`**
+   - already listed above in this section: the real optimistic-update/
+   rollback Sheets-write logic for bidder check-in is bypassed by a bare
+   `vi.fn()` mock in `Bidders.test.tsx` and never actually runs.
+3. **Verify `bidRoutes.ts`'s transactional multi-sheet writes are
+   actually well-tested, not just tested** - `recordWinningBid`,
+   `closeAuctionAndCleanup`, `registerWalkInBidder`,
+   `checkInBidderWithBid` (`server/services/auctionService.ts`,
+   `server/services/bidderService.ts`) all have existing coverage in
+   `server/test/bid-management.test.ts`/`tickets.test.ts`, but that
+   coverage hasn't been rated against `testing-philosophy.md`'s
+   GOOD/SHALLOW/CIRCULAR/SMOKE criteria yet - needs a real pass before
+   this can be called "hardened" rather than just "covered."
+4. **`src/hooks/useDashboardState.ts`'s Special-Winners/Follow-Up
+   read+write** - `fetchFollowUpRecords`, the `Special-Winners` fetch
+   effect, `saveGiftCardWinner`, `saveRaffleWinner`. Zero test coverage;
+   `Dashboard.test.tsx` only covers derived stat widgets.
+5. **`src/hooks/useAuctionStatusData.ts`** - already listed above in
+   this section (the `val === false || val === "FALSE"` coercion); also
+   covers the `close-and-cleanup` trigger itself, which has no dedicated
+   hook-level test even though the server route it calls does.
+
+Also flagged during the inventory but deliberately left out of this
+sequence: `server/services/emailService.ts:processEmail` does a direct
+triple-sheet read of Bid-Management data, but it's only reachable
+through the already-hardened receipt-email path - worth a defensive-
+parsing look eventually, not urgent enough to block this list.
+
 Missing edge-case coverage on business-critical flows that already have
 *some* test coverage:
 

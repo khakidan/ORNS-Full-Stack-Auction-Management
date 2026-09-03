@@ -178,27 +178,27 @@ export async function setupNewAuction(
       await sheets.spreadsheets.values.clear({
         spreadsheetId: itemEntrySpreadsheetId,
         range: "Auction-Items!A2:Z"
-      }).catch(err => console.error("Failed to clear Item Entry sheets", err));
+      }).catch(err => onLog(`Failed to clear Item Entry sheets: ${err.message}`));
     }
-    
+
     if (ticketsSpreadsheetId) {
       await sheets.spreadsheets.values.clear({
         spreadsheetId: ticketsSpreadsheetId,
         range: "'tickets'!A2:Z"
-      }).catch(err => console.error("Failed to clear tickets sheet", err));
-      
+      }).catch(err => onLog(`Failed to clear tickets sheet: ${err.message}`));
+
       await sheets.spreadsheets.values.clear({
         spreadsheetId: ticketsSpreadsheetId,
         range: "'sponsor tickets'!A2:Z"
-      }).catch(err => console.error("Failed to clear sponsor tickets", err));
+      }).catch(err => onLog(`Failed to clear sponsor tickets: ${err.message}`));
     }
-    
+
     if (bidManagementSpreadsheetId) {
       const shtInfo = await sheets.spreadsheets.get({ spreadsheetId: bidManagementSpreadsheetId });
       const shts = shtInfo.data.sheets || [];
-      
+
       const reqs: any[] = [];
-      
+
       shts.forEach(sheet => {
         const nm = sheet.properties?.title;
         const id = sheet.properties?.sheetId;
@@ -207,12 +207,12 @@ export async function setupNewAuction(
            reqs.push({ deleteSheet: { sheetId: id } });
         }
       });
-      
+
       if (reqs.length > 0) {
         await sheets.spreadsheets.batchUpdate({
           spreadsheetId: bidManagementSpreadsheetId,
           requestBody: { requests: reqs }
-        }).catch(err => console.error("Failed deleting sheets", err));
+        }).catch(err => onLog(`Failed deleting sheets from Bid Management: ${err.message}`));
       }
 
       await sheets.spreadsheets.values.update({
@@ -220,20 +220,20 @@ export async function setupNewAuction(
         range: "'Auction-Status'!A2",
         valueInputOption: "USER_ENTERED",
         requestBody: { values: [[true]] }
-      }).catch(err => console.error("Failed Auction-Status", err));
+      }).catch(err => onLog(`Failed to reset Auction-Status: ${err.message}`));
 
       await sheets.spreadsheets.values.clear({
         spreadsheetId: bidManagementSpreadsheetId,
         range: "'Special-Winners'!B2:B3"
-      }).catch(err => console.error("Failed Special-Winners clear", err));
+      }).catch(err => onLog(`Failed to clear Special-Winners: ${err.message}`));
 
       await sheets.spreadsheets.values.clear({
         spreadsheetId: bidManagementSpreadsheetId,
         range: "'Follow-Up'!A2:Z"
-      }).catch(err => console.error("Failed Follow-Up clear", err));
+      }).catch(err => onLog(`Failed to clear Follow-Up: ${err.message}`));
     }
-  } catch (err) {
-    console.error("General error during sheet resets", err);
+  } catch (err: any) {
+    onLog(`General error during sheet resets: ${err.message}`);
   }
 
   return {

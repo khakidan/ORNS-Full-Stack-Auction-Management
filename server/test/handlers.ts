@@ -9,6 +9,8 @@ export let lastBulkWritePayload: any[][] = [];
 export let bundleWritePayload: any[][] = [];
 export let bulkWriteCallCount = 0;
 export let productionScriptCallLog: string[] = [];
+export let clearedRanges: { spreadsheetId: string; range: string }[] = [];
+export let sheetBatchUpdateRequests: { spreadsheetId: string; requests: any[] }[] = [];
 
 export function resetHandlersState() {
   appendCallCount = 0;
@@ -20,6 +22,8 @@ export function resetHandlersState() {
   bundleWritePayload = [];
   bulkWriteCallCount = 0;
   productionScriptCallLog = [];
+  clearedRanges = [];
+  sheetBatchUpdateRequests = [];
 }
 
 export const handlers = [
@@ -118,12 +122,21 @@ export const handlers = [
   }),
 
   // Google Sheets clear handler
-  http.post('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range\\:clear', () => {
+  http.post('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range\\:clear', ({ params }) => {
+    clearedRanges.push({
+      spreadsheetId: String(params.spreadsheetId),
+      range: decodeURIComponent(String(params.range))
+    });
     return HttpResponse.json({ clearedRange: "A1:Z100" });
   }),
 
   // Google Sheets batchUpdate handler
-  http.post('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId\\:batchUpdate', () => {
+  http.post('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId\\:batchUpdate', async ({ params, request }) => {
+    const body = await request.clone().json().catch(() => ({})) as any;
+    sheetBatchUpdateRequests.push({
+      spreadsheetId: String(params.spreadsheetId),
+      requests: body?.requests || []
+    });
     return HttpResponse.json({ replies: [] });
   }),
 
