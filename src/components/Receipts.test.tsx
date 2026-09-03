@@ -83,6 +83,9 @@ describe("Receipts", () => {
     const btn = screen.getByText("Refresh");
     await userEvent.click(btn);
     
-    expect(fetchWithRetry).toHaveBeenCalledWith(expect.stringContaining("/api/drive/files/mock-folder-id"), expect.anything());
+    expect(fetchWithRetry).toHaveBeenCalledWith(
+      expect.stringContaining("/api/drive/files/mock-folder-id"),
+      { credentials: "include" }
+    );
   });
 });
