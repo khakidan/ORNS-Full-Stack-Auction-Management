@@ -10,7 +10,6 @@ export interface WinnerRecord {
   items: { id: string; name: string; price: number }[];
   paid: boolean;
   paymentPending?: boolean;
-  paymentMethod: string;
 }
 
 interface UseCheckoutStateArgs {
@@ -158,8 +157,7 @@ export function useCheckoutState({
             total,
             items: wonItems,
             paid: bidderInfo?.paid || false,
-            paymentPending: !!bidderInfo?.checkoutTimestamp && !bidderInfo?.paid,
-            paymentMethod: "" // Will be determined from bidders/attendees if needed
+            paymentPending: !!bidderInfo?.checkoutTimestamp && !bidderInfo?.paid
           });
         }
       }

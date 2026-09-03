@@ -152,10 +152,6 @@ Sorted by severity within each area.
 
 ### Dead code
 
-- **`WinnerRecord.paymentMethod` is always `""` and never read**
-  (`src/hooks/useCheckoutState.ts:13,162`) - `WinnerCard`, `WinnerGrid`,
-  and `PaymentMethodDialog` all use a separate `paymentMethod` state
-  instead. Remove the field.
 - **`useGoogleAuth`'s `checkAuth` is exported and destructured in
   `App.tsx:84` but never called** - confirmed by grep, the only
   consumer never invokes it. Stop returning it from the hook (or wire
