@@ -17,18 +17,6 @@ each area.
 
 ### Correctness bugs
 
-- **`Class_ReceiptManager.gs`'s own `createIndividualReceipt()`/
-  `createAllReceipts()` prototype methods (lines ~224/282) are now
-  unreachable** - they were only ever called by the global wrapper
-  functions of the same name, which were deleted as part of removing
-  the now-orphaned manual-menu code (see CHANGELOG.md). Left in place
-  rather than deleted in that same pass, since they're substantial,
-  self-contained, UI-prompt-driven methods (not one-line wrappers) and
-  weren't part of what was explicitly scoped for deletion. `ReceiptManager`
-  itself stays very much alive - `GoogleAIStudio.createAllReceipts`/
-  `.createIndividualReceipt` use a separate, parameterized code path on
-  the same class. Needs the same outright-delete-vs-keep-as-fallback
-  decision as the rest of that cleanup.
 - **Checkout's refresh spinner can get stuck forever**
   (`src/hooks/useCheckoutState.ts:109-179`) - `handleRefresh` sets
   `fetchingWinners(true)`, but `loadWinners` early-returns at its own

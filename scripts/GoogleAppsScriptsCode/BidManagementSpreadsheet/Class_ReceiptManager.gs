@@ -8,14 +8,17 @@
  *   - Calculate fees and generate PayPal links
  *   - Dispatch emails via EmailManager
  *   - Delegate doc writing to ReceiptDoc
- *   - Entry points for individual and batch receipt generation
+ *
+ * Has no menu-driven entry points of its own - individual and batch
+ * receipt generation are driven by GoogleAIStudio.createIndividualReceipt/
+ * .createAllReceipts, which construct a ReceiptManager and call its
+ * lower-level methods (buildReceipt_, processBatch_, etc.) directly.
  */
 class ReceiptManager extends GlobalVariables {
     constructor ( folderID = null ) {
         super();
         this.folderID = folderID; // ← stored so processBatch_() can pass it to ReceiptDoc
         this.customPaymentUrl = null;
-        this.uiManager = new UIManager();
         this.bidderManager = new BidderManager();
         this.auctionItemManager = new AuctionItemManager();
         this.emailManager = new EmailManager();
@@ -218,87 +221,6 @@ class ReceiptManager extends GlobalVariables {
     }
 
     // ── Entry points ─────────────────────────────────────────────────────────
-    /**
-     * Prompts for a single bidder number and generates their receipt.
-     */
-    createIndividualReceipt () {
-        const s = this.uiManager.strings;
-        let col = -1;
-        let bidIdText = '';
-
-        while ( true ) {
-            const input = this.uiManager.promptOkCancel( s.receiptGenerationTitle, s.enterBidderNumberPrompt );
-            if ( input === null ) return;
-
-            bidIdText = input.trim();
-            if ( bidIdText === '' ) {
-                this.uiManager.showAlert( s.invalidInputTitle, s.blankBidderNumberMsg );
-                continue;
-            }
-
-            col = this.findBidderColInBidSheet_( bidIdText );
-            if ( col === -1 ) {
-                const tryAgain = this.uiManager.confirmYesNo(
-                    s.bidderNotFoundTitle,
-                    s.bidderNotFoundReceiptMsg( bidIdText )
-                );
-                if ( tryAgain ) continue;
-                return;
-            }
-            break;
-        }
-
-        this.currentBidId = bidIdText;
-        this.currentReceipt = this.buildReceipt_( col );
-
-        if ( !this.currentReceipt.hasWinningItems() ) {
-            this.uiManager.showAlert( s.statusTitle, s.noBidsMsg );
-            return;
-        }
-
-        this.shouldSendEmails = this.uiManager.confirmYesNo( s.emailReceiptTitle, s.emailReceiptQuestion );
-
-        try {
-            this.handleEmailDispatch_();
-
-            const doc = new ReceiptDoc();
-            doc.setDoc_( `${ this.currentReceipt.lastName }, ${ this.currentReceipt.firstName }` );
-            doc.writeHeader_();
-            doc.writeReceiptBody_( this.currentReceipt, this );
-            doc.writeFooter_();
-            doc.saveAndClose_();
-            doc.convertToPdfAndMove_( true );
-
-            this.uiManager.showAlert( s.successTitle, s.receiptCreatedSuccessMsg );
-        } catch ( e ) {
-            this.uiManager.showAlert( s.errorTitle, s.receiptErrorMsg( e.message ) );
-        }
-    }
-
-    /**
-     * Generates receipts for ALL bidders who have won items, split into two
-     * batch documents to stay within GAS execution time limits.
-     */
-    createAllReceipts () {
-        const s = this.uiManager.strings;
-        const emailResponse = this.uiManager.promptYesNoCancel( s.massEmailTitle, s.massEmailQuestion );
-
-        if ( emailResponse === 'CANCEL' ) return;
-
-        this.shouldSendEmails = ( emailResponse === 'YES' );
-        this.bidderManager.sortByLastName_();
-
-        const bidderSheet = this.activeSpreadSheet.getSheetByName( this.bidNumbersString );
-        const allBidderData = bidderSheet.getDataRange().getValues();
-        const totalRows = allBidderData.length;
-        const midPoint = Math.ceil( ( totalRows - 1 ) / 2 ) + 1;
-
-        this.processBatch_( 'Receipts - 1st Half', allBidderData, 1, midPoint );
-        this.processBatch_( 'Receipts - 2nd Half', allBidderData, midPoint, totalRows );
-
-        this.uiManager.showAlert( s.successTitle, s.batchReceiptsSuccessMsg );
-    }
-
     /**
      * Processes a slice of the bidder list into a single batch receipt document.
      * @param {string}   fileName

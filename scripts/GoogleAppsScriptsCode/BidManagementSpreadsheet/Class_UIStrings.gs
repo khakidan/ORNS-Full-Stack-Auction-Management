@@ -115,19 +115,5 @@ class UIStrings {
         this.emailReceiptCheckoutQuestion = 'Would you like to email this receipt to the bidder?';
         this.receiptReadyTitle = 'Receipt Ready';
         this.receiptReadyMsg = ( total ) => `Total due: ${ total }. The receipt has been saved to the folder. Please print it now.`;
-
-        // ── ReceiptManager ────────────────────────────────────────────────────
-        this.receiptGenerationTitle = 'Receipt Generation';
-        this.enterBidderNumberPrompt = 'Enter Bidder Number:';
-        this.blankBidderNumberMsg = 'Bidder number cannot be blank. Please try again.';
-        this.bidderNotFoundReceiptMsg = ( id ) => `Bidder "${ id }" was not found. Would you like to try a different number?`;
-        this.statusTitle = 'Status';
-        this.noBidsMsg = 'This bidder has not won any items.';
-        this.emailReceiptQuestion = 'Would you like to email this receipt to the bidder (if an email address is on file)?';
-        this.receiptCreatedSuccessMsg = 'Receipt created and moved to the folder.';
-        this.receiptErrorMsg = ( msg ) => `Failed to create receipt: ${ msg }`;
-        this.massEmailTitle = 'Mass Email Receipts';
-        this.massEmailQuestion = 'Would you like to automatically email receipts to ALL winning bidders with an email address on file?\n\n(This should typically only be done once per auction).';
-        this.batchReceiptsSuccessMsg = 'Batch receipt generation complete.';
     }
 }
