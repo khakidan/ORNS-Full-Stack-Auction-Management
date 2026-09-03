@@ -36,13 +36,6 @@ each area.
   `finally` block, and `handleRefresh` has no `finally` of its own to
   cover that path. Fix: move the guard inside the `try`, or wrap
   `handleRefresh` in its own `try/finally`.
-- **OAuth `postMessage` listener doesn't check `event.origin`**
-  (`src/hooks/useApiAuthStatus.ts:24-31`, `src/hooks/useGoogleAuth.ts:12-26`) -
-  both listeners trust `event.data.tokens` from any `postMessage`
-  sender and persist it straight to `localStorage.google_tokens`, which
-  every backend call then sends as `x-google-tokens`. Fix: `if
-  (event.origin !== window.location.origin) return;` before reading
-  `event.data`.
 - **`WinnerCard`'s "Mark Paid" button has a permanently-dead loading
   condition** (`src/components/WinnerCard.tsx:89`) -
   `loading={processingId === \`${winner.bidderId}-pay\`}`, but
@@ -80,12 +73,6 @@ each area.
   `useAttendeesData.ts`'s `addAttendee`/`removeAttendee` - see
   CHANGELOG.md for all three. `useTicketAttendeeState.ts:79/100,108/120`
   is still open too.
-- **`useGoogleAuth`'s auth check runs inside a `setState` updater**
-  (`src/hooks/useGoogleAuth.ts:35-42`) - `checkAuth()` is called from
-  within the `setAuthenticated` updater function; React (especially
-  StrictMode) can invoke updaters more than once, doubling
-  `/auth/status` requests. Fix: call `checkAuth()` from the interval
-  body directly, not from inside a state updater.
 - **`server/services/emailService.ts:processEmail` does a direct
   triple-sheet read of Bid-Management data** with no defensive parsing
   - only reachable through the already-hardened receipt-email path, so
@@ -190,13 +177,6 @@ each area.
   accumulates state. Fix: clone before mutating.
 
 ### Test coverage gaps (`testing-philosophy.md`)
-
-Zero test file imports the real module (not a `vi.mock()` of its path)
-for any of these - confirmed by grep. Ranked by risk:
-
-- Lower priority but real gaps: `useConfigSettingsState.extractId`
-  (4 regex branches, only ever exercised with pre-clean input in the
-  existing test), `useApiAuthStatus.ts`/`useGoogleAuth.ts`.
 
 Existing tests that would rate SHALLOW/CIRCULAR/SMOKE under
 `testing-philosophy.md`'s own definitions, with the fix each needs:

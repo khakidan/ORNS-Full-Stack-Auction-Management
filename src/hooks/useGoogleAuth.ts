@@ -1,14 +1,26 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getAuthStatus, getAuthUrl, logout } from "@/services/google-api";
 import { toast } from "sonner";
 
 export function useGoogleAuth() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  // Mirrors `authenticated` for the interval below to read without being
+  // in its dependency array (which would tear down/recreate the interval
+  // every time auth state changes).
+  const authenticatedRef = useRef(authenticated);
+
+  useEffect(() => {
+    authenticatedRef.current = authenticated;
+  }, [authenticated]);
 
   useEffect(() => {
     checkAuth();
     
     const handleAuthSuccess = (event: MessageEvent) => {
+      // Reject postMessages from any other origin before trusting
+      // event.data at all - without this, any page holding a reference to
+      // this window could inject fake tokens for us to persist and trust.
+      if (event.origin !== window.location.origin) return;
       console.log("[Auth] Received message:", event.data?.type);
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
         if (event.data.tokens) {
@@ -31,14 +43,15 @@ export function useGoogleAuth() {
     
     window.addEventListener('message', handleAuthSuccess);
 
-    // low-frequency fallback poll (every 5 seconds), only if not authenticated
+    // low-frequency fallback poll (every 5 seconds), only if not authenticated.
+    // Reads authenticatedRef rather than calling checkAuth() from inside a
+    // setState updater - updaters must be pure, and React (especially
+    // StrictMode) can invoke them more than once, which would have doubled
+    // these /auth/status requests.
     const interval = setInterval(() => {
-      setAuthenticated((prev) => {
-        if (!prev) {
-          checkAuth();
-        }
-        return prev;
-      });
+      if (!authenticatedRef.current) {
+        checkAuth();
+      }
     }, 5000);
 
     return () => {

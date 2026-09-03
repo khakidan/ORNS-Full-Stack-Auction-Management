@@ -22,6 +22,10 @@ export function useApiAuthStatus() {
     checkProviderAuth();
 
     const handleMessage = (event: MessageEvent) => {
+      // Reject postMessages from any other origin before trusting
+      // event.data at all - without this, any page holding a reference to
+      // this window could inject fake tokens for us to persist and trust.
+      if (event.origin !== window.location.origin) return;
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
         if (event.data.tokens) {
           localStorage.setItem('google_tokens', JSON.stringify(event.data.tokens));
