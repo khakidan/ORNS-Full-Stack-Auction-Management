@@ -6,7 +6,7 @@ import "@testing-library/jest-dom";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Bidders from "./Bidders";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 // Framer Motion Mock as established in other tests
 vi.mock("motion/react", () => ({
@@ -57,8 +57,11 @@ vi.mock("@/components/ui/alert-dialog", () => ({
   AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
   AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
   AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
-  AlertDialogCancel: ({ children }: any) => <button>{children}</button>,
-  AlertDialogAction: ({ children }: any) => <button>{children}</button>,
+  // Forward onClick - a prior version of this mock dropped it entirely,
+  // which would silently no-op any test that clicks a confirm/cancel
+  // button in a dialog built on these primitives (see refactor-opportunities.md).
+  AlertDialogCancel: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
+  AlertDialogAction: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
 }));
 
 // Mock ScrollArea component
@@ -84,6 +87,11 @@ vi.mock("@/services/google-api", () => ({
   getSheetData: vi.fn(),
   appendSheetData: vi.fn(),
 }));
+
+import { toast } from "sonner";
+import { fetchWithRetry } from "@/services/google-api";
+
+const mockedFetchWithRetry = vi.mocked(fetchWithRetry);
 
 // Mock dataset of 6 bidders covering all target filter states:
 // - 2 checked in (John Doe, Jane Smith)
@@ -221,9 +229,24 @@ const mockAttendees = [
   },
 ];
 
+// Stable across renders (unlike a fresh vi.fn() created inside the mock
+// factory below, which would produce a new, unassertable reference on
+// every re-render) so tests can assert on them directly.
+const mockCheckInBidder = vi.fn();
+const mockMarkBidderAsProxy = vi.fn();
+const mockFetchBidders = vi.fn();
+const mockFetchAttendees = vi.fn();
+
+// Per-test overrides for the two context mocks below - null means "use
+// the shared default dataset used by every existing test in this file".
+// Reset to null in the top-level afterEach so an override never leaks
+// into a later, unrelated test.
+let authOverride: any = null;
+let configOverride: any = null;
+
 // Mock Config & Auction contexts
 vi.mock("@/context/ConfigContext", () => ({
-  useConfig: () => ({
+  useConfig: () => configOverride ?? {
     config: {
       bidManagementSpreadsheetId: "test-bid-mgmt-id",
       auctionTicketsSpreadsheetId: "test-tickets-id",
@@ -231,21 +254,26 @@ vi.mock("@/context/ConfigContext", () => ({
       bidManagementSheet: "Bid-Management",
       bidderNumbersSheet: "Bidder-Numbers",
     }
-  })
+  }
 }));
 
 vi.mock("@/context/AuctionContext", () => ({
-  useAuction: () => ({
+  useAuction: () => authOverride ?? {
     bidders: mockBidders,
     attendees: mockAttendees,
     loading: false,
-    checkInBidder: vi.fn(),
-    markBidderAsProxy: vi.fn(),
-    fetchBidders: vi.fn(),
-    fetchAttendees: vi.fn(),
+    checkInBidder: mockCheckInBidder,
+    markBidderAsProxy: mockMarkBidderAsProxy,
+    fetchBidders: mockFetchBidders,
+    fetchAttendees: mockFetchAttendees,
     isAuctionClosed: false,
-  })
+  }
 }));
+
+afterEach(() => {
+  authOverride = null;
+  configOverride = null;
+});
 
 describe('Bidders - Sort and Filter', () => {
   let user: ReturnType<typeof userEvent.setup>;
@@ -570,6 +598,178 @@ describe('Bidders - Check-In Proxy Mutual Exclusion', () => {
     const row = screen.getByText("Alice Green").closest("tr") as HTMLElement;
     expect(within(row).getByRole("button", { name: /check in/i })).toBeInTheDocument();
     expect(within(row).getByRole("button", { name: /proxy/i })).toBeInTheDocument();
+  });
+});
+
+// A not-checked-in, non-proxy bidder with a real, PENDING attendee record -
+// the one combination handleCheckInAttempt (useBiddersState.ts) routes
+// through the PendingPaymentDialog instead of checking in immediately.
+// None of the shared mockBidders/mockAttendees above hit this combination
+// (the only pending-attendee bidder, Jane Smith, is already checked in),
+// so these tests override the AuctionContext mock with their own small
+// dataset via authOverride instead of extending the shared arrays.
+const pendingBidder = {
+  id: "109",
+  firstName: "Grace",
+  lastName: "Pending",
+  email: "grace@example.com",
+  checkedIn: false,
+  isProxy: false,
+  checkedOut: false,
+  paid: false,
+};
+
+const pendingAttendee = {
+  id: "att-9",
+  firstName: "Grace",
+  lastName: "Pending",
+  email: "grace@example.com",
+  phone: "",
+  sheet: "tickets",
+  paymentStatus: "Pending",
+  guestsInfo: [],
+};
+
+function usePendingBidderScenario(overrides: { ticketPrice?: string } = {}) {
+  authOverride = {
+    bidders: [pendingBidder],
+    attendees: [pendingAttendee],
+    loading: false,
+    checkInBidder: mockCheckInBidder,
+    markBidderAsProxy: mockMarkBidderAsProxy,
+    fetchBidders: mockFetchBidders,
+    fetchAttendees: mockFetchAttendees,
+    isAuctionClosed: false,
+  };
+  configOverride = {
+    config: {
+      bidManagementSpreadsheetId: "test-bid-mgmt-id",
+      auctionTicketsSpreadsheetId: "test-tickets-id",
+      ticketPrice: overrides.ticketPrice ?? "35",
+      bidManagementSheet: "Bid-Management",
+      bidderNumbersSheet: "Bidder-Numbers",
+    },
+  };
+}
+
+describe('Bidders - Check-In', () => {
+  let user: ReturnType<typeof userEvent.setup>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    user = userEvent.setup();
+  });
+
+  it('checks in immediately (no dialog) when the bidder has no pending-payment attendee', async () => {
+    // Alice Green (shared dataset): not checked in, not proxy, no
+    // matching attendee record at all.
+    render(<Bidders />);
+
+    const row = screen.getByText("Alice Green").closest("tr") as HTMLElement;
+    await user.click(within(row).getByRole("button", { name: /check in/i }));
+
+    expect(mockCheckInBidder).toHaveBeenCalledTimes(1);
+    expect(mockCheckInBidder).toHaveBeenCalledWith(expect.objectContaining({ id: "103", firstName: "Alice" }));
+    expect(fetchWithRetry).not.toHaveBeenCalled();
+  });
+
+  it('opens the pending-payment confirmation instead of checking in immediately when the attendee has not paid', async () => {
+    usePendingBidderScenario();
+    render(<Bidders />);
+
+    // Before the click, no dialog text naming Grace should be present.
+    expect(screen.queryByText(/Grace Pending has not paid/i)).not.toBeInTheDocument();
+
+    const row = screen.getByText("Grace Pending").closest("tr") as HTMLElement;
+    await user.click(within(row).getByRole("button", { name: /check in/i }));
+
+    // The confirmation dialog's real description text now renders with
+    // Grace's real name - proving handleCheckInAttempt routed through
+    // setPendingCheckIn rather than checking in directly.
+    expect(screen.getByText(/Grace Pending has not paid/i)).toBeInTheDocument();
+    expect(mockCheckInBidder).not.toHaveBeenCalled();
+    expect(fetchWithRetry).not.toHaveBeenCalled();
+  });
+
+  it('"No, Do Not Add" checks the bidder in directly, without adding a ticket to their receipt', async () => {
+    usePendingBidderScenario();
+    render(<Bidders />);
+
+    const row = screen.getByText("Grace Pending").closest("tr") as HTMLElement;
+    await user.click(within(row).getByRole("button", { name: /check in/i }));
+    await user.click(screen.getByRole("button", { name: /no, do not add/i }));
+
+    expect(mockCheckInBidder).toHaveBeenCalledTimes(1);
+    expect(mockCheckInBidder).toHaveBeenCalledWith(expect.objectContaining({ id: "109" }));
+    expect(fetchWithRetry).not.toHaveBeenCalled();
+  });
+
+  it('"Yes, Add to Receipt" POSTs the real /api/auction/check-in-with-bid payload', async () => {
+    usePendingBidderScenario();
+    mockedFetchWithRetry.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ success: true, bidAdded: true, checkedIn: true }),
+    } as Response);
+
+    render(<Bidders />);
+
+    const row = screen.getByText("Grace Pending").closest("tr") as HTMLElement;
+    await user.click(within(row).getByRole("button", { name: /check in/i }));
+    await user.click(screen.getByRole("button", { name: /yes, add to receipt/i }));
+
+    expect(fetchWithRetry).toHaveBeenCalledWith(
+      "http://localhost:3000/api/auction/check-in-with-bid",
+      expect.objectContaining({ method: "POST", credentials: "include" })
+    );
+    const body = JSON.parse((mockedFetchWithRetry.mock.calls[0][1] as any).body);
+    expect(body).toMatchObject({
+      bidderId: "109",
+      spreadsheetId: "test-bid-mgmt-id",
+      bidManagementSheet: "Bid-Management",
+      bidderNumbersSheet: "Bidder-Numbers",
+      bidValue: 35,
+    });
+    expect(typeof body.idempotencyKey).toBe("string");
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(toast.success).toHaveBeenCalledWith("Check-in complete and ticket added to Grace's receipt");
+    expect(mockFetchBidders).toHaveBeenCalled();
+  });
+
+  it("falls back to a $35 bid value when the configured ticket price doesn't parse", async () => {
+    usePendingBidderScenario({ ticketPrice: "not-a-number" });
+    mockedFetchWithRetry.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ success: true, bidAdded: true, checkedIn: true }),
+    } as Response);
+
+    render(<Bidders />);
+
+    const row = screen.getByText("Grace Pending").closest("tr") as HTMLElement;
+    await user.click(within(row).getByRole("button", { name: /check in/i }));
+    await user.click(screen.getByRole("button", { name: /yes, add to receipt/i }));
+
+    await new Promise((r) => setTimeout(r, 0));
+    const body = JSON.parse((mockedFetchWithRetry.mock.calls[0][1] as any).body);
+    expect(body.bidValue).toBe(35);
+  });
+
+  it('shows an error toast (not a crash) and still refreshes the bidder list when the transactional check-in fails', async () => {
+    usePendingBidderScenario();
+    mockedFetchWithRetry.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: "Bidder column not found in Bid Management" }),
+    } as Response);
+
+    render(<Bidders />);
+
+    const row = screen.getByText("Grace Pending").closest("tr") as HTMLElement;
+    await user.click(within(row).getByRole("button", { name: /check in/i }));
+    await user.click(screen.getByRole("button", { name: /yes, add to receipt/i }));
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(toast.error).toHaveBeenCalledWith("Failed to sync updates—retrying... local state reverted.");
+    expect(mockFetchBidders).toHaveBeenCalled();
   });
 });
 

@@ -197,10 +197,6 @@ for any of these - confirmed by grep. Ranked by risk:
 - Lower priority but real gaps: `useConfigSettingsState.extractId`
   (4 regex branches, only ever exercised with pre-clean input in the
   existing test), `useApiAuthStatus.ts`/`useGoogleAuth.ts`.
-- **Bidder check-in** - `Bidders.test.tsx` has 21 tests and none click
-  "Check In." The pending-payment confirm path, the
-  `/api/auction/check-in-with-bid` call, its `bidValue: parseFloat(ticketPrice)
-  || 35` fallback, and the failure/rollback path are all untested.
 
 Existing tests that would rate SHALLOW/CIRCULAR/SMOKE under
 `testing-philosophy.md`'s own definitions, with the fix each needs:
@@ -222,10 +218,6 @@ Existing tests that would rate SHALLOW/CIRCULAR/SMOKE under
   identical three `getByDisplayValue` calls on props handed in one line
   earlier; the first is mistitled "renders the dialog title and
   description" but never checks the description.
-- `src/components/Bidders.test.tsx:60-61` - mocks `AlertDialogCancel`/`AlertDialogAction`
-  as `({children}) => <button>{children}</button>`, dropping `onClick`
-  entirely - any future test clicking a confirm button in this file
-  will silently no-op and still pass.
 
 ---
 
