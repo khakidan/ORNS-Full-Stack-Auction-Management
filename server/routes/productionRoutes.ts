@@ -96,7 +96,8 @@ export default function createProductionRouter() {
    */
 
   router.post("/tickets/bidder-labels", (req, res, next) => {
-    handleAppsScriptCall(req, res, next, "apiCreateBidderLabels", process.env.SCRIPT_ID_TICKETS!, []);
+    const { folderId, bidManagementSpreadsheetId } = req.body;
+    handleAppsScriptCall(req, res, next, "apiCreateBidderLabels", process.env.SCRIPT_ID_TICKETS!, [folderId || "", bidManagementSpreadsheetId || ""]);
   });
 
   return router;

@@ -80,11 +80,12 @@ describe("Document and Presentation Creation workflow", () => {
     {
       endpoint: "/api/production/tickets/bidder-labels",
       funcName: "apiCreateBidderLabels",
-      payload: {},
+      payload: { folderId: "test-folder-id", bidManagementSpreadsheetId: "test-bm-id" },
+      expectedParams: ["test-folder-id", "test-bm-id"],
     },
   ];
 
-  testCases.forEach(({ endpoint, funcName, payload }) => {
+  testCases.forEach(({ endpoint, funcName, payload, expectedParams }) => {
     describe(endpoint, () => {
       it(`happy path - successfully calls ${funcName}`, async () => {
         const response = await request(app)
@@ -95,11 +96,12 @@ describe("Document and Presentation Creation workflow", () => {
         expect(response.status).toBe(200);
         expect(productionScriptCallLog).toContain(funcName);
         expect(appsScriptCallCount).toBe(1);
-        // Confirms the folderId actually reaches the Apps Script call as a
-        // parameter, not just that some function got called - a payload
+        // Confirms the payload fields actually reach the Apps Script call as
+        // parameters, not just that some function got called - a payload
         // handling bug (wrong key, wrong array position) wouldn't have
         // failed this test before this assertion existed.
-        expect(lastAppsScriptParams).toEqual((payload as any).folderId !== undefined ? [(payload as any).folderId] : []);
+        const expected = expectedParams ?? ((payload as any).folderId !== undefined ? [(payload as any).folderId] : []);
+        expect(lastAppsScriptParams).toEqual(expected);
       });
 
       it("auth failure - returns 401 when unauthenticated", async () => {

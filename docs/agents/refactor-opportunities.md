@@ -22,6 +22,36 @@ Sorted by severity within each area.
 
 ### Correctness bugs
 
+- ~~`TicketsSpreadsheet/Class_BidderManager.gs`'s `getAllBidders()` invented
+  bidder numbers locally instead of reading the app's real ones, and used
+  the wrong guest-2/guest-3 column offsets~~ - **done, see CHANGELOG.md.**
+  Rewrote it to look every bidder up in the Bid-Management app's real
+  `Bidder-Numbers` sheet (matching `syncService.ts`'s normalization exactly)
+  instead of generating sequential numbers, fixed the column offsets, and
+  fixed the accompanying dead-`folderID` bug in
+  `server/routes/productionRoutes.ts`'s `/tickets/bidder-labels` route that
+  was silently sending every printed label doc to the developer's old
+  working folder instead of the For-Print folder.
+- **`TicketsSpreadsheet/menu.gs` is still live/enabled** - unlike
+  `BidManagementSpreadsheet/menu.gs` and `ItemsSpreadsheet/menu.gs`, which
+  were both deliberately disabled once the web app became the single
+  source of use (see CHANGELOG.md). Left alone during the bidder-number fix
+  above since the user hasn't been asked about it yet and disabling it was
+  out of scope for that fix - its one live entry point,
+  `generateBidderLabels()`, was kept functional (now prompts for the
+  Bid-Management spreadsheet ID via `ui.prompt(...)` instead of taking a
+  `BidderManager` with no way to supply one). Needs the same
+  disable-the-menu conversation already had for the other two spreadsheets.
+- **`server/services/syncService.ts`'s `Bidder-Numbers` header (11 columns:
+  A id, B firstName, C lastName, D email, E checkedIn, F proxy,
+  G checkedOut, H paid, I paymentMethod, J invoiceURL, K invoicedAmount)
+  doesn't match `BidManagementSpreadsheet/Class_BidderManager.gs`'s own
+  12-column layout used elsewhere this session** (G paid, H checkedOut,
+  L timestamp added). Noticed while re-verifying the exact column mapping
+  for the Tickets-spreadsheet bidder-number fix above - didn't affect that
+  fix (only needs columns A-D, where both agree) so left uninvestigated,
+  but worth reconciling: either one of these is stale/wrong, or there's an
+  undocumented reason they diverge.
 - **`Class_ReceiptManager.gs`'s own `createIndividualReceipt()`/
   `createAllReceipts()` prototype methods (lines ~224/282) are now
   unreachable** - they were only ever called by the global wrapper

@@ -7,12 +7,15 @@
  * cells — columns 0 and 2, column 1 is a narrow gutter). Every 6 bidders
  * a new page break and table copy are appended.
  *
- * @param {BidderManager} bidderManager  Provides the ordered Bidder array.
+ * @param {Bidder[]} bidders  Already-fetched, already-validated bidder array
+ *   (see BidderManager#getAllBidders). Fetching happens BEFORE this class is
+ *   constructed so a failed/unmatched lookup never leaves a wasted, empty
+ *   template copy behind in Drive.
  */
 class BidderLabelsDoc extends DocService {
-    constructor ( bidderManager, folderID = null ) {
+    constructor ( bidders, folderID = null ) {
         super();
-        this.bidderManager = bidderManager;
+        this.bidders = bidders;
 
         // Pass folderID so TemplateManager places the copy in the correct folder
         const templateManager = new TemplateManager( folderID );
@@ -56,7 +59,7 @@ class BidderLabelsDoc extends DocService {
      */
     generateBidderLabels () {
         const body = this.getBody_();
-        const bidders = this.bidderManager.getAllBidders();
+        const bidders = this.bidders;
 
         const tables = body.getTables();
         if ( tables.length === 0 ) return;
@@ -86,5 +89,27 @@ class BidderLabelsDoc extends DocService {
 }
 
 function generateBidderLabels () {
-    new BidderLabelsDoc( new BidderManager() ).generateBidderLabels();
+    const ui = SpreadsheetApp.getUi();
+    const response = ui.prompt(
+        'Bid-Management Spreadsheet',
+        'Paste the Bid-Management spreadsheet ID or URL:',
+        ui.ButtonSet.OK_CANCEL
+    );
+    if ( response.getSelectedButton() !== ui.Button.OK ) return;
+
+    const idMatch = response.getResponseText().match( /[-\w]{25,}/ );
+    if ( !idMatch ) {
+        ui.alert( 'Error', 'No valid spreadsheet ID found in that input.', ui.ButtonSet.OK );
+        return;
+    }
+
+    let bidders;
+    try {
+        bidders = new BidderManager().getAllBidders( idMatch[ 0 ] );
+    } catch ( e ) {
+        ui.alert( 'Error', e.toString(), ui.ButtonSet.OK );
+        return;
+    }
+
+    new BidderLabelsDoc( bidders ).generateBidderLabels();
 }

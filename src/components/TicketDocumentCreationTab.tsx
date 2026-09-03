@@ -17,6 +17,7 @@ export default function TicketDocumentCreationTab() {
   const { config } = useConfig();
   const spreadsheetId = config.auctionTicketsSpreadsheetId;
   const forPrintFolderId = config.forPrintFolderId;
+  const bidManagementSpreadsheetId = config.bidManagementSpreadsheetId;
   
   const [files, setFiles] = useState<any[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
@@ -55,15 +56,20 @@ export default function TicketDocumentCreationTab() {
       toast.error("Please correctly configure the Auction Tickets Spreadsheet ID in Settings.");
       return;
     }
+    if (!bidManagementSpreadsheetId || bidManagementSpreadsheetId.includes("PASTE")) {
+      toast.error("Please correctly configure the Bid Management Spreadsheet ID in Settings.");
+      return;
+    }
 
     try {
       toast.loading(`Running ${label}...`, { id: functionName });
-      
+
       const endpoint = "/api/production/tickets/bidder-labels";
-      
+
       const res = await fetchWithRetry(`${getBaseUrl()}${endpoint}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" }
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId: forPrintFolderId, bidManagementSpreadsheetId })
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
