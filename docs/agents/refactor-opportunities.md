@@ -17,14 +17,6 @@ each area.
 
 ### Correctness bugs
 
-- **`WinnerCard`'s "Mark Paid" button has a permanently-dead loading
-  condition** (`src/components/WinnerCard.tsx:89`) -
-  `loading={processingId === \`${winner.bidderId}-pay\`}`, but
-  `useCheckoutState.ts` only ever sets `processingId` to `-email` or
-  `-print` suffixes (confirmed by grep - no `-pay` write exists
-  anywhere). The button never shows a spinner regardless of actual
-  in-flight state. Fix: wire it to the real `isSubmittingPayment` flag
-  used by `PaymentMethodDialog`, or drop the dead prop.
 - **New staff/sponsor attendee entries write payment fields to the
   wrong semantics** (`src/hooks/useTicketAttendeeState.ts:140-142`) -
   writes `row[16] = "Paid"` (commented "Payment Status") and `row[17] =

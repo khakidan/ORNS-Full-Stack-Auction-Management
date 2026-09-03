@@ -10,6 +10,7 @@ interface WinnerGridProps {
   loading: boolean;
   bidders: Bidder[];
   processingId: string | null;
+  payingBidderId: string | null;
   onEmailReceipt: (winner: WinnerRecord) => void;
   onPrintReceipt: (winner: WinnerRecord) => void;
   onMarkPaid: (winner: WinnerRecord) => void;
@@ -27,6 +28,7 @@ export function WinnerGrid({
   loading,
   bidders,
   processingId,
+  payingBidderId,
   onEmailReceipt,
   onPrintReceipt,
   onMarkPaid,
@@ -47,6 +49,7 @@ export function WinnerGrid({
               winner={winner}
               hasEmail={hasEmail}
               processingId={processingId}
+              payingBidderId={payingBidderId}
               onEmailReceipt={onEmailReceipt}
               onPrintReceipt={onPrintReceipt}
               onMarkPaid={onMarkPaid}

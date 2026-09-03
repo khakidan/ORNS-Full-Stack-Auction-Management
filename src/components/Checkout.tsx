@@ -87,6 +87,7 @@ export default function Checkout() {
             loading={state.fetchingWinners}
             bidders={bidders}
             processingId={state.processingId}
+            payingBidderId={state.isSubmittingPayment ? state.winnerToPay?.bidderId ?? null : null}
             onEmailReceipt={state.handleEmailReceipt}
             onPrintReceipt={state.handlePrintReceipt}
             onMarkPaid={state.handleMarkPaid}
@@ -99,6 +100,7 @@ export default function Checkout() {
             loading={state.fetchingWinners}
             bidders={bidders}
             processingId={state.processingId}
+            payingBidderId={state.isSubmittingPayment ? state.winnerToPay?.bidderId ?? null : null}
             onEmailReceipt={state.handleEmailReceipt}
             onPrintReceipt={state.handlePrintReceipt}
             onMarkPaid={state.handleMarkPaid}

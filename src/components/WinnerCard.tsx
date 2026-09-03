@@ -7,6 +7,7 @@ interface WinnerCardProps {
   winner: WinnerRecord;
   hasEmail: boolean;
   processingId: string | null;
+  payingBidderId: string | null;
   onEmailReceipt: (winner: WinnerRecord) => void;
   onPrintReceipt: (winner: WinnerRecord) => void;
   onMarkPaid: (winner: WinnerRecord) => void;
@@ -16,11 +17,21 @@ export function WinnerCard({
   winner,
   hasEmail,
   processingId,
+  payingBidderId,
   onEmailReceipt,
   onPrintReceipt,
   onMarkPaid,
 }: WinnerCardProps) {
   const isProcessingThisWinner = !!processingId && processingId.startsWith(`${winner.bidderId}-`);
+  // useCheckoutState.confirmMarkPaid closes the payment dialog immediately
+  // (before its background sync settles), so isSubmittingPayment's own
+  // in-flight window falls entirely after handleMarkPaid's dialog-open
+  // click - there's no async gap on this button's own click to show a
+  // spinner for. What this button CAN reflect is that later window: once
+  // the dialog closes, the "Checkout" button re-appears for a moment
+  // while the sync is still running, before winner.paid/paymentPending
+  // updates and this branch stops rendering it at all.
+  const isPayingThisWinner = payingBidderId === winner.bidderId;
 
   return (
     <Card className="flex flex-col h-full shadow-sm hover:shadow-md transition-shadow">
@@ -85,8 +96,9 @@ export function WinnerCard({
             size="sm"
             className="w-full gap-2"
             onClick={() => onMarkPaid(winner)}
-            disabled={isProcessingThisWinner}
-            loading={processingId === `${winner.bidderId}-pay`}
+            disabled={isProcessingThisWinner || isPayingThisWinner}
+            loading={isPayingThisWinner}
+            loadingText="Processing..."
             icon={<CheckCircle2 className="w-4 h-4" />}
           >
             Checkout
