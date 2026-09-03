@@ -45,16 +45,17 @@ Sorted by severity within each area.
   these models. Needs a decision on whether to delete them from this
   repo's reference copy (and, separately, whether they're worth
   removing from the live script too).
-- **Whether `PayPalSweeper.gs`'s `checkPendingPayPalInvoices` is
-  actually registered as a live time-driven trigger is unconfirmed** -
-  no `ScriptApp.newTrigger(...)` call or trigger manifest exists in any
-  of the provided `.gs` files; trigger registration lives in the Apps
-  Script project's Triggers UI, not in source, so it can't be verified
-  from this repo. If it was never set up (plausible if the deferred/
-  sweeper flow was a recent addition), the entire "keep checking until
-  it's paid" background reconciliation never runs at all, independent
-  of the invoice-ID-regex bug that was already found and fixed here.
-  Needs the user to check the live Apps Script project's Triggers page.
+- **The manual-menu manager classes are now fully orphaned in the live
+  script, since the custom "Auction" menu was disabled** (`menu.gs`'s
+  `onOpen`/`onInstall` are now no-ops, per the user's direction that
+  this app is the single source of use and the spreadsheet is data
+  storage only) - `Class_CheckInManager.gs`, `Class_CheckOutManager.gs`,
+  `Class_BidEntryManager.gs`, `Class_AuctionSetupManager.gs`,
+  `Class_SettingsManager.gs`, and their support classes (`UIManager`,
+  `UIStrings`) had no other entry point. `createCustomMenu()` itself is
+  intentionally left defined (just never called) as a manual fallback.
+  Needs a decision on whether to delete these classes outright too, or
+  leave them in place as inert fallback code.
 - **Bundle creation silently drops a manually-entered min raise**
   (`server/services/bundleService.ts:158-170,225`) - `minRaise` is
   destructured out of `req.body` in `bundleRoutes.ts:61,88` and typed

@@ -3,16 +3,44 @@
  * Uses the exact structural parsing logic validated in the direct pipeline test.
  */
 class PayPalService {
-    constructor () {
-        const props = PropertiesService.getScriptProperties();
-        const allProps = props.getProperties(); // Fetch all keys at once to prevent individual null hits
+    /**
+     * @param {Object} [overrides] Optional dependency/config injection, used by
+     *   unit tests to avoid touching real Script Properties or the network.
+     *   Production call sites (`new PayPalService()`) never pass this - every
+     *   field falls back to the real Apps Script behavior when omitted.
+     * @param {function(string, Object): { getResponseCode: function(): number, getContentText: function(): string }} [overrides.fetcher]
+     *   Replaces `UrlFetchApp.fetch`. Must match its (url, options) => response signature.
+     * @param {string} [overrides.clientId]      Replaces the `PAYPAL_CLIENT_ID` script property.
+     * @param {string} [overrides.clientSecret]  Replaces the `PAYPAL_CLIENT_SECRET` script property.
+     * @param {boolean} [overrides.isSandbox]    Replaces the `PAYPAL_IS_SANDBOX` script property.
+     */
+    constructor ( overrides = {} ) {
+        this.fetcher = overrides.fetcher || UrlFetchApp.fetch.bind( UrlFetchApp );
+
+        // Only touch real Script Properties when credentials aren't injected -
+        // keeps this constructor safe to call outside the Apps Script runtime
+        // (e.g. from a test harness) as long as clientId/clientSecret are given.
+        const needsScriptProperties = overrides.clientId === undefined
+            || overrides.clientSecret === undefined
+            || overrides.isSandbox === undefined;
+        const allProps = needsScriptProperties
+            ? PropertiesService.getScriptProperties().getProperties()
+            : {};
 
         // Clean keys of any hidden trailing spaces from the Google Cloud console copy/paste
-        this.clientId = ( allProps[ 'PAYPAL_CLIENT_ID' ] || '' ).trim();
-        this.clientSecret = ( allProps[ 'PAYPAL_CLIENT_SECRET' ] || '' ).trim();
+        this.clientId = overrides.clientId !== undefined
+            ? overrides.clientId
+            : ( allProps[ 'PAYPAL_CLIENT_ID' ] || '' ).trim();
+        this.clientSecret = overrides.clientSecret !== undefined
+            ? overrides.clientSecret
+            : ( allProps[ 'PAYPAL_CLIENT_SECRET' ] || '' ).trim();
 
-        const sandboxRaw = ( allProps[ 'PAYPAL_IS_SANDBOX' ] || '' ).trim().toLowerCase();
-        this.isSandbox = sandboxRaw === 'true' || sandboxRaw === ''; // Default to true if empty/sandbox
+        if ( overrides.isSandbox !== undefined ) {
+            this.isSandbox = overrides.isSandbox;
+        } else {
+            const sandboxRaw = ( allProps[ 'PAYPAL_IS_SANDBOX' ] || '' ).trim().toLowerCase();
+            this.isSandbox = sandboxRaw === 'true' || sandboxRaw === ''; // Default to true if empty/sandbox
+        }
 
         this.baseUrl = this.isSandbox ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
         this.merchantEmail = 'pavetheway@orns.org';
@@ -36,7 +64,7 @@ class PayPalService {
             muteHttpExceptions: true
         };
 
-        const response = UrlFetchApp.fetch( `${ this.baseUrl }/v1/oauth2/token`, options );
+        const response = this.fetcher( `${ this.baseUrl }/v1/oauth2/token`, options );
         if ( response.getResponseCode() !== 200 ) {
             throw new Error( `PayPal API Authentication Failed: ${ response.getContentText() }` );
         }
@@ -177,7 +205,7 @@ class PayPalService {
         };
 
         // Step A: Draft the invoice
-        let response = UrlFetchApp.fetch( `${ this.baseUrl }/v2/invoicing/invoices`, options );
+        let response = this.fetcher( `${ this.baseUrl }/v2/invoicing/invoices`, options );
         let responseText = response.getContentText();
         let invoiceData = JSON.parse( responseText );
 
@@ -195,7 +223,7 @@ class PayPalService {
         // Step B: Send/publish so it registers on the payment ledger
         options.method = 'post';
         options.payload = JSON.stringify( { send_to_recipient: true } );
-        response = UrlFetchApp.fetch( `${ this.baseUrl }/v2/invoicing/invoices/${ invoiceId }/send`, options );
+        response = this.fetcher( `${ this.baseUrl }/v2/invoicing/invoices/${ invoiceId }/send`, options );
 
         // Step C: Extract the checkout URL
         let sendData = {};
@@ -234,7 +262,7 @@ class PayPalService {
             } ),
             muteHttpExceptions: true
         };
-        UrlFetchApp.fetch( `${ this.baseUrl }/v2/invoicing/invoices/${ invoiceId }/cancel`, options );
+        this.fetcher( `${ this.baseUrl }/v2/invoicing/invoices/${ invoiceId }/cancel`, options );
     }
 
     /**
@@ -283,7 +311,7 @@ class PayPalService {
         console.log( `[PayPal Debug] Outgoing Request Endpoint: ${ url }` );
 
         // Execute request
-        const response = UrlFetchApp.fetch( url, options );
+        const response = this.fetcher( url, options );
         const statusCode = response.getResponseCode();
         const responseText = response.getContentText();
 
@@ -318,7 +346,7 @@ class PayPalService {
             muteHttpExceptions: true
         };
 
-        const response = UrlFetchApp.fetch( url, options );
+        const response = this.fetcher( url, options );
         const responseCode = response.getResponseCode();
         const responseText = response.getContentText();
 

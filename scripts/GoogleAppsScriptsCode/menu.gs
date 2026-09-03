@@ -3,9 +3,17 @@ const PRE_AUCTION_TASKS = 'Pre-Auction Tasks';
 const MID_AUCTION_TASKS = 'Auction Tasks';
 const PRINTING_TASKS = 'Printing Tasks';
 
+/**
+ * The custom "Auction" menu (manual Check-In/Check-Out/Bid Entry/Settings/
+ * Printing dialogs) is deliberately disabled - the ORNS Auction Manager
+ * web app is now the single source of use for running an auction; this
+ * spreadsheet is data storage only. `createCustomMenu()` itself is left
+ * defined below (unused) rather than deleted, in case it's ever needed
+ * again as a manual fallback.
+ */
 /** @OnlyCurrentDoc */
-function onOpen ( e ) { createCustomMenu(); }
-function onInstall ( e ) { createCustomMenu(); }
+function onOpen ( e ) {}
+function onInstall ( e ) {}
 
 function createCustomMenu () {
     const ui = SpreadsheetApp.getUi();

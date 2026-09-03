@@ -71,8 +71,8 @@ To keep developer directives clean, maintainable, and modular, the monolithic Ag
 For the complete guidelines and background, see [`/docs/agents/patterns.md`](./docs/agents/patterns.md).
 
 1.  **File Preservation**: **NEVER DELETE `server/routes/bidRoutes.ts`**. This managing endpoint handles critical transactional bid logs. Do not edit core SDK files (`src/services/firebase.ts`, `src/context/ConfigContext.tsx`, `firestore.rules`).
-2.  **Testing Mandate**: Always run tests and verify that all **316 tests continue to pass green**. Tests must be run in two partition batches to avoid memory sandbox timeouts:
-    *   **Backend (228 tests)**: `npx vitest run server/test/`
+2.  **Testing Mandate**: Always run tests and verify that all **340 tests continue to pass green**. Tests must be run in two partition batches to avoid memory sandbox timeouts:
+    *   **Backend (252 tests)**: `npx vitest run server/test/`
     *   **Frontend (88 tests)**: `npx vitest run src/`
 3.  **Session Cookie Rules**: Session cookie **MUST** remain named **`orns_session`**. Do not revert it to `__session`.
 4.  **Code Splitting Rules**: The `manualChunks` function inside `vite.config.ts` must use the dynamic functional matcher structure.
