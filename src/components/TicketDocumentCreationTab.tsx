@@ -6,7 +6,6 @@ import { PlaySquare, Download, FileText, Loader2, ExternalLink, RefreshCw } from
 import { toast } from "sonner";
 import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { StatusStatePlaceholder } from "@/components/ui/StatusStatePlaceholder";
 import { cn } from "@/lib/utils";
 

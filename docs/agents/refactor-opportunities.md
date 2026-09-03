@@ -150,12 +150,6 @@ Sorted by severity within each area.
   already imports the lib version). Fix: import it here too and delete
   the local copy.
 
-### Dead code
-
-- **`DocumentCreationTab.tsx`/`TicketDocumentCreationTab.tsx` both
-  import `Badge` but never render it** - confirmed unused in both
-  files' JSX.
-
 ### Redundant/duplicated logic
 
 - **`DocumentCreationTab.tsx` and `TicketDocumentCreationTab.tsx` are
