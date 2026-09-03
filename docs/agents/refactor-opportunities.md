@@ -194,8 +194,6 @@ each area.
 Zero test file imports the real module (not a `vi.mock()` of its path)
 for any of these - confirmed by grep. Ranked by risk:
 
-- **`src/lib/bidderAttendeeInfo.ts`** - primary-vs-guest name/email
-  matching that drives the pending-check-in badge logic.
 - Lower priority but real gaps: `useConfigSettingsState.extractId`
   (4 regex branches, only ever exercised with pre-clean input in the
   existing test), `useApiAuthStatus.ts`/`useGoogleAuth.ts`.

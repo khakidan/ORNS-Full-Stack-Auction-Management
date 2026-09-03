@@ -18,10 +18,18 @@ export function getBidderAttendeeInfo(bidder: Bidder, attendees: Attendee[]): Bi
 
   if (primary) return { attendee: primary, isGuest: false };
 
+  // Guest.ownBidderNumber never actually holds a bidder ID - it's the
+  // sheet's "yes"/"no" opt-in flag (see attendeeParsing.ts/syncService.ts),
+  // so a `=== bidder.id` comparison against it could never match. Email is
+  // a far more reliable signal than the freeform name fallback (which
+  // stays, for guests without an email on file).
+  const bidderEmail = bidder.email?.trim().toLowerCase();
+  const bidderFullName = `${bidder.firstName} ${bidder.lastName}`.trim().toLowerCase();
+
   const guestOf = attendees.find(a =>
     a.guestsInfo.some(g =>
-      g.ownBidderNumber === bidder.id ||
-      (g.name && g.name.toLowerCase() === `${bidder.firstName} ${bidder.lastName}`.trim().toLowerCase())
+      (!!bidderEmail && !!g.email && g.email.trim().toLowerCase() === bidderEmail) ||
+      (!!g.name && g.name.toLowerCase() === bidderFullName)
     )
   );
 
