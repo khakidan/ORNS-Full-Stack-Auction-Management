@@ -265,10 +265,6 @@ for any of these - confirmed by grep. Ranked by risk:
   covered via `src/lib/bidGridParsing.test.ts`, but `fetchWinners`'s
   bidder-name lookup and `recordWinningBid`'s optimistic-update/rollback
   path around `totalRaised`, the app's headline number, remain untested.
-- **`src/hooks/useBiddersData.ts`** - check-in/proxy optimistic updates
-  and their rollback-on-failure paths; `Bidders.test.tsx` mocks
-  `checkInBidder` as a bare `vi.fn()`, so the real rollback logic never
-  runs.
 - **`src/hooks/useAttendeesData.ts`** - add/remove optimistic update +
   rollback, plus its own hardcoded column indices.
 - **`src/context/ConfigContext.tsx`** - Firestore snapshot→localStorage
@@ -331,10 +327,30 @@ be worked through:
    `batchUpdate`/`clear`/`update` payloads (which sheetIds get deleted
    and which don't, e.g. `Auction-Status`/`tickets` must survive) and
    asserts the failure-visibility fix via a simulated 429.
-2. **`src/hooks/useBiddersData.ts`'s `checkInBidder`/`markBidderAsProxy`**
-   - already listed above in this section: the real optimistic-update/
-   rollback Sheets-write logic for bidder check-in is bypassed by a bare
-   `vi.fn()` mock in `Bidders.test.tsx` and never actually runs.
+2. ~~`src/hooks/useBiddersData.ts`'s `checkInBidder`/`markBidderAsProxy`~~
+   - **done.** `useBiddersData` is only ever consumed through
+   `AuctionContext.tsx`, which every existing component test mocks
+   wholesale - there was no component-test path that could reach this
+   hook's real code. Added `src/hooks/useBiddersData.test.ts` (7 tests)
+   via `renderHook` from `@testing-library/react` v16 (already installed,
+   first use of it in this codebase - the established integration-style
+   component-test convention has no way to reach hook logic this
+   deeply hidden behind a fully-mocked context; confirmed with the user
+   before introducing the new pattern). Covers: `fetchBidders` happy
+   path and its swallow-to-empty-list failure path; `checkInBidder`'s
+   real column-E write at the bidder's actual sheet row plus rollback
+   when the bidder isn't found in the `A:A` lookup and when the write
+   itself fails; the equivalent for `markBidderAsProxy`'s column-F
+   write, including a check that rolling back one bidder doesn't touch
+   a sibling bidder's already-true `isProxy` state. One assertion had to
+   be dropped after it flaked: asserting the optimistic update landed
+   *before* the rollback is not reliably observable when both the
+   optimistic set and the mocked rejection resolve on immediate,
+   same-tick microtasks - only the settled end state is pinned now.
+   Sanity-checked all 7 catch a real regression (temporarily
+   commented out both `setBidders(previousBidders)` rollback calls,
+   confirmed 3 tests failed, reverted) and re-ran 5x to confirm no
+   flakiness before trusting them.
 3. **Verify `bidRoutes.ts`'s transactional multi-sheet writes are
    actually well-tested, not just tested** - `recordWinningBid`,
    `closeAuctionAndCleanup`, `registerWalkInBidder`,
