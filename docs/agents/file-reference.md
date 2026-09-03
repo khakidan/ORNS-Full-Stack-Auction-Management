@@ -28,7 +28,6 @@ This document details the decoupled, highly structured layout of the **ORNS Char
 │   │   └── setupRoutes.ts     # Initial spreadsheet bootstrap rules
 │   │
 │   ├── services/              # Singleton Service Providers
-│   │   ├── assistantService.ts# Gemini assistant interactions and parsing logic
 │   │   ├── genai.ts           # Google GenAI model loading and SDK configurations
 │   │   ├── google.ts          # Resilient Google Sheets API wrappers with retry-backoff
 │   │   └── paypal.ts          # PayPal transaction fee calculations

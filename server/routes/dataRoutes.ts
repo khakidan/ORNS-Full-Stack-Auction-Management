@@ -4,15 +4,13 @@ import { getAuthenticatedClient } from '../services/oauth';
 import { performSheetSync } from '../services/syncService';
 import { sheetCache, CACHE_TTL, clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { normalizeRange } from '../utils/rangeUtils';
-import { genAI } from '../services/genai';
-import { 
-  addItem, 
-  deleteItem, 
-  updateItem, 
+import {
+  addItem,
+  deleteItem,
+  updateItem,
   bulkUpdateItems,
   ensureFollowUpSheet
 } from '../services/itemService';
-import { handleAssistantRequest } from '../services/assistantService';
 import { checkIdempotency, saveIdempotency } from '../utils/idempotency';
 import { updateAttendeeField } from '../services/bidderService';
 
@@ -402,27 +400,6 @@ export default function createDataRouter() {
         return res.status(404).json({ error: "Folder not found. Please check the folder ID in Settings." });
       }
       next(error);
-    }
-  });
-
-  // Gemini Assistant Endpoint
-  router.post("/assistant", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: "GEMINI_API_KEY is not configured in the environment." });
-    }
-
-    const { context, message, history } = req.body;
-    if (!message) {
-      return res.status(400).json({ error: "No message provided" });
-    }
-
-    try {
-      const text = await handleAssistantRequest(context, message, history);
-      res.json({ text });
-    } catch (error: any) {
-      console.error("Gemini assistant error:", error);
-      res.status(500).json({ error: error.message, fallback: true });
     }
   });
 

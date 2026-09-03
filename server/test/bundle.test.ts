@@ -1,11 +1,9 @@
 /**
- * Test suite for the Bundle workflow and Gemini Assistant features.
- * Covers bundle creation, bundle restoration, AI name/description generation, and the assistant logic.
+ * Test suite for the Bundle workflow.
+ * Covers bundle creation, bundle restoration, and AI name/description generation.
  *
- * NOTE: The vi.mock for "../services/genai" handles two different prompt structures:
- * 1. String contents: Passed by the bundle suggestion routes.
- * 2. Array contents: Passed by the assistant route (array of message objects).
- * The mock intercepts these shapes based on whether `args.contents` is a string or not.
+ * NOTE: The vi.mock for "../services/genai" intercepts the bundle suggestion
+ * routes' string-shaped `contents` prompt, keyed off its prefix.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
@@ -36,9 +34,9 @@ vi.mock("../services/genai", () => ({
             candidates: [{ finishReason: 'STOP' }]
           });
         }
-        // Default — handles assistant requests where contents is an array of message objects
+        // Default fallback for any other prompt shape
         return Promise.resolve({
-          text: 'AI assistant response',
+          text: 'AI response',
           candidates: [{ finishReason: 'STOP' }]
         });
       }),
@@ -285,112 +283,5 @@ describe('Bundle Restore workflow', () => {
   it("Auth failure", async () => {
     const response = await request(app).post("/api/bundle/restore").send({});
     expect(response.status).toBe(401);
-  });
-
-  describe('Gemini Assistant workflow', () => {
-    beforeEach(() => {
-      resetHandlersState();
-    });
-
-    afterEach(() => {
-      server.resetHandlers();
-      resetHandlersState();
-    });
-
-    it('Happy path — returns AI response text', async () => {
-      const response = await request(app)
-        .post('/api/assistant')
-        .set(authHeader)
-        .send({
-          context: 'You are an assistant for a charity auction.',
-          message: 'What items are available?',
-          history: []
-        });
-
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('text');
-      expect(typeof response.body.text).toBe('string');
-      expect(response.body.text.length).toBeGreaterThan(0);
-
-      const generateContentMock = vi.mocked(
-        (await import("../services/genai")).genAI.models.generateContent
-      );
-      expect(generateContentMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          contents: expect.arrayContaining([
-            expect.objectContaining({
-              role: 'user',
-              parts: expect.arrayContaining([
-                expect.objectContaining({ text: 'What items are available?' })
-              ])
-            })
-          ]),
-          config: expect.objectContaining({
-            systemInstruction: 'You are an assistant for a charity auction.'
-          })
-        })
-      );
-    });
-
-    it('Includes conversation history in the request', async () => {
-      const response = await request(app)
-        .post('/api/assistant')
-        .set(authHeader)
-        .send({
-          context: 'Auction context',
-          message: 'Follow-up question',
-          history: [
-            { role: 'user', text: 'Previous question' },
-            { role: 'assistant', text: 'Previous answer' }
-          ]
-        });
-
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('text');
-
-      const generateContent = vi.mocked(
-        (await import("../services/genai")).genAI.models.generateContent
-      );
-      expect(generateContent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          contents: expect.arrayContaining([
-            { role: 'user', parts: [{ text: 'Previous question' }] },
-            { role: 'model', parts: [{ text: 'Previous answer' }] },
-            { role: 'user', parts: [{ text: 'Follow-up question' }] }
-          ])
-        })
-      );
-    });
-
-    it('Auth failure', async () => {
-      const response = await request(app)
-        .post('/api/assistant')
-        .send({ message: 'Hello', history: [] });
-      expect(response.status).toBe(401);
-    });
-
-    it('Missing message — returns 400', async () => {
-      const response = await request(app)
-        .post('/api/assistant')
-        .set(authHeader)
-        .send({ context: 'Some context', history: [] });
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe('No message provided');
-    });
-
-    it('GEMINI_API_KEY not configured — returns 500', async () => {
-      const originalKey = process.env.GEMINI_API_KEY;
-      delete process.env.GEMINI_API_KEY;
-
-      const response = await request(app)
-        .post('/api/assistant')
-        .set(authHeader)
-        .send({ message: 'Hello', history: [] });
-
-      expect(response.status).toBe(500);
-      expect(response.body.error).toContain('GEMINI_API_KEY');
-
-      process.env.GEMINI_API_KEY = originalKey;
-    });
   });
 });

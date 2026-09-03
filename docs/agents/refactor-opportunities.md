@@ -11,11 +11,7 @@ feature work belongs in [`ROADMAP.md`](./ROADMAP.md) instead.
 
 ## Tasks To Refactor
 
-- **Decide whether to delete or keep the orphaned `/api/assistant`
-  backend route** (`react-patterns.md`) - `server/routes/dataRoutes.ts`,
-  `server/services/assistantService.ts`, and the 5 tests in
-  `server/test/bundle.test.ts`'s "Gemini Assistant workflow" block, now
-  that its only frontend consumer (`AuctionAssistant.tsx`) is deleted.
+Nothing outstanding right now.
 
 ---
 
