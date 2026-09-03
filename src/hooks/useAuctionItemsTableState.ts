@@ -176,9 +176,9 @@ export function useAuctionItemsTableState(
       return;
     }
 
-    const colLetter = bulkField === 'itemType' ? 'I' : 'J';
+    // Only 'itemType' can reach here - the 'category' branch above already returned.
     const updatePromises = selectedIndices.map(idx =>
-      updateSheetData(spreadsheetId, `Auction-Items!${colLetter}${idx}`, [[bulkValue]])
+      updateSheetData(spreadsheetId, `Auction-Items!I${idx}`, [[bulkValue]])
     );
 
     // Background sync

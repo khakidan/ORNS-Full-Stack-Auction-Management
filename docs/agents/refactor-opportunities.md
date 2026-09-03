@@ -152,11 +152,6 @@ Sorted by severity within each area.
 
 ### Dead code
 
-- **`useAuctionItemsTableState.ts:179`'s bulk-field ternary has an
-  unreachable branch** - `bulkField === 'itemType' ? 'I' : 'J'`, but
-  `bulkField`'s type is `"category" | "itemType"` and the `category`
-  case already returns on the line above, so the `'J'` branch (and the
-  ternary itself) can never produce `'J'`. Collapse to the constant `'I'`.
 - **`WinnerRecord.paymentMethod` is always `""` and never read**
   (`src/hooks/useCheckoutState.ts:13,162`) - `WinnerCard`, `WinnerGrid`,
   and `PaymentMethodDialog` all use a separate `paymentMethod` state
