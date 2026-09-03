@@ -17,13 +17,6 @@ each area.
 
 ### Correctness bugs
 
-- **Checkout's refresh spinner can get stuck forever**
-  (`src/hooks/useCheckoutState.ts:109-179`) - `handleRefresh` sets
-  `fetchingWinners(true)`, but `loadWinners` early-returns at its own
-  `if (!spreadsheetId) return;` (line 110) before ever reaching its
-  `finally` block, and `handleRefresh` has no `finally` of its own to
-  cover that path. Fix: move the guard inside the `try`, or wrap
-  `handleRefresh` in its own `try/finally`.
 - **`WinnerCard`'s "Mark Paid" button has a permanently-dead loading
   condition** (`src/components/WinnerCard.tsx:89`) -
   `loading={processingId === \`${winner.bidderId}-pay\`}`, but

@@ -155,8 +155,17 @@ export function useCheckoutState({
 
   const handleRefresh = async () => {
     setFetchingWinners(true);
-    await fetchAllData();
-    await loadWinners();
+    try {
+      await fetchAllData();
+      await loadWinners();
+    } finally {
+      // loadWinners has its own finally, but only when it actually runs
+      // its try block - it early-returns before that (no spreadsheetId)
+      // without resetting fetchingWinners, and fetchAllData() itself can
+      // throw before loadWinners is ever called. Either path would leave
+      // the refresh spinner stuck forever without this finally.
+      setFetchingWinners(false);
+    }
   };
 
   useEffect(() => {

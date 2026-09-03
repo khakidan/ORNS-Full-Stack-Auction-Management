@@ -3,13 +3,17 @@
  *
  * useCheckoutState is only ever consumed through Checkout.tsx, and
  * Checkout.test.tsx mocks useConfig/useAuction wholesale - so none of
- * this hook's real logic has ever run under the test suite. Scoped
- * narrowly to confirmMarkPaid's rollback behavior here (the same
+ * this hook's real logic has ever run under the test suite. Scoped to
+ * two already-logged bugs: confirmMarkPaid's rollback (the same
  * whole-snapshot rollback bug already fixed in useWinnersData.ts,
  * useAttendeesData.ts, useAuctionItemsTableState.ts, and
- * useBiddersData.ts this session) - full hook coverage (loadWinners,
- * the receipt/email handlers, batch print/email) is a separate,
- * larger test-coverage gap, not part of this fix.
+ * useBiddersData.ts this session) and handleRefresh's stuck-spinner
+ * bug (refactor-opportunities.md: fetchingWinners(true) is never reset
+ * when loadWinners early-returns without a spreadsheetId, or when
+ * fetchAllData itself throws before loadWinners is ever called) - full
+ * hook coverage (loadWinners's own happy path, the receipt/email
+ * handlers, batch print/email) is a separate, larger test-coverage gap,
+ * not part of either fix.
  */
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -73,15 +77,15 @@ function mockLoadWinnersData() {
 
 const ITEMS = [ITEM1, ITEM2];
 
-function renderWithTwoWinners() {
+function renderWithTwoWinners(overrides: { spreadsheetId?: string; fetchAllData?: () => Promise<void> } = {}) {
   const bidders = [makeBidder({ id: "101", firstName: "Alice", lastName: "One" }), makeBidder({ id: "102", firstName: "Bob", lastName: "Two" })];
   return renderHook(() =>
     useCheckoutState({
       bidders,
       items: ITEMS,
       attendees: [],
-      fetchAllData: vi.fn(),
-      spreadsheetId: "ss-id",
+      fetchAllData: overrides.fetchAllData ?? vi.fn(),
+      spreadsheetId: overrides.spreadsheetId ?? "ss-id",
       ticketsSpreadsheetId: "",
       bidManagementSheet: "Bid-Management",
       bidderNumbersSheet: "Bidder-Numbers",
@@ -178,5 +182,35 @@ describe("useCheckoutState.confirmMarkPaid", () => {
       expect(result.current.winners.find(w => w.bidderId === "101")!.paid).toBe(false);
     });
     expect(result.current.winners.find(w => w.bidderId === "102")!.paid).toBe(true);
+  });
+});
+
+describe("useCheckoutState.handleRefresh", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLoadWinnersData();
+  });
+
+  it("does not leave the refresh spinner stuck when there's no spreadsheetId - loadWinners early-returns before its own finally", async () => {
+    const { result } = renderWithTwoWinners({ spreadsheetId: "" });
+    await waitFor(() => expect(result.current.fetchingWinners).toBe(false));
+
+    await act(async () => {
+      await result.current.handleRefresh();
+    });
+
+    expect(result.current.fetchingWinners).toBe(false);
+  });
+
+  it("does not leave the refresh spinner stuck when fetchAllData itself throws before loadWinners ever runs", async () => {
+    const fetchAllData = vi.fn().mockRejectedValue(new Error("network down"));
+    const { result } = renderWithTwoWinners({ fetchAllData });
+    await waitFor(() => expect(result.current.winners).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.handleRefresh().catch(() => {});
+    });
+
+    expect(result.current.fetchingWinners).toBe(false);
   });
 });
