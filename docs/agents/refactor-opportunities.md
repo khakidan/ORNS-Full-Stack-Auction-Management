@@ -205,9 +205,6 @@ each area.
 Zero test file imports the real module (not a `vi.mock()` of its path)
 for any of these - confirmed by grep. Ranked by risk:
 
-- **`src/lib/attendeeParsing.ts`** - the dual general-vs-staff/sponsor
-  column-shift logic (the exact area the guest-column correctness bug
-  fixed elsewhere lived in). Highest-risk untested file in the repo.
 - **`src/lib/itemParsing.ts`** - header-name detection via substring
   `.includes()` matching with positional fallbacks; one drifted header
   name silently binds the wrong column.
