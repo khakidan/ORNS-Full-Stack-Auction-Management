@@ -83,8 +83,7 @@ describe("BundlingDialog", () => {
   it("renders the dialog title and description", () => {
     render(<BundlingDialog {...baseProps} />);
     expect(screen.getByText("Bundle Auction Items")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("$200.00")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Joe's Pizza / Sushi Place")).toBeInTheDocument();
+    expect(screen.getByText("This will combine items into one new package.")).toBeInTheDocument();
   });
 
   it("renders pre-populated bundle details from props", () => {

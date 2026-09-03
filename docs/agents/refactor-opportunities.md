@@ -185,12 +185,6 @@ Existing tests that would rate SHALLOW/CIRCULAR/SMOKE under
   (`ticketPrice`) out of nine that `handleSave` normalizes; fixture IDs
   are already clean so `extractId`'s branches never fire. Needs an
   assertion on a URL-shaped input and its extracted ID.
-- `server/test/production.test.ts:96-97` - asserts an Apps Script
-  function was called and how many times, never with what arguments.
-- `src/components/BundlingDialog.test.tsx:83-96` - two tests assert the
-  identical three `getByDisplayValue` calls on props handed in one line
-  earlier; the first is mistitled "renders the dialog title and
-  description" but never checks the description.
 
 ---
 
