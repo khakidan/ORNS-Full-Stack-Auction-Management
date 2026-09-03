@@ -1,6 +1,6 @@
 /**
  * Tests the REAL source of
- * scripts/GoogleAppsScriptsCode/Class_GoogleAIStudio.gs's `recordPayment` -
+ * scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GoogleAIStudio.gs's `recordPayment` -
  * the function `apiRecordPayment` (called by server/services/auctionService.ts
  * for every checkout) delegates to. Loaded via helpers/loadGasClass
  * alongside its real GlobalVariables base class, not a Node reimplementation.
@@ -15,8 +15,8 @@ import { FakeSpreadsheet } from "./helpers/fakeSheet";
 
 const { GoogleAIStudio } = loadGasClasses(
   [
-    "scripts/GoogleAppsScriptsCode/Class_GlobalVariables.gs",
-    "scripts/GoogleAppsScriptsCode/Class_GoogleAIStudio.gs",
+    "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GlobalVariables.gs",
+    "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GoogleAIStudio.gs",
   ],
   ["GlobalVariables", "GoogleAIStudio"]
 );

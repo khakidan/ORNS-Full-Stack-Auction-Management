@@ -22,7 +22,7 @@ Sorted by severity within each area.
 
 ### Correctness bugs
 
-- **Two data-model classes in `scripts/GoogleAppsScriptsCode/` are
+- **Two data-model classes in `scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/` are
   never instantiated anywhere** - `Class_AuctionItem.gs`'s `AuctionItem`
   and `Class_Bidder.gs`'s `Bidder` (confirmed by grep across the whole
   folder: zero `new AuctionItem(...)`/`new Bidder(...)` calls). Every
