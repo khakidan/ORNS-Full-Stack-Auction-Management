@@ -171,13 +171,28 @@ Sorted by severity within each area.
   access. Sanity-checked by reverting to the old `if (data.error)
   throw` check alone and confirming the new "not-ok-with-no-error-field"
   test failed, then reverted.
-- **`useAuctionItems.ts` duplicates `src/lib/itemParsing.ts` and the
-  two have drifted** (`src/hooks/useAuctionItems.ts:59-95`) - inline
-  reimplementation of the same header-detection parser, but `status`
-  defaults to `""` here vs `"Active"` in the shared lib version, and the
-  filter is `item.id && item.name` vs `item.id || item.name`. The same
-  sheet parsed through either path yields a different item set. Fix:
-  replace the block with `parseItemRows(data.values)`.
+- ~~`useAuctionItems.ts` duplicates `src/lib/itemParsing.ts` and the
+  two have drifted~~ - **done.** Confirmed real: `useAuctionItems.ts`
+  (used only by `AuctionItemsTab.tsx`, the item-management screen) had
+  its own inline header-detection parser that defaulted blank `status`
+  to `""` and required `item.id && item.name`, while `parseItemRows`
+  (used by `useItemsData.ts` → `AuctionContext` → Dashboard/Checkout/
+  `Items.tsx`, the app-wide item list) defaults blank `status` to
+  `"Active"` and only requires `item.id || item.name` - so the same
+  underlying sheet data could show a different item set (and different
+  status values) on the management screen than everywhere else in the
+  app. Replaced the inline duplicate with `parseItemRows(data.values)`.
+  Added `src/hooks/useAuctionItems.test.ts` (6 tests, via `renderHook` -
+  this hook is only ever consumed through `AuctionItemsTab.tsx`, which
+  mocks it wholesale, so none of its real logic had run under the test
+  suite before this): the parallel items/categories/valueCalculations
+  fetch on mount, a direct regression test pinning both drifted
+  behaviors now matching (`status` defaults to `"Active"`, an id-only
+  row is included, not dropped), the no-spreadsheetId no-op, the
+  items-fetch-failure error toast, categories/valueCalculations
+  failing silently without blocking items from loading, and `refresh()`.
+  Sanity-checked by reintroducing the old stricter `id && name` filter
+  and confirming the regression test caught it, then reverted.
 - ~~`useBundling.ts` duplicates `src/lib/auctionItemPricing.ts`
   byte-for-byte~~ - **done.** `parseDollar`/`calculateAutoBids` were
   copied verbatim instead of imported (`useAuctionItemsTableState.ts`
@@ -638,11 +653,40 @@ Missing edge-case coverage on business-critical flows that already have
   "Check In." The pending-payment confirm path, the
   `/api/auction/check-in-with-bid` call, its `bidValue: parseFloat(ticketPrice)
   || 35` fallback, and the failure/rollback path are all untested.
-- **Bundle create/restore** - thorough server-side
-  (`server/test/bundle.test.ts`), zero client-side: `AuctionItemsTab.test.tsx`
-  and `BundlingDialog.test.tsx` both mock `useBundling` wholesale, so
-  none of its real logic (the `<2` items guard, token generation, the
-  AI-suggestion fallback branches, `handleRestoreBundle`) ever runs.
+- ~~Bundle create/restore~~ - **done, closing the last item of the
+  Items-spreadsheet direct-Sheets-API plan.** Thorough server-side
+  coverage already existed (`server/test/bundle.test.ts`); the real
+  gap was `useBundling.ts`'s own logic (the `<2`-items guard, the
+  double-submit/`res.ok` fixes, AI-suggestion fallbacks,
+  `handleRestoreBundle`) and its wiring into the actual UI, since both
+  `AuctionItemsTab.test.tsx` and `BundlingDialog.test.tsx` mock
+  `useBundling` wholesale. `useBundling.test.ts` (added earlier in this
+  same plan, via `renderHook`) already closed the hook-logic half;
+  `BundlingDialog.tsx` was already well-covered directly as a pure
+  presentational component (it renders from props alone, no `useBundling`
+  import). What was still missing was specifically the *wiring*: does
+  selecting real rows in the real table and clicking through the real
+  UI actually reach `useBundling` and produce the right request. Added
+  `src/components/AuctionItemsTab.bundling.test.tsx` (4 tests,
+  `useBundling` deliberately left unmocked, unlike the sibling
+  `AuctionItemsTab.test.tsx`): selecting 2 real rows shows the real
+  bulk-action-bar count, clicking "Bundle" opens the real dialog
+  pre-filled with the real merged donors/computed auto-bids, confirming
+  sends the real request with the selected items' actual IDs and the
+  typed name, and the `<2`-items guard blocks opening the dialog with a
+  real toast. Hit and fixed a real test-authoring pitfall along the
+  way: the shadcn/`@base-ui/react` `Checkbox` re-renders its DOM node
+  on each state change, so capturing `screen.getAllByRole("checkbox")`
+  once and clicking two entries from that same stale array silently
+  no-ops on the second click (confirmed by adding a temporary debug log
+  to the pruning effect from the previous item and watching it never
+  fire a second time) - fixed by re-querying fresh
+  (`screen.getAllByRole("checkbox")[n]`) immediately before each click,
+  and using `fireEvent.click` instead of `userEvent.click` for these
+  specific base-ui elements. Sanity-checked by breaking the real
+  `AuctionItemsTab.tsx` → `useBundling` wiring (passing `{}` instead of
+  `table.selectedRows`) and confirming exactly the wiring-dependent
+  tests failed, then reverted.
 - **PayPal surcharge** - `financeUtils.test.ts` covers $0/$5/$100/$10,000
   with exact penny math, but not a negative input;
   `calculatePayPalSurcharge(-1)` currently returns a negative total
