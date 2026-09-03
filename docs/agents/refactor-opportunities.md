@@ -11,7 +11,358 @@ feature work belongs in [`ROADMAP.md`](./ROADMAP.md) instead.
 
 ## Tasks To Refactor
 
-Nothing outstanding right now.
+**2026-09-02 deep audit**: bugs, dead code, redundancy, and test-coverage
+gaps, verified directly against real code (a sample independently
+confirmed by hand: the bundle `minRaise` drop, the Checkout stuck
+spinner, the dead `WinnerCard` loading condition, the `ConfigContext`
+listener leak, the `AuctionContext` dead exports, the duplicated
+`resequenceCategoryIds`, the missing OAuth `postMessage` origin check,
+and the bundle double-submit race all reproduce as described below).
+Sorted by severity within each area.
+
+### Correctness bugs
+
+- **Bundle creation silently drops a manually-entered min raise**
+  (`server/services/bundleService.ts:158-170,225`) - `minRaise` is
+  destructured out of `req.body` in `bundleRoutes.ts:61,88` and typed
+  on `ProcessBundleParams`, but `processBundle`'s own destructure never
+  lists it, so `cleanMinRaise` is always recomputed from the tier table,
+  discarding any admin override with no warning. Fix: `const cleanMinRaise
+  = minRaise || calculateMinRaise(parsedValue, valueCalculations);`
+  matching how `openingBid` is handled one line above.
+- **Checkout's refresh spinner can get stuck forever**
+  (`src/hooks/useCheckoutState.ts:109-179`) - `handleRefresh` sets
+  `fetchingWinners(true)`, but `loadWinners` early-returns at its own
+  `if (!spreadsheetId) return;` (line 110) before ever reaching its
+  `finally` block, and `handleRefresh` has no `finally` of its own to
+  cover that path. Fix: move the guard inside the `try`, or wrap
+  `handleRefresh` in its own `try/finally`.
+- **`ConfigContext.tsx`'s Firestore config listener is never
+  unsubscribed** (`src/context/ConfigContext.tsx:49-70`) - the
+  `return () => unsubConfig()` at line 70 is returned from inside the
+  `onAuthStateChanged` *callback*, whose return value Firebase ignores
+  (that's not how the effect-cleanup contract works for a nested
+  callback). Every sign-out→sign-in cycle stacks another live listener
+  that's never torn down. Fix: hold `unsubConfig` in a variable in the
+  outer scope and call it from the effect's own cleanup and before
+  resubscribing. Note: `patterns.md` marks this file "do not edit" -
+  raise with the user before touching it.
+- **Bundle creation button can be double-submitted**
+  (`src/hooks/useBundling.ts:186-232`) - `executeBundle` fires
+  `fetchWithRetry(...)` without `await`, so the `finally {
+  setIsExecutingBundle(false) }` runs in the same tick, re-enabling the
+  now-`LoadingButton`-gated "Confirm Bundle & Merge Rows" button
+  immediately. The idempotency key is regenerated per call, so the
+  server can't dedupe a rapid double-click into two bundles. Fix: await
+  the fetch (or move the `finally` into the promise chain's own
+  `.finally()`).
+- **OAuth `postMessage` listener doesn't check `event.origin`**
+  (`src/hooks/useApiAuthStatus.ts:24-31`, `src/hooks/useGoogleAuth.ts:12-26`) -
+  both listeners trust `event.data.tokens` from any `postMessage`
+  sender and persist it straight to `localStorage.google_tokens`, which
+  every backend call then sends as `x-google-tokens`. Fix: `if
+  (event.origin !== window.location.origin) return;` before reading
+  `event.data`.
+- **`WinnerCard`'s "Mark Paid" button has a permanently-dead loading
+  condition** (`src/components/WinnerCard.tsx:89`) -
+  `loading={processingId === \`${winner.bidderId}-pay\`}`, but
+  `useCheckoutState.ts` only ever sets `processingId` to `-email` or
+  `-print` suffixes (confirmed by grep - no `-pay` write exists
+  anywhere). The button never shows a spinner regardless of actual
+  in-flight state. Fix: wire it to the real `isSubmittingPayment` flag
+  used by `PaymentMethodDialog`, or drop the dead prop.
+- **New staff/sponsor attendee entries write payment fields to the
+  wrong semantics** (`src/hooks/useTicketAttendeeState.ts:140-142`) -
+  writes `row[16] = "Paid"` (commented "Payment Status") and `row[17] =
+  "$0"` (commented "Total Paid"), but `server/services/bidderService.ts:346`'s
+  canonical `fieldMapping` says the *paymentStatus* column for
+  non-general sheets is R (index 17) - so this writes a dollar amount
+  into the status column and a status string into an unmapped one.
+  Currently masked because `src/lib/attendeeParsing.ts:45-47` hardcodes
+  `paymentMethod`/`paymentStatus`/`totalPaid` to `"Comp"`/`"Paid"`/`"$0"`
+  for every non-general row regardless of actual cell contents - so
+  today this doesn't show wrong data, but the write is backwards
+  relative to the one column any other code path (`updatePaymentStatus`)
+  actually reads/writes, and would surface immediately if the parser's
+  hardcoding is ever revisited. Needs a decision on which of the two
+  (the hardcoding, or the write) is "correct" before fixing either.
+- **Optimistic-update rollbacks restore a whole stale snapshot instead
+  of reverting just the failed change** - `src/hooks/useWinnersData.ts:63-64,107-108`
+  is the clearest instance: `recordWinningBid` captures
+  `previousWinners`/`previousTotal` from the render closure, and on
+  failure restores them absolutely. Two bids recorded in quick
+  succession (before a re-render) both capture the same baseline; if
+  the second fails, its rollback erases the first bid's already-committed
+  change too. Same shape in `useBiddersData.ts:40/58,67/85`,
+  `useCheckoutState.ts:313/372`, `useAuctionItemsTableState.ts:142/195,209/299`,
+  `useTicketAttendeeState.ts:79/100,108/120`. Fix: make rollbacks
+  functional and scoped to the one entity (e.g. `setWinners(prev =>
+  ({...prev, [itemId]: previousValue}))`) instead of restoring a
+  captured array/object wholesale.
+- **`useGoogleAuth`'s auth check runs inside a `setState` updater**
+  (`src/hooks/useGoogleAuth.ts:35-42`) - `checkAuth()` is called from
+  within the `setAuthenticated` updater function; React (especially
+  StrictMode) can invoke updaters more than once, doubling
+  `/auth/status` requests. Fix: call `checkAuth()` from the interval
+  body directly, not from inside a state updater.
+- **`useAuctionItemsTableState`'s selection isn't reconciled with
+  filters** (`src/hooks/useAuctionItemsTableState.ts:107-129`) -
+  `selectedRows` survives filter/search changes and isn't pruned by
+  `resetFilters`, while `useBundling.ts:93,121,190` re-derives the
+  selected-items list against the *unfiltered* `items` array. Select
+  rows, change the category filter, and the bundle action can silently
+  include items no longer visible in the table. Fix: prune
+  `selectedRows` to the currently-filtered set whenever filters change.
+- **`useBundling.ts`'s restore/execute handlers assume response shape
+  without checking `res.ok`** (`src/hooks/useBundling.ts:81,218`) -
+  `data.ui_history_log.original_item_names.join(...)` throws on any
+  response missing that field, turning a successful restore into a
+  "Failed to restore bundle: Cannot read properties of undefined" toast.
+  Fix: check `res.ok` first and optional-chain the log-message
+  construction with a fallback.
+- **Dashboard's "Not Present" count includes proxy bidders as absent**
+  (`src/hooks/useDashboardState.ts:181` vs `:164`) - computed as
+  `totalBidders - checkedInCount`, while the "unattended bidders" list
+  one line away correctly excludes proxies (`!checkedIn && !isProxy`).
+  The Attendance pie chart's "Not Present" slice therefore overlaps
+  with checked-out/proxy bidders. Fix: subtract `proxyBidders.length`
+  too.
+- **Two independent, disagreeing implementations of the same
+  Bid-Management column-pair parse** (`src/hooks/useCheckoutState.ts:134-151`
+  vs `src/hooks/useWinnersData.ts:29-49`) - different range bounds
+  (`!1:100` vs `!A:ZZ`, while the server itself writes bids scanning
+  `!1:300` per `server/services/auctionService.ts:83`) and different
+  cell guards (`row[j] && row[j+1]` vs `row[j]` alone), so the two
+  screens can compute different totals for the same data on a large
+  enough auction. Fix: extract one `parseBidGrid()` into `src/lib/` and
+  use it in both places.
+- **`useAuctionItems.ts` duplicates `src/lib/itemParsing.ts` and the
+  two have drifted** (`src/hooks/useAuctionItems.ts:59-95`) - inline
+  reimplementation of the same header-detection parser, but `status`
+  defaults to `""` here vs `"Active"` in the shared lib version, and the
+  filter is `item.id && item.name` vs `item.id || item.name`. The same
+  sheet parsed through either path yields a different item set. Fix:
+  replace the block with `parseItemRows(data.values)`.
+- **`useBundling.ts` duplicates `src/lib/auctionItemPricing.ts`
+  byte-for-byte** (`src/hooks/useBundling.ts:26-59` vs
+  `src/lib/auctionItemPricing.ts:6-38`) - `parseDollar`/`calculateAutoBids`
+  copied verbatim instead of imported (`useAuctionItemsTableState.ts`
+  already imports the lib version). Fix: import it here too and delete
+  the local copy.
+
+### Dead code
+
+- **`AuctionContextType.fetchItems`/`fetchWinners`** (`src/context/AuctionContext.tsx`) -
+  exposed on the public context but no component consumes either
+  (confirmed by a repo-wide grep for `.fetchItems`/`.fetchWinners`
+  outside the provider itself). Drop both from the interface and the
+  provider's `value` object.
+- **`resequenceCategoryIds` is duplicated verbatim** between
+  `server/services/itemService.ts:62-87` and
+  `server/services/bundleService.ts:124-149` (confirmed byte-identical
+  via `diff`). Extract into a shared helper, e.g. `server/utils/categoryHelpers.ts`
+  (which already holds `getCategoryBase`, the function this one calls).
+- **`useAuctionItemsTableState.ts:179`'s bulk-field ternary has an
+  unreachable branch** - `bulkField === 'itemType' ? 'I' : 'J'`, but
+  `bulkField`'s type is `"category" | "itemType"` and the `category`
+  case already returns on the line above, so the `'J'` branch (and the
+  ternary itself) can never produce `'J'`. Collapse to the constant `'I'`.
+- **`WinnerRecord.paymentMethod` is always `""` and never read**
+  (`src/hooks/useCheckoutState.ts:13,162`) - `WinnerCard`, `WinnerGrid`,
+  and `PaymentMethodDialog` all use a separate `paymentMethod` state
+  instead. Remove the field.
+- **`useGoogleAuth`'s `checkAuth` is exported and destructured in
+  `App.tsx:84` but never called** - confirmed by grep, the only
+  consumer never invokes it. Stop returning it from the hook (or wire
+  it up if a manual re-check was actually intended somewhere).
+- **`src/components/OAuthRedirectHelperCard.tsx`'s entire card is
+  permanently hidden** (`<Card className="hidden">`) - still mounted
+  from `ConfigSettings.tsx` with live props computed by
+  `useConfigSettingsState` (redirectUri, copySuccess, onCopy), so the
+  hook keeps doing work for UI nobody can ever see. Needs a decision:
+  deliberately disabled (delete the render call + associated hook
+  state) or an accidental leftover `hidden` class.
+- **`DocumentCreationTab.tsx`/`TicketDocumentCreationTab.tsx` both
+  import `Badge` but never render it** - confirmed unused in both
+  files' JSX.
+
+### Redundant/duplicated logic
+
+- **`DocumentCreationTab.tsx` and `TicketDocumentCreationTab.tsx` are
+  ~200 of ~280 lines identical** - same folder-files card, refresh
+  button, and loading/empty/invalid states, differing only in the
+  spreadsheetId field and endpoint/button-label map. Extract a shared
+  `DocumentCreationPanel`/`FolderFilesTable`, the same way
+  `SpecialWinnerField` already consolidated the analogous Dashboard
+  duplication.
+- **27 identical auth-guard copies** - `if (!req.session?.tokens)
+  return res.status(401).json({ error: "Unauthorized" });` repeated
+  verbatim across `server/routes/{setupRoutes,bundleRoutes,dataRoutes,receiptRoutes,bidRoutes,productionRoutes}.ts`.
+  Currently correct everywhere, but a candidate for a small
+  `requireAuth` Express middleware so a future new route can't forget
+  it.
+- **Divergent "minimum raise" fallback tables** -
+  `server/services/itemService.ts:15-32` (`calculateBidAmounts`) falls
+  back to a flat `$5` when no `valueCalculations` are configured;
+  `server/services/bundleService.ts:98-119` (`calculateMinRaise`) has a
+  hardcoded 7-tier ladder instead. Adding an item vs. bundling one at
+  the same value produces different minimum raises when no "Value
+  Calculations" tab is configured. Reconcile to one shared table.
+- **`useApiAuthStatus.ts` and `useGoogleAuth.ts` independently
+  duplicate the same auth-status + `OAUTH_AUTH_SUCCESS` listener flow** -
+  both mount at the same time (from `AuctionContext` and `App.tsx`
+  respectively), so every OAuth completion fires two `/auth/status`
+  requests and two redundant `localStorage` writes. Have `useGoogleAuth`
+  build on `useApiAuthStatus` (keep only its `_fallbackTokens` escape
+  hatch, the one thing `useApiAuthStatus` doesn't have).
+- **`useBiddersData.ts`'s `checkInBidder` and `markBidderAsProxy` are
+  identical apart from one field/column** (`:46-60` vs `:73-87`) -
+  collapse into one `setBidderFlag(bidder, field, column, successMessage)`.
+- **Error-toast wording has drifted into three variants for the same
+  optimistic-rollback situation** - most call sites say `"Failed to
+  sync updates—retrying... local state reverted."`, `useTicketAttendeeState.ts:101,121`
+  says `"...rolling back..."`, and `useBundling.ts:225,229` reuses the
+  "local state reverted" wording for `executeBundle`, which has no
+  optimistic update to revert at all, and nothing anywhere actually
+  retries. Standardize on one accurate constant.
+
+### Code quality
+
+- **`useAttendeesData.ts` tracks no `loading` state**, unlike its
+  sibling `useBiddersData.ts` - `TicketAttendeeTab.tsx`'s Refresh
+  button is wired to the *bidders'* `loading` flag from context instead,
+  so its spinner never reflects the actual attendee fetch. Add a
+  `loading` state to `useAttendeesData` and expose/wire it correctly.
+- **`useCheckoutState.ts` (416 lines) and `useAuctionItemsTableState.ts`
+  (437 lines)** are both past this codebase's own "over 400 is almost
+  certainly doing too much" line (`react-patterns.md`); each mixes list
+  parsing/filtering with per-row and batch mutation handlers. Candidate
+  for the same container-hook-split treatment already applied to every
+  other oversized file in this app.
+- **Several `any` types could be narrowed to `string[]`/concrete
+  shapes**: `useAttendeesData.ts:34` (`rowData: any[]`),
+  `AuctionContext.tsx:26` (`data: any[]`), `useAuctionItems.ts:19,35,79`
+  (`row: any[]`), `useCheckoutState.ts:117` (`row: any`, where
+  `name: row[0]` can be `undefined` while typed `string`),
+  `useBiddersState.ts:105-106` (`valA`/`valB` typed `any`, silently
+  unsorted for any sort key other than `id`/`name`/`status`).
+- **`useConfigSettingsState.ts`'s `syncSettingToCloud` never checks
+  `res.ok`** (`:28-35`) - the six calls at `:229-234` report success
+  via the outer `handleSave` even on a 4xx response, since
+  `fetchWithRetry` only throws for 429/5xx.
+- **Icon-only interactive elements hidden via `opacity-0
+  group-hover:opacity-100` have no keyboard-focus reveal** -
+  `src/components/ui/EditableCell.tsx:137-149`'s edit-trigger (used in
+  nearly every editable table cell app-wide) and the delete button in
+  `src/components/AuctionItemRow.tsx:150-158` are invisible to a
+  keyboard user tabbing to them, with no visible focus ring since
+  `opacity-0` hides the whole element. `component-standards.md`
+  requires focus outlines never be removed without replacement. Fix:
+  add `group-focus-within:opacity-100` alongside the existing
+  `group-hover:opacity-100`.
+- **`Checkout.tsx`'s two `TabsContent` panels both bind the same
+  `state.filteredWinners`** (`:84-106`) - `useCheckoutState.filteredWinners`
+  is already tab-scoped internally, so passing the identical prop to
+  both the "pending" and "completed" `WinnerGrid` instances only
+  renders correctly because `Tabs` unmounts the inactive panel. Fragile
+  if `forceMount` is ever added. Fix: expose separate
+  `pendingFilteredWinners`/`completedFilteredWinners` from the hook.
+- **`AddAttendeeDialog.tsx` and `BiddersFilterControls.tsx`'s `Select`s
+  render bare `<SelectValue />` where the stored value and display
+  label differ** (e.g. value `"sponsor tickets"` shown as "Sponsor") -
+  `component-standards.md` documents this exact failure mode
+  (`SelectValue` renders the raw value unless given explicit
+  `children`) and the documented workaround isn't applied at either
+  call site. Medium confidence - couldn't be confirmed statically since
+  it depends on `@base-ui/react`'s item-registration timing; verify
+  with a manual UI check (select "Sponsor"/"Checked In" and confirm the
+  trigger text) before fixing.
+- **`google-api.ts`'s `fetchWithRetry` mutates the caller's `options`
+  object in place** (`src/services/google-api.ts:27-38`) - shallow-clones
+  neither `options` nor `options.headers` before injecting the auth
+  header, so a caller reusing an options literal across calls
+  accumulates state. Fix: clone before mutating.
+
+### Test coverage gaps (`testing-philosophy.md`)
+
+Zero test file imports the real module (not a `vi.mock()` of its path)
+for any of these - confirmed by grep. Ranked by risk:
+
+- **`src/lib/attendeeParsing.ts`** - the dual general-vs-staff/sponsor
+  column-shift logic (the exact area the correctness bug above lives
+  in). Highest-risk untested file in the repo.
+- **`src/lib/itemParsing.ts`** - header-name detection via substring
+  `.includes()` matching with positional fallbacks; one drifted header
+  name silently binds the wrong column.
+- **`src/hooks/useWinnersData.ts`** - the column-pair walk that computes
+  `totalRaised`, the app's headline number.
+- **`src/hooks/useBiddersData.ts`** - check-in/proxy optimistic updates
+  and their rollback-on-failure paths; `Bidders.test.tsx` mocks
+  `checkInBidder` as a bare `vi.fn()`, so the real rollback logic never
+  runs.
+- **`src/hooks/useAttendeesData.ts`** - add/remove optimistic update +
+  rollback, plus its own hardcoded column indices.
+- **`src/context/ConfigContext.tsx`** - Firestore snapshot→localStorage
+  mirroring, the `permission-denied` toast branch, and the `@orns.org`
+  domain-enforcement + forced-signout logic. Security-relevant, zero
+  coverage.
+- **`src/lib/bidderAttendeeInfo.ts`** - primary-vs-guest name/email
+  matching that drives the pending-check-in badge logic.
+- **`src/hooks/useAuctionStatusData.ts:14`** - the `val === false ||
+  val === "FALSE"` boolean coercion gating the entire post-auction UI.
+- Lower priority but real gaps: `src/lib/auctionItemPricing.ts` (pure,
+  trivial to test, 7 untested tier branches), `useConfigSettingsState.extractId`
+  (4 regex branches, only ever exercised with pre-clean input in the
+  existing test), `useAuctionItems.ts`, `useApiAuthStatus.ts`/`useGoogleAuth.ts`.
+
+Existing tests that would rate SHALLOW/CIRCULAR/SMOKE under
+`testing-philosophy.md`'s own definitions, with the fix each needs:
+
+- `src/components/ConfigSettings.test.tsx:141-157` - asserts one field
+  (`ticketPrice`) out of nine that `handleSave` normalizes; fixture IDs
+  are already clean so `extractId`'s branches never fire. Needs an
+  assertion on a URL-shaped input and its extracted ID.
+- `src/components/Checkout.test.tsx:114-119,139-144` - asserts only
+  `expect.objectContaining({ method: "POST" })`, never the request
+  body; the file's own `:170-176` shows the right pattern
+  (`body: expect.stringContaining(...)`) - apply it here too.
+- `src/components/Receipts.test.tsx:86` - uses `expect.anything()`,
+  the literal placeholder `testing-philosophy.md` calls out as not a
+  real assertion.
+- `server/test/production.test.ts:96-97` - asserts an Apps Script
+  function was called and how many times, never with what arguments.
+- `src/components/BundlingDialog.test.tsx:83-96` - two tests assert the
+  identical three `getByDisplayValue` calls on props handed in one line
+  earlier; the first is mistitled "renders the dialog title and
+  description" but never checks the description.
+- `src/components/Bidders.test.tsx:60-61` - mocks `AlertDialogCancel`/`AlertDialogAction`
+  as `({children}) => <button>{children}</button>`, dropping `onClick`
+  entirely - any future test clicking a confirm button in this file
+  will silently no-op and still pass.
+
+Missing edge-case coverage on business-critical flows that already have
+*some* test coverage:
+
+- **Bidder check-in** - `Bidders.test.tsx` has 21 tests and none click
+  "Check In." The pending-payment confirm path, the
+  `/api/auction/check-in-with-bid` call, its `bidValue: parseFloat(ticketPrice)
+  || 35` fallback, and the failure/rollback path are all untested.
+- **Checkout mark-paid** - well covered server-side
+  (`server/test/bid-management.test.ts:324-339`), untested client-side:
+  the Cash/Check/Credit-Card→CASH/CHECK/PAYPAL mapping, the optimistic
+  `paid` split, the 202-vs-200 divergent state write, and the
+  high-value Special-Winners interstitial (deliberately stubbed to `[]`
+  in the existing "happy path" test).
+- **Bundle create/restore** - thorough server-side
+  (`server/test/bundle.test.ts`), zero client-side: `AuctionItemsTab.test.tsx`
+  and `BundlingDialog.test.tsx` both mock `useBundling` wholesale, so
+  none of its real logic (the `<2` items guard, token generation, the
+  AI-suggestion fallback branches, `handleRestoreBundle`) ever runs.
+- **PayPal surcharge** - `financeUtils.test.ts` covers $0/$5/$100/$10,000
+  with exact penny math, but not a negative input;
+  `calculatePayPalSurcharge(-1)` currently returns a negative total
+  with a positive surcharge with no guard. Given `AGENTS.md` names this
+  the single authoritative fee path, worth a guard + test.
 
 ---
 
@@ -71,11 +422,14 @@ listed so future audits don't have to re-derive this, and so nobody
 - **`useEffect` usage stays scoped to real external synchronization**
   (`react-patterns.md`) - 1-3 effects per file, none computing a value
   that could live in render.
-- **Test assertions aren't shallow placeholders where they look bare**
-  (`testing-philosophy.md`) - every bare `.toHaveBeenCalled()` is either
-  a `.not.toHaveBeenCalled()` negative assertion or
+- **Bare `.toHaveBeenCalled()` usage is not itself a shallow-assertion
+  problem** (`testing-philosophy.md`) - every occurrence is either a
+  `.not.toHaveBeenCalled()` negative assertion or
   `server/test/middleware.test.ts` confirming `next()` fired, neither of
-  which has a meaningful payload to check.
+  which has a meaningful payload to check. (Other shallow-assertion
+  patterns - `expect.anything()`, asserting one field out of many,
+  asserting call count but never arguments - were found in the
+  2026-09-02 deep audit; see "Test coverage gaps" above.)
 
 ---
 
