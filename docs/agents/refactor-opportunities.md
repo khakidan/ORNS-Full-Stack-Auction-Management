@@ -80,14 +80,16 @@ each area.
   of reverting just the failed change** - two bids/edits recorded in
   quick succession (before a re-render) both capture the same pre-update
   baseline; if the second fails, its rollback erases the first's
-  already-committed change too. Same shape in `useBiddersData.ts:40/58,67/85`,
-  `useCheckoutState.ts:313/372`, `useTicketAttendeeState.ts:79/100,108/120`,
-  `useAttendeesData.ts` (`addAttendee`/`removeAttendee`). Fix: make
-  rollbacks functional and scoped to the one entity (e.g.
+  already-committed change too. Same shape in `useBiddersData.ts:40/58,67/85`
+  and `useCheckoutState.ts:313/372`. Fix: make rollbacks functional and
+  scoped to the one entity (e.g.
   `setWinners(prev => ({...prev, [itemId]: previousValue}))`) instead
   of restoring a captured array/object wholesale, matching the fix
-  already applied to `useAuctionItemsTableState.ts`'s `handleUpdate` and
-  `useWinnersData.ts`'s `recordWinningBid` - see CHANGELOG.md for both.
+  already applied to `useAuctionItemsTableState.ts`'s `handleUpdate`,
+  `useWinnersData.ts`'s `recordWinningBid`, and
+  `useAttendeesData.ts`'s `addAttendee`/`removeAttendee` - see
+  CHANGELOG.md for all three. `useTicketAttendeeState.ts:79/100,108/120`
+  is still open too.
 - **`useGoogleAuth`'s auth check runs inside a `setState` updater**
   (`src/hooks/useGoogleAuth.ts:35-42`) - `checkAuth()` is called from
   within the `setAuthenticated` updater function; React (especially
@@ -202,8 +204,6 @@ each area.
 Zero test file imports the real module (not a `vi.mock()` of its path)
 for any of these - confirmed by grep. Ranked by risk:
 
-- **`src/hooks/useAttendeesData.ts`** - add/remove optimistic update +
-  rollback, plus its own hardcoded column indices.
 - **`src/context/ConfigContext.tsx`** - Firestore snapshot→localStorage
   mirroring, the `permission-denied` toast branch, and the `@orns.org`
   domain-enforcement + forced-signout logic. Security-relevant, zero
@@ -212,11 +212,12 @@ for any of these - confirmed by grep. Ranked by risk:
   matching that drives the pending-check-in badge logic.
 - Lower priority but real gaps: `useConfigSettingsState.extractId`
   (4 regex branches, only ever exercised with pre-clean input in the
-  existing test), `useAuctionItems.ts`, `useApiAuthStatus.ts`/`useGoogleAuth.ts`.
+  existing test), `useApiAuthStatus.ts`/`useGoogleAuth.ts`.
 - **Bidder check-in** - `Bidders.test.tsx` has 21 tests and none click
   "Check In." The pending-payment confirm path, the
   `/api/auction/check-in-with-bid` call, its `bidValue: parseFloat(ticketPrice)
   || 35` fallback, and the failure/rollback path are all untested.
+
 Existing tests that would rate SHALLOW/CIRCULAR/SMOKE under
 `testing-philosophy.md`'s own definitions, with the fix each needs:
 
