@@ -22,21 +22,6 @@ Sorted by severity within each area.
 
 ### Correctness bugs
 
-- **Receipt totals shown to bidders don't match what PayPal actually
-  charges** (`scripts/GoogleAppsScriptsCode/Class_ReceiptManager.gs:127-130`
-  vs `Class_PayPalService.gs:53-65`) - the emailed and printed receipt
-  both compute the bidder's total via `calculateAdjustedTotalWithFees`
-  (2.2% + $0.30), but the actual PayPal invoice `createAndSendInvoice`
-  creates is priced via `calculatePayPalSurcharge` (3.49% + $0.49 - the
-  same rate this Node app's `server/utils/financeUtils.ts` correctly
-  uses). A bidder is told one number and charged a higher one; the gap
-  grows with bid size. Needs a decision on which formula is actually
-  correct before fixing (confirm with PayPal's real merchant rate), then
-  point `calculateAdjustedTotalWithFees`'s two call sites
-  (`Class_ReceiptManager.gs:192`, `Class_ReceiptDoc.gs:49`) at
-  `calculatePayPalSurcharge` instead - or delete
-  `calculateAdjustedTotalWithFees` entirely if it's simply the wrong,
-  superseded formula.
 - **Two data-model classes in `scripts/GoogleAppsScriptsCode/` are
   never instantiated anywhere** - `Class_AuctionItem.gs`'s `AuctionItem`
   and `Class_Bidder.gs`'s `Bidder` (confirmed by grep across the whole

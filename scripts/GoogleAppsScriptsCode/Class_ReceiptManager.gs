@@ -120,13 +120,21 @@ class ReceiptManager extends GlobalVariables {
 
     // ── Financial helpers ────────────────────────────────────────────────────
     /**
-     * Calculates the total with a 2.2% + $0.30 PayPal processing fee.
+     * Calculates the total with PayPal's actual processing fee (3.49% +
+     * $0.49) - delegates to PayPalService.calculatePayPalSurcharge, the
+     * exact same formula used to create the real PayPal invoice, so the
+     * number shown here always matches what the bidder is actually
+     * charged. Previously computed its own, different (and wrong) 2.2% +
+     * $0.30 rate - every disclaimer surrounding this value, in this app
+     * and the Node app (this receipt's own QR caption, EmailManager's
+     * email template, and server/services/emailService.ts), has always
+     * said "3.49% + $0.49", confirming that was always the intended rate.
      * @param {number} originalTotal
      * @returns {number}
      */
     calculateAdjustedTotalWithFees ( originalTotal ) {
         if ( originalTotal <= 0 ) return 0;
-        return parseFloat( ( ( originalTotal + 0.30 ) / ( 1 - 0.022 ) ).toFixed( 2 ) );
+        return new PayPalService().calculatePayPalSurcharge( originalTotal ).total;
     }
 
     /**
