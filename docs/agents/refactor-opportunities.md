@@ -11,9 +11,6 @@ feature work belongs in [`ROADMAP.md`](./ROADMAP.md) instead.
 
 ## Tasks To Refactor
 
-- **Add a submitting/loading state to `AddAttendeeDialog`'s "Save
-  Entry" button** (`component-standards.md`) - `handleAddSubmit` in
-  `hooks/useTicketAttendeeState.ts` doesn't track one yet.
 - **Decide whether to delete or keep the orphaned `/api/assistant`
   backend route** (`react-patterns.md`) - `server/routes/dataRoutes.ts`,
   `server/services/assistantService.ts`, and the 5 tests in

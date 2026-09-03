@@ -43,6 +43,7 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
   const [attendeeToDelete, setAttendeeToDelete] = useState<Attendee | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [newEntry, setNewEntry] = useState<NewAttendeeEntry>(EMPTY_NEW_ENTRY);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const filteredAttendees = useMemo(() => {
     return attendees.filter(a => {
@@ -127,25 +128,30 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
       return;
     }
 
-    const row = new Array(25).fill("");
-    row[0] = newEntry.firstName;
-    row[1] = newEntry.lastName;
-    row[2] = newEntry.email;
-    row[3] = newEntry.phone;
-    row[4] = newEntry.tickets;
+    setIsSubmitting(true);
+    try {
+      const row = new Array(25).fill("");
+      row[0] = newEntry.firstName;
+      row[1] = newEntry.lastName;
+      row[2] = newEntry.email;
+      row[3] = newEntry.phone;
+      row[4] = newEntry.tickets;
 
-    if (newEntry.source !== 'tickets') {
-      row[16] = "Paid"; // Payment Status
-      row[17] = "$0";   // Total Paid
-    } else {
-      row[19] = "Manual";
-      row[20] = "Pending";
-      row[21] = "$0";
+      if (newEntry.source !== 'tickets') {
+        row[16] = "Paid"; // Payment Status
+        row[17] = "$0";   // Total Paid
+      } else {
+        row[19] = "Manual";
+        row[20] = "Pending";
+        row[21] = "$0";
+      }
+
+      await addAttendee(newEntry.source, row);
+      setIsAddDialogOpen(false);
+      setNewEntry(EMPTY_NEW_ENTRY);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    await addAttendee(newEntry.source, row);
-    setIsAddDialogOpen(false);
-    setNewEntry(EMPTY_NEW_ENTRY);
   };
 
   const handleDeleteConfirm = async () => {
@@ -173,6 +179,7 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
     newEntry,
     setNewEntry,
     handleAddSubmit,
+    isSubmitting,
 
     attendeeToDelete,
     setAttendeeToDelete,

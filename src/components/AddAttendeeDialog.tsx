@@ -9,6 +9,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/LoadingButton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -34,6 +35,7 @@ interface AddAttendeeDialogProps {
   newEntry: NewAttendeeEntry;
   onNewEntryChange: (entry: NewAttendeeEntry) => void;
   onSubmit: () => void;
+  isSubmitting: boolean;
 }
 
 export function AddAttendeeDialog({
@@ -42,6 +44,7 @@ export function AddAttendeeDialog({
   newEntry,
   onNewEntryChange,
   onSubmit,
+  isSubmitting,
 }: AddAttendeeDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -94,7 +97,7 @@ export function AddAttendeeDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={onSubmit}>Save Entry</Button>
+          <LoadingButton onClick={onSubmit} loading={isSubmitting}>Save Entry</LoadingButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

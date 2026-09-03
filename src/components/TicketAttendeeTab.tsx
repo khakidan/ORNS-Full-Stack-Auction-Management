@@ -61,6 +61,7 @@ export default function TicketAttendeeTab() {
                 newEntry={state.newEntry}
                 onNewEntryChange={state.setNewEntry}
                 onSubmit={state.handleAddSubmit}
+                isSubmitting={state.isSubmitting}
               />
             )}
             {isAuctionClosed && (
