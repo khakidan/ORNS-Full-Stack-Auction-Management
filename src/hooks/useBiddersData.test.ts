@@ -166,6 +166,54 @@ describe("useBiddersData", () => {
       });
       expect(toast.error).toHaveBeenCalled();
     });
+
+    it("scopes a failed rollback to just the one bidder - a second bidder's already-committed check-in must survive", async () => {
+      mockedGetSheetData.mockResolvedValueOnce({
+        values: [
+          ["ID", "First", "Last", "Email", "CheckedIn", "Proxy", "CheckedOut", "Paid"],
+          ["101", "Jane", "Doe", "jane@example.com", "FALSE", "FALSE", "FALSE", "FALSE"],
+          ["102", "John", "Smith", "john@example.com", "FALSE", "FALSE", "FALSE", "FALSE"],
+        ],
+      } as any);
+
+      const { result } = renderHook(() => useBiddersData(SPREADSHEET_ID, SHEET_NAME));
+      await act(async () => {
+        await result.current.fetchBidders();
+      });
+
+      const bidder101 = result.current.bidders.find(b => b.id === "101")!;
+      const bidder102 = result.current.bidders.find(b => b.id === "102")!;
+
+      // A:A lookup for bidder 101 (found at row 2), then for bidder 102
+      // (not found - only the header + 101's row present).
+      mockedGetSheetData
+        .mockResolvedValueOnce({ values: [["ID"], ["101"]] } as any)
+        .mockResolvedValueOnce({ values: [["ID"], ["101"]] } as any);
+
+      let resolveUpdate: (v: any) => void;
+      mockedUpdateSheetData.mockReturnValueOnce(new Promise((resolve) => { resolveUpdate = resolve; }));
+
+      act(() => {
+        result.current.checkInBidder(bidder101);
+        result.current.checkInBidder(bidder102);
+      });
+
+      expect(result.current.bidders.find(b => b.id === "101")!.checkedIn).toBe(true);
+      expect(result.current.bidders.find(b => b.id === "102")!.checkedIn).toBe(true);
+
+      // Bidder 101's write succeeds and commits.
+      await act(async () => {
+        resolveUpdate!(undefined);
+      });
+      await waitFor(() => expect(result.current.bidders.find(b => b.id === "101")!.checkedIn).toBe(true));
+
+      // Bidder 102's row lookup fails (not found) after 101 already
+      // committed - its rollback must not touch 101.
+      await waitFor(() => {
+        expect(result.current.bidders.find(b => b.id === "102")!.checkedIn).toBe(false);
+      });
+      expect(result.current.bidders.find(b => b.id === "101")!.checkedIn).toBe(true);
+    });
   });
 
   describe("markBidderAsProxy", () => {
@@ -225,6 +273,46 @@ describe("useBiddersData", () => {
       });
       // Bidder 102's pre-existing isProxy: true survives the rollback unchanged.
       expect(result.current.bidders.find(b => b.id === "102")!.isProxy).toBe(true);
+    });
+
+    it("scopes a failed rollback to just the one bidder - a second bidder's already-committed proxy mark must survive", async () => {
+      const { result } = renderHook(() => useBiddersData(SPREADSHEET_ID, SHEET_NAME));
+      await act(async () => {
+        mockedGetSheetData.mockResolvedValueOnce({
+          values: [
+            ["ID", "First", "Last", "Email", "CheckedIn", "Proxy", "CheckedOut", "Paid"],
+            ["101", "Jane", "Doe", "jane@example.com", "FALSE", "FALSE", "FALSE", "FALSE"],
+            ["102", "John", "Smith", "john@example.com", "FALSE", "FALSE", "FALSE", "FALSE"],
+          ],
+        } as any);
+        await result.current.fetchBidders();
+      });
+
+      const bidder101 = result.current.bidders.find(b => b.id === "101")!;
+      const bidder102 = result.current.bidders.find(b => b.id === "102")!;
+
+      // A:A lookup for 101 (found), then for 102 (sheet only has 101's row).
+      mockedGetSheetData
+        .mockResolvedValueOnce({ values: [["ID"], ["101"]] } as any)
+        .mockResolvedValueOnce({ values: [["ID"], ["101"]] } as any);
+
+      let resolveUpdate: (v: any) => void;
+      mockedUpdateSheetData.mockReturnValueOnce(new Promise((resolve) => { resolveUpdate = resolve; }));
+
+      act(() => {
+        result.current.markBidderAsProxy(bidder101);
+        result.current.markBidderAsProxy(bidder102);
+      });
+
+      await act(async () => {
+        resolveUpdate!(undefined);
+      });
+      await waitFor(() => expect(result.current.bidders.find(b => b.id === "101")!.isProxy).toBe(true));
+
+      await waitFor(() => {
+        expect(result.current.bidders.find(b => b.id === "102")!.isProxy).toBe(false);
+      });
+      expect(result.current.bidders.find(b => b.id === "101")!.isProxy).toBe(true);
     });
   });
 });

@@ -63,16 +63,16 @@ each area.
   of reverting just the failed change** - two bids/edits recorded in
   quick succession (before a re-render) both capture the same pre-update
   baseline; if the second fails, its rollback erases the first's
-  already-committed change too. Same shape in `useBiddersData.ts:40/58,67/85`
-  and `useCheckoutState.ts:313/372`. Fix: make rollbacks functional and
-  scoped to the one entity (e.g.
+  already-committed change too. Still open in
+  `useCheckoutState.ts:313/372` and
+  `useTicketAttendeeState.ts:79/100,108/120`. Fix: make rollbacks
+  functional and scoped to the one entity (e.g.
   `setWinners(prev => ({...prev, [itemId]: previousValue}))`) instead
   of restoring a captured array/object wholesale, matching the fix
   already applied to `useAuctionItemsTableState.ts`'s `handleUpdate`,
-  `useWinnersData.ts`'s `recordWinningBid`, and
-  `useAttendeesData.ts`'s `addAttendee`/`removeAttendee` - see
-  CHANGELOG.md for all three. `useTicketAttendeeState.ts:79/100,108/120`
-  is still open too.
+  `useWinnersData.ts`'s `recordWinningBid`, `useAttendeesData.ts`'s
+  `addAttendee`/`removeAttendee`, and `useBiddersData.ts`'s
+  `checkInBidder`/`markBidderAsProxy` - see CHANGELOG.md for all four.
 - **`server/services/emailService.ts:processEmail` does a direct
   triple-sheet read of Bid-Management data** with no defensive parsing
   - only reachable through the already-hardened receipt-email path, so

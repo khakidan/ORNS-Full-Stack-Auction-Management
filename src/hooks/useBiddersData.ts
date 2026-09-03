@@ -36,8 +36,11 @@ export function useBiddersData(spreadsheetId: string, bidderNumbersSheet: string
   const checkInBidder = async (bidder: Bidder) => {
     if (!spreadsheetId) return;
 
-    // 1. Store previous state for rollback
-    const previousBidders = [...bidders];
+    // 1. Store this bidder's previous checkedIn value for a scoped
+    // rollback, not a whole-array snapshot - a second bidder's mutation
+    // committed while this one is still in flight must not be erased by
+    // this rollback.
+    const previousCheckedIn = bidder.checkedIn;
 
     // 2. Optimistic Update (Immediate UI change)
     setBidders(prev => prev.map(b => b.id === bidder.id ? { ...b, checkedIn: true } : b));
@@ -54,8 +57,8 @@ export function useBiddersData(spreadsheetId: string, bidderNumbersSheet: string
       })
       .then(() => toast.success(`${bidder.firstName} ${bidder.lastName} checked in (Synced)`))
       .catch(e => {
-        // 4. Rollback on failure
-        setBidders(previousBidders);
+        // 4. Rollback on failure - scoped to just this bidder.
+        setBidders(prev => prev.map(b => b.id === bidder.id ? { ...b, checkedIn: previousCheckedIn } : b));
         toast.error(`Failed to sync updates—retrying... local state reverted.`);
       });
   };
@@ -63,8 +66,9 @@ export function useBiddersData(spreadsheetId: string, bidderNumbersSheet: string
   const markBidderAsProxy = async (bidder: Bidder) => {
     if (!spreadsheetId) return;
 
-    // 1. Store previous state for rollback
-    const previousBidders = [...bidders];
+    // 1. Store this bidder's previous isProxy value for a scoped
+    // rollback, not a whole-array snapshot - see checkInBidder above.
+    const previousIsProxy = bidder.isProxy;
 
     // 2. Optimistic Update
     setBidders(prev => prev.map(b => b.id === bidder.id ? { ...b, isProxy: true } : b));
@@ -81,8 +85,8 @@ export function useBiddersData(spreadsheetId: string, bidderNumbersSheet: string
       })
       .then(() => toast.success(`${bidder.firstName} ${bidder.lastName} marked as Proxy Bidder`))
       .catch(err => {
-        // 4. Rollback
-        setBidders(previousBidders);
+        // 4. Rollback - scoped to just this bidder.
+        setBidders(prev => prev.map(b => b.id === bidder.id ? { ...b, isProxy: previousIsProxy } : b));
         toast.error("Failed to sync updates—retrying... local state reverted.");
       });
   };
