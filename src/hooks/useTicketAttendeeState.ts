@@ -76,7 +76,10 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
     }
     if (field === 'phone') col = 'D';
 
-    const previousAttendees = [...attendees];
+    // Just this attendee's previous state, not a whole captured array
+    // snapshot - a second attendee edited while this one is still in
+    // flight must not be erased by this rollback.
+    const previousAttendeeState = attendee;
 
     // Optimistic update
     setAttendees(prev => prev.map(a => {
@@ -97,7 +100,7 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
       .catch(e => {
         console.error(e);
         // Rollback
-        setAttendees(previousAttendees);
+        setAttendees(prev => prev.map(a => a.id === attendee.id ? previousAttendeeState : a));
         toast.error("Failed to sync updates—rolling back...");
       });
   };
@@ -105,7 +108,10 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
   const updatePaymentStatus = async (attendee: Attendee, newStatus: string) => {
     if (!spreadsheetId) return;
 
-    const previousAttendees = [...attendees];
+    // Just this attendee's previous payment status, not a whole captured
+    // array snapshot - a second attendee updated while this one is still
+    // in flight must not be erased by this rollback.
+    const previousPaymentStatus = attendee.paymentStatus;
 
     // Optimistic update
     setAttendees(prev => prev.map(a => a.id === attendee.id ? { ...a, paymentStatus: newStatus } : a));
@@ -117,7 +123,7 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
       .catch(e => {
         console.error(e);
         // Rollback
-        setAttendees(previousAttendees);
+        setAttendees(prev => prev.map(a => a.id === attendee.id ? { ...a, paymentStatus: previousPaymentStatus } : a));
         toast.error("Failed to sync updates—rolling back...");
       });
   };
