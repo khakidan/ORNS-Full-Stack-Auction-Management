@@ -104,10 +104,12 @@ class BiddingGuideDoc extends DocService {
     }
 
     loopThroughAllLiveAuctionItems_ () {
-        for ( let i = 0; i < this.itemManager.auctionItems.loopLength; i++ ) {
-            const item = this.itemManager.getAuctionItemAtIndex_( i );
-            if ( !item.isLive() ) continue;
+        // Uses getValidSortedItems() (not a raw index loop) so inactive/deleted
+        // items are never printed, and items are shown in ID order - matching
+        // every other document generator's behavior.
+        const liveItems = this.itemManager.getValidSortedItems().filter( item => item.isLive() );
 
+        for ( const item of liveItems ) {
             if ( this.getFirstEntry_() === 0 ) this.writeLiveAuctionCategoryHeader_();
 
             this.writeMultiLineTextWithStyle_(

@@ -185,6 +185,22 @@ Sorted by severity within each area.
   "local state reverted" wording for `executeBundle`, which has no
   optimistic update to revert at all, and nothing anywhere actually
   retries. Standardize on one accurate constant.
+- **`ItemsSpreadsheet/menu.gs`'s custom menu is now disabled (per the
+  same "app is the single source of use" policy applied to
+  Bid-Management), orphaning ~12 menu-only wrapper functions** -
+  `printAuctionItemsForBundling`, `requestSequentialBundles`,
+  `printLabelsForAuctionItems`, `setAuctionIDsOnImportSheet`,
+  `createNewBiddingGuideCoverPage`, `createNewBiddingGuideInnerPages`,
+  `createBidSheets`, `createNewCatalog`, `createTableTents`,
+  `createNewPresentation`, `updateFileOrFolderLocations`,
+  `fixEmptyCategorySheet`. Each duplicates the same generation logic
+  the corresponding `api*` bridge function in `Class_GoogleAIStudio.gs`
+  already calls (different global name, its own fresh
+  `new AuctionItemManager()`, no `_executeGeneration` error wrapper).
+  Same deferred decision as Bid-Management's now-deleted manager
+  classes: delete outright vs. keep as inert fallback - hold off until
+  the Items-spreadsheet hardening plan's testing phase is done, same
+  sequencing as before.
 
 ### Code quality
 
@@ -427,6 +443,92 @@ sequence: `server/services/emailService.ts:processEmail` does a direct
 triple-sheet read of Bid-Management data, but it's only reachable
 through the already-hardened receipt-email path - worth a defensive-
 parsing look eventually, not urgent enough to block this list.
+
+**Planned sequence: hardening the Items-spreadsheet API surface**
+(2026-09-03). Now that the Bid-Management plan above is fully closed,
+this is the same treatment applied to `scripts/GoogleAppsScriptsCode/ItemsSpreadsheet/`
+(26 `.gs` files, 8 `api*` bridge functions all called from
+`server/routes/productionRoutes.ts` → `DocumentCreationTab.tsx`) and
+its Node-side callers. Order: fix real bugs found during the read-
+through first, then build the two-tier test infrastructure (Node `vm`
+harness + native GAS tests, same `overrides = {}` injectable-dependency
+pattern used for Bid-Management), then close the Node-side gaps.
+
+1. ~~Fixed a critical, complete breakage~~ - **done.** `Class_GlobalStyles.gs`
+   was entirely empty (0 bytes), but `Class_DriveService.gs`'s
+   `DriveService extends GlobalStyles` - since `DocService`, `SlidesService`,
+   and `TemplateManager` all extend `DriveService` transitively, and
+   every document generator extends one of those, this would have
+   thrown `ReferenceError: GlobalStyles is not defined` the instant
+   *any* function in the script ran (menu items and all 8 `api*`
+   bridge functions alike). User pasted in the real content (colors,
+   fonts, spacing primitives, `DocumentApp` style objects - the same
+   shape as the sibling `BidManagementSpreadsheet/Class_GlobalStyles.gs`).
+2. ~~`LiveAuctionSlides.writeLiveAuctionItems_()` and
+   `BiddingGuideDoc.loopThroughAllLiveAuctionItems_()` didn't filter
+   inactive/deleted items~~ - **done.** Both looped over raw sheet rows
+   via `getAuctionItemAtIndex_(i)` instead of calling
+   `getValidSortedItems()` like every other document generator
+   (`BundlingMeetingDoc`, `PackagingLabelsDoc`, `BidSheetDoc`,
+   `CatalogDoc`, `TableTentDoc` all correctly filter+sort). A Live-
+   category item marked inactive/deleted in the app would still print
+   in the live-auction slideshow and the bidding guide's inner pages.
+   Fixed both to build their item list via
+   `this.itemManager.getValidSortedItems().filter(item => item.isLive())`.
+3. ~~`GlobalVariables`'s `_Settings`-missing path called
+   `SpreadsheetApp.getUi().alert(...)` unconditionally~~ - **done.**
+   `getUi()` throws when there's no UI context, which is exactly how
+   every `api*` call reaches this code (via the Apps Script API, no
+   spreadsheet window open) - if `_Settings` were ever missing, the
+   caller would get a confusing internal UI-context exception instead
+   of the intended "Missing _Settings configuration" message. Wrapped
+   the `getUi().alert(...)` call in a try/catch that swallows the no-
+   UI-context failure; the deliberate `throw new Error(...)` right
+   after it still surfaces the real message either way.
+4. ~~Disabled the Items spreadsheet's custom "Auction" menu~~ - **done.**
+   Per the user's explicit confirmation that the same "app is the
+   single source of use, spreadsheet menus are not used anymore"
+   policy applied to Bid-Management also applies here - `onOpen`/
+   `onInstall` are now no-ops, `createCustomMenu()` is left defined
+   (just unreachable) as a manual fallback, matching
+   `BidManagementSpreadsheet/menu.gs` exactly. All 8 menu-only document-
+   generation wrapper functions (`printAuctionItemsForBundling`,
+   `requestSequentialBundles`, `printLabelsForAuctionItems`,
+   `setAuctionIDsOnImportSheet`, `createNewBiddingGuideCoverPage`,
+   `createNewBiddingGuideInnerPages`, `createBidSheets`,
+   `createNewCatalog`, `createTableTents`, `createNewPresentation`,
+   `updateFileOrFolderLocations`, `fixEmptyCategorySheet`) are now
+   orphaned the same way Bid-Management's manager classes were -
+   logged as a new follow-up below (deleting them is a later decision,
+   same deferred sequencing as the Bid-Management cleanup).
+   Sanity-checked all 4 fixes by loading the full `.gs` folder (in
+   correct dependency order) into a sandboxed Node `vm` context and
+   confirming every file parses and every `extends` chain resolves with
+   no errors - not a full test run, just confirming nothing was broken
+   syntactically before moving on to real test infrastructure.
+5. **Build the two-tier test infrastructure for the 8 `api*` bridge
+   functions** (`apiCreateBundlingDoc`, `apiCreateItemLabels`,
+   `apiCreateSlideshow`, `apiCreateBiddingGuideCoverPage`,
+   `apiCreateBiddingGuideInnerPages`, `apiCreateBidSheets`,
+   `apiCreateCatalog`, `apiCreateTableTents`) - currently zero
+   testability infrastructure exists in this script at all (no
+   `overrides = {}` pattern anywhere, unlike the already-refactored
+   `BidManagementSpreadsheet/Class_GlobalVariables.gs`/
+   `Class_GoogleAIStudio.gs`). Needs the same injectable-overrides
+   refactor applied to `GlobalVariables`/`AuctionItemManager` at
+   minimum, plus new fake `DriveApp`/`DocumentApp`/`SlidesApp` mocks
+   (a new mock surface - Bid-Management's tests only ever needed a fake
+   Sheet, never Drive/Docs/Slides).
+6. **Close the Node-side gaps once the `.gs` side is testable** -
+   `server/test/production.test.ts`'s 18 tests only assert "was the
+   Apps Script function called," never the actual `folderId` parameter
+   forwarded, and never exercise `productionRoutes.ts`'s
+   `result.success === false` → 400 branch or its missing-`scriptId` →
+   400 branch (both real, currently-untested code paths). And
+   `src/components/DocumentCreationTab.tsx` - the UI driving all 8
+   generation buttons, the auction-closed disabling, the folder-not-
+   configured guard, and the generated-files list fetch/refresh - has
+   zero test coverage at all.
 
 Missing edge-case coverage on business-critical flows that already have
 *some* test coverage:

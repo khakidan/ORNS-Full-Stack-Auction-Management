@@ -1,3 +1,11 @@
+/**
+ * The custom "Auction" menu (manual bundling/labels/document-generation
+ * scripts) is deliberately disabled - the ORNS Auction Manager web app is
+ * now the single source of use; this spreadsheet is data storage only.
+ * `createCustomMenu()` is left defined below (unused) as a manual fallback,
+ * matching the same policy already applied to the Bid-Management
+ * spreadsheet's menu.gs.
+ */
 const MENU_TITLE = 'Auction';
 const BUNDLE_SCRIPTS_TITLE = 'Bundling Meeting Scripts';
 const PACKAGING_SCRIPTS_TITLE = 'Packaging Meeting Scripts';
@@ -6,12 +14,9 @@ const MISC_SCRIPTS_TITLE = 'Miscellaneous Scripts';
 const PRINTED_DOC_MENU_TITLE = 'Create Printed Docs & Slideshow Scripts';
 const BIDDING_GUIDE_MENU_TITLE = 'Bidding Guide (2 pages / 8 x 11.5 page size)';
 
-/**
- * @OnlyCurrentDoc
- * Limits the scope of file access to the current document.
- */
-
-function onOpen ( e ) { createCustomMenu(); }
+/** @OnlyCurrentDoc */
+function onOpen ( e ) {}
+function onInstall ( e ) {}
 
 function createCustomMenu () {
     const ui = SpreadsheetApp.getUi();

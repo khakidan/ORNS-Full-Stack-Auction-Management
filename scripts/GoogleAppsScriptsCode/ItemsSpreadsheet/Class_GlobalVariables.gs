@@ -52,12 +52,19 @@ class GlobalVariables {
      * @param {string[]} keys
      */
     createEmptySettingsTab_ ( keys ) {
-        SpreadsheetApp.getUi().alert(
-            'Configuration Error',
-            'The "_Settings" tab was missing and has been created.\n' +
-            'Please run "Set File & Folder Locations" before continuing.',
-            SpreadsheetApp.getUi().ButtonSet.OK
-        );
+        try {
+            SpreadsheetApp.getUi().alert(
+                'Configuration Error',
+                'The "_Settings" tab was missing and has been created.\n' +
+                'Please run "Set File & Folder Locations" before continuing.',
+                SpreadsheetApp.getUi().ButtonSet.OK
+            );
+        } catch ( e ) {
+            // SpreadsheetApp.getUi() throws when there's no UI context - e.g.
+            // when this constructor runs because the web app called one of the
+            // api* bridge functions via the Apps Script API. The thrown Error
+            // below still surfaces a clear message to that caller either way.
+        }
 
         const sheet = this.activeSpreadSheet.insertSheet( '_Settings' );
 

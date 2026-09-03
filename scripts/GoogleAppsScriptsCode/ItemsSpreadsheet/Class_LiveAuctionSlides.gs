@@ -73,10 +73,12 @@ class LiveAuctionSlides extends SlidesService {
     }
 
     writeLiveAuctionItems_ () {
-        for ( let i = 0; i < this.itemManager.auctionItems.loopLength; i++ ) {
-            const item = this.itemManager.getAuctionItemAtIndex_( i );
-            if ( !item.isLive() ) continue;
+        // Uses getValidSortedItems() (not a raw index loop) so inactive/deleted
+        // items never appear on stage, and items are shown in ID order -
+        // matching every other document generator's behavior.
+        const liveItems = this.itemManager.getValidSortedItems().filter( item => item.isLive() );
 
+        for ( const item of liveItems ) {
             const file = this.getSlidesFile_();
             file.appendSlide()
                 .insertImage( this.getLiveAuctionBgImgBlob(), this.slidePosition.left, this.slidePosition.top, this.slidePosition.width, this.slidePosition.height );
