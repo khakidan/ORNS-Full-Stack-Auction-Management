@@ -87,29 +87,3 @@ class BidderLabelsDoc extends DocService {
         this.doc.saveAndClose();
     }
 }
-
-function generateBidderLabels () {
-    const ui = SpreadsheetApp.getUi();
-    const response = ui.prompt(
-        'Bid-Management Spreadsheet',
-        'Paste the Bid-Management spreadsheet ID or URL:',
-        ui.ButtonSet.OK_CANCEL
-    );
-    if ( response.getSelectedButton() !== ui.Button.OK ) return;
-
-    const idMatch = response.getResponseText().match( /[-\w]{25,}/ );
-    if ( !idMatch ) {
-        ui.alert( 'Error', 'No valid spreadsheet ID found in that input.', ui.ButtonSet.OK );
-        return;
-    }
-
-    let bidders;
-    try {
-        bidders = new BidderManager().getAllBidders( idMatch[ 0 ] );
-    } catch ( e ) {
-        ui.alert( 'Error', e.toString(), ui.ButtonSet.OK );
-        return;
-    }
-
-    new BidderLabelsDoc( bidders ).generateBidderLabels();
-}

@@ -32,16 +32,6 @@ Sorted by severity within each area.
   `server/routes/productionRoutes.ts`'s `/tickets/bidder-labels` route that
   was silently sending every printed label doc to the developer's old
   working folder instead of the For-Print folder.
-- **`TicketsSpreadsheet/menu.gs` is still live/enabled** - unlike
-  `BidManagementSpreadsheet/menu.gs` and `ItemsSpreadsheet/menu.gs`, which
-  were both deliberately disabled once the web app became the single
-  source of use (see CHANGELOG.md). Left alone during the bidder-number fix
-  above since the user hasn't been asked about it yet and disabling it was
-  out of scope for that fix - its one live entry point,
-  `generateBidderLabels()`, was kept functional (now prompts for the
-  Bid-Management spreadsheet ID via `ui.prompt(...)` instead of taking a
-  `BidderManager` with no way to supply one). Needs the same
-  disable-the-menu conversation already had for the other two spreadsheets.
 - **`BidManagementSpreadsheet/Class_GoogleAIStudio.gs`'s `recordPayment()`
   and `PayPalSweeper.gs` both comment columns G/H backwards** - both say
   `// Column G: Paid?` / `// Column H: Checked Out?`, but the actual header
