@@ -16,8 +16,6 @@ interface AuctionContextType {
   totalRaised: number;
   loading: boolean;
   fetchBidders: () => Promise<void>;
-  fetchItems: () => Promise<void>;
-  fetchWinners: () => Promise<void>;
   fetchAttendees: () => Promise<void>;
   fetchAllData: () => Promise<void>;
   checkInBidder: (bidder: Bidder) => Promise<void>;
@@ -90,8 +88,6 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     totalRaised: winnersData.totalRaised,
     loading: biddersData.loading,
     fetchBidders: biddersData.fetchBidders,
-    fetchItems: itemsData.fetchItems,
-    fetchWinners: winnersData.fetchWinners,
     fetchAttendees: attendeesData.fetchAttendees,
     fetchAllData,
     checkInBidder: biddersData.checkInBidder,

@@ -152,11 +152,6 @@ Sorted by severity within each area.
 
 ### Dead code
 
-- **`AuctionContextType.fetchItems`/`fetchWinners`** (`src/context/AuctionContext.tsx`) -
-  exposed on the public context but no component consumes either
-  (confirmed by a repo-wide grep for `.fetchItems`/`.fetchWinners`
-  outside the provider itself). Drop both from the interface and the
-  provider's `value` object.
 - **`resequenceCategoryIds` is duplicated verbatim** between
   `server/services/itemService.ts:62-87` and
   `server/services/bundleService.ts:124-149` (confirmed byte-identical
