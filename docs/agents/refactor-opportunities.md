@@ -152,11 +152,6 @@ Sorted by severity within each area.
 
 ### Dead code
 
-- **`resequenceCategoryIds` is duplicated verbatim** between
-  `server/services/itemService.ts:62-87` and
-  `server/services/bundleService.ts:124-149` (confirmed byte-identical
-  via `diff`). Extract into a shared helper, e.g. `server/utils/categoryHelpers.ts`
-  (which already holds `getCategoryBase`, the function this one calls).
 - **`useAuctionItemsTableState.ts:179`'s bulk-field ternary has an
   unreachable branch** - `bulkField === 'itemType' ? 'I' : 'J'`, but
   `bulkField`'s type is `"category" | "itemType"` and the `category`

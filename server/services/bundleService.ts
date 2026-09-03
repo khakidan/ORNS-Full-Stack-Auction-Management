@@ -1,6 +1,6 @@
 import { sheets_v4 } from "googleapis";
 import { genAI } from "../services/genai";
-import { getCategoryBase } from "../utils/categoryHelpers";
+import { getCategoryBase, resequenceCategoryIds } from "../utils/categoryHelpers";
 
 export interface SuggestNamesParams {
   items: Array<{ name: string; description?: string }>;
@@ -116,36 +116,6 @@ function calculateMinRaise(value: number, tiers: { minRange: number; minRaise: n
     else calculatedRaise = 50;
   }
   return `$${calculatedRaise.toFixed(2)}`;
-}
-
-/**
- * Helper to re-sequence IDs for specific categories in the values array.
- */
-function resequenceCategoryIds(values: any[][], categories: Set<string>, baseNumbers: Record<string, number>) {
-  for (const cat of categories) {
-    if (!cat) continue;
-    const rowMapping: { origIndex: number, row: any[] }[] = [];
-    for (let i = 1; i < values.length; i++) {
-      const r = values[i] || [];
-      if (r[1] === cat && r[9] === "Active") {
-        rowMapping.push({ origIndex: i, row: r });
-      }
-    }
-
-    rowMapping.sort((a, b) => {
-      const idA = a.row[0] === "TEMP" ? 999999 : (parseInt(a.row[0]) || 999999);
-      const idB = b.row[0] === "TEMP" ? 999999 : (parseInt(b.row[0]) || 999999);
-      if (idA !== idB) return idA - idB;
-      return a.origIndex - b.origIndex;
-    });
-
-    const startNum = baseNumbers[cat] || getCategoryBase(cat);
-    let runningNum = startNum;
-    rowMapping.forEach(item => {
-      item.row[0] = runningNum.toString();
-      runningNum++;
-    });
-  }
 }
 
 /**
