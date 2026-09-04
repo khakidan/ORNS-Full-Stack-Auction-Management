@@ -23,11 +23,6 @@ deep audit's "Redundant/duplicated logic" section has been closed. See
 
 ### Code quality
 
-- **`google-api.ts`'s `fetchWithRetry` mutates the caller's `options`
-  object in place** (`src/services/google-api.ts:27-38`) - shallow-clones
-  neither `options` nor `options.headers` before injecting the auth
-  header, so a caller reusing an options literal across calls
-  accumulates state. Fix: clone before mutating.
 - **`TicketAttendeeTab.tsx`'s own Source filter `Select` has the same
   bare-`<SelectValue />` gap** just confirmed and fixed in
   `AddAttendeeDialog.tsx`/`BiddersFilterControls.tsx` (`:37-48`) - values

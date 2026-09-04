@@ -22,25 +22,30 @@ export async function fetchWithRetry(url: string | URL | Request, options: Reque
     }
   }
 
+  // Clone before mutating - the caller's options object (and its headers)
+  // must not be touched, or a caller reusing an options literal across
+  // multiple calls would silently accumulate state (e.g. leaking one
+  // call's injected auth header into an unrelated later call sharing the
+  // same object).
+  const requestOptions: RequestInit = { ...options };
+
   if (savedTokensStr) {
     console.log(`[google-api] Token string present for ${url.toString()}, injecting x-google-tokens`);
-    if (!options.headers) {
-      options.headers = {};
-    }
-    if (options.headers instanceof Headers) {
-      options.headers.set("x-google-tokens", savedTokensStr);
-    } else if (Array.isArray(options.headers)) {
+    if (requestOptions.headers instanceof Headers) {
+      requestOptions.headers = new Headers(requestOptions.headers);
+      requestOptions.headers.set("x-google-tokens", savedTokensStr);
+    } else if (Array.isArray(requestOptions.headers)) {
       // Find and remove existing if any to avoid duplicates
-      options.headers = options.headers.filter(h => h[0] !== "x-google-tokens");
-      options.headers.push(["x-google-tokens", savedTokensStr]);
+      requestOptions.headers = requestOptions.headers.filter(h => h[0] !== "x-google-tokens");
+      requestOptions.headers.push(["x-google-tokens", savedTokensStr]);
     } else {
-      (options.headers as any)["x-google-tokens"] = savedTokensStr;
+      requestOptions.headers = { ...(requestOptions.headers as Record<string, string> | undefined), "x-google-tokens": savedTokensStr };
     }
   }
 
   while (attempt < retries) {
     try {
-      const response = await fetch(url, options);
+      const response = await fetch(url, requestOptions);
       
       if (response.status === 429 || (response.status >= 500 && response.status < 600)) {
         const errorText = await response.clone().text().catch(() => "");
