@@ -9,9 +9,11 @@ const ATTENDEE_SHEETS = ["tickets", "staff tickets", "sponsor tickets"];
 
 export function useAttendeesData(ticketsSpreadsheetId: string) {
   const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const fetchAttendees = useCallback(async () => {
     if (!ticketsSpreadsheetId) return;
+    setLoading(true);
     try {
       let allAttendees: Attendee[] = [];
 
@@ -29,6 +31,8 @@ export function useAttendeesData(ticketsSpreadsheetId: string) {
       setAttendees(allAttendees);
     } catch (e) {
       console.error(e);
+    } finally {
+      setLoading(false);
     }
   }, [ticketsSpreadsheetId]);
 
@@ -93,5 +97,5 @@ export function useAttendeesData(ticketsSpreadsheetId: string) {
       });
   };
 
-  return { attendees, setAttendees, fetchAttendees, addAttendee, removeAttendee };
+  return { attendees, setAttendees, loading, fetchAttendees, addAttendee, removeAttendee };
 }

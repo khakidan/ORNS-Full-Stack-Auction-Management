@@ -21,7 +21,7 @@ import { useTicketAttendeeState } from "@/hooks/useTicketAttendeeState";
 export default function TicketAttendeeTab() {
   const { config } = useConfig();
   const spreadsheetId = config.auctionTicketsSpreadsheetId;
-  const { attendees, setAttendees, loading, addAttendee, removeAttendee, fetchAttendees, isAuctionClosed } = useAuction();
+  const { attendees, setAttendees, attendeesLoading, addAttendee, removeAttendee, fetchAttendees, isAuctionClosed } = useAuction();
 
   const state = useTicketAttendeeState({ attendees, setAttendees, addAttendee, removeAttendee, spreadsheetId });
 
@@ -49,8 +49,8 @@ export default function TicketAttendeeTab() {
         }
         trailing={
           <>
-            <Button variant="outline" onClick={fetchAttendees} disabled={loading} className="gap-2">
-              <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+            <Button variant="outline" onClick={fetchAttendees} disabled={attendeesLoading} className="gap-2">
+              <RefreshCw className={cn("w-4 h-4", attendeesLoading && "animate-spin")} />
               Refresh
             </Button>
 
@@ -83,7 +83,7 @@ export default function TicketAttendeeTab() {
         <CardContent className="flex-1 overflow-auto p-0 min-h-[400px]">
           <AttendeesTable
             attendees={state.filteredAttendees}
-            loading={loading}
+            loading={attendeesLoading}
             isAuctionClosed={isAuctionClosed}
             onUpdateField={state.updateField}
             onUpdatePaymentStatus={state.updatePaymentStatus}

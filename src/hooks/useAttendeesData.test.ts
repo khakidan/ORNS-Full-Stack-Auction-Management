@@ -19,6 +19,12 @@
  * could collide for two adds triggered in the same millisecond, which
  * would have made a scoped rollback affect both new entries instead of
  * just the failed one - now includes a random suffix too.
+ *
+ * Also added a real `loading` state (refactor-opportunities.md): this
+ * hook previously tracked no loading state of its own at all -
+ * TicketAttendeeTab.tsx's Refresh button and table spinner were wired to
+ * useBiddersData.ts's `loading` from context instead, so they never
+ * actually reflected this hook's own fetch.
  */
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -114,6 +120,46 @@ describe("useAttendeesData.fetchAttendees", () => {
 
     expect(result.current.attendees).toHaveLength(1);
     expect(result.current.attendees[0].firstName).toBe("Alice");
+  });
+
+  it("tracks its own loading state - true while the fetch is in flight, false once it settles", async () => {
+    // TicketAttendeeTab.tsx used to have no attendees-specific loading
+    // flag at all and borrowed useBiddersData.ts's `loading` instead, so
+    // its Refresh button/table spinner never actually reflected this
+    // fetch. Regression guard for that fix: this hook must expose and
+    // maintain its own `loading`.
+    let resolveFirstSheet: (v: any) => void;
+    mockedGetSheetData.mockImplementation((_id: string, range: string) => {
+      if (range.startsWith("tickets")) {
+        return new Promise((resolve) => { resolveFirstSheet = resolve; });
+      }
+      return Promise.resolve({ values: [] });
+    });
+
+    const { result } = renderHook(() => useAttendeesData("ss-id"));
+    expect(result.current.loading).toBe(false);
+
+    let fetchPromise: Promise<void>;
+    act(() => {
+      fetchPromise = result.current.fetchAttendees();
+    });
+    await waitFor(() => expect(result.current.loading).toBe(true));
+
+    await act(async () => {
+      resolveFirstSheet!({ values: TICKETS_ROWS });
+      await fetchPromise;
+    });
+
+    expect(result.current.loading).toBe(false);
+  });
+
+  it("does not set loading when ticketsSpreadsheetId is empty - fetchAttendees returns before the guard", async () => {
+    const { result } = renderHook(() => useAttendeesData(""));
+    await act(async () => {
+      await result.current.fetchAttendees();
+    });
+
+    expect(result.current.loading).toBe(false);
   });
 });
 

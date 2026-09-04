@@ -23,11 +23,6 @@ deep audit's "Redundant/duplicated logic" section has been closed. See
 
 ### Code quality
 
-- **`useAttendeesData.ts` tracks no `loading` state**, unlike its
-  sibling `useBiddersData.ts` - `TicketAttendeeTab.tsx`'s Refresh
-  button is wired to the *bidders'* `loading` flag from context instead,
-  so its spinner never reflects the actual attendee fetch. Add a
-  `loading` state to `useAttendeesData` and expose/wire it correctly.
 - **`useCheckoutState.ts` (416 lines) and `useAuctionItemsTableState.ts`
   (437 lines)** are both past this codebase's own "over 400 is almost
   certainly doing too much" line (`react-patterns.md`); each mixes list

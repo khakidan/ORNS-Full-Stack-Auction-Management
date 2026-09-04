@@ -150,6 +150,7 @@ vi.mock("@/context/AuctionContext", () => ({
     addAttendee: mockAddAttendee,
     setAttendees: vi.fn(),
     loading: false,
+    attendeesLoading: false,
     removeAttendee: vi.fn(),
     fetchAttendees: vi.fn(),
     isAuctionClosed: false,
