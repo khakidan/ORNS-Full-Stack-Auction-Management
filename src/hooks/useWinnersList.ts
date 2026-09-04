@@ -103,6 +103,12 @@ export function useWinnersList({ bidders, items, fetchAllData, spreadsheetId, bi
   }, [bidders, items, loadWinners]);
 
   const filteredWinners = useMemo(() => {
+    const matchesSearch = (w: WinnerRecord) => {
+      const nameMatch = w.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const idMatch = w.bidderId.includes(searchTerm);
+      return nameMatch || idMatch;
+    };
+
     const pendingWinners = winners.filter(w => {
       const bidder = bidders.find(b => b.id === w.bidderId);
       return !bidder?.checkedOut;
@@ -113,16 +119,13 @@ export function useWinnersList({ bidders, items, fetchAllData, spreadsheetId, bi
       return bidder?.checkedOut === true;
     });
 
-    const displayedWinners = activeTab === "pending" ? pendingWinners : completedWinners;
-
-    const filtered = displayedWinners.filter(w => {
-      const nameMatch = w.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const idMatch = w.bidderId.includes(searchTerm);
-      return nameMatch || idMatch;
-    });
-
-    return { pendingWinners, completedWinners, filtered };
-  }, [winners, bidders, activeTab, searchTerm]);
+    return {
+      pendingWinners,
+      completedWinners,
+      pendingFiltered: pendingWinners.filter(matchesSearch),
+      completedFiltered: completedWinners.filter(matchesSearch),
+    };
+  }, [winners, bidders, searchTerm]);
 
   return {
     winners,
@@ -135,7 +138,8 @@ export function useWinnersList({ bidders, items, fetchAllData, spreadsheetId, bi
     setActiveTab,
     pendingWinners: filteredWinners.pendingWinners,
     completedWinners: filteredWinners.completedWinners,
-    filteredWinners: filteredWinners.filtered,
+    pendingFilteredWinners: filteredWinners.pendingFiltered,
+    completedFilteredWinners: filteredWinners.completedFiltered,
     handleRefresh,
   };
 }

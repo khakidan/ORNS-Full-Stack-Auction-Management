@@ -37,13 +37,6 @@ deep audit's "Redundant/duplicated logic" section has been closed. See
   requires focus outlines never be removed without replacement. Fix:
   add `group-focus-within:opacity-100` alongside the existing
   `group-hover:opacity-100`.
-- **`Checkout.tsx`'s two `TabsContent` panels both bind the same
-  `state.filteredWinners`** (`:84-106`) - `useCheckoutState.filteredWinners`
-  is already tab-scoped internally, so passing the identical prop to
-  both the "pending" and "completed" `WinnerGrid` instances only
-  renders correctly because `Tabs` unmounts the inactive panel. Fragile
-  if `forceMount` is ever added. Fix: expose separate
-  `pendingFilteredWinners`/`completedFilteredWinners` from the hook.
 - **`AddAttendeeDialog.tsx` and `BiddersFilterControls.tsx`'s `Select`s
   render bare `<SelectValue />` where the stored value and display
   label differ** (e.g. value `"sponsor tickets"` shown as "Sponsor") -

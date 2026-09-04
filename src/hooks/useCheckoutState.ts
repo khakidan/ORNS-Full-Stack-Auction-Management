@@ -77,7 +77,8 @@ export function useCheckoutState({
     setActiveTab: winnersList.setActiveTab,
     pendingWinners: winnersList.pendingWinners,
     completedWinners: winnersList.completedWinners,
-    filteredWinners: winnersList.filteredWinners,
+    pendingFilteredWinners: winnersList.pendingFilteredWinners,
+    completedFilteredWinners: winnersList.completedFilteredWinners,
 
     handleRefresh: winnersList.handleRefresh,
     handleEmailReceipt: receiptActions.handleEmailReceipt,

@@ -185,6 +185,73 @@ describe("useCheckoutState.confirmMarkPaid", () => {
   });
 });
 
+describe("useCheckoutState.pendingFilteredWinners / completedFilteredWinners", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLoadWinnersData();
+  });
+
+  it("keeps both tab-scoped lists independently populated at the same time - not gated by activeTab", async () => {
+    // refactor-opportunities.md flagged that both TabsContent panels used
+    // to bind the same `filteredWinners` (tab-scoped only via activeTab),
+    // which only rendered correctly because Tabs unmounts the inactive
+    // panel - a forceMount, or any other simultaneous read of both
+    // panels' data, would show the wrong list for whichever tab wasn't
+    // "active". Alice hasn't checked out (pending); Bob has (completed).
+    const bidders = [
+      makeBidder({ id: "101", firstName: "Alice", lastName: "One", checkedOut: false }),
+      makeBidder({ id: "102", firstName: "Bob", lastName: "Two", checkedOut: true }),
+    ];
+    const { result } = renderHook(() =>
+      useCheckoutState({
+        bidders,
+        items: ITEMS,
+        attendees: [],
+        fetchAllData: vi.fn(),
+        spreadsheetId: "ss-id",
+        ticketsSpreadsheetId: "",
+        bidManagementSheet: "Bid-Management",
+        bidderNumbersSheet: "Bidder-Numbers",
+        folderId: "folder-id",
+      })
+    );
+    await waitFor(() => expect(result.current.winners).toHaveLength(2));
+
+    // Both lists must be correct simultaneously, regardless of which tab
+    // is "active" - activeTab is never even touched here.
+    expect(result.current.pendingFilteredWinners.map(w => w.bidderId)).toEqual(["101"]);
+    expect(result.current.completedFilteredWinners.map(w => w.bidderId)).toEqual(["102"]);
+  });
+
+  it("scopes the search term to each tab-scoped list independently", async () => {
+    const bidders = [
+      makeBidder({ id: "101", firstName: "Alice", lastName: "One", checkedOut: false }),
+      makeBidder({ id: "102", firstName: "Bob", lastName: "Two", checkedOut: true }),
+    ];
+    const { result } = renderHook(() =>
+      useCheckoutState({
+        bidders,
+        items: ITEMS,
+        attendees: [],
+        fetchAllData: vi.fn(),
+        spreadsheetId: "ss-id",
+        ticketsSpreadsheetId: "",
+        bidManagementSheet: "Bid-Management",
+        bidderNumbersSheet: "Bidder-Numbers",
+        folderId: "folder-id",
+      })
+    );
+    await waitFor(() => expect(result.current.winners).toHaveLength(2));
+
+    act(() => {
+      result.current.setSearchTerm("Bob");
+    });
+
+    expect(result.current.pendingFilteredWinners).toEqual([]);
+    expect(result.current.completedFilteredWinners.map(w => w.bidderId)).toEqual(["102"]);
+  });
+});
+
 describe("useCheckoutState.handleRefresh", () => {
   beforeEach(() => {
     vi.clearAllMocks();

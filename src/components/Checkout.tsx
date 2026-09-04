@@ -83,7 +83,7 @@ export default function Checkout() {
 
         <TabsContent value="pending" className="m-0">
           <WinnerGrid
-            winners={state.filteredWinners}
+            winners={state.pendingFilteredWinners}
             loading={state.fetchingWinners}
             bidders={bidders}
             processingId={state.processingId}
@@ -96,7 +96,7 @@ export default function Checkout() {
 
         <TabsContent value="completed" className="m-0">
           <WinnerGrid
-            winners={state.filteredWinners}
+            winners={state.completedFilteredWinners}
             loading={state.fetchingWinners}
             bidders={bidders}
             processingId={state.processingId}
