@@ -7,9 +7,21 @@
  *   - Orchestrate the full bidder-sheet setup workflow
  */
 class BidderManager extends GlobalVariables {
-    constructor () {
-        super();
+    /**
+     * @param {Object} [overrides] Optional dependency injection, used by unit
+     *   tests to avoid touching the real active spreadsheet, its _Settings
+     *   tab, or the real external tickets spreadsheet. Production call sites
+     *   (`new BidderManager()`) never pass this. Forwards `overrides` on to
+     *   GlobalVariables' own constructor (see its docblock for
+     *   activeSpreadSheet/config), and additionally accepts:
+     * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [overrides.ticketsSpreadsheet]
+     *   Replaces `SpreadsheetApp.openById(this.config['auctionTicketSheetsID'])`
+     *   in getAuctionTicketsSheet_ entirely when given.
+     */
+    constructor ( overrides = {} ) {
+        super( overrides );
         this.uiManager = new UIManager();
+        this.ticketsSpreadsheetOverride_ = overrides.ticketsSpreadsheet || null;
 
         // Column header string constants
         this.idString = 'ID';
@@ -81,10 +93,14 @@ class BidderManager extends GlobalVariables {
     /** Lazy-loads the external tickets spreadsheet via DriveService-style safeFetch. */
     getAuctionTicketsSheet_ () {
         if ( !this._ticketsSpreadsheet ) {
-            const id = this.config[ 'auctionTicketSheetsID' ];
-            if ( !id || id.toString().includes( 'PASTE' ) ) return null;
-            try { this._ticketsSpreadsheet = SpreadsheetApp.openById( id ); }
-            catch ( e ) { console.warn( `BidderManager: could not open tickets sheet. ${ e.message }` ); return null; }
+            if ( this.ticketsSpreadsheetOverride_ ) {
+                this._ticketsSpreadsheet = this.ticketsSpreadsheetOverride_;
+            } else {
+                const id = this.config[ 'auctionTicketSheetsID' ];
+                if ( !id || id.toString().includes( 'PASTE' ) ) return null;
+                try { this._ticketsSpreadsheet = SpreadsheetApp.openById( id ); }
+                catch ( e ) { console.warn( `BidderManager: could not open tickets sheet. ${ e.message }` ); return null; }
+            }
         }
         return this._ticketsSpreadsheet;
     }
@@ -171,8 +187,16 @@ class BidderManager extends GlobalVariables {
         const data = this.ticketBidders;
         for ( let i = 0; i < data.loopLength; i++ ) {
 
-            // First check if they have guests and a guest first name exists
-            if ( data.range[ i ][ 6 ] !== '' && data.range[ i ][ firstNameCol ] !== '' ) {
+            // A guest is real whenever their own name is present - matches
+            // src/lib/attendeeParsing.ts's own inclusion check on the Node
+            // side, which never reads column G (index 6) at all. This used
+            // to also require column G (a separate "guest marker" checkbox
+            // distinct from the guest's own data) to be non-blank, which
+            // silently dropped any guest whose row simply never had that
+            // checkbox ticked - even one with a real name/email who
+            // explicitly opted in below - from ever being added to
+            // Bidder-Numbers, so their labels were never generated.
+            if ( data.range[ i ][ firstNameCol ] !== '' ) {
 
                 // Fetch the "Own Bidder Number?" response
                 const wantsOwnNumber = data.range[ i ][ ownBidderCol ];

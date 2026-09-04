@@ -346,6 +346,88 @@ describe('Guest Bidder Number Assignment workflow', () => {
 
     expect(response.status).toBe(401);
   });
+
+  it('User-reported bug: a real, opted-in guest still gets a bidder number even when the separate "Guest Marker" column (index 6) is blank', async () => {
+    // Root cause: collectGuestInfo used to require row[6] ("Guest Marker")
+    // to be non-blank as a prerequisite, on top of the guest's own name
+    // and their "yes" opt-in - a column the app's own attendee table
+    // (src/lib/attendeeParsing.ts) never reads at all to decide whether a
+    // guest is real. A guest with a genuine name/email who explicitly
+    // opted in for their own number, but whose row simply never had that
+    // separate checkbox ticked, was silently dropped from Bidder-Numbers -
+    // so their printed label was never generated, even though they were
+    // visibly listed with an "Own #" badge in the live app.
+    server.use(
+      http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+        const url = new URL(request.url);
+        const range = decodeURIComponent(url.pathname.split('/').pop() || "");
+
+        if (range.includes("Settings")) {
+          return HttpResponse.json({
+            values: [
+              ["Setting Key", "Value"],
+              ["ticketPrice", "35"]
+            ]
+          });
+        }
+        if (range.includes("tickets")) {
+          return HttpResponse.json({
+            values: [
+              ["First Name", "Last Name", "Email", "P1", "P2", "P3", "Guest Marker", "G1 First", "G1 Last", "G1 Email", "G1 Own Num"],
+              // Guest Marker (index 6) deliberately blank, unlike every
+              // other fixture row in this file - Bob still has a real
+              // name/email and explicitly opted in ("yes").
+              ["Alice", "One", "alice@example.com", "", "", "", "", "Bob", "One", "bob@example.com", "yes"],
+            ]
+          });
+        }
+        if (range.includes("Bidder-Numbers")) {
+          return HttpResponse.json({
+            values: [
+              ["ID", "First Name", "Last Name", "Email", "Checked In", "Proxy Bidder", "Checked Out", "Paid", "Payment Method", "Invoice URL", "Invoiced Amount"]
+            ]
+          });
+        }
+        return HttpResponse.json({ values: [] });
+      }),
+      http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId', () => {
+        return HttpResponse.json({
+          sheets: [
+            { properties: { title: "Bidder-Numbers", sheetId: 101 } },
+            { properties: { title: "Bid-Management", sheetId: 102 } },
+            { properties: { title: "Auction-Items", sheetId: 103 } }
+          ]
+        });
+      }),
+      http.put('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', async ({ request }) => {
+        const url = new URL(request.url);
+        const pathname = decodeURIComponent(url.pathname);
+        try {
+          const body = await request.clone().json() as any;
+          if (body.values && body.values.length > 0 && pathname.includes('Bidder-Numbers')) {
+            lastBulkWritePayload.splice(0, lastBulkWritePayload.length, ...body.values);
+          }
+        } catch (e) {}
+        return HttpResponse.json({ updatedRows: 1 });
+      })
+    );
+
+    const response = await request(app)
+      .post('/api/bidders/sync')
+      .set(authHeader)
+      .send({
+        spreadsheetId,
+        auctionImportSheetID: 'dummy-import',
+        auctionTicketSheetsID: ticketsSpreadsheetId
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+
+    const bobRow = lastBulkWritePayload.find(row => row[1] === "Bob" && row[2] === "One");
+    expect(bobRow).toBeDefined();
+    expect(bobRow[3]).toBe("bob@example.com");
+  });
 });
 
 describe('Sync guard against re-syncing after walk-ins', () => {

@@ -219,10 +219,20 @@ export async function performSheetSync(client: any, spreadsheetId: string, custo
   const collectGuestInfo = (firstCol: number, lastCol: number, emailCol: number, ownBidderCol: number) => {
     for (let i = 1; i < ticketsRows.length; i++) {
       const row = ticketsRows[i];
-      if (row && row.length > Math.max(firstCol, lastCol, emailCol, ownBidderCol, 6)) {
-        const hasGuestMarker = String(row[6] || "").trim() !== "";
+      if (row && row.length > Math.max(firstCol, lastCol, emailCol, ownBidderCol)) {
         const guestFirst = String(row[firstCol] || "").trim();
-        if (hasGuestMarker && guestFirst !== "") {
+        // A guest is real whenever their own name is present - matches
+        // src/lib/attendeeParsing.ts's own inclusion check, which never
+        // reads column G (row[6]) at all. This used to also require
+        // row[6] to be non-blank (a separate "guest marker" checkbox
+        // distinct from the guest's own data), which silently dropped
+        // any guest whose row simply never had that checkbox ticked -
+        // even one with a real name/email who explicitly opted in below
+        // - from ever being added to Bidder-Numbers, so their labels
+        // were never generated. Guest inclusion is real name + opt-in
+        // only now, the same two facts the app's own attendee table
+        // already treats as authoritative.
+        if (guestFirst !== "") {
           const wantsOwn = String(row[ownBidderCol] || "").trim().toLowerCase();
           if (wantsOwn === "yes") {
             collectedBidders.push([
