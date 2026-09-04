@@ -23,15 +23,9 @@ deep audit's "Redundant/duplicated logic" section has been closed. See
 
 ### Code quality
 
-- **`TicketAttendeeTab.tsx`'s own Source filter `Select` has the same
-  bare-`<SelectValue />` gap** just confirmed and fixed in
-  `AddAttendeeDialog.tsx`/`BiddersFilterControls.tsx` (`:37-48`) - values
-  `"tickets"`/`"sponsor tickets"`/`"staff tickets"` are shown verbatim
-  instead of their labels ("General Tickets"/"Sponsors"/"Staff"). Found
-  while confirming the sibling bug via a real (unmocked) RTL render, out
-  of scope for that pass since it wasn't one of the two files named.
-  Same fix: pass `SelectValue` a `(value) => LABELS[value] ?? value`
-  children function.
+Nothing outstanding right now - every item flagged in the 2026-09-02 deep
+audit's "Code quality" section has been closed. See `CHANGELOG.md` for
+the individual fixes.
 
 ### Test coverage gaps (`testing-philosophy.md`)
 

@@ -18,6 +18,18 @@ import { useAuction } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
 import { useTicketAttendeeState } from "@/hooks/useTicketAttendeeState";
 
+// SelectValue with no children renders the raw stored value, not the
+// matching SelectItem's label - see component-standards.md's documented
+// SelectValue failure mode (confirmed via a throwaway RTL render for the
+// sibling AddAttendeeDialog.tsx/BiddersFilterControls.tsx case - the
+// trigger showed the literal stored value instead of the item's label).
+const SOURCE_LABELS: Record<string, string> = {
+  all: "All Sources",
+  tickets: "General Tickets",
+  "sponsor tickets": "Sponsors",
+  "staff tickets": "Staff",
+};
+
 export default function TicketAttendeeTab() {
   const { config } = useConfig();
   const spreadsheetId = config.auctionTicketsSpreadsheetId;
@@ -37,7 +49,7 @@ export default function TicketAttendeeTab() {
           <Select value={state.filterSource} onValueChange={state.setFilterSource}>
             <SelectTrigger className="w-[180px] h-10">
               <Filter className="w-4 h-4 mr-2" />
-              <SelectValue placeholder="Source" />
+              <SelectValue placeholder="Source">{(value: string) => SOURCE_LABELS[value] ?? value}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Sources</SelectItem>
