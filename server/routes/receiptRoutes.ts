@@ -3,13 +3,13 @@ import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
 import { processEmail } from '../services/emailService';
 import { createIndividualReceipt, createAllReceipts, processAllEmails } from '../services/receiptService';
+import { requireAuth } from '../middleware/requireAuth';
 
 export default function createReceiptsRouter() {
   const router = Router();
+  router.use(requireAuth);
 
   router.post("/generate", async (req, res, next) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     const { bidderId, emailReceipt } = req.body;
     const scriptId = process.env.SCRIPT_ID_BID_MANAGEMENT;
     
@@ -27,8 +27,6 @@ export default function createReceiptsRouter() {
   });
 
   router.post("/generate-all", async (req, res, next) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     const scriptId = process.env.SCRIPT_ID_BID_MANAGEMENT;
     
     if (!scriptId) return res.status(500).json({ error: "SCRIPT_ID_BID_MANAGEMENT not configured." });
@@ -46,8 +44,6 @@ export default function createReceiptsRouter() {
 
 
   router.post("/email-all", async (req, res, next) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     const { spreadsheetId } = req.body;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
 
@@ -61,8 +57,6 @@ export default function createReceiptsRouter() {
   });
 
   router.post("/email-only", async (req, res, next) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     const { bidderId, spreadsheetId } = req.body;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
 

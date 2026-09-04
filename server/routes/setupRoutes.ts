@@ -2,14 +2,14 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
 import { setupNewAuction } from '../services/auctionSetupService';
+import { requireAuth } from '../middleware/requireAuth';
 
 export default function createSetupRouter() {
   const router = Router();
+  router.use(requireAuth);
 
   router.post("/setup-new", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
-    const { 
+    const {
       ticketsSpreadsheetId, 
       itemEntrySpreadsheetId, 
       bidManagementSpreadsheetId 

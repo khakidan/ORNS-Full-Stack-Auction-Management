@@ -3,6 +3,7 @@ import { cacheControl } from "../middleware/cacheControl";
 import { cookiePolicy } from "../middleware/cookiePolicy";
 import { tokenRestorer } from "../middleware/tokenRestorer";
 import { errorHandler } from "../middleware/errorHandler";
+import { requireAuth } from "../middleware/requireAuth";
 import { Request, Response } from "express";
 
 // Typed Mock Helpers
@@ -326,5 +327,57 @@ describe("middleware - errorHandler", () => {
     expect(next).not.toHaveBeenCalled();
     expect(errorLogSpy).toHaveBeenCalledTimes(1);
     expect(errorLogSpy).toHaveBeenCalledWith("Centralized Error:", err);
+  });
+});
+
+describe("middleware - requireAuth", () => {
+  function createAuthMocks(session: any) {
+    const req = { session } as unknown as Request;
+    const jsonMock = vi.fn();
+    const res = {
+      status: vi.fn().mockReturnValue({ json: jsonMock }),
+    } as unknown as Response;
+    const next = vi.fn();
+    return { req, res, next, jsonMock };
+  }
+
+  it("calls next() and does not respond when session tokens are present", () => {
+    const { req, res, next, jsonMock } = createAuthMocks({ tokens: { access_token: "abc" } });
+
+    requireAuth(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).not.toHaveBeenCalled();
+    expect(jsonMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 Unauthorized and does not call next() when session is null", () => {
+    const { req, res, next, jsonMock } = createAuthMocks(null);
+
+    requireAuth(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(jsonMock).toHaveBeenCalledWith({ error: "Unauthorized" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 Unauthorized and does not call next() when session exists but has no tokens", () => {
+    const { req, res, next, jsonMock } = createAuthMocks({});
+
+    requireAuth(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(jsonMock).toHaveBeenCalledWith({ error: "Unauthorized" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 Unauthorized when session is undefined", () => {
+    const { req, res, next, jsonMock } = createAuthMocks(undefined);
+
+    requireAuth(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(jsonMock).toHaveBeenCalledWith({ error: "Unauthorized" });
+    expect(next).not.toHaveBeenCalled();
   });
 });

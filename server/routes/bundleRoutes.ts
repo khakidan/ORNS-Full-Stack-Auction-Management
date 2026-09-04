@@ -3,18 +3,19 @@ import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
 import { checkIdempotency, saveIdempotency } from '../utils/idempotency';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
-import { 
-  suggestBundleNames, 
-  suggestBundleDescription, 
-  processBundle, 
-  restoreBundle 
+import {
+  suggestBundleNames,
+  suggestBundleDescription,
+  processBundle,
+  restoreBundle
 } from '../services/bundleService';
+import { requireAuth } from '../middleware/requireAuth';
 
 export default function createBundleRouter() {
   const router = Router();
+  router.use(requireAuth);
 
   router.post("/suggest-names", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
     if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
 
     const { items } = req.body;
@@ -31,7 +32,6 @@ export default function createBundleRouter() {
   });
 
   router.post("/suggest-description", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
     if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
 
     const { items } = req.body;
@@ -48,9 +48,7 @@ export default function createBundleRouter() {
   });
 
   router.post("/process", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
-    const { 
+    const {
       spreadsheetId, 
       targetIds, 
       newName, 
@@ -101,8 +99,6 @@ export default function createBundleRouter() {
   });
 
   router.post("/restore", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     const { spreadsheetId, targetBundleToken, idempotencyKey } = req.body;
     
     if (!spreadsheetId || !targetBundleToken) {

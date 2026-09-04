@@ -1,19 +1,20 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
+import { requireAuth } from '../middleware/requireAuth';
 
 export default function createProductionRouter() {
   const router = Router();
+  router.use(requireAuth);
 
   const handleAppsScriptCall = async (
-    req: Request, 
-    res: Response, 
-    next: NextFunction, 
-    functionName: string, 
-    scriptId: string, 
+    req: Request,
+    res: Response,
+    next: NextFunction,
+    functionName: string,
+    scriptId: string,
     parameters: any[] = []
   ) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
     if (!scriptId) return res.status(400).json({ error: "Missing Target Environment Script ID" });
 
     try {

@@ -17,12 +17,6 @@ each area.
 
 ### Redundant/duplicated logic
 
-- **27 identical auth-guard copies** - `if (!req.session?.tokens)
-  return res.status(401).json({ error: "Unauthorized" });` repeated
-  verbatim across `server/routes/{setupRoutes,bundleRoutes,dataRoutes,receiptRoutes,bidRoutes,productionRoutes}.ts`.
-  Currently correct everywhere, but a candidate for a small
-  `requireAuth` Express middleware so a future new route can't forget
-  it.
 - **`useApiAuthStatus.ts` and `useGoogleAuth.ts` independently
   duplicate the same auth-status + `OAUTH_AUTH_SUCCESS` listener flow** -
   both mount at the same time (from `AuctionContext` and `App.tsx`

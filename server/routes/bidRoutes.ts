@@ -7,15 +7,15 @@ import { executeGoogleSheetsTransaction, SheetOp } from '../services/sheetsServi
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { registerWalkInBidder, checkInBidderWithBid } from '../services/bidderService';
 import { recordWinningBid, checkoutMarkPaid, closeAuctionAndCleanup } from '../services/auctionService';
+import { requireAuth } from '../middleware/requireAuth';
 
 export default function createBidRouter() {
   const router = Router();
+  router.use(requireAuth);
 
   // Record winning bid with follow-up logic
   router.post("/auction/record-winning-bid", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
-    const { 
+    const {
       bidderId, 
       itemId, 
       price, 
@@ -60,9 +60,7 @@ export default function createBidRouter() {
 
   // transactional checkout
   router.post("/auction/checkout-mark-paid", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
-    const { 
+    const {
       bidderId, 
       spreadsheetId, 
       ticketsSpreadsheetId, 
@@ -115,8 +113,6 @@ export default function createBidRouter() {
   });
 
   router.post("/auction/close-and-cleanup", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     const { spreadsheetId, bidderNumbersSheet, bidManagementSheet } = req.body;
     if (!spreadsheetId || !bidderNumbersSheet || !bidManagementSheet) {
       return res.status(400).json({ error: "Missing required spreadsheet parameters for cleanup." });
@@ -146,9 +142,7 @@ export default function createBidRouter() {
 
   // Update walk-in to be transactional across sheets
   router.post("/bidders/walk-in", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
-    const { 
+    const {
       firstName, 
       lastName, 
       email, 
@@ -198,9 +192,7 @@ export default function createBidRouter() {
 
   // Transactional Check-in with optional Bid (e.g. for unpaid tickets)
   router.post("/auction/check-in-with-bid", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
-    const { 
+    const {
       bidderId, 
       spreadsheetId, 
       bidManagementSheet, 

@@ -13,16 +13,16 @@ import {
 } from '../services/itemService';
 import { checkIdempotency, saveIdempotency } from '../utils/idempotency';
 import { updateAttendeeField } from '../services/bidderService';
+import { requireAuth } from '../middleware/requireAuth';
 
 export default function createDataRouter() {
   const router = Router();
-  
+  router.use(requireAuth);
+
   // Sheet API Cache is now imported from shared utils/sheetCache
 
   // Sync bidders via Node.js Google Sheets integration
   router.post("/bidders/sync", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     const { spreadsheetId, auctionImportSheetID, auctionTicketSheetsID } = req.body;
     if (!spreadsheetId) {
       return res.status(400).json({ error: "spreadsheetId is required to sync and setup bid management." });
@@ -49,8 +49,6 @@ export default function createDataRouter() {
   });
 
   router.post("/settings/update", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     const { spreadsheetId, key, value, description } = req.body;
     if (!spreadsheetId || !key) return res.status(400).json({ error: "Missing required fields" });
 
@@ -107,8 +105,6 @@ export default function createDataRouter() {
 
   // Add Auction Item and resequence
   router.post("/auction/add-item", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     const { spreadsheetId, category, name, description, value, donor, itemType, idempotencyKey } = req.body;
     if (!spreadsheetId || !category || !name) {
       return res.status(400).json({ error: "Missing required parameters for adding item" });
@@ -141,8 +137,6 @@ export default function createDataRouter() {
 
   // Delete Auction Item Row
   router.post("/auction/delete-item", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     const { spreadsheetId, rowIndex } = req.body;
     if (!spreadsheetId || !rowIndex) {
       return res.status(400).json({ error: "Missing required parameters for deletion" });
@@ -167,8 +161,6 @@ export default function createDataRouter() {
 
   // Update Auction Item Row & Manage Sequencing on Change
   router.post("/auction/update-item", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     const { spreadsheetId, rowIndex, field, value } = req.body;
     if (!spreadsheetId || !rowIndex || !field) {
       return res.status(400).json({ error: "Missing required parameters" });
@@ -197,8 +189,6 @@ export default function createDataRouter() {
 
   // Bulk Update Auction Item Rows & Manage Sequencing on Change
   router.post("/auction/bulk-update-items", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     const { spreadsheetId, rowIndices, field, value, idempotencyKey } = req.body;
     if (!spreadsheetId || !rowIndices || !rowIndices.length || !field) {
       return res.status(400).json({ error: "Missing required bulk update parameters" });
@@ -228,8 +218,6 @@ export default function createDataRouter() {
 
   // Sheet API Proxy
   router.get("/sheets/:spreadsheetId/:range", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     const { spreadsheetId, range } = req.params;
     const decodedRange = decodeURIComponent(range);
     const normalizedRange = normalizeRange(decodedRange);
@@ -270,8 +258,6 @@ export default function createDataRouter() {
   });
 
   router.post("/sheets/:spreadsheetId/:range", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     if (!req.body || !req.body.values) {
       return res.status(400).json({ error: "Missing body values" });
     }
@@ -309,8 +295,6 @@ export default function createDataRouter() {
   });
 
   router.post("/sheets/:spreadsheetId/:range/append", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     if (!req.body || !req.body.values) {
       return res.status(400).json({ error: "Missing body values" });
     }
@@ -348,8 +332,6 @@ export default function createDataRouter() {
   });
 
   router.post("/sheets/:spreadsheetId/:range/clear", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     try {
       const { spreadsheetId, range } = req.params;
       const client = getAuthenticatedClient(req.session.tokens);
@@ -374,8 +356,6 @@ export default function createDataRouter() {
 
   // Drive API Proxy
   router.get("/drive/files/:folderId", async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     try {
       const client = getAuthenticatedClient(req.session.tokens);
       const drive = google.drive({ version: "v3", auth: client });
@@ -412,8 +392,6 @@ export default function createDataRouter() {
 
   // Update Attendee Field Endpoints
   const updateAttendeeHandler = async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.session?.tokens) return res.status(401).json({ error: "Unauthorized" });
-
     const { spreadsheetId, sheet, rowIndex, field, value } = req.body;
     if (!spreadsheetId || !sheet || rowIndex === undefined || !field) {
       return res.status(400).json({ error: "Missing required fields" });
