@@ -183,6 +183,25 @@ function itemsTests_displayFallbacks_ () {
     itemsTests_assertEqual_( blankRaise.getDisplayMinRaise(), '5', 'blank min raise should fall back to 5' );
 }
 
+function itemsTests_shortRowDefaultsMissingTrailingCellsToEmptyString_ () {
+    // The Sheets API omits trailing empty cells from a row, so a row with
+    // no bundle/timestamp data (or any other blank trailing columns) can
+    // arrive genuinely shorter than 12 elements - not itemsTests_itemRow_'s
+    // always-12-element fixture, which never exercised this path. Missing
+    // cells must default to '', not undefined, or the `=== ''` fallback
+    // checks silently break.
+    const idOnly = new AuctionItem( [ '101' ] );
+    itemsTests_assertEqual_( idOnly.id, '101', 'id from the one present cell' );
+    itemsTests_assertEqual_( idOnly.category, '', 'missing category defaults to empty string, not undefined' );
+    itemsTests_assertEqual_( idOnly.bundleID, '', 'missing bundleID defaults to empty string, not undefined' );
+    itemsTests_assertEqual_( idOnly.bundleTimeStamp, '', 'missing bundleTimeStamp defaults to empty string, not undefined' );
+
+    itemsTests_assertEqual_( idOnly.getDisplayValue(), '500', 'missing value should still fall back to 500, not "undefined"' );
+    itemsTests_assertEqual_( idOnly.getDisplayOpeningBid(), '5', 'missing opening bid should still fall back to 5, not "undefined"' );
+    itemsTests_assertEqual_( idOnly.getDisplayMinRaise(), '5', 'missing min raise should still fall back to 5, not "undefined"' );
+    itemsTests_assertEqual_( idOnly.hasOpeningBid(), false, 'missing opening bid should read as not-set' );
+}
+
 // ── GoogleAIStudio._executeGeneration / itemManager override ────────────
 
 function itemsTests_executeGeneration_success_ () {
@@ -216,6 +235,7 @@ function runItemsSpreadsheetUnitTests () {
         [ 'AuctionItem: isLive()', itemsTests_isLive_ ],
         [ 'AuctionItem: hasOpeningBid()', itemsTests_hasOpeningBid_ ],
         [ 'AuctionItem: display fallbacks', itemsTests_displayFallbacks_ ],
+        [ 'AuctionItem: short row defaults missing trailing cells to \'\'', itemsTests_shortRowDefaultsMissingTrailingCellsToEmptyString_ ],
         [ '_executeGeneration: success', itemsTests_executeGeneration_success_ ],
         [ '_executeGeneration: catches errors', itemsTests_executeGeneration_catchesErrors_ ],
         [ 'itemManager override', itemsTests_itemManagerOverride_ ]

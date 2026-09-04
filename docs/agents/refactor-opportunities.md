@@ -17,14 +17,9 @@ each area.
 
 ### Redundant/duplicated logic
 
-- **`Class_AuctionItem.gs`'s constructor has no length guard on
-  `rowData`** - `rowData[0].toString()` etc. assume all 12 columns are
-  present; if the real Auction-Items sheet ever has fewer than 12
-  populated columns, `bundleID`/`bundledDateTime` become `undefined`
-  instead of `""`, silently breaking the `=== ''` fallback checks in
-  `getDisplayValue()`/`getDisplayOpeningBid()`/`getDisplayMinRaise()`.
-  Low probability (the app always writes all 12 columns), not fixed -
-  flagged for awareness if this class is touched again.
+Nothing outstanding right now - every item flagged in the 2026-09-02
+deep audit's "Redundant/duplicated logic" section has been closed. See
+`CHANGELOG.md` for the individual fixes.
 
 ### Code quality
 

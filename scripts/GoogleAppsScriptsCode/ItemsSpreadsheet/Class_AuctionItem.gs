@@ -8,18 +8,26 @@ class AuctionItem {
      * @param {Array} rowData  A single row from the Auction-Items data range.
      */
     constructor ( rowData ) {
-        this.id = rowData[ 0 ].toString();
-        this.category = rowData[ 1 ];
-        this.name = rowData[ 2 ];
-        this.description = rowData[ 3 ];
-        this.value = rowData[ 4 ];
-        this.openingBid = rowData[ 5 ];
-        this.minRaise = rowData[ 6 ];
-        this.donatedBy = rowData[ 7 ];
-        this.phyOrCert = rowData[ 8 ];
-        this.status = rowData[ 9 ];
-        this.bundleID = rowData[ 10 ];
-        this.bundleTimeStamp = rowData[ 11 ];
+        // NULL PROTECTION: the Sheets API omits trailing empty cells from a
+        // row, so a row with no bundle/timestamp data can arrive shorter
+        // than 12 columns - default any missing trailing cell to '' so the
+        // `=== ''` fallback checks below (getDisplayValue/getDisplayOpeningBid/
+        // getDisplayMinRaise) still work as designed, instead of comparing
+        // against `undefined`.
+        const cell = ( i ) => ( rowData[ i ] !== undefined && rowData[ i ] !== null ) ? rowData[ i ] : '';
+
+        this.id = cell( 0 ).toString();
+        this.category = cell( 1 );
+        this.name = cell( 2 );
+        this.description = cell( 3 );
+        this.value = cell( 4 );
+        this.openingBid = cell( 5 );
+        this.minRaise = cell( 6 );
+        this.donatedBy = cell( 7 );
+        this.phyOrCert = cell( 8 );
+        this.status = cell( 9 );
+        this.bundleID = cell( 10 );
+        this.bundleTimeStamp = cell( 11 );
     }
 
     /** Returns true when the item belongs to the Live auction category. */

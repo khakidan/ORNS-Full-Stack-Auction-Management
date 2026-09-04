@@ -117,4 +117,24 @@ describe("AuctionItem display-fallback helpers", () => {
     expect((blank as any)[method]()).toBe(fallback);
     expect((real as any)[method]()).toBe("75");
   });
+
+  it("defaults missing trailing cells to '' instead of undefined for a genuinely short row", () => {
+    // The Sheets API omits trailing empty cells from a row, so a row with
+    // no bundle/timestamp data (or any other blank trailing columns) can
+    // arrive shorter than 12 elements - not itemRow()'s always-12-element
+    // fixture, which never exercises this path. Missing cells must
+    // default to '', not undefined, or the `=== ''` fallback checks below
+    // silently break.
+    const idOnly = new AuctionItem(["101"]);
+
+    expect(idOnly.id).toBe("101");
+    expect(idOnly.category).toBe("");
+    expect(idOnly.bundleID).toBe("");
+    expect(idOnly.bundleTimeStamp).toBe("");
+
+    expect(idOnly.getDisplayValue()).toBe("500");
+    expect(idOnly.getDisplayOpeningBid()).toBe("5");
+    expect(idOnly.getDisplayMinRaise()).toBe("5");
+    expect(idOnly.hasOpeningBid()).toBe(false);
+  });
 });
