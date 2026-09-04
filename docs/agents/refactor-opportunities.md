@@ -17,9 +17,6 @@ each area.
 
 ### Redundant/duplicated logic
 
-- **`useBiddersData.ts`'s `checkInBidder` and `markBidderAsProxy` are
-  identical apart from one field/column** (`:46-60` vs `:73-87`) -
-  collapse into one `setBidderFlag(bidder, field, column, successMessage)`.
 - **Error-toast wording has drifted into three variants for the same
   optimistic-rollback situation** - most call sites say `"Failed to
   sync updates—retrying... local state reverted."`, `useTicketAttendeeState.ts:101,121`
