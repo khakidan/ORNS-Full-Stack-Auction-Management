@@ -15,6 +15,21 @@ feature work belongs in [`ROADMAP.md`](./ROADMAP.md) instead.
 gaps, verified directly against real code. Sorted by severity within
 each area.
 
+**2026-09-04 standards audit**: measured against `component-standards.md`,
+`patterns.md`, `react-patterns.md`, `style_guide.md`,
+`tailwind-style-guide.md`, `testing-philosophy.md` - three parallel
+passes, findings independently spot-verified against real code before
+being logged here (one claimed finding, a supposed `h-[650px]`
+duplication between `DataTableWrapper.tsx` and `Items.tsx`, turned out
+on inspection to be a docblock comment illustrating the prop next to its
+one real usage site, not an actual second call site - dropped rather
+than logged). This pass also found `component-standards.md` and
+`react-patterns.md` each citing "known gaps" (no `IconButton`/
+`LoadingButton`/`ConfirmationDialog`/table wrapper, six oversized
+components) that had already been closed by feature work since those
+docs were last verified - corrected directly in both docs rather than
+logged here, since the fix was the doc text itself, not a backlog item.
+
 ### Redundant/duplicated logic
 
 Nothing outstanding right now - every item flagged in the 2026-09-02
@@ -23,9 +38,67 @@ deep audit's "Redundant/duplicated logic" section has been closed. See
 
 ### Code quality
 
-Nothing outstanding right now - every item flagged in the 2026-09-02 deep
-audit's "Code quality" section has been closed. See `CHANGELOG.md` for
-the individual fixes.
+- **`useConfigSettingsState.ts:43-46` syncs a prop into local state via
+  `useEffect`, the exact anti-pattern shape `react-patterns.md`'s
+  "Derived State" rule warns against**: `const [config, setConfig] =
+  useState<Config>(remoteConfig)` followed by `useEffect(() =>
+  setConfig(remoteConfig), [remoteConfig])`. Not a drop-in `useMemo`
+  fix, though - `config` is a mutable local *draft* (`setConfig` is
+  also called directly by every field's `onChange` while editing), not
+  pure derived data, so this needs a real
+  design decision (e.g. reset the draft via a `key` prop on remount, or
+  only reconcile on a real external change vs. a same-value re-render)
+  rather than a mechanical refactor. `refactor-opportunities.md`'s own
+  "Passed Audit Inspection" list previously claimed "no component syncs
+  a computed value into a second `useState` via an effect" - that claim
+  is now corrected below rather than left contradicting this entry.
+- **`AuctionItemsTable.tsx:64-85` uses inline `style={{ width: "..." }}`
+  on all 8 `<TableHead>` cells**, alongside a separate `className` on
+  each - `style_guide.md`'s "Inline style attributes are forbidden" rule
+  is violated outright here, and it's the only real hit anywhere in
+  `src/` outside test files. All 8 values are static (`"40px"`, `"7%"`,
+  `"30%"`, `"15%"` ×3, `"18%"`, `"60px"`), not computed at runtime, so
+  there's no runtime-value reason they can't move into `className` as
+  Tailwind width utilities (`w-10`/`w-15` for the two px values; the
+  percentages have no clean default-scale equivalent, so those would
+  stay arbitrary-bracket values, e.g. `w-[7%]`, in `className` rather
+  than a separate `style` prop).
+- **Several arbitrary Tailwind width/height values have a clean default-scale
+  equivalent already available, per `tailwind-style-guide.md`'s "Arbitrary
+  Values" rule** (Tailwind's scale: `w-37.5`=150px, `w-45`=180px, `w-60`=240px,
+  `w-75`=300px, `h-62.5`=250px, `h-75`=300px, `h-80`=320px, `h-100`=400px,
+  `w-35`=140px, `min-w-25`=100px, `min-h-20`=80px, `min-h-30`=120px,
+  `max-w-50`=200px):
+  - `src/components/AuctionItemsFilterBar.tsx:56` `w-[240px]` and `:74`
+    `w-[180px]` - notably, this same file's `SelectContent` at `:64`
+    already uses the proper scale form (`min-w-75`), added in the same
+    recent pass that left these two untouched - an internal
+    inconsistency worth cleaning up together.
+  - `src/components/BiddersFilterControls.tsx:55,68,79` `w-[150px]` ×3
+  - `src/components/TicketAttendeeTab.tsx:50` `w-[180px]`
+  - `src/components/AttendanceChart.tsx:14`, `src/components/ProxyBiddersCard.tsx:19`
+    `h-[320px]`
+  - `src/components/Receipts.tsx:69` `h-[400px]`, `:104` `w-[300px]`,
+    `:120` `max-w-[300px]`
+  - `src/components/FollowUpListPanel.tsx:46` `h-[300px]`
+  - `src/components/WinnerGrid.tsx:40` `h-[250px]`
+  - `src/components/AuctionItemsBulkActionBar.tsx:49` `w-[140px]`,
+    `src/components/BidderRow.tsx:61` `min-w-[140px]`
+  - `src/components/BugReportDialog.tsx:72` `min-h-[120px]`,
+    `src/components/ui/EditableCell.tsx:91` `min-h-[80px]`
+  - `src/components/WinnerCard.tsx:64,77` `min-w-[100px]`
+  - `src/components/FolderFilesCard.tsx:77`, `src/components/BidderRow.tsx:57`
+    `max-w-[200px]`
+
+  Not flagged (legitimate one-offs per the guide's own stated
+  exceptions): dialog max-width/max-height sizing in
+  `AddAuctionItemDialog.tsx`/`BundlingDialog.tsx`, the percentage column
+  widths in `AttendeesTable.tsx`/`Items.tsx` (no clean fractional
+  Tailwind equivalent), and `DataTableWrapper.tsx`/`Items.tsx`'s
+  `h-[650px]` (650 isn't a scale-clean value either, and it's a single
+  real usage site, not duplicated - a docblock comment in
+  `DataTableWrapper.tsx` merely illustrates the prop using the same
+  string as its one real caller).
 
 ### Test coverage gaps (`testing-philosophy.md`)
 
@@ -80,9 +153,10 @@ listed so future audits don't have to re-derive this, and so nobody
 - **No direct `fetch()` calls outside `src/services/google-api.ts`**
   (`react-patterns.md`) - every network call goes through
   `fetchWithRetry`/`getBaseUrl`.
-- **No derived-state duplication anti-pattern** (`react-patterns.md`) -
-  no component syncs a computed value into a second `useState` via an
-  effect.
+- ~~No derived-state duplication anti-pattern~~ **Correction (2026-09-04
+  audit)**: this claim didn't hold - `useConfigSettingsState.ts:43-46`
+  does exactly this. Moved to "Code quality" above as an open item
+  rather than left here as a false "passed" claim.
 - **Memoization applied where it matters, skipped where it doesn't**
   (`performance.md`, `react-patterns.md`) - `hooks/useAuctionItemsTableState.ts`
   and `hooks/useBiddersState.ts` wrap their filter/sort in `useMemo`
@@ -104,9 +178,20 @@ listed so future audits don't have to re-derive this, and so nobody
 
 ## Out of Scope, but Should be Fixed
 
-Nothing outstanding right now. Items belong here only when they
-genuinely need a decision, doc correction, or environment this audit
-doesn't have access to - not as a place to defer real code fixes.
+- **`text-[10px]`/`text-[11px]` is a widespread, repeated arbitrary
+  value (8 real files in `src/components/`) sitting below Tailwind's
+  smallest default step (`text-xs` = 12px).** Unlike the one-off
+  arbitrary widths/heights logged under "Code quality" above, this
+  isn't drift - it's used consistently enough, for the same two values,
+  across enough unrelated files (badges, filter labels, table
+  micro-text) that it reads as a real, already-adopted convention that
+  was just never promoted to a named token. `tailwind-style-guide.md`
+  doesn't currently document a `2xs`-style step. Needs a design
+  decision (add `--text-2xs`/`--text-3xs` tokens to `src/index.css`'s
+  `@theme inline` block the same way `--color-orns-red` was added as a
+  one-off token, or confirm 10px/11px should just stay as the
+  established arbitrary-value exception) - not something to
+  mechanically find-and-replace without that call being made first.
 
 ---
 

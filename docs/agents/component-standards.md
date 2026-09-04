@@ -21,18 +21,25 @@ This app's component library is **shadcn generated in the `base-nova`
 style, on `@base-ui/react` primitives** (`components.json`) - not Radix
 directly, and not a from-scratch component set. `src/components/ui/`
 currently contains: `alert-dialog.tsx`, `badge.tsx`, `button.tsx`,
-`card.tsx`, `checkbox.tsx`, `dialog.tsx`, `input.tsx`, `label.tsx`,
+`card.tsx`, `checkbox.tsx`, `ConfirmationDialog.tsx`, `dialog.tsx`,
+`EditableCell.tsx` (app-specific), `IconButton.tsx` (app-specific),
+`input.tsx`, `label.tsx`, `LoadingButton.tsx` (app-specific),
 `scroll-area.tsx`, `select.tsx`, `separator.tsx`, `sheet.tsx`,
-`sonner.tsx` (toasts), `table.tsx`, `tabs.tsx`, `textarea.tsx`, and one
-app-specific primitive, `EditableCell.tsx`. Check this list (or
-`file-reference.md`) before assuming a pattern isn't componentized yet.
+`sonner.tsx` (toasts), `table.tsx`, `tabs.tsx`, `textarea.tsx`. Check
+this list (or `file-reference.md`) before assuming a pattern isn't
+componentized yet.
 
-There is no dedicated `IconButton` component, no `ConfirmationDialog`
-wrapper, and no card-primitives subdirectory - `Card`/`CardHeader`/
-`CardContent`/`CardFooter` from `card.tsx` are used directly. Treat
-absence of a wrapper as a real gap (see
-[`refactor-opportunities.md`](./refactor-opportunities.md)), not as
-evidence the pattern doesn't apply.
+`IconButton`, `LoadingButton`, and `ConfirmationDialog` were the three
+gaps this doc used to flag as missing (see "Icon-Only Buttons" and
+"Dialogs and Modals" below) - all three now exist and are in real use
+app-wide (confirmed 2026-09-04: `IconButton` in `AttendeeRow.tsx`,
+`FolderFilesCard.tsx`, `AuctionItemRow.tsx`; `LoadingButton` in 13
+files including `Checkout.tsx`, `BidEntry.tsx`, `ConfigSettings.tsx`;
+`ConfirmationDialog` in `TicketAttendeeTab.tsx`, `Checkout.tsx`,
+`AuctionItemsTab.tsx`, `PendingPaymentDialog.tsx`). There is still no
+card-primitives subdirectory - `Card`/`CardHeader`/`CardContent`/
+`CardFooter` from `card.tsx` are used directly, which remains correct
+practice, not a gap.
 
 There are seven top-level workflow views under `src/components/`
 (`Dashboard.tsx`, `Bidders.tsx`, `Items.tsx`, `BidEntry.tsx`,
@@ -48,15 +55,17 @@ pattern from another domain.
 
 ### One Responsibility
 
-Every component should have one clear purpose. Several of this app's
-existing top-level views have outgrown that already:
-`AuctionItemsTab.tsx` (969 lines), `Bidders.tsx` and `Checkout.tsx` (644
-lines each), `ConfigSettings.tsx` (572 lines), `Dashboard.tsx` (517
-lines). These aren't hypothetical "avoid this" examples - they're real
-files in this repo that mix search/filter UI, table rendering, dialogs,
-and business logic in one component. Splitting them is tracked in
-`refactor-opportunities.md` rather than treated as a rule to apply only
-to new code.
+Every component should have one clear purpose. This used to be a real,
+outstanding gap - `AuctionItemsTab.tsx` (969 lines), `Bidders.tsx` and
+`Checkout.tsx` (644 lines each), `ConfigSettings.tsx` (572 lines),
+`Dashboard.tsx` (517 lines) - but all six were split via the
+container-hook pattern (a thin `src/components/*.tsx` view composing a
+`src/hooks/use*State.ts` hook) as of 2026-09-04: `AuctionItemsTab.tsx`
+181, `Bidders.tsx` 107, `Checkout.tsx` 143, `ConfigSettings.tsx` 64,
+`Dashboard.tsx` 57. No file under `src/components/` (excluding `ui/`)
+exceeds 250 lines today - the largest is `BundlingDialog.tsx` at 182.
+Keep new components in the 50-250 line range from the start rather than
+letting this drift back.
 
 New components should stay well under these sizes. If a component
 handles unrelated concerns (e.g. rendering a table *and* owning the
@@ -119,19 +128,19 @@ is already built into `buttonVariants`), prevent duplicate submissions,
 support keyboard activation, have visible focus states
 (`focus-visible:ring-3 focus-visible:ring-ring/50` is already built in).
 
-There is currently no shared `LoadingButton` component - every busy/spinner
-state is hand-rolled per call site with an inline `Loader2` +
-`animate-spin` (seen in `BidEntry.tsx`, `Bidders.tsx`, `Checkout.tsx`,
-`Receipts.tsx`). This is a real duplication - see
-`refactor-opportunities.md`.
+`src/components/ui/LoadingButton.tsx` is the shared busy/spinner-state
+wrapper - use it instead of hand-rolling an inline `Loader2` +
+`animate-spin` per call site (13 real call sites today, including
+`BidEntry.tsx`, `Checkout.tsx`, `ConfigSettings.tsx`).
 
 ### Icon-Only Buttons
 
-There is no dedicated `IconButton` component. Icon-only buttons currently
-use `<Button size="icon">` (or `icon-xs`/`icon-sm`/`icon-lg`) directly and
-must still carry an explicit `aria-label` - it is not enforced at the type
-level the way it would be with a dedicated wrapper, so this needs manual
-discipline until/unless that wrapper is built.
+`src/components/ui/IconButton.tsx` wraps `Button` with `size` locked to
+the icon variants and `aria-label` **required at the type level** - an
+icon-only button can't ship without an accessible label the way a plain
+`<Button size="icon">` could. Use it for any new icon-only control
+(real call sites today: `AttendeeRow.tsx`, `FolderFilesCard.tsx`,
+`AuctionItemRow.tsx`).
 
 ---
 
@@ -164,13 +173,12 @@ independent toggle state, not for actions.
 
 ## Tables
 
-`src/components/ui/table.tsx` is the shared primitive; `Bidders.tsx`,
-`Items.tsx`, `AuctionItemsTab.tsx`, `Checkout.tsx`, `Receipts.tsx` all
-build their own table body/empty-state/search-bar scaffolding around it
-independently rather than through a shared wrapper. That duplication
-(search input + empty-state text + scroll container repeated per view)
-is real and tracked in `refactor-opportunities.md` - it is not yet
-solved by an existing `DataTableWrapper`-style component in this repo.
+`src/components/ui/table.tsx` is the shared primitive, and
+`src/components/DataTableWrapper.tsx` (85 lines) is the shared
+scroll-container/empty-state wrapper around it - use it for any new
+data table rather than hand-rolling that scaffolding again. Real call
+sites today: `Items.tsx`, `BiddersTable.tsx`, `WinnerGrid.tsx`,
+`Receipts.tsx`, `AttendeesTable.tsx`.
 
 ### Empty Tables
 
@@ -186,12 +194,13 @@ back.
 
 ## Dialogs and Modals
 
-This app's dialog primitives are `dialog.tsx`, `alert-dialog.tsx`, and
-`sheet.tsx` (a slide-over panel used for the bundling and edit flows).
-There is no dedicated `ConfirmationDialog` wrapper component - destructive
-confirmations are currently built ad hoc from `alert-dialog.tsx` per call
-site (e.g. `BundlingDialog.tsx`). Extracting a shared confirmation dialog
-is a reasonable follow-up, not something already done.
+This app's dialog primitives are `dialog.tsx`, `alert-dialog.tsx`,
+`sheet.tsx` (a slide-over panel used for the bundling and edit flows),
+and `src/components/ui/ConfirmationDialog.tsx` - the shared destructive-
+confirmation wrapper (built on `alert-dialog.tsx`). Use it for any new
+destructive-confirmation flow rather than hand-rolling one from
+`alert-dialog.tsx` again. Real call sites today: `TicketAttendeeTab.tsx`,
+`Checkout.tsx`, `AuctionItemsTab.tsx`, `PendingPaymentDialog.tsx`.
 
 Dialogs must: trap focus, close with Escape, have a clear title, have
 clear actions, return focus after closing - `@base-ui/react`'s dialog
@@ -250,9 +259,9 @@ Before creating a component:
 
 Prefer existing `src/components/ui/` primitives over new ones,
 composition over configuration, semantic HTML, accessible controls. Avoid
-inventing a second button/card/select pattern when this app's real ones
-already cover the case. When a gap genuinely exists (no `IconButton`, no
-`ConfirmationDialog`, no shared table wrapper, no `LoadingButton`),
-building it is legitimate - but check `refactor-opportunities.md` first,
-since these specific gaps are already logged there rather than being
-undiscovered.
+inventing a second button/card/select/dialog/table pattern when this
+app's real ones (`IconButton`, `LoadingButton`, `ConfirmationDialog`,
+`DataTableWrapper` all now exist, alongside `Button`/`Card`/`Select`)
+already cover the case. When a genuinely new gap turns up, check
+`refactor-opportunities.md` first before building a wrapper - it may
+already be logged.

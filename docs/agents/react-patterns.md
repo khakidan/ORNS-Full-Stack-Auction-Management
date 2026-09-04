@@ -50,10 +50,13 @@ intended one-way dependency direction - see `patterns.md` and
 
 ### `src/context/`
 
-`AuctionContext.tsx` (532 lines) and `ConfigContext.tsx` (130 lines) hold
-shared application/config state. `AuctionContext.tsx` in particular is
-large for a context provider - worth a look if it's mixing multiple
-unrelated concerns (see `refactor-opportunities.md`).
+`AuctionContext.tsx` and `ConfigContext.tsx` hold shared application/
+config state. `AuctionContext.tsx` used to be large (532 lines) for a
+context provider, mixing several unrelated concerns - as of 2026-09-04
+it's a 118-line container composing split-out `src/hooks/use*Data.ts`
+hooks (`useBiddersData`, `useItemsData`, `useAttendeesData`,
+`useWinnersData`, `useAuctionStatusData`), the same container-hook
+pattern now used throughout `src/hooks/`.
 
 ### `src/hooks/`
 
@@ -65,10 +68,10 @@ of the pattern is followed correctly.
 ### `src/components/`
 
 Components display information and handle events. See
-`component-standards.md` for the component-level rules; several existing
-top-level views (`AuctionItemsTab.tsx` at 969 lines, `Bidders.tsx` and
-`Checkout.tsx` at 644 lines each) have grown past the size where "avoid
-embedding business logic" is still true in practice.
+`component-standards.md` for the component-level rules. Every top-level
+view that used to be oversized has since been split via the
+container-hook pattern - a thin `src/components/*.tsx` view composing a
+`src/hooks/use*State.ts` hook that owns the actual state/business logic.
 
 ---
 
@@ -77,14 +80,16 @@ embedding business logic" is still true in practice.
 Preferred: 50-150 lines. Acceptable: 150-250 lines. Over 250: consider
 refactoring. Over 400: almost certainly doing too much.
 
-Real files currently over 400 lines in `src/components/`:
-`AuctionItemsTab.tsx` (969), `Bidders.tsx` (644), `Checkout.tsx` (644),
-`ConfigSettings.tsx` (572), `Dashboard.tsx` (517),
-`TicketAttendeeTab.tsx` (446). These aren't a hypothetical "avoid this" -
-they're the actual state of the codebase today, tracked in
-`refactor-opportunities.md`. Don't add more responsibilities to these
-files without considering a split first; new components should target
-the 50-250 line range from the start.
+As of 2026-09-04, no file under `src/components/` (excluding `ui/`)
+exceeds 250 lines - the largest is `BundlingDialog.tsx` at 182. The six
+files this section used to cite as real, current examples of "over
+400 lines" have all been split: `AuctionItemsTab.tsx` 969 → 181,
+`Bidders.tsx` 644 → 107, `Checkout.tsx` 644 → 143, `ConfigSettings.tsx`
+572 → 64, `Dashboard.tsx` 517 → 57, `TicketAttendeeTab.tsx` 446 → 120.
+Keep new components in the 50-250 line range from the start rather than
+letting this drift back - when a view starts mixing search/filter
+state, business logic, and rendering again, extract a `use*State.ts`
+hook the same way these six were split, before it grows past 250 lines.
 
 ---
 
