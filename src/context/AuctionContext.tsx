@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useCallback, useEffect } from "react";
 import { useConfig } from "./ConfigContext";
+import { useAuth } from "./AuthContext";
 import { Bidder, AuctionItem, Attendee } from "@/types";
-import { useApiAuthStatus } from "@/hooks/useApiAuthStatus";
 import { useBiddersData } from "@/hooks/useBiddersData";
 import { useItemsData } from "@/hooks/useItemsData";
 import { useAttendeesData } from "@/hooks/useAttendeesData";
@@ -35,7 +35,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   const spreadsheetId = config.bidManagementSpreadsheetId;
   const ticketsSpreadsheetId = config.auctionTicketsSpreadsheetId;
 
-  const { isApiAuthenticated } = useApiAuthStatus();
+  const { authenticated: isApiAuthenticated } = useAuth();
 
   const biddersData = useBiddersData(spreadsheetId, config.bidderNumbersSheet);
   const itemsData = useItemsData(spreadsheetId, config.auctionItemsSheet);

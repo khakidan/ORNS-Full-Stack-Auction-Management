@@ -6,7 +6,7 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { useConfig } from "@/context/ConfigContext";
-import { useGoogleAuth } from "@/hooks/useGoogleAuth";
+import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -81,7 +81,7 @@ function BackToTop() {
 export default function App() {
   const { config } = useConfig();
   const { isAuctionClosed, closeAuction } = useAuction();
-  const { authenticated, handleLogin, handleLogout } = useGoogleAuth();
+  const { authenticated, handleLogin, handleLogout } = useAuth();
   const [activeWorkflow, setActiveWorkflow] = useState<WorkflowType>(() => {
     const pathWorkflow = getWorkflowFromPath(window.location.pathname);
     if (pathWorkflow) return pathWorkflow;
