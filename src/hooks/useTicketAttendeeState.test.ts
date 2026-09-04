@@ -387,4 +387,153 @@ describe("useTicketAttendeeState", () => {
       expect(attendees[1].paymentStatus).toBe("Paid");
     });
   });
+
+  describe("handleEditSave", () => {
+    // EditAttendeeDialog.tsx collects every field (contact, guests,
+    // payment status) into one draft and Save calls this once - it
+    // must diff against the attendee actually being edited and only
+    // sync the fields that changed, reusing updateField/
+    // updatePaymentStatus's own already-tested column mapping and
+    // rollback behavior rather than re-syncing everything unconditionally.
+    function setup(attendees: Attendee[]) {
+      let current = attendees;
+      const setAttendees = vi.fn((updater: any) => {
+        current = typeof updater === "function" ? updater(current) : updater;
+      });
+      const hook = renderHook(
+        (props: { attendees: Attendee[] }) =>
+          useTicketAttendeeState({
+            attendees: props.attendees,
+            setAttendees,
+            addAttendee: vi.fn(),
+            removeAttendee: vi.fn(),
+            spreadsheetId: "ss-id",
+          }),
+        { initialProps: { attendees } }
+      );
+      return { ...hook, getAttendees: () => current };
+    }
+
+    it("does nothing until an attendee is being edited", async () => {
+      mockedUpdateSheetData.mockResolvedValue(undefined);
+      const { result } = setup([makeAttendee()]);
+
+      await act(async () => {
+        await result.current.handleEditSave({ firstName: "X", lastName: "Y", email: "z@e.com", phone: "1", paymentStatus: "Paid", guests: [] });
+      });
+
+      expect(mockedUpdateSheetData).not.toHaveBeenCalled();
+    });
+
+    it("only syncs the contact fields that actually changed", async () => {
+      mockedUpdateSheetData.mockResolvedValue(undefined);
+      const attendee = makeAttendee({ rowIndex: 5, firstName: "Alice", lastName: "One", email: "alice@example.com", phone: "555-0100" });
+      const { result } = setup([attendee]);
+
+      act(() => { result.current.setAttendeeToEdit(attendee); });
+
+      await act(async () => {
+        await result.current.handleEditSave({
+          firstName: "Alicia", // changed
+          lastName: "One",     // unchanged
+          email: "alice@example.com", // unchanged
+          phone: "555-0100",   // unchanged
+          paymentStatus: attendee.paymentStatus, // unchanged
+          guests: [],
+        });
+      });
+
+      expect(mockedUpdateSheetData).toHaveBeenCalledTimes(1);
+      expect(mockedUpdateSheetData).toHaveBeenCalledWith("ss-id", "tickets!A5", [["Alicia"]]);
+    });
+
+    it("syncs a changed guest field using the guest's own column mapping", async () => {
+      mockedUpdateSheetData.mockResolvedValue(undefined);
+      const guest = makeGuest({ guestIndex: 1, firstName: "Bob", lastName: "Guest", email: "bob@example.com" });
+      const attendee = makeAttendee({ rowIndex: 7, guestsInfo: [guest] });
+      const { result } = setup([attendee]);
+
+      act(() => { result.current.setAttendeeToEdit(attendee); });
+
+      await act(async () => {
+        await result.current.handleEditSave({
+          firstName: attendee.firstName,
+          lastName: attendee.lastName,
+          email: attendee.email,
+          phone: attendee.phone,
+          paymentStatus: attendee.paymentStatus,
+          guests: [{ guestIndex: 1, firstName: "Robert", lastName: "Guest", email: "bob@example.com" }],
+        });
+      });
+
+      expect(mockedUpdateSheetData).toHaveBeenCalledTimes(1);
+      expect(mockedUpdateSheetData).toHaveBeenCalledWith("ss-id", "tickets!H7", [["Robert"]]);
+    });
+
+    it("syncs a changed payment status via updatePaymentStatus's own column", async () => {
+      mockedUpdateSheetData.mockResolvedValue(undefined);
+      const attendee = makeAttendee({ rowIndex: 5, sheet: "tickets", paymentStatus: "Pending" });
+      const { result } = setup([attendee]);
+
+      act(() => { result.current.setAttendeeToEdit(attendee); });
+
+      await act(async () => {
+        await result.current.handleEditSave({
+          firstName: attendee.firstName,
+          lastName: attendee.lastName,
+          email: attendee.email,
+          phone: attendee.phone,
+          paymentStatus: "Paid",
+          guests: [],
+        });
+      });
+
+      expect(mockedUpdateSheetData).toHaveBeenCalledTimes(1);
+      expect(mockedUpdateSheetData).toHaveBeenCalledWith("ss-id", "tickets!U5", [["Paid"]]);
+    });
+
+    it("closes the edit dialog (clears attendeeToEdit) after a save with no changes", async () => {
+      mockedUpdateSheetData.mockResolvedValue(undefined);
+      const attendee = makeAttendee();
+      const { result } = setup([attendee]);
+
+      act(() => { result.current.setAttendeeToEdit(attendee); });
+      expect(result.current.attendeeToEdit).toBe(attendee);
+
+      await act(async () => {
+        await result.current.handleEditSave({
+          firstName: attendee.firstName,
+          lastName: attendee.lastName,
+          email: attendee.email,
+          phone: attendee.phone,
+          paymentStatus: attendee.paymentStatus,
+          guests: [],
+        });
+      });
+
+      expect(mockedUpdateSheetData).not.toHaveBeenCalled();
+      expect(result.current.attendeeToEdit).toBeNull();
+    });
+
+    it("closes the edit dialog after a save that does sync changes", async () => {
+      mockedUpdateSheetData.mockResolvedValue(undefined);
+      const attendee = makeAttendee({ firstName: "Alice" });
+      const { result } = setup([attendee]);
+
+      act(() => { result.current.setAttendeeToEdit(attendee); });
+
+      await act(async () => {
+        await result.current.handleEditSave({
+          firstName: "Alicia",
+          lastName: attendee.lastName,
+          email: attendee.email,
+          phone: attendee.phone,
+          paymentStatus: attendee.paymentStatus,
+          guests: [],
+        });
+      });
+
+      expect(result.current.attendeeToEdit).toBeNull();
+    });
+  });
 });

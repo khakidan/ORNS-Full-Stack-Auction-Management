@@ -47,6 +47,15 @@ Nothing outstanding right now - every gap and SHALLOW/CIRCULAR/SMOKE-rated
 test flagged in this section has been closed. See `CHANGELOG.md` for the
 individual fixes.
 
+### Code Hardening
+
+1. Right now the Items that live in the Items Spreadsheet are capable of living independently from the Items that are listed in the Bid Management Spreadsheet. This was never an intentional thing, and only exists in its current state because of the fact that the 2 spreadheets had separate workflows — but the items, in the ideal world, would always stay in sync. We should harden the codebase so that this is a true statement. Since the app has access to all the items in the Items spreadsheet, there really is no need for the Bid Management spreadsheet to have this separate sheet that could — in theory — drift apart from the official Items spreadsheet. We should look into changing all necessary workflows to account for this fact and then ensure that no current workflows are impacted by this change.
+2. We should look through the rest of the app and try and find any other areas in which the app would benefit from rethinking how we are doing things and then try and find a way to harden the workflow.
+
+### UI / Layout Tweaks
+
+1. We should look into making all of the pages have a more visually appealing and user-friendly design. We should use the newly created Attendee List table on the Auction Tickets page as inpiration — and keep that same visual feel to it.
+
 ---
 
 ## Passed Audit Inspection

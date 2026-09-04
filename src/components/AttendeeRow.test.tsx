@@ -1,19 +1,18 @@
 /**
  * @vitest-environment jsdom
  *
- * User-reported bug: "I was expecting to be able to edit the first and
- * last names of guests in the auction tickets table, like you can for the
- * primary bidder, but you can't." AttendeeRow.tsx used to render a guest's
- * name as a plain, non-editable <span> (just onUpdateField'ing the guest's
- * email) while the primary attendee's own firstName/lastName were already
- * real EditableCells - this pins that guest firstName/lastName are now
- * editable the same way, and that editing calls onUpdateField with the
- * real guestIndex so useTicketAttendeeState.ts's column mapping fires
- * correctly (covered directly in useTicketAttendeeState.test.ts; this
- * file only covers the component wiring itself).
+ * User-reported bug: "The tabular layout of the Attendee List is ugly
+ * compared to the rest of the app... it's also clunky to have the visual
+ * spaces between the first and last name fields." AttendeeRow.tsx was
+ * rewritten from a <table>-row of four separate inline EditableCells to
+ * a single flexible row, with all field editing moved into
+ * EditAttendeeDialog.tsx (opened via the pencil icon). This file replaces
+ * the old inline-editing tests with coverage of the new row: it renders
+ * (not edits) attendee info, and its Edit/Delete actions just report the
+ * click back to the caller.
  */
 import "@testing-library/jest-dom";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { AttendeeRow } from "./AttendeeRow";
@@ -50,120 +49,190 @@ function makeAttendee(overrides: Partial<Attendee> = {}): Attendee {
   };
 }
 
-function renderRow(attendee: Attendee, onUpdateField = vi.fn()) {
+function renderRow(overrides: Partial<Parameters<typeof AttendeeRow>[0]> = {}) {
+  const onEdit = vi.fn();
+  const onUpdatePaymentStatus = vi.fn();
+  const onDeleteRequest = vi.fn();
+  const attendee = overrides.attendee ?? makeAttendee();
+
   render(
-    <table>
-      <tbody>
+    <AttendeeRow
+      attendee={attendee}
+      isAuctionClosed={false}
+      onEdit={onEdit}
+      onUpdatePaymentStatus={onUpdatePaymentStatus}
+      onDeleteRequest={onDeleteRequest}
+      {...overrides}
+    />
+  );
+
+  return { attendee, onEdit, onUpdatePaymentStatus, onDeleteRequest };
+}
+
+describe("AttendeeRow - display", () => {
+  it("renders the attendee's first and last name", () => {
+    renderRow({ attendee: makeAttendee({ firstName: "Alice", lastName: "One" }) });
+
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+    expect(screen.getByText("One")).toBeInTheDocument();
+  });
+
+  it("renders a source badge for each sheet", () => {
+    const cases: [string, string][] = [
+      ["tickets", "General"],
+      ["sponsor tickets", "Sponsor"],
+      ["staff tickets", "Staff"],
+    ];
+    cases.forEach(([sheet, label]) => {
+      const { unmount } = render(
         <AttendeeRow
-          attendee={attendee}
+          attendee={makeAttendee({ sheet })}
           isAuctionClosed={false}
-          onUpdateField={onUpdateField}
+          onEdit={vi.fn()}
           onUpdatePaymentStatus={vi.fn()}
           onDeleteRequest={vi.fn()}
         />
-      </tbody>
-    </table>
-  );
-  return onUpdateField;
-}
-
-/** Edits an EditableCell that's currently showing `currentValue` (via its read-mode title) to `newValue`. */
-async function editCell(currentValue: string, newValue: string) {
-  const user = userEvent.setup();
-  const displayed = screen.getByTitle(currentValue);
-  const editButton = within(displayed.parentElement!).getByRole("button", { name: "Edit" });
-  await user.click(editButton);
-
-  const input = screen.getByDisplayValue(currentValue);
-  await user.clear(input);
-  await user.type(input, newValue);
-  await user.click(screen.getByRole("button", { name: /save/i }));
-}
-
-describe("AttendeeRow - guest firstName/lastName editing", () => {
-  it("renders a guest's firstName and lastName as real, editable text (not a plain span)", () => {
-    const attendee = makeAttendee({ guestsInfo: [makeGuest({ firstName: "Bob", lastName: "Guest" })] });
-    renderRow(attendee);
-
-    expect(screen.getByTitle("Bob")).toBeInTheDocument();
-    expect(screen.getByTitle("Guest")).toBeInTheDocument();
-  });
-
-  it("editing a guest's firstName calls onUpdateField with the field, new value, and the guest's own guestIndex", async () => {
-    const attendee = makeAttendee({ guestsInfo: [makeGuest({ guestIndex: 2, firstName: "Bob", lastName: "Guest" })] });
-    const onUpdateField = renderRow(attendee);
-
-    await editCell("Bob", "Robert");
-
-    expect(onUpdateField).toHaveBeenCalledWith(attendee, "firstName", "Robert", 2);
-  });
-
-  it("editing a guest's lastName calls onUpdateField with the field, new value, and the guest's own guestIndex", async () => {
-    const attendee = makeAttendee({ guestsInfo: [makeGuest({ guestIndex: 2, firstName: "Bob", lastName: "Guest" })] });
-    const onUpdateField = renderRow(attendee);
-
-    await editCell("Guest", "Guestson");
-
-    expect(onUpdateField).toHaveBeenCalledWith(attendee, "lastName", "Guestson", 2);
-  });
-
-  it("still lets the primary attendee's own firstName/lastName be edited (guestIndex undefined) - unaffected by the guest-editing addition", async () => {
-    const attendee = makeAttendee({ firstName: "Alice", lastName: "One" });
-    const onUpdateField = renderRow(attendee);
-
-    await editCell("Alice", "Alicia");
-
-    expect(onUpdateField).toHaveBeenCalledWith(attendee, "firstName", "Alicia");
-  });
-
-  it("still renders and updates a guest's email correctly, unaffected by the firstName/lastName addition", async () => {
-    const attendee = makeAttendee({ guestsInfo: [makeGuest({ guestIndex: 1, email: "bob@example.com" })] });
-    const onUpdateField = renderRow(attendee);
-
-    await editCell("bob@example.com", "bob-new@example.com");
-
-    expect(onUpdateField).toHaveBeenCalledWith(attendee, "email", "bob-new@example.com", 1);
-  });
-
-  it("shows the 'Own #' badge next to a guest's name fields when they opted in, keyed off ownBidderNumber", () => {
-    const attendee = makeAttendee({
-      guestsInfo: [makeGuest({ ownBidderNumber: "yes" }), makeGuest({ guestIndex: 2, firstName: "Carol", lastName: "Guest2", ownBidderNumber: "no" })],
+      );
+      expect(screen.getByText(label)).toBeInTheDocument();
+      unmount();
     });
-    renderRow(attendee);
+  });
 
-    expect(screen.getAllByText("Own #")).toHaveLength(1);
+  it("renders guest chips combining each guest's first and last name", () => {
+    renderRow({
+      attendee: makeAttendee({
+        guestsInfo: [makeGuest({ firstName: "Marcus", lastName: "Whitfield" })],
+      }),
+    });
+
+    expect(screen.getByText("Marcus Whitfield")).toBeInTheDocument();
+  });
+
+  it("shows 'No guests listed' when there are no guests", () => {
+    renderRow({ attendee: makeAttendee({ guestsInfo: [] }) });
+
+    expect(screen.getByText("No guests listed")).toBeInTheDocument();
+  });
+
+  it("shows a title on a guest chip when they have their own bidder number", () => {
+    renderRow({
+      attendee: makeAttendee({
+        guestsInfo: [makeGuest({ ownBidderNumber: "yes" })],
+      }),
+    });
+
+    expect(screen.getByTitle("Has their own bidder number")).toBeInTheDocument();
+  });
+
+  it("shows the Paid pill and total when paid with a nonzero total", () => {
+    renderRow({ attendee: makeAttendee({ paymentStatus: "Paid", totalPaid: "$140" }) });
+
+    expect(screen.getByRole("button", { name: /paid/i })).toBeInTheDocument();
+    expect(screen.getByText("Total: $140")).toBeInTheDocument();
+  });
+
+  it("shows the Pending pill and no total when unpaid", () => {
+    renderRow({ attendee: makeAttendee({ paymentStatus: "Pending" }) });
+
+    expect(screen.getByRole("button", { name: /pending/i })).toBeInTheDocument();
+    expect(screen.queryByText(/^Total:/)).not.toBeInTheDocument();
   });
 });
 
 describe("AttendeeRow - guests-exceed-tickets-purchased warning", () => {
   // User-reported data-quality bug: "we have a bidder who has purchased 1
   // ticket, but has 3 guests on their row... shouldn't allow a bidder to
-  // have less tickets purchased than guests" - the exact repro from the
-  // report is 1 ticket / 3 guests.
-  it("shows a visible warning when guest count exceeds tickets purchased, naming the real numbers", () => {
-    const attendee = makeAttendee({
-      ticketsPurchased: "1",
-      guestsInfo: [makeGuest({ guestIndex: 1 }), makeGuest({ guestIndex: 2 }), makeGuest({ guestIndex: 3 })],
+  // have less tickets purchased than guests" - the exact repro is 1
+  // ticket / 3 guests.
+  it("shows a visible warning when guest count exceeds tickets purchased, naming the real numbers in its title", () => {
+    renderRow({
+      attendee: makeAttendee({
+        ticketsPurchased: "1",
+        guestsInfo: [makeGuest({ guestIndex: 1 }), makeGuest({ guestIndex: 2 }), makeGuest({ guestIndex: 3 })],
+      }),
     });
-    renderRow(attendee);
 
-    expect(screen.getByText(/3 guests listed but only 1 ticket\(s\) purchased/)).toBeInTheDocument();
+    expect(screen.getByText("Guests exceed tickets")).toBeInTheDocument();
+    expect(screen.getByTitle(/3 guests listed but only 1 ticket\(s\) purchased/)).toBeInTheDocument();
   });
 
   it("does not show a warning when guest count is within tickets purchased", () => {
-    const attendee = makeAttendee({
-      ticketsPurchased: "3",
-      guestsInfo: [makeGuest({ guestIndex: 1 }), makeGuest({ guestIndex: 2 })],
+    renderRow({
+      attendee: makeAttendee({
+        ticketsPurchased: "3",
+        guestsInfo: [makeGuest({ guestIndex: 1 }), makeGuest({ guestIndex: 2 })],
+      }),
     });
-    renderRow(attendee);
 
-    expect(screen.queryByText(/guests listed but only/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Guests exceed tickets")).not.toBeInTheDocument();
+  });
+});
+
+describe("AttendeeRow - actions", () => {
+  it("clicking the Edit button calls onEdit with the attendee", async () => {
+    const user = userEvent.setup();
+    const { attendee, onEdit } = renderRow();
+
+    await user.click(screen.getByRole("button", { name: `Edit ${attendee.firstName} ${attendee.lastName}` }));
+
+    expect(onEdit).toHaveBeenCalledWith(attendee);
   });
 
-  it("does not show a warning for a bidder with no guests, even with 0 tickets recorded", () => {
-    const attendee = makeAttendee({ ticketsPurchased: "0", guestsInfo: [] });
-    renderRow(attendee);
+  it("clicking the Delete button calls onDeleteRequest with the attendee", async () => {
+    const user = userEvent.setup();
+    const { attendee, onDeleteRequest } = renderRow();
 
-    expect(screen.queryByText(/guests listed but only/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: `Delete ${attendee.firstName} ${attendee.lastName}` }));
+
+    expect(onDeleteRequest).toHaveBeenCalledWith(attendee);
+  });
+
+  it("clicking the Pending pill calls onUpdatePaymentStatus with Paid", async () => {
+    const user = userEvent.setup();
+    const { attendee, onUpdatePaymentStatus } = renderRow({ attendee: makeAttendee({ paymentStatus: "Pending" }) });
+
+    await user.click(screen.getByRole("button", { name: /pending/i }));
+
+    expect(onUpdatePaymentStatus).toHaveBeenCalledWith(attendee, "Paid");
+  });
+
+  it("clicking the Paid pill calls onUpdatePaymentStatus with Pending", async () => {
+    const user = userEvent.setup();
+    const { attendee, onUpdatePaymentStatus } = renderRow({ attendee: makeAttendee({ paymentStatus: "Paid" }) });
+
+    await user.click(screen.getByRole("button", { name: /paid/i }));
+
+    expect(onUpdatePaymentStatus).toHaveBeenCalledWith(attendee, "Pending");
+  });
+
+  it("hides the Edit and Delete buttons when the auction is closed", () => {
+    const attendee = makeAttendee();
+    render(
+      <AttendeeRow
+        attendee={attendee}
+        isAuctionClosed={true}
+        onEdit={vi.fn()}
+        onUpdatePaymentStatus={vi.fn()}
+        onDeleteRequest={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: `Edit ${attendee.firstName} ${attendee.lastName}` })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: `Delete ${attendee.firstName} ${attendee.lastName}` })).not.toBeInTheDocument();
+  });
+
+  it("disables the payment pill when the auction is closed", () => {
+    const attendee = makeAttendee({ paymentStatus: "Pending" });
+    render(
+      <AttendeeRow
+        attendee={attendee}
+        isAuctionClosed={true}
+        onEdit={vi.fn()}
+        onUpdatePaymentStatus={vi.fn()}
+        onDeleteRequest={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: /pending/i })).toBeDisabled();
   });
 });

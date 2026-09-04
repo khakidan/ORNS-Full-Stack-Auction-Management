@@ -4,6 +4,22 @@ import { updateSheetData } from "@/services/google-api";
 import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { Attendee } from "@/types";
 
+interface EditGuestDraft {
+  guestIndex: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+interface AttendeeEditDraft {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  paymentStatus: string;
+  guests: EditGuestDraft[];
+}
+
 interface NewAttendeeEntry {
   firstName: string;
   lastName: string;
@@ -43,6 +59,8 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [attendeeToDelete, setAttendeeToDelete] = useState<Attendee | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [attendeeToEdit, setAttendeeToEdit] = useState<Attendee | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [newEntry, setNewEntry] = useState<NewAttendeeEntry>(EMPTY_NEW_ENTRY);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -191,6 +209,51 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
     }
   };
 
+  /**
+   * Saves everything EditAttendeeDialog.tsx collected in one action,
+   * reusing updateField/updatePaymentStatus's already-tested per-cell
+   * sync + rollback for each field that actually changed - only a diff
+   * against the attendee being edited, not a full rewrite, keeps this
+   * from re-syncing (and re-rollback-racing) fields the user never
+   * touched.
+   */
+  const handleEditSave = async (draft: AttendeeEditDraft) => {
+    if (!attendeeToEdit) return;
+    const attendee = attendeeToEdit;
+
+    const fieldUpdates: Promise<void>[] = [];
+    (["firstName", "lastName", "email", "phone"] as const).forEach((field) => {
+      if (draft[field] !== attendee[field]) {
+        fieldUpdates.push(updateField(attendee, field, draft[field]));
+      }
+    });
+    draft.guests.forEach((guestDraft) => {
+      const original = attendee.guestsInfo.find((g) => g.guestIndex === guestDraft.guestIndex);
+      if (!original) return;
+      (["firstName", "lastName", "email"] as const).forEach((field) => {
+        if (guestDraft[field] !== original[field]) {
+          fieldUpdates.push(updateField(attendee, field, guestDraft[field], guestDraft.guestIndex));
+        }
+      });
+    });
+    if (draft.paymentStatus !== attendee.paymentStatus) {
+      fieldUpdates.push(updatePaymentStatus(attendee, draft.paymentStatus));
+    }
+
+    if (fieldUpdates.length === 0) {
+      setAttendeeToEdit(null);
+      return;
+    }
+
+    setIsSavingEdit(true);
+    try {
+      await Promise.all(fieldUpdates);
+    } finally {
+      setIsSavingEdit(false);
+      setAttendeeToEdit(null);
+    }
+  };
+
   const handleDeleteConfirm = async () => {
     if (!attendeeToDelete) return;
     setIsDeleting(true);
@@ -222,5 +285,10 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
     setAttendeeToDelete,
     isDeleting,
     handleDeleteConfirm,
+
+    attendeeToEdit,
+    setAttendeeToEdit,
+    isSavingEdit,
+    handleEditSave,
   };
 }

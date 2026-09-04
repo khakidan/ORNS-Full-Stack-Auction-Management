@@ -8,7 +8,7 @@ This document details the exact execution parameters required to run the test su
 
 ## The Sandbox Constraint
 
-Running the full test suite (824 tests) as a single execution block will exceed memory limits and trigger a **command timeout** in AI Studio's sandbox. 
+Running the full test suite (845 tests) as a single execution block will exceed memory limits and trigger a **command timeout** in AI Studio's sandbox. 
 
 To prevent execution freezes and ensure continuous status verification, the test suite is strictly partitioned into two operational batches.
 
@@ -24,7 +24,7 @@ npx vitest run server/test/
 ```
 
 ### Batch 2: Frontend Layer
-Contains 429 interactive components and state tests confirming layout flows, search inputs, modal triggers, and dynamic calculations.
+Contains 450 interactive components and state tests confirming layout flows, search inputs, modal triggers, and dynamic calculations.
 
 ```bash
 NODE_OPTIONS=--no-experimental-webstorage npx vitest run src/
@@ -41,7 +41,7 @@ Always execute both batches and confirm the final aggregates prior to declaring 
 | Batch Name | Path Parameter | Target Tests Count |
 |---|---|---|
 | **Batch 1 (Backend)** | `server/test/` | **395 passed** |
-| **Batch 2 (Frontend)** | `src/` | **429 passed** |
-| **Combined Aggregate** | *All Test Files* | **824 passed** |
+| **Batch 2 (Frontend)** | `src/` | **450 passed** |
+| **Combined Aggregate** | *All Test Files* | **845 passed** |
 
 *Do not run a bare `npx vitest run` without specifying these directory boundaries.*

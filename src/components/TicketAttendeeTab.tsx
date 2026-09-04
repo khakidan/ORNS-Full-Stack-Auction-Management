@@ -12,8 +12,9 @@ import {
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { cn } from "@/lib/utils";
 import { FilterToolbar } from "@/components/FilterToolbar";
-import { AttendeesTable } from "@/components/AttendeesTable";
+import { AttendeesList } from "@/components/AttendeesList";
 import { AddAttendeeDialog } from "@/components/AddAttendeeDialog";
+import { EditAttendeeDialog } from "@/components/EditAttendeeDialog";
 import { useAuction } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
 import { useTicketAttendeeState } from "@/hooks/useTicketAttendeeState";
@@ -93,16 +94,24 @@ export default function TicketAttendeeTab() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex-1 overflow-auto p-0 min-h-100">
-          <AttendeesTable
+          <AttendeesList
             attendees={state.filteredAttendees}
             loading={attendeesLoading}
             isAuctionClosed={isAuctionClosed}
-            onUpdateField={state.updateField}
+            onEdit={state.setAttendeeToEdit}
             onUpdatePaymentStatus={state.updatePaymentStatus}
             onDeleteRequest={state.setAttendeeToDelete}
           />
         </CardContent>
       </Card>
+
+      <EditAttendeeDialog
+        attendee={state.attendeeToEdit}
+        open={!!state.attendeeToEdit}
+        onOpenChange={(open) => !open && state.setAttendeeToEdit(null)}
+        onSave={state.handleEditSave}
+        isSaving={state.isSavingEdit}
+      />
 
       <ConfirmationDialog
         open={!!state.attendeeToDelete}

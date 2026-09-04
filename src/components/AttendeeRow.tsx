@@ -1,111 +1,138 @@
-import { AlertTriangle, Trash2 } from "lucide-react";
-import { TableCell, TableRow } from "@/components/ui/table";
+import { AlertTriangle, Mail, Phone, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { IconButton } from "@/components/ui/IconButton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { EditableCell } from "@/components/ui/EditableCell";
 import { Attendee } from "@/types";
 import { cn } from "@/lib/utils";
 import { hasMoreGuestsThanTicketsPurchased } from "@/lib/attendeeValidation";
 
+const SOURCE_BADGE_STYLES: Record<string, string> = {
+  "tickets": "bg-muted text-muted-foreground",
+  "sponsor tickets": "bg-indigo-50 text-indigo-700 border-indigo-100",
+  "staff tickets": "bg-emerald-50 text-emerald-700 border-emerald-100",
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  "tickets": "General",
+  "sponsor tickets": "Sponsor",
+  "staff tickets": "Staff",
+};
+
 interface AttendeeRowProps {
   attendee: Attendee;
   isAuctionClosed: boolean;
-  onUpdateField: (attendee: Attendee, field: string, newValue: string, guestIndex?: number) => Promise<void>;
+  onEdit: (attendee: Attendee) => void;
   onUpdatePaymentStatus: (attendee: Attendee, newStatus: string) => void;
   onDeleteRequest: (attendee: Attendee) => void;
 }
 
+/**
+ * Redesigned per the user-reported "Attendee List UI Layout Issues" bug:
+ * replaces the old <table>-based row (four separate EditableCells packed
+ * into one narrow column, with the first/last name gap the report called
+ * out) with a single flexible row. All field editing now happens in one
+ * place - EditAttendeeDialog.tsx, opened via the pencil icon - instead
+ * of per-field inline editors.
+ */
 export function AttendeeRow({
   attendee: a,
   isAuctionClosed,
-  onUpdateField,
+  onEdit,
   onUpdatePaymentStatus,
   onDeleteRequest,
 }: AttendeeRowProps) {
   const guestsExceedTickets = hasMoreGuestsThanTicketsPurchased(a);
+  const isPaid = a.paymentStatus?.toLowerCase() === 'paid';
+  const methodDisplay = a.paymentMethod || (a.sheet.includes('staff') || a.sheet.includes('sponsor') ? 'Comp' : 'Unknown');
 
   return (
-    <TableRow className="align-top hover:bg-slate-50/30">
-      <TableCell>
-        <div className="flex flex-col gap-1.5">
-          <div className="flex gap-1">
-            <EditableCell value={a.firstName} onSave={val => onUpdateField(a, 'firstName', val)} placeholder="First" disabled={isAuctionClosed} singleLine />
-            <EditableCell value={a.lastName} onSave={val => onUpdateField(a, 'lastName', val)} placeholder="Last" disabled={isAuctionClosed} singleLine />
-          </div>
-          <EditableCell value={a.email} onSave={val => onUpdateField(a, 'email', val)} placeholder="Email" disabled={isAuctionClosed} singleLine />
-          <EditableCell value={a.phone} onSave={val => onUpdateField(a, 'phone', val)} placeholder="Phone" disabled={isAuctionClosed} singleLine />
+    <div className="group/row flex items-start gap-4 px-5 py-4 border-b last:border-0 hover:bg-muted/50 transition-colors">
+      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-semibold text-[15px]">{a.firstName}</span>
+          <span className="font-semibold text-[15px]">{a.lastName}</span>
+          <Badge variant="outline" className={cn("capitalize text-xs font-normal", SOURCE_BADGE_STYLES[a.sheet])}>
+            {SOURCE_LABELS[a.sheet] || 'General'}
+          </Badge>
+          {guestsExceedTickets && (
+            <span
+              className="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5"
+              title={`${a.guestsInfo.length} guests listed but only ${a.ticketsPurchased || 0} ticket(s) purchased - please correct in the spreadsheet.`}
+            >
+              <AlertTriangle className="w-3 h-3" /> Guests exceed tickets
+            </span>
+          )}
         </div>
-      </TableCell>
-      <TableCell className="text-center">
-        <Badge variant="outline" className="capitalize text-xs font-normal py-1">
-          {a.sheet.replace(' tickets', '').trim() || 'General'}
-        </Badge>
-      </TableCell>
-      <TableCell className="text-center">
+        <div className="flex items-center gap-3.5 flex-wrap text-sm text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <Mail className="w-3.5 h-3.5 shrink-0" />
+            {a.email || <span className="italic">No email</span>}
+          </span>
+          {a.phone && (
+            <span className="flex items-center gap-1.5">
+              <Phone className="w-3.5 h-3.5 shrink-0" />
+              {a.phone}
+            </span>
+          )}
+        </div>
+        {a.guestsInfo.length > 0 ? (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">Guests</span>
+            {a.guestsInfo.map((g, idx) => (
+              <span key={idx} className="inline-flex items-center gap-1.5 text-xs bg-muted rounded-full px-2.5 py-1">
+                {g.firstName} {g.lastName}
+                {g.ownBidderNumber?.toLowerCase() === 'yes' && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" title="Has their own bidder number" />
+                )}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground italic">No guests listed</span>
+        )}
+      </div>
+
+      <div className="w-13 shrink-0 flex flex-col items-center gap-0.5 pt-0.5">
         <div
           className={cn(
-            "font-semibold mx-auto w-8 h-8 rounded-md text-sm flex items-center justify-center",
+            "w-8 h-8 rounded-md flex items-center justify-center font-semibold text-sm",
             guestsExceedTickets ? "bg-red-100 text-red-700 ring-1 ring-red-300" : "bg-secondary text-secondary-foreground"
           )}
-          title={guestsExceedTickets ? `${a.guestsInfo.length} guests listed but only ${a.ticketsPurchased || 0} ticket(s) purchased` : undefined}
         >
           {a.ticketsPurchased}
         </div>
-      </TableCell>
-      <TableCell className="text-base">
-        <div className="space-y-3">
-          {guestsExceedTickets && (
-            <div className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <span>
-                {a.guestsInfo.length} guests listed but only {a.ticketsPurchased || 0} ticket(s) purchased - please correct in the spreadsheet.
-              </span>
-            </div>
+        <span className="text-[10px] uppercase text-muted-foreground">tix</span>
+      </div>
+
+      <div className="w-37.5 shrink-0 flex flex-col gap-1 pt-0.5">
+        <button
+          type="button"
+          disabled={isAuctionClosed}
+          onClick={() => onUpdatePaymentStatus(a, isPaid ? 'Pending' : 'Paid')}
+          className={cn(
+            "inline-flex items-center gap-1.5 w-fit rounded-md border px-2.5 py-1 text-xs font-medium",
+            isAuctionClosed ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+            isPaid ? "bg-green-50 border-green-200 text-green-700" : "bg-amber-50 border-amber-200 text-amber-700"
           )}
-          {a.guestsInfo.map((g, idx) => (
-            <div key={idx} className="flex flex-col gap-1.5 pb-2 border-b border-slate-100 last:border-0 last:pb-0">
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1">
-                  <EditableCell value={g.firstName} onSave={val => onUpdateField(a, 'firstName', val, g.guestIndex)} placeholder="First" disabled={isAuctionClosed} singleLine />
-                  <EditableCell value={g.lastName} onSave={val => onUpdateField(a, 'lastName', val, g.guestIndex)} placeholder="Last" disabled={isAuctionClosed} singleLine />
-                </div>
-                {g.ownBidderNumber?.toLowerCase() === 'yes' && (
-                  <Badge variant="secondary" className="text-xxs h-4 px-1 font-normal bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border-indigo-200 shrink-0">
-                    Own #
-                  </Badge>
-                )}
-              </div>
-              <EditableCell value={g.email} onSave={val => onUpdateField(a, 'email', val, g.guestIndex)} placeholder="Guest Email" disabled={isAuctionClosed} singleLine />
-            </div>
-          ))}
-          {a.guestsInfo.length === 0 && <span className="text-muted-foreground italic text-sm">No guests listed</span>}
-        </div>
-      </TableCell>
-      <TableCell>
-        <div className="flex flex-col gap-2">
-          <Select value={a.paymentStatus || 'Pending'} onValueChange={(val) => onUpdatePaymentStatus(a, val)} disabled={isAuctionClosed}>
-            <SelectTrigger className={cn("h-9 text-sm", a.paymentStatus?.toLowerCase() === 'paid' ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Paid">Paid</SelectItem>
-              <SelectItem value="Pending">Pending</SelectItem>
-            </SelectContent>
-          </Select>
-          {a.paymentStatus?.toLowerCase() === 'paid' && a.totalPaid !== '$0' && (
-            <span className="text-sm text-green-700 font-medium">Total: {a.totalPaid}</span>
-          )}
-          <span className="text-xs text-muted-foreground">Source: {a.paymentMethod || (a.sheet.includes('staff') || a.sheet.includes('sponsor') ? 'Comp' : 'Unknown')}</span>
-        </div>
-      </TableCell>
-      <TableCell>
+        >
+          <span className={cn("w-1.5 h-1.5 rounded-full", isPaid ? "bg-green-600" : "bg-amber-600")} />
+          {isPaid ? 'Paid' : 'Pending'}
+        </button>
+        {isPaid && a.totalPaid !== '$0' && (
+          <span className="text-xs text-green-700 font-medium">Total: {a.totalPaid}</span>
+        )}
+        <span className="text-[11px] text-muted-foreground">Source: {methodDisplay}</span>
+      </div>
+
+      <div className="flex gap-1 shrink-0 pt-0.5 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 transition-opacity">
+        {!isAuctionClosed && (
+          <IconButton
+            variant="ghost"
+            aria-label={`Edit ${a.firstName} ${a.lastName}`}
+            icon={<Pencil className="w-3.5 h-3.5" />}
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            onClick={() => onEdit(a)}
+          />
+        )}
         {!isAuctionClosed && (
           <IconButton
             variant="ghost"
@@ -115,7 +142,7 @@ export function AttendeeRow({
             onClick={() => onDeleteRequest(a)}
           />
         )}
-      </TableCell>
-    </TableRow>
+      </div>
+    </div>
   );
 }
