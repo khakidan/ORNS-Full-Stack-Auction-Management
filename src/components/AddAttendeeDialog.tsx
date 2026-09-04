@@ -20,6 +20,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+// SelectValue with no children renders the raw stored value, not the
+// matching SelectItem's label - see component-standards.md's documented
+// SelectValue failure mode. Confirmed via a throwaway RTL render that
+// the trigger showed the literal "sponsor tickets" instead of "Sponsor".
+const SOURCE_LABELS: Record<string, string> = {
+  "tickets": "General Tickets",
+  "sponsor tickets": "Sponsor",
+  "staff tickets": "Staff",
+};
+
 interface NewAttendeeEntry {
   firstName: string;
   lastName: string;
@@ -81,7 +91,7 @@ export function AddAttendeeDialog({
             <Label className="text-right">Source</Label>
             <Select value={newEntry.source} onValueChange={v => onNewEntryChange({ ...newEntry, source: v })}>
               <SelectTrigger className="col-span-3">
-                <SelectValue />
+                <SelectValue>{(value: string) => SOURCE_LABELS[value] ?? value}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="tickets">General Tickets</SelectItem>

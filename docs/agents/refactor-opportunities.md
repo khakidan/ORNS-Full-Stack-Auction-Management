@@ -37,21 +37,20 @@ deep audit's "Redundant/duplicated logic" section has been closed. See
   requires focus outlines never be removed without replacement. Fix:
   add `group-focus-within:opacity-100` alongside the existing
   `group-hover:opacity-100`.
-- **`AddAttendeeDialog.tsx` and `BiddersFilterControls.tsx`'s `Select`s
-  render bare `<SelectValue />` where the stored value and display
-  label differ** (e.g. value `"sponsor tickets"` shown as "Sponsor") -
-  `component-standards.md` documents this exact failure mode
-  (`SelectValue` renders the raw value unless given explicit
-  `children`) and the documented workaround isn't applied at either
-  call site. Medium confidence - couldn't be confirmed statically since
-  it depends on `@base-ui/react`'s item-registration timing; verify
-  with a manual UI check (select "Sponsor"/"Checked In" and confirm the
-  trigger text) before fixing.
 - **`google-api.ts`'s `fetchWithRetry` mutates the caller's `options`
   object in place** (`src/services/google-api.ts:27-38`) - shallow-clones
   neither `options` nor `options.headers` before injecting the auth
   header, so a caller reusing an options literal across calls
   accumulates state. Fix: clone before mutating.
+- **`TicketAttendeeTab.tsx`'s own Source filter `Select` has the same
+  bare-`<SelectValue />` gap** just confirmed and fixed in
+  `AddAttendeeDialog.tsx`/`BiddersFilterControls.tsx` (`:37-48`) - values
+  `"tickets"`/`"sponsor tickets"`/`"staff tickets"` are shown verbatim
+  instead of their labels ("General Tickets"/"Sponsors"/"Staff"). Found
+  while confirming the sibling bug via a real (unmocked) RTL render, out
+  of scope for that pass since it wasn't one of the two files named.
+  Same fix: pass `SelectValue` a `(value) => LABELS[value] ?? value`
+  children function.
 
 ### Test coverage gaps (`testing-philosophy.md`)
 
