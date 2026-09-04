@@ -15,13 +15,6 @@ feature work belongs in [`ROADMAP.md`](./ROADMAP.md) instead.
 gaps, verified directly against real code. Sorted by severity within
 each area.
 
-### Correctness bugs
-
-- **`server/services/emailService.ts:processEmail` does a direct
-  triple-sheet read of Bid-Management data** with no defensive parsing
-  - only reachable through the already-hardened receipt-email path, so
-  low urgency, but worth a look if that path is ever touched again.
-
 ### Redundant/duplicated logic
 
 - **`DocumentCreationTab.tsx` and `TicketDocumentCreationTab.tsx` are

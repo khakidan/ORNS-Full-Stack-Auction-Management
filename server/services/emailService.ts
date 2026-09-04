@@ -99,10 +99,14 @@ export async function processEmail(client: OAuth2Client, spreadsheetId: string, 
   
   for (let i = 1; i < numData.length; i++) {
     if (String(numData[i][0]).trim() === String(bidderId).trim()) {
-      firstName = numData[i][1];
-      lastName = numData[i][2];
-      email = numData[i][3];
-      invoiceUrl = numData[i][9]; 
+      // A short/malformed row (missing trailing cells) leaves these
+      // `undefined` rather than blank - without the fallback, the sent
+      // email's subject/greeting would literally read "undefined
+      // undefined" instead of degrading to an empty name.
+      firstName = numData[i][1] || '';
+      lastName = numData[i][2] || '';
+      email = numData[i][3] || '';
+      invoiceUrl = numData[i][9] || '';
       break;
     }
   }
