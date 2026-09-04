@@ -35,7 +35,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   const spreadsheetId = config.bidManagementSpreadsheetId;
   const ticketsSpreadsheetId = config.auctionTicketsSpreadsheetId;
 
-  const isApiAuthenticated = useApiAuthStatus();
+  const { isApiAuthenticated } = useApiAuthStatus();
 
   const biddersData = useBiddersData(spreadsheetId, config.bidderNumbersSheet);
   const itemsData = useItemsData(spreadsheetId, config.auctionItemsSheet);

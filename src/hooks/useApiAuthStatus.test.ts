@@ -40,42 +40,42 @@ describe("useApiAuthStatus", () => {
     mockedGetAuthStatus.mockResolvedValue({ authenticated: true });
     const { result } = renderHook(() => useApiAuthStatus());
 
-    expect(result.current).toBeNull();
-    await waitFor(() => expect(result.current).toBe(true));
+    expect(result.current.isApiAuthenticated).toBeNull();
+    await waitFor(() => expect(result.current.isApiAuthenticated).toBe(true));
   });
 
   it("reflects a false auth status", async () => {
     mockedGetAuthStatus.mockResolvedValue({ authenticated: false });
     const { result } = renderHook(() => useApiAuthStatus());
 
-    await waitFor(() => expect(result.current).toBe(false));
+    await waitFor(() => expect(result.current.isApiAuthenticated).toBe(false));
   });
 
   it("treats a failed status check as unauthenticated, not a crash", async () => {
     mockedGetAuthStatus.mockRejectedValue(new Error("network down"));
     const { result } = renderHook(() => useApiAuthStatus());
 
-    await waitFor(() => expect(result.current).toBe(false));
+    await waitFor(() => expect(result.current.isApiAuthenticated).toBe(false));
   });
 
   it("re-checks auth and persists tokens on a same-origin OAUTH_AUTH_SUCCESS message", async () => {
     mockedGetAuthStatus.mockResolvedValueOnce({ authenticated: false }).mockResolvedValueOnce({ authenticated: true });
     const { result } = renderHook(() => useApiAuthStatus());
-    await waitFor(() => expect(result.current).toBe(false));
+    await waitFor(() => expect(result.current.isApiAuthenticated).toBe(false));
 
     act(() => {
       postMessageEvent({ type: "OAUTH_AUTH_SUCCESS", tokens: { access_token: "tok-123" } });
     });
 
     expect(localStorage.getItem("google_tokens")).toBe(JSON.stringify({ access_token: "tok-123" }));
-    await waitFor(() => expect(result.current).toBe(true));
+    await waitFor(() => expect(result.current.isApiAuthenticated).toBe(true));
     expect(getAuthStatus).toHaveBeenCalledTimes(2);
   });
 
   it("ignores a postMessage from a different origin (regression guard for the origin-check fix)", async () => {
     mockedGetAuthStatus.mockResolvedValue({ authenticated: false });
     const { result } = renderHook(() => useApiAuthStatus());
-    await waitFor(() => expect(result.current).toBe(false));
+    await waitFor(() => expect(result.current.isApiAuthenticated).toBe(false));
 
     act(() => {
       postMessageEvent({ type: "OAUTH_AUTH_SUCCESS", tokens: { access_token: "attacker-token" } }, "https://evil.example.com");

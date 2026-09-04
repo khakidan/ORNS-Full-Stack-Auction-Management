@@ -17,13 +17,20 @@ each area.
 
 ### Redundant/duplicated logic
 
-- **`useApiAuthStatus.ts` and `useGoogleAuth.ts` independently
-  duplicate the same auth-status + `OAUTH_AUTH_SUCCESS` listener flow** -
-  both mount at the same time (from `AuctionContext` and `App.tsx`
-  respectively), so every OAuth completion fires two `/auth/status`
-  requests and two redundant `localStorage` writes. Have `useGoogleAuth`
-  build on `useApiAuthStatus` (keep only its `_fallbackTokens` escape
-  hatch, the one thing `useApiAuthStatus` doesn't have).
+- **`useApiAuthStatus.ts` (via `AuctionProvider`) and `useGoogleAuth.ts`
+  (via `App.tsx`) are still two separate live hook instances, so every
+  OAuth completion still fires two `/auth/status` requests** - the
+  *duplicated source code* was closed (`useGoogleAuth.ts` now builds its
+  login/logout/fallback-poll flow on top of `useApiAuthStatus.ts` instead
+  of hand-copying its listener/status-check logic, see CHANGELOG.md), but
+  `main.tsx` mounts `AuctionProvider` around `<App />`, so the two hooks
+  remain genuinely separate component-subtree instances with no shared
+  state between them - code-sharing alone can't collapse that to one
+  network call. Actually deduplicating the *requests* would mean lifting
+  the auth-status state into one shared context/provider both `App.tsx`
+  and `AuctionContext.tsx` read from, instead of each calling its own
+  hook - a real architectural change, not a copy-paste cleanup, so
+  splitting it out as its own item.
 - **`useBiddersData.ts`'s `checkInBidder` and `markBidderAsProxy` are
   identical apart from one field/column** (`:46-60` vs `:73-87`) -
   collapse into one `setBidderFlag(bidder, field, column, successMessage)`.

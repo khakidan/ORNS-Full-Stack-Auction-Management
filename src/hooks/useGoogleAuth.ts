@@ -1,73 +1,41 @@
-import { useState, useEffect, useRef } from "react";
-import { getAuthStatus, getAuthUrl, logout } from "@/services/google-api";
+import { useEffect, useRef } from "react";
+import { getAuthUrl, logout } from "@/services/google-api";
 import { toast } from "sonner";
+import { useApiAuthStatus } from "@/hooks/useApiAuthStatus";
 
+/**
+ * Adds the login/logout flow and a low-frequency fallback poll on top of
+ * useApiAuthStatus.ts's shared auth-status-check + postMessage-listener
+ * logic, rather than duplicating that flow - both hooks used to mount
+ * their own independent copy (from AuctionContext.tsx and App.tsx
+ * respectively), doubling every OAuth completion's /auth/status requests
+ * and localStorage writes.
+ */
 export function useGoogleAuth() {
-  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
-  // Mirrors `authenticated` for the interval below to read without being
-  // in its dependency array (which would tear down/recreate the interval
+  const { isApiAuthenticated: authenticated, checkProviderAuth } = useApiAuthStatus();
+
+  // Mirrors `authenticated` for the poll below to read without being in
+  // its dependency array (which would tear down/recreate the interval
   // every time auth state changes).
   const authenticatedRef = useRef(authenticated);
-
   useEffect(() => {
     authenticatedRef.current = authenticated;
   }, [authenticated]);
 
   useEffect(() => {
-    checkAuth();
-    
-    const handleAuthSuccess = (event: MessageEvent) => {
-      // Reject postMessages from any other origin before trusting
-      // event.data at all - without this, any page holding a reference to
-      // this window could inject fake tokens for us to persist and trust.
-      if (event.origin !== window.location.origin) return;
-      console.log("[Auth] Received message:", event.data?.type);
-      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
-        if (event.data.tokens) {
-          console.log("[Auth] Tokens received safely");
-          try {
-            localStorage.setItem('google_tokens', JSON.stringify(event.data.tokens));
-            console.log("[Auth] Tokens saved to localStorage");
-          } catch (e) {
-            console.warn("[Auth] localStorage failed, storing in memory:", e);
-            // _fallbackTokens is an intentional escape hatch for environments where
-            // localStorage is blocked (e.g. cross-origin iframes). Not a type oversight.
-            (window as any)._fallbackTokens = JSON.stringify(event.data.tokens);
-          }
-        } else {
-          console.error("[Auth] No tokens contained in postMessage!");
-        }
-        checkAuth();
-      }
-    };
-    
-    window.addEventListener('message', handleAuthSuccess);
-
     // low-frequency fallback poll (every 5 seconds), only if not authenticated.
-    // Reads authenticatedRef rather than calling checkAuth() from inside a
-    // setState updater - updaters must be pure, and React (especially
-    // StrictMode) can invoke them more than once, which would have doubled
-    // these /auth/status requests.
+    // Reads authenticatedRef rather than calling checkProviderAuth() from
+    // inside a setState updater - updaters must be pure, and React
+    // (especially StrictMode) can invoke them more than once, which would
+    // have doubled these /auth/status requests.
     const interval = setInterval(() => {
       if (!authenticatedRef.current) {
-        checkAuth();
+        checkProviderAuth();
       }
     }, 5000);
 
-    return () => {
-      window.removeEventListener('message', handleAuthSuccess);
-      clearInterval(interval);
-    };
-  }, []);
-
-  const checkAuth = async () => {
-    try {
-      const status = await getAuthStatus();
-      setAuthenticated(status.authenticated);
-    } catch (e) {
-      setAuthenticated(false);
-    }
-  };
+    return () => clearInterval(interval);
+  }, [checkProviderAuth]);
 
   const handleLogin = async () => {
     // Check if we are inside an iframe (like the AI Studio preview environment)
@@ -94,14 +62,14 @@ export function useGoogleAuth() {
     try {
       console.log("Handle login clicked, fetching auth URL...");
       const response = await getAuthUrl();
-      
+
       if (response.error || !response.url) {
         console.error("Server returned auth error:", response?.error || "Unknown error");
         toast.error("Auth server did not return a valid login URL.");
         if (popup) popup.close();
         return;
       }
-      
+
       console.log("Redirecting to:", response.url.substring(0, 50) + "...");
       if (isIframe && popup) {
         popup.location.href = response.url;
@@ -117,7 +85,7 @@ export function useGoogleAuth() {
 
   const handleLogout = async () => {
     await logout();
-    await checkAuth();
+    await checkProviderAuth();
   };
 
   return { authenticated, handleLogin, handleLogout };
