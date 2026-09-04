@@ -53,15 +53,18 @@ export function AttendeeRow({
       <TableCell className="text-base">
         <div className="space-y-3">
           {a.guestsInfo.map((g, idx) => (
-            <div key={idx} className="flex flex-col gap-0.5 pb-2 border-b border-slate-100 last:border-0 last:pb-0">
-              <span className="font-medium text-slate-800 flex items-center gap-2 text-base">
-                {g.name || `Guest ${idx + 1}`}
+            <div key={idx} className="flex flex-col gap-1.5 pb-2 border-b border-slate-100 last:border-0 last:pb-0">
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1">
+                  <EditableCell value={g.firstName} onSave={val => onUpdateField(a, 'firstName', val, g.guestIndex)} placeholder="First" disabled={isAuctionClosed} singleLine />
+                  <EditableCell value={g.lastName} onSave={val => onUpdateField(a, 'lastName', val, g.guestIndex)} placeholder="Last" disabled={isAuctionClosed} singleLine />
+                </div>
                 {g.ownBidderNumber?.toLowerCase() === 'yes' && (
-                  <Badge variant="secondary" className="text-xxs h-4 px-1 font-normal bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border-indigo-200">
+                  <Badge variant="secondary" className="text-xxs h-4 px-1 font-normal bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border-indigo-200 shrink-0">
                     Own #
                   </Badge>
                 )}
-              </span>
+              </div>
               <EditableCell value={g.email} onSave={val => onUpdateField(a, 'email', val, g.guestIndex)} placeholder="Guest Email" disabled={isAuctionClosed} singleLine />
             </div>
           ))}

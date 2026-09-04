@@ -20,6 +20,8 @@ function makeBidder(overrides: Partial<Bidder> = {}): Bidder {
 function makeGuest(overrides: Partial<Guest> = {}): Guest {
   return {
     name: "Bob Guest",
+    firstName: "Bob",
+    lastName: "Guest",
     email: "bob@example.com",
     guestIndex: 1,
     ownBidderNumber: "",

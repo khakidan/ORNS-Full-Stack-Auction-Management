@@ -84,7 +84,7 @@ const mockAttendees = [
     phone: "123-456-7890",
     sheet: "tickets",
     ticketsPurchased: 2,
-    guestsInfo: [{ name: "Alice Guest 1", email: "guest1@example.com", ownBidderNumber: "no", guestIndex: 1 }],
+    guestsInfo: [{ name: "Guest One", firstName: "Guest", lastName: "One", email: "guest1@example.com", ownBidderNumber: "no", guestIndex: 1 }],
     paymentStatus: "Paid",
     totalPaid: "$100",
     paymentMethod: "stripe"

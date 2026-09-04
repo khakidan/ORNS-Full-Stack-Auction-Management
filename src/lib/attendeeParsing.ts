@@ -27,9 +27,9 @@ export function parseAttendeeRows(sheetName: string, values: string[][]): Attend
         pm = row[19]; ps = row[20]; tp = row[21];
       }
 
-      if (row[7] || row[8] || row[9]) guests.push({ name: `${row[7] || ''} ${row[8] || ''}`.trim(), email: row[9]?.toString() || '', guestIndex: 1, ownBidderNumber: g1own?.toString() || '' });
-      if (g2f || g2l || g2e) guests.push({ name: `${g2f || ''} ${g2l || ''}`.trim(), email: g2e?.toString() || '', guestIndex: 2, ownBidderNumber: g2own?.toString() || '' });
-      if (g3f || g3l || g3e) guests.push({ name: `${g3f || ''} ${g3l || ''}`.trim(), email: g3e?.toString() || '', guestIndex: 3, ownBidderNumber: g3own?.toString() || '' });
+      if (row[7] || row[8] || row[9]) guests.push({ name: `${row[7] || ''} ${row[8] || ''}`.trim(), firstName: row[7]?.toString() || '', lastName: row[8]?.toString() || '', email: row[9]?.toString() || '', guestIndex: 1, ownBidderNumber: g1own?.toString() || '' });
+      if (g2f || g2l || g2e) guests.push({ name: `${g2f || ''} ${g2l || ''}`.trim(), firstName: g2f?.toString() || '', lastName: g2l?.toString() || '', email: g2e?.toString() || '', guestIndex: 2, ownBidderNumber: g2own?.toString() || '' });
+      if (g3f || g3l || g3e) guests.push({ name: `${g3f || ''} ${g3l || ''}`.trim(), firstName: g3f?.toString() || '', lastName: g3l?.toString() || '', email: g3e?.toString() || '', guestIndex: 3, ownBidderNumber: g3own?.toString() || '' });
 
       return {
         id: `${sheetName}-${i}`,

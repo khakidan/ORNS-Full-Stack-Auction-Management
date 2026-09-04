@@ -63,19 +63,30 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
 
     let col = 'A';
     if (field === 'lastName') col = 'B';
-    if (field === 'email') {
-      col = 'C';
-      if (attendee.sheet === 'tickets') {
-        if (guestIndex === 1) col = 'J';
-        else if (guestIndex === 2) col = 'N';
-        else if (guestIndex === 3) col = 'R';
-      } else {
-        if (guestIndex === 1) col = 'J';
-        else if (guestIndex === 2) col = 'M';
-        else if (guestIndex === 3) col = 'P';
-      }
-    }
+    if (field === 'email') col = 'C';
     if (field === 'phone') col = 'D';
+
+    if (guestIndex !== undefined && (field === 'firstName' || field === 'lastName' || field === 'email')) {
+      // Guest column triples shift after guest 1 on the general "tickets"
+      // sheet (an "own bidder number" flag inserted after guest 1 pushes
+      // everything past it over by one column) but not on staff/sponsor
+      // sheets - the exact same shift attendeeParsing.ts's parser and
+      // syncService.ts's collectGuestInfo already account for.
+      const GUEST_COLUMNS: Record<string, Record<number, { firstName: string; lastName: string; email: string }>> = {
+        tickets: {
+          1: { firstName: 'H', lastName: 'I', email: 'J' },
+          2: { firstName: 'L', lastName: 'M', email: 'N' },
+          3: { firstName: 'P', lastName: 'Q', email: 'R' },
+        },
+        default: {
+          1: { firstName: 'H', lastName: 'I', email: 'J' },
+          2: { firstName: 'K', lastName: 'L', email: 'M' },
+          3: { firstName: 'N', lastName: 'O', email: 'P' },
+        },
+      };
+      const columnsForGuest = (GUEST_COLUMNS[attendee.sheet] || GUEST_COLUMNS.default)[guestIndex];
+      if (columnsForGuest) col = columnsForGuest[field];
+    }
 
     // Just this attendee's previous state, not a whole captured array
     // snapshot - a second attendee edited while this one is still in
@@ -90,7 +101,16 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
       } else {
         return {
           ...a,
-          guestsInfo: a.guestsInfo.map(g => g.guestIndex === guestIndex ? { ...g, email: newValue } : g)
+          guestsInfo: a.guestsInfo.map(g => {
+            if (g.guestIndex !== guestIndex) return g;
+            const updatedGuest = { ...g, [field]: newValue };
+            // Keep the combined display name (used by bidderAttendeeInfo.ts's
+            // guest-to-bidder matching) in sync with a firstName/lastName edit.
+            if (field === 'firstName' || field === 'lastName') {
+              updatedGuest.name = `${updatedGuest.firstName} ${updatedGuest.lastName}`.trim();
+            }
+            return updatedGuest;
+          })
         };
       }
     }));

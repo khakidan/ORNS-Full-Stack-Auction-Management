@@ -14,7 +14,7 @@
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useTicketAttendeeState } from "./useTicketAttendeeState";
-import { Attendee } from "@/types";
+import { Attendee, Guest } from "@/types";
 
 vi.mock("@/services/google-api", () => ({
   updateSheetData: vi.fn(),
@@ -46,6 +46,18 @@ function makeAttendee(overrides: Partial<Attendee> = {}): Attendee {
     paymentMethod: "Manual",
     paymentStatus: "Pending",
     totalPaid: "$0",
+    ...overrides,
+  };
+}
+
+function makeGuest(overrides: Partial<Guest> = {}): Guest {
+  return {
+    name: "Bob Guest",
+    firstName: "Bob",
+    lastName: "Guest",
+    email: "bob@example.com",
+    guestIndex: 1,
+    ownBidderNumber: "",
     ...overrides,
   };
 }
@@ -149,6 +161,138 @@ describe("useTicketAttendeeState", () => {
 
       await waitFor(() => expect(attendees[0].firstName).toBe("Alice"));
       expect(attendees[1].firstName).toBe("Bobby");
+    });
+  });
+
+  describe("updateField - guest firstName/lastName/email column mapping", () => {
+    // User-reported bug: "I was expecting to be able to edit the first and
+    // last names of guests in the auction tickets table, like you can for
+    // the primary bidder, but you can't." AttendeeRow.tsx only ever wired
+    // up guest *email* edits; guest firstName/lastName weren't editable at
+    // all, and updateField had no column mapping for them - only the
+    // primary attendee's A/B columns and the pre-existing guest *email*
+    // mapping. Column values here are cross-checked against
+    // attendeeParsing.ts's own column layout (the inverse of what that
+    // parser reads) and against the pre-existing guest-email columns this
+    // test file already implicitly trusted.
+    function setup(attendees: Attendee[]) {
+      let current = attendees;
+      const setAttendees = vi.fn((updater: any) => {
+        current = typeof updater === "function" ? updater(current) : updater;
+      });
+      const hook = renderHook(
+        (props: { attendees: Attendee[] }) =>
+          useTicketAttendeeState({
+            attendees: props.attendees,
+            setAttendees,
+            addAttendee: vi.fn(),
+            removeAttendee: vi.fn(),
+            spreadsheetId: "ss-id",
+          }),
+        { initialProps: { attendees } }
+      );
+      return { ...hook, getAttendees: () => current };
+    }
+
+    it("still maps the primary attendee's own firstName/lastName/email/phone to columns A/B/C/D (unaffected by the guest-column addition)", async () => {
+      mockedUpdateSheetData.mockResolvedValue(undefined);
+      const attendee = makeAttendee({ rowIndex: 5 });
+      const { result } = setup([attendee]);
+
+      await act(async () => { await result.current.updateField(attendee, "firstName", "Alicia"); });
+      expect(mockedUpdateSheetData).toHaveBeenLastCalledWith("ss-id", "tickets!A5", [["Alicia"]]);
+
+      await act(async () => { await result.current.updateField(attendee, "lastName", "Uno"); });
+      expect(mockedUpdateSheetData).toHaveBeenLastCalledWith("ss-id", "tickets!B5", [["Uno"]]);
+
+      await act(async () => { await result.current.updateField(attendee, "email", "new@example.com"); });
+      expect(mockedUpdateSheetData).toHaveBeenLastCalledWith("ss-id", "tickets!C5", [["new@example.com"]]);
+
+      await act(async () => { await result.current.updateField(attendee, "phone", "555-9999"); });
+      expect(mockedUpdateSheetData).toHaveBeenLastCalledWith("ss-id", "tickets!D5", [["555-9999"]]);
+    });
+
+    it.each([
+      [1, "H", "I", "J"],
+      [2, "L", "M", "N"],
+      [3, "P", "Q", "R"],
+    ])("maps guest %i's firstName/lastName/email to the SHIFTED columns %s/%s/%s on the general 'tickets' sheet", async (guestIndex, firstCol, lastCol, emailCol) => {
+      mockedUpdateSheetData.mockResolvedValue(undefined);
+      const guest = makeGuest({ guestIndex });
+      const attendee = makeAttendee({ sheet: "tickets", rowIndex: 7, guestsInfo: [guest] });
+      const { result } = setup([attendee]);
+
+      await act(async () => { await result.current.updateField(attendee, "firstName", "Newfirst", guestIndex); });
+      expect(mockedUpdateSheetData).toHaveBeenLastCalledWith("ss-id", `tickets!${firstCol}7`, [["Newfirst"]]);
+
+      await act(async () => { await result.current.updateField(attendee, "lastName", "Newlast", guestIndex); });
+      expect(mockedUpdateSheetData).toHaveBeenLastCalledWith("ss-id", `tickets!${lastCol}7`, [["Newlast"]]);
+
+      await act(async () => { await result.current.updateField(attendee, "email", "new-guest@example.com", guestIndex); });
+      expect(mockedUpdateSheetData).toHaveBeenLastCalledWith("ss-id", `tickets!${emailCol}7`, [["new-guest@example.com"]]);
+    });
+
+    it.each([
+      [1, "H", "I", "J"],
+      [2, "K", "L", "M"],
+      [3, "N", "O", "P"],
+    ])("maps guest %i's firstName/lastName/email to the UNSHIFTED columns %s/%s/%s on staff/sponsor sheets", async (guestIndex, firstCol, lastCol, emailCol) => {
+      mockedUpdateSheetData.mockResolvedValue(undefined);
+      const guest = makeGuest({ guestIndex });
+      const attendee = makeAttendee({ sheet: "sponsor tickets", rowIndex: 9, guestsInfo: [guest] });
+      const { result } = setup([attendee]);
+
+      await act(async () => { await result.current.updateField(attendee, "firstName", "Newfirst", guestIndex); });
+      expect(mockedUpdateSheetData).toHaveBeenLastCalledWith("ss-id", `sponsor tickets!${firstCol}9`, [["Newfirst"]]);
+
+      await act(async () => { await result.current.updateField(attendee, "lastName", "Newlast", guestIndex); });
+      expect(mockedUpdateSheetData).toHaveBeenLastCalledWith("ss-id", `sponsor tickets!${lastCol}9`, [["Newlast"]]);
+
+      await act(async () => { await result.current.updateField(attendee, "email", "new-guest@example.com", guestIndex); });
+      expect(mockedUpdateSheetData).toHaveBeenLastCalledWith("ss-id", `sponsor tickets!${emailCol}9`, [["new-guest@example.com"]]);
+    });
+
+    it("updates only the touched guest's own field in local state, not a different field on that guest - the exact regression this fix closes", async () => {
+      // Before this fix, the optimistic update always wrote to the guest's
+      // `email` key regardless of which field was actually being edited,
+      // so a firstName edit for a guest would (once guest firstName editing
+      // existed at all) have silently landed in the wrong local field.
+      mockedUpdateSheetData.mockImplementation(() => new Promise(() => {})); // never resolves - inspect the optimistic state directly
+      const guest = makeGuest({ guestIndex: 1, firstName: "Bob", lastName: "Guest", email: "bob@example.com" });
+      const attendee = makeAttendee({ guestsInfo: [guest] });
+      const { result, getAttendees } = setup([attendee]);
+
+      act(() => { result.current.updateField(attendee, "firstName", "Robert", 1); });
+
+      const updatedGuest = getAttendees()[0].guestsInfo[0];
+      expect(updatedGuest.firstName).toBe("Robert");
+      expect(updatedGuest.email).toBe("bob@example.com"); // untouched
+      expect(updatedGuest.lastName).toBe("Guest"); // untouched
+    });
+
+    it("keeps the guest's combined display name (name) in sync when firstName/lastName is edited", async () => {
+      mockedUpdateSheetData.mockImplementation(() => new Promise(() => {}));
+      const guest = makeGuest({ guestIndex: 1, firstName: "Bob", lastName: "Guest", name: "Bob Guest" });
+      const attendee = makeAttendee({ guestsInfo: [guest] });
+      const { result, getAttendees } = setup([attendee]);
+
+      act(() => { result.current.updateField(attendee, "firstName", "Robert", 1); });
+
+      expect(getAttendees()[0].guestsInfo[0].name).toBe("Robert Guest");
+    });
+
+    it("only touches the edited guest, leaving a second guest on the same attendee untouched", async () => {
+      mockedUpdateSheetData.mockImplementation(() => new Promise(() => {}));
+      const guest1 = makeGuest({ guestIndex: 1, firstName: "Bob", lastName: "Guest1" });
+      const guest2 = makeGuest({ guestIndex: 2, firstName: "Carol", lastName: "Guest2" });
+      const attendee = makeAttendee({ guestsInfo: [guest1, guest2] });
+      const { result, getAttendees } = setup([attendee]);
+
+      act(() => { result.current.updateField(attendee, "firstName", "Robert", 1); });
+
+      const [updatedGuest1, untouchedGuest2] = getAttendees()[0].guestsInfo;
+      expect(updatedGuest1.firstName).toBe("Robert");
+      expect(untouchedGuest2.firstName).toBe("Carol");
     });
   });
 

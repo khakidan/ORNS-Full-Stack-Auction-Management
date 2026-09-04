@@ -29,6 +29,8 @@ export interface AuctionItem {
 
 export interface Guest {
   name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   guestIndex: number;
   ownBidderNumber: string;

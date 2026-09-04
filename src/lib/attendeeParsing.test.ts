@@ -93,7 +93,7 @@ describe("parseAttendeeRows - guest 1 (unshifted on every sheet)", () => {
     const [attendee] = parseAttendeeRows("tickets", [GENERAL_HEADER, row]);
 
     expect(attendee.guestsInfo).toEqual([
-      { name: "Bob Guest", email: "bob@example.com", guestIndex: 1, ownBidderNumber: "yes" },
+      { name: "Bob Guest", firstName: "Bob", lastName: "Guest", email: "bob@example.com", guestIndex: 1, ownBidderNumber: "yes" },
     ]);
   });
 
@@ -102,7 +102,7 @@ describe("parseAttendeeRows - guest 1 (unshifted on every sheet)", () => {
     const [attendee] = parseAttendeeRows("staff tickets", [OTHER_HEADER, row]);
 
     expect(attendee.guestsInfo).toEqual([
-      { name: "Bob Guest", email: "bob@example.com", guestIndex: 1, ownBidderNumber: "" },
+      { name: "Bob Guest", firstName: "Bob", lastName: "Guest", email: "bob@example.com", guestIndex: 1, ownBidderNumber: "" },
     ]);
   });
 
@@ -118,7 +118,7 @@ describe("parseAttendeeRows - guest 1 (unshifted on every sheet)", () => {
     const [attendee] = parseAttendeeRows("tickets", [GENERAL_HEADER, row]);
 
     expect(attendee.guestsInfo).toEqual([
-      { name: "", email: "onlyemail@example.com", guestIndex: 1, ownBidderNumber: "" },
+      { name: "", firstName: "", lastName: "", email: "onlyemail@example.com", guestIndex: 1, ownBidderNumber: "" },
     ]);
   });
 });
@@ -129,7 +129,7 @@ describe("parseAttendeeRows - guest 2/3 column shift (the exact bug pattern alre
     const [attendee] = parseAttendeeRows("tickets", [GENERAL_HEADER, row]);
 
     expect(attendee.guestsInfo).toEqual([
-      { name: "Carol Guest2", email: "carol@example.com", guestIndex: 2, ownBidderNumber: "no" },
+      { name: "Carol Guest2", firstName: "Carol", lastName: "Guest2", email: "carol@example.com", guestIndex: 2, ownBidderNumber: "no" },
     ]);
   });
 
@@ -138,7 +138,7 @@ describe("parseAttendeeRows - guest 2/3 column shift (the exact bug pattern alre
     const [attendee] = parseAttendeeRows("tickets", [GENERAL_HEADER, row]);
 
     expect(attendee.guestsInfo).toEqual([
-      { name: "Dave Guest3", email: "dave@example.com", guestIndex: 3, ownBidderNumber: "yes" },
+      { name: "Dave Guest3", firstName: "Dave", lastName: "Guest3", email: "dave@example.com", guestIndex: 3, ownBidderNumber: "yes" },
     ]);
   });
 
@@ -147,7 +147,7 @@ describe("parseAttendeeRows - guest 2/3 column shift (the exact bug pattern alre
     const [attendee] = parseAttendeeRows("sponsor tickets", [OTHER_HEADER, row]);
 
     expect(attendee.guestsInfo).toEqual([
-      { name: "Carol Guest2", email: "carol@example.com", guestIndex: 2, ownBidderNumber: "" },
+      { name: "Carol Guest2", firstName: "Carol", lastName: "Guest2", email: "carol@example.com", guestIndex: 2, ownBidderNumber: "" },
     ]);
   });
 
@@ -156,7 +156,7 @@ describe("parseAttendeeRows - guest 2/3 column shift (the exact bug pattern alre
     const [attendee] = parseAttendeeRows("sponsor tickets", [OTHER_HEADER, row]);
 
     expect(attendee.guestsInfo).toEqual([
-      { name: "Dave Guest3", email: "dave@example.com", guestIndex: 3, ownBidderNumber: "" },
+      { name: "Dave Guest3", firstName: "Dave", lastName: "Guest3", email: "dave@example.com", guestIndex: 3, ownBidderNumber: "" },
     ]);
   });
 
