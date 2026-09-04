@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { useConfig } from "@/context/ConfigContext";
@@ -41,9 +41,23 @@ async function syncSettingToCloud(spreadsheetId: string, key: string, value: str
 export function useConfigSettingsState() {
   const { config: remoteConfig, saveConfig, firebaseUser, loginToFirebase } = useConfig();
   const [config, setConfig] = useState<Config>(remoteConfig);
+  // Tracks the last remoteConfig value this draft was synced from. A field
+  // edit always replaces `config` with a fresh object (never mutates in
+  // place - see AuctionConfigurationCard.tsx/TicketPricingCard.tsx's
+  // setConfig calls), so `config !== lastSyncedRemoteConfigRef.current`
+  // means the user has unsaved edits in progress. Only accept a new
+  // remoteConfig (the initial async load, a same-identity Firestore
+  // re-fire, or a real cross-device change) while the draft is still
+  // clean - otherwise this would silently overwrite whatever the user is
+  // mid-typing, which is the exact bug this replaced.
+  const lastSyncedRemoteConfigRef = useRef<Config>(remoteConfig);
 
   useEffect(() => {
-    setConfig(remoteConfig);
+    setConfig((current) => {
+      if (current !== lastSyncedRemoteConfigRef.current) return current;
+      lastSyncedRemoteConfigRef.current = remoteConfig;
+      return remoteConfig;
+    });
   }, [remoteConfig]);
 
   const [savingSettings, setSavingSettings] = useState(false);

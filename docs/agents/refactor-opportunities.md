@@ -38,20 +38,8 @@ deep audit's "Redundant/duplicated logic" section has been closed. See
 
 ### Code quality
 
-- **`useConfigSettingsState.ts:43-46` syncs a prop into local state via
-  `useEffect`, the exact anti-pattern shape `react-patterns.md`'s
-  "Derived State" rule warns against**: `const [config, setConfig] =
-  useState<Config>(remoteConfig)` followed by `useEffect(() =>
-  setConfig(remoteConfig), [remoteConfig])`. Not a drop-in `useMemo`
-  fix, though - `config` is a mutable local *draft* (`setConfig` is
-  also called directly by every field's `onChange` while editing), not
-  pure derived data, so this needs a real
-  design decision (e.g. reset the draft via a `key` prop on remount, or
-  only reconcile on a real external change vs. a same-value re-render)
-  rather than a mechanical refactor. `refactor-opportunities.md`'s own
-  "Passed Audit Inspection" list previously claimed "no component syncs
-  a computed value into a second `useState` via an effect" - that claim
-  is now corrected below rather than left contradicting this entry.
+Nothing outstanding right now - every item flagged in this section has
+been closed. See `CHANGELOG.md` for the individual fixes.
 
 ### Test coverage gaps (`testing-philosophy.md`)
 
