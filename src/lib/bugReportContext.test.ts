@@ -2,7 +2,8 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { formatAppState, getCurrentRoute, formatBrowserInfo, formatConsoleActivity } from "./bugReportContext";
+import { formatAppState, getCurrentRoute, formatBrowserInfo, formatConsoleActivity, formatReportAsMarkdown } from "./bugReportContext";
+import { BugReportListItem } from "@/types";
 
 describe("formatAppState", () => {
   it("includes every field in a readable, greppable form", () => {
@@ -75,5 +76,45 @@ describe("formatConsoleActivity", () => {
     expect(text).toBe(
       "[2026-09-03T12:00:00.000Z] ERROR: boom\n[2026-09-03T12:00:01.000Z] WARN: careful"
     );
+  });
+});
+
+describe("formatReportAsMarkdown", () => {
+  const BASE_REPORT: BugReportListItem = {
+    reportId: "report-1",
+    timestamp: "2026-09-04T05:07:13.370Z",
+    status: "Open",
+    type: "UI Issue",
+    title: "Clipping of Circular Checked In State",
+    description: "The visual representation is getting clipped at the top.",
+    route: "/BidManagement (workflow: bids, tab: dashboard)",
+    appState: "Bidders: 16\nItems: 14",
+    browserInfo: "User-Agent: test-agent",
+    consoleActivity: "(none captured)",
+    screenshotLink: "",
+  };
+
+  it("includes every field in a single self-contained Markdown document", () => {
+    const md = formatReportAsMarkdown(BASE_REPORT);
+
+    expect(md).toContain("# Clipping of Circular Checked In State");
+    expect(md).toContain("**Type:** UI Issue");
+    expect(md).toContain("**Status:** Open");
+    expect(md).toContain("**Timestamp:** 2026-09-04T05:07:13.370Z");
+    expect(md).toContain("**Route:** /BidManagement (workflow: bids, tab: dashboard)");
+    expect(md).toContain("The visual representation is getting clipped at the top.");
+    expect(md).toContain("Bidders: 16\nItems: 14");
+    expect(md).toContain("User-Agent: test-agent");
+    expect(md).toContain("(none captured)");
+  });
+
+  it("includes a Markdown link to the real Drive screenshot when one exists", () => {
+    const md = formatReportAsMarkdown({ ...BASE_REPORT, screenshotLink: "https://drive.google.com/file/d/abc/view" });
+    expect(md).toContain("**Screenshot:** https://drive.google.com/file/d/abc/view");
+  });
+
+  it("omits the Screenshot line entirely when there is no screenshot", () => {
+    const md = formatReportAsMarkdown(BASE_REPORT);
+    expect(md).not.toContain("**Screenshot:**");
   });
 });

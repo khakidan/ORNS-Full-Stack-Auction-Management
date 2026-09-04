@@ -43,7 +43,7 @@ To keep developer directives clean, maintainable, and modular, the monolithic Ag
     *   Detailed instructions for auction operations, bidding procedures, ticket sales, registration, and PayPal checkout.
 
 9.  **[Sandbox-Safe Testing & Batches (testing-batches.md)](./docs/agents/testing-batches.md)**
-    *   Step-by-step procedures to run tests in partition batches (294 backend, 188 frontend) to prevent sandboxed environment command timeouts.
+    *   Step-by-step procedures to run tests in partition batches to prevent sandboxed environment command timeouts. Current pass/fail totals live only there - not duplicated here.
 
 10. **[Testing Philosophy & Quality Standards (testing-philosophy.md)](./docs/agents/testing-philosophy.md)**
     *   Kent C. Dodds prime directive and test quality ratings (GOOD, SHALLOW, CIRCULAR, SMOKE).
@@ -71,9 +71,9 @@ To keep developer directives clean, maintainable, and modular, the monolithic Ag
 For the complete guidelines and background, see [`/docs/agents/patterns.md`](./docs/agents/patterns.md).
 
 1.  **File Preservation**: **NEVER DELETE `server/routes/bidRoutes.ts`**. This managing endpoint handles critical transactional bid logs. Do not edit core SDK files (`src/services/firebase.ts`, `src/context/ConfigContext.tsx`, `firestore.rules`).
-2.  **Testing Mandate**: Always run tests and verify that all **732 tests continue to pass green**. Tests must be run in two partition batches to avoid memory sandbox timeouts:
-    *   **Backend (349 tests)**: `npx vitest run server/test/`
-    *   **Frontend (383 tests)**: `NODE_OPTIONS=--no-experimental-webstorage npx vitest run src/` (the flag is required on Node 22+ - `ConfigContext.tsx` reads `localStorage` at module load, and Node's own built-in Web Storage global can leave jsdom's `window.localStorage` undefined without it)
+2.  **Testing Mandate**: Always run tests and verify that the full suite continues to pass green (see [`testing-batches.md`](./docs/agents/testing-batches.md) for the current totals). Tests must be run in two partition batches to avoid memory sandbox timeouts:
+    *   **Backend**: `npx vitest run server/test/`
+    *   **Frontend**: `NODE_OPTIONS=--no-experimental-webstorage npx vitest run src/` (the flag is required on Node 22+ - `ConfigContext.tsx` reads `localStorage` at module load, and Node's own built-in Web Storage global can leave jsdom's `window.localStorage` undefined without it)
 3.  **Session Cookie Rules**: Session cookie **MUST** remain named **`orns_session`**. Do not revert it to `__session`.
 4.  **Code Splitting Rules**: The `manualChunks` function inside `vite.config.ts` must use the dynamic functional matcher structure.
 5.  **PayPal Surcharges**: NEVER calculate fees client-side; always utilize `PayPalService.calculatePayPalSurcharge` server-side.
@@ -86,8 +86,7 @@ The floating bug icon (bottom-left corner) / Ctrl-Cmd-Shift-B shortcut lets anyo
 
 **These reports are a working note, not a permanent record.** Once a report's underlying fix has actually shipped and been written up in `CHANGELOG.md` (the real permanent history), close the loop:
 
-*   Delete that report's row from the Bug-Reports spreadsheet (or flip its `Status` column to `Fixed` if you'd rather keep a short-term audit trail before a periodic cleanup pass).
-*   Delete its screenshot file from the Bug Reports Screenshots Drive folder, if it had one.
-*   If a report ever landed in the local `bug-reports/` fallback directory instead (check it occasionally - it means the Sheets write failed at submission time), delete its `.md`/`.png` files too once handled.
+*   Use the **Bug Reports** admin page (left sidebar, System section - `src/components/BugReportsAdmin.tsx`) to work the open queue: each row's **View** button opens a dialog with the full report and a "Copy as Markdown" button (formatted for pasting straight into a Claude Code chat, via `formatReportAsMarkdown` in `src/lib/bugReportContext.ts`) to request the fix; once fixed, **Resolve** flips that row's `Status` column to `Fixed` (`server/services/bugReportService.ts`'s `markReportResolved`) and automatically deletes its screenshot from the Bug Reports Screenshots Drive folder (`deleteScreenshotFromDrive`), so no manual spreadsheet/Drive cleanup is needed for reports that went through the Sheet.
+*   If a report ever landed in the local `bug-reports/` fallback directory instead (check it occasionally - it means the Sheets write failed at submission time), delete its `.md`/`.png` files manually once handled - the admin UI only reads from the Sheet.
 
 Do not treat an open bug-report row as itself documentation of the fix - `CHANGELOG.md` is where the real "what happened and why" write-up belongs, exactly as it does for every other fix in this codebase.

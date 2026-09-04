@@ -102,3 +102,26 @@ export interface BugReportPayload {
   /** Base64-encoded PNG (no data: URL prefix), or null if not captured/included. */
   screenshotBase64: string | null;
 }
+
+/**
+ * One row read back from the Bug-Reports sheet (GET /api/bug-reports/list)
+ * - the admin-facing counterpart to BugReportPayload above. Console
+ * activity/app state/browser info are already flattened to their
+ * formatted string form by the server (see bugReportService.ts's
+ * formatConsoleActivityForFile), not re-parsed back into structured data,
+ * since the admin list view only ever needs to display them, not act on
+ * them individually.
+ */
+export interface BugReportListItem {
+  reportId: string;
+  timestamp: string;
+  status: string;
+  type: string;
+  title: string;
+  description: string;
+  route: string;
+  appState: string;
+  browserInfo: string;
+  consoleActivity: string;
+  screenshotLink: string;
+}

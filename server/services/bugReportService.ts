@@ -2,7 +2,10 @@ import { drive_v3, sheets_v4 } from "googleapis";
 import fsPromises from "fs/promises";
 import path from "path";
 import { Readable } from "stream";
-import { BugReportPayload } from "../../src/types";
+import { BugReportListItem, BugReportPayload } from "../../src/types";
+
+/** Column order the whole module writes/reads Bug-Reports rows in - see appendBugReportToSheet below for the write side. */
+const BUG_REPORTS_RANGE = "Bug-Reports!A:K";
 
 // Gitignored, sibling to `sessions/` - a local, per-machine working note,
 // not something that belongs in version control.
@@ -97,7 +100,7 @@ export async function uploadScreenshotToDrive(drive: drive_v3.Drive, folderId: s
 export async function appendBugReportToSheet(sheets: sheets_v4.Sheets, spreadsheetId: string, report: BugReportPayload, reportId: string, screenshotLink: string): Promise<void> {
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: "Bug-Reports!A:K",
+    range: BUG_REPORTS_RANGE,
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [[
@@ -115,4 +118,78 @@ export async function appendBugReportToSheet(sheets: sheets_v4.Sheets, spreadshe
       ]],
     },
   });
+}
+
+/** Maps one raw Bug-Reports row (Column A-K) to the shape the admin list view reads - the inverse of appendBugReportToSheet's column order above. */
+export function parseReportRow(row: string[]): BugReportListItem {
+  return {
+    reportId: row[0] || "",
+    timestamp: row[1] || "",
+    status: row[2] || "",
+    type: row[3] || "",
+    title: row[4] || "",
+    description: row[5] || "",
+    route: row[6] || "",
+    appState: row[7] || "",
+    browserInfo: row[8] || "",
+    consoleActivity: row[9] || "",
+    screenshotLink: row[10] || "",
+  };
+}
+
+export async function listOpenBugReports(sheets: sheets_v4.Sheets, spreadsheetId: string): Promise<BugReportListItem[]> {
+  const result = await sheets.spreadsheets.values.get({ spreadsheetId, range: BUG_REPORTS_RANGE });
+  const rows = (result.data.values || []).slice(1); // drop the header row
+  return rows
+    .map(parseReportRow)
+    .filter((r) => r.reportId && r.status.toLowerCase() === "open");
+}
+
+/**
+ * Finds a report's 1-indexed sheet row by Report ID (column A), the same
+ * find-by-key-in-column-A pattern dataRoutes.ts's /settings/update
+ * already uses against a different sheet - reading the full row (not
+ * just column A) so the caller also gets the screenshot link back
+ * without a second API call, since resolving a report needs both the
+ * row index (to update Status) and the screenshot link (to delete the
+ * Drive file) in the same request. rowIndex is -1 if not found.
+ */
+export async function findReportRow(sheets: sheets_v4.Sheets, spreadsheetId: string, reportId: string): Promise<{ rowIndex: number; screenshotLink: string }> {
+  const result = await sheets.spreadsheets.values.get({ spreadsheetId, range: BUG_REPORTS_RANGE });
+  const rows = result.data.values || [];
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i][0] === reportId) {
+      return { rowIndex: i + 1, screenshotLink: rows[i][10] || "" };
+    }
+  }
+  return { rowIndex: -1, screenshotLink: "" };
+}
+
+export async function markReportResolved(sheets: sheets_v4.Sheets, spreadsheetId: string, rowIndex: number): Promise<void> {
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `Bug-Reports!C${rowIndex}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [["Fixed"]] },
+  });
+}
+
+/**
+ * Deletes a report's screenshot from Drive once it's been resolved, so
+ * the Bug Screenshots folder doesn't accumulate images for reports
+ * that are done being worked on. Parses the file ID out of the
+ * "https://drive.google.com/file/d/<id>/view" link uploadScreenshotToDrive
+ * builds. Best-effort and non-blocking by design, matching this app's
+ * other Drive/Sheets side effects (e.g. the screenshot upload itself) -
+ * a resolved report must not fail to save just because Drive cleanup
+ * didn't work, so failures are logged and swallowed, never thrown.
+ */
+export async function deleteScreenshotFromDrive(drive: drive_v3.Drive, screenshotLink: string): Promise<void> {
+  const match = screenshotLink.match(/\/file\/d\/([^/]+)\//);
+  if (!match) return;
+  try {
+    await drive.files.delete({ fileId: match[1] });
+  } catch (error) {
+    console.error("[BugReport] Failed to delete resolved report's screenshot from Drive:", error);
+  }
 }

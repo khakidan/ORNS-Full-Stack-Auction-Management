@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { Loader2, LayoutDashboard, RefreshCw, Users, ShoppingBag, CreditCard, Handshake, WalletCards, Settings, LogOut, FileText, Ticket, Package, ClipboardList, PanelLeftClose, Menu, ArrowUp, AlertCircle, ExternalLink } from "lucide-react";
+import { Loader2, LayoutDashboard, RefreshCw, Users, ShoppingBag, CreditCard, Handshake, WalletCards, Settings, LogOut, FileText, Ticket, Package, ClipboardList, PanelLeftClose, Menu, ArrowUp, AlertCircle, ExternalLink, Bug } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import Dashboard from "./components/Dashboard";
@@ -27,20 +27,23 @@ import { useAuction } from "./context/AuctionContext";
 const ConfigSettings = lazy(() => import("./components/ConfigSettings"));
 const AuctionTicketsWorkflow = lazy(() => import("./components/AuctionTicketsWorkflow"));
 const AuctionItemsWorkflow = lazy(() => import("./components/AuctionItemsWorkflow"));
+const BugReportsAdmin = lazy(() => import("./components/BugReportsAdmin"));
 
-type WorkflowType = 'tickets' | 'items' | 'bids' | 'settings';
+type WorkflowType = 'tickets' | 'items' | 'bids' | 'settings' | 'bugReports';
 
 const WORKFLOW_PATHS: Record<WorkflowType, string> = {
   items: "/AuctionItemsWorkflow",
   tickets: "/AuctionTicketsWorkflow",
   bids: "/BidManagement",
-  settings: "/Configuration"
+  settings: "/Configuration",
+  bugReports: "/BugReports"
 };
 
 const getWorkflowFromPath = (path: string): WorkflowType | null => {
   const cleanPath = path.toLowerCase();
   if (cleanPath.includes("items")) return "items";
   if (cleanPath.includes("tickets")) return "tickets";
+  if (cleanPath.includes("bugreports")) return "bugReports";
   if (cleanPath.includes("bid")) return "bids";
   if (cleanPath.includes("config") || cleanPath.includes("settings") || cleanPath.includes("configuration")) return "settings";
   return null;
@@ -213,6 +216,7 @@ export default function App() {
              {activeWorkflow === 'tickets' && "Tickets"}
              {activeWorkflow === 'bids' && "Bids"}
              {activeWorkflow === 'settings' && "Config"}
+             {activeWorkflow === 'bugReports' && "Bugs"}
            </span>
            <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
              {isMobileMenuOpen ? <PanelLeftClose className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -290,8 +294,18 @@ export default function App() {
           <div className="h-6" />
           {(isSidebarOpen || isMobileMenuOpen) && <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">System</p>}
 
-          <Button 
-            variant={activeWorkflow === 'settings' ? 'secondary' : 'ghost'} 
+          <Button
+            variant={activeWorkflow === 'bugReports' ? 'secondary' : 'ghost'}
+            className={cn("justify-start gap-3 h-10", (isSidebarOpen || isMobileMenuOpen) ? "w-full" : "w-10 px-0 justify-center")}
+            onClick={() => { setActiveWorkflow('bugReports'); setIsMobileMenuOpen(false); }}
+            title="Bug Reports"
+          >
+            <Bug className="w-5 h-5 shrink-0" />
+            {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Bug Reports</span>}
+          </Button>
+
+          <Button
+            variant={activeWorkflow === 'settings' ? 'secondary' : 'ghost'}
             className={cn("justify-start gap-3 h-10", (isSidebarOpen || isMobileMenuOpen) ? "w-full" : "w-10 px-0 justify-center")}
             onClick={() => { setActiveWorkflow('settings'); setIsMobileMenuOpen(false); }}
             title="Configuration"
@@ -330,7 +344,8 @@ export default function App() {
                 {activeWorkflow === 'items' && <AuctionItemsWorkflow />}
                 
                 {activeWorkflow === 'settings' && <ConfigSettings />}
-                
+                {activeWorkflow === 'bugReports' && <BugReportsAdmin />}
+
                 {activeWorkflow === 'bids' && (
                 <div className="space-y-6">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">

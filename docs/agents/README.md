@@ -88,7 +88,7 @@ All core operations are managed via unified npm scripts declared in `package.jso
 
 ## Test Suite
 
-The codebase enforces a zero-regression policy backed by a robust test suite containing **732 passing tests** across 72 focused files (recounted directly via `find server/test src -iname "*.test.ts" -o -iname "*.test.tsx"` during the 2026-09-04 standards audit, correcting a stale file count that had drifted from actual `+N new test file` tallies in earlier `CHANGELOG.md` entries; the 728 test-count figure was accurate at the time, since bumped to 732):
+The codebase enforces a zero-regression policy backed by a robust test suite. Current pass/fail totals and file counts live only in [`testing-batches.md`](./testing-batches.md), not duplicated here - re-derive them via `find server/test src -iname "*.test.ts" -o -iname "*.test.tsx"` (file count) and the two `npx vitest run` commands there (test counts) rather than trusting a stale number:
 *   **Backend Integration & Units**: Managed by **Vitest**, **supertest**, and **MSW (Mock Service Worker)** to mock Google API payloads and ensure absolute safety across Sheets transactional structures.
 *   **Frontend Interaction**: Managed by **React Testing Library** and **Vitest** to assert interactive transitions, sorting, searching, and conditional warning dialogs.
 

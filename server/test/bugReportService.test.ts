@@ -7,6 +7,11 @@ import {
   writeLocalReportFallback,
   uploadScreenshotToDrive,
   appendBugReportToSheet,
+  parseReportRow,
+  listOpenBugReports,
+  findReportRow,
+  markReportResolved,
+  deleteScreenshotFromDrive,
 } from "../services/bugReportService";
 import { BugReportPayload } from "../../src/types";
 
@@ -110,6 +115,154 @@ describe("uploadScreenshotToDrive", () => {
       })
     );
     expect(link).toBe("https://drive.google.com/file/d/drive-file-id/view");
+  });
+});
+
+describe("parseReportRow", () => {
+  it("maps A-K into the documented field order, the inverse of appendBugReportToSheet's write order", () => {
+    const row = ["report-1", "2026-09-04T00:00:00.000Z", "Open", "Bug", "Title", "Description", "/route", "app state", "browser info", "console activity", "https://drive.google.com/file/d/x/view"];
+    expect(parseReportRow(row)).toEqual({
+      reportId: "report-1",
+      timestamp: "2026-09-04T00:00:00.000Z",
+      status: "Open",
+      type: "Bug",
+      title: "Title",
+      description: "Description",
+      route: "/route",
+      appState: "app state",
+      browserInfo: "browser info",
+      consoleActivity: "console activity",
+      screenshotLink: "https://drive.google.com/file/d/x/view",
+    });
+  });
+
+  it("defaults every missing/short-row column to an empty string rather than undefined", () => {
+    expect(parseReportRow(["report-1"])).toEqual({
+      reportId: "report-1",
+      timestamp: "",
+      status: "",
+      type: "",
+      title: "",
+      description: "",
+      route: "",
+      appState: "",
+      browserInfo: "",
+      consoleActivity: "",
+      screenshotLink: "",
+    });
+  });
+});
+
+describe("listOpenBugReports", () => {
+  it("drops the header row and filters to Status === 'open' (case-insensitive), dropping rows with no Report ID", async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: {
+        values: [
+          ["Report ID", "Timestamp", "Status"],
+          ["report-1", "t1", "Open"],
+          ["report-2", "t2", "Fixed"],
+          ["report-3", "t3", "open"],
+          ["", "t4", "Open"], // no report ID - dropped
+        ],
+      },
+    });
+    const fakeSheets = { spreadsheets: { values: { get } } } as any;
+
+    const reports = await listOpenBugReports(fakeSheets, "sheet-id");
+
+    expect(get).toHaveBeenCalledWith({ spreadsheetId: "sheet-id", range: "Bug-Reports!A:K" });
+    expect(reports.map((r) => r.reportId)).toEqual(["report-1", "report-3"]);
+  });
+
+  it("returns an empty array, not a throw, when the sheet has no data rows", async () => {
+    const get = vi.fn().mockResolvedValue({ data: {} });
+    const fakeSheets = { spreadsheets: { values: { get } } } as any;
+
+    expect(await listOpenBugReports(fakeSheets, "sheet-id")).toEqual([]);
+  });
+});
+
+describe("findReportRow", () => {
+  it("returns the 1-indexed sheet row and the screenshot link (column K) matching the Report ID in column A", async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: {
+        values: [
+          ["Report ID"],
+          ["report-1", "", "", "", "", "", "", "", "", "", "https://drive.google.com/file/d/report-1-screenshot/view"],
+          ["report-2"],
+          ["report-3", "", "", "", "", "", "", "", "", "", "https://drive.google.com/file/d/report-3-screenshot/view"],
+        ],
+      },
+    });
+    const fakeSheets = { spreadsheets: { values: { get } } } as any;
+
+    expect(await findReportRow(fakeSheets, "sheet-id", "report-3")).toEqual({
+      rowIndex: 4,
+      screenshotLink: "https://drive.google.com/file/d/report-3-screenshot/view",
+    });
+    expect(get).toHaveBeenCalledWith({ spreadsheetId: "sheet-id", range: "Bug-Reports!A:K" });
+  });
+
+  it("returns an empty screenshotLink when the matched row has no screenshot", async () => {
+    const get = vi.fn().mockResolvedValue({ data: { values: [["Report ID"], ["report-1"]] } });
+    const fakeSheets = { spreadsheets: { values: { get } } } as any;
+
+    expect(await findReportRow(fakeSheets, "sheet-id", "report-1")).toEqual({ rowIndex: 2, screenshotLink: "" });
+  });
+
+  it("returns rowIndex -1 when the Report ID isn't found", async () => {
+    const get = vi.fn().mockResolvedValue({ data: { values: [["Report ID"], ["report-1"]] } });
+    const fakeSheets = { spreadsheets: { values: { get } } } as any;
+
+    expect(await findReportRow(fakeSheets, "sheet-id", "does-not-exist")).toEqual({ rowIndex: -1, screenshotLink: "" });
+  });
+});
+
+describe("deleteScreenshotFromDrive", () => {
+  it("deletes the file whose ID is parsed from the real 'https://drive.google.com/file/d/<id>/view' link format uploadScreenshotToDrive builds", async () => {
+    const deleteFn = vi.fn().mockResolvedValue({});
+    const fakeDrive = { files: { delete: deleteFn } } as any;
+
+    await deleteScreenshotFromDrive(fakeDrive, "https://drive.google.com/file/d/abc123/view");
+
+    expect(deleteFn).toHaveBeenCalledWith({ fileId: "abc123" });
+  });
+
+  it("no-ops without throwing when the link is empty or doesn't match the expected format", async () => {
+    const deleteFn = vi.fn();
+    const fakeDrive = { files: { delete: deleteFn } } as any;
+
+    await deleteScreenshotFromDrive(fakeDrive, "");
+    await deleteScreenshotFromDrive(fakeDrive, "not-a-drive-link");
+
+    expect(deleteFn).not.toHaveBeenCalled();
+  });
+
+  it("swallows a Drive API failure rather than throwing - a resolved report must not fail to save just because cleanup didn't work", async () => {
+    const deleteFn = vi.fn().mockRejectedValue(new Error("Drive API down"));
+    const fakeDrive = { files: { delete: deleteFn } } as any;
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(deleteScreenshotFromDrive(fakeDrive, "https://drive.google.com/file/d/abc123/view")).resolves.toBeUndefined();
+
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+});
+
+describe("markReportResolved", () => {
+  it("writes 'Fixed' to column C of the given row only", async () => {
+    const update = vi.fn().mockResolvedValue({});
+    const fakeSheets = { spreadsheets: { values: { update } } } as any;
+
+    await markReportResolved(fakeSheets, "sheet-id", 5);
+
+    expect(update).toHaveBeenCalledWith({
+      spreadsheetId: "sheet-id",
+      range: "Bug-Reports!C5",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [["Fixed"]] },
+    });
   });
 });
 

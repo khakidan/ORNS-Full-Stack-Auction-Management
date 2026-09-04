@@ -1,4 +1,4 @@
-import { BugReportConsoleEntry } from "@/types";
+import { BugReportConsoleEntry, BugReportListItem } from "@/types";
 
 export interface AppStateSnapshot {
   biddersCount: number;
@@ -57,4 +57,47 @@ export function formatBrowserInfo(): string {
 export function formatConsoleActivity(entries: BugReportConsoleEntry[]): string {
   if (entries.length === 0) return "(none captured)";
   return entries.map((e) => `[${e.timestamp}] ${e.level.toUpperCase()}: ${e.message}`).join("\n");
+}
+
+/**
+ * Renders one already-fetched report row (BugReportsAdmin.tsx's "View"
+ * dialog) back out as a single self-contained Markdown document, meant
+ * to be copied and pasted straight into a chat with a coding assistant -
+ * mirrors bugReportService.ts's server-side buildReportMarkdown's
+ * section structure (Type/Timestamp/Route header block, App State/
+ * Browser Info as fenced code blocks, Description, then Recent Console
+ * Activity) so the two "shapes" of this app's bug reports stay
+ * recognizably the same document, just from two different sources - one
+ * built at submit time from live app state, this one rebuilt at review
+ * time from what's already in the sheet. The screenshot (if any) is a
+ * plain Markdown link to the real Drive file, not a re-embedded image -
+ * there's no local file to link to here, unlike the local-fallback path.
+ */
+export function formatReportAsMarkdown(report: BugReportListItem): string {
+  const screenshotLine = report.screenshotLink ? `\n**Screenshot:** ${report.screenshotLink}\n` : "";
+  return `# ${report.title}
+
+**Type:** ${report.type}
+**Status:** ${report.status}
+**Timestamp:** ${report.timestamp}
+**Route:** ${report.route}
+${screenshotLine}
+## Description
+
+${report.description}
+
+## App State
+\`\`\`
+${report.appState}
+\`\`\`
+
+## Browser Info
+\`\`\`
+${report.browserInfo}
+\`\`\`
+
+## Recent Console Activity
+
+${report.consoleActivity}
+`;
 }

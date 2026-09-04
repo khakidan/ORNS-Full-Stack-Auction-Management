@@ -10,7 +10,9 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import fs from "fs/promises";
 import path from "path";
+import { http, HttpResponse } from "msw";
 import { app } from "../app";
+import { server } from "./setup";
 import { resetHandlersState, appendCallCount, lastAppendedRow } from "./handlers";
 
 const mockTokens = {
@@ -137,5 +139,178 @@ describe("POST /api/bug-reports", () => {
       .send({ ...validBody, screenshotBase64 });
 
     expect(res.status).toBe(413);
+  });
+});
+
+describe("GET /api/bug-reports/list", () => {
+  beforeEach(() => {
+    resetHandlersState();
+  });
+
+  it("401s with no authenticated session - unlike POST /, viewing reports is a real admin action gated like every other data route", async () => {
+    const res = await request(app).get("/api/bug-reports/list").query({ spreadsheetId: "sheet-abc" });
+    expect(res.status).toBe(401);
+  });
+
+  it("400s when spreadsheetId is missing", async () => {
+    const res = await request(app).get("/api/bug-reports/list").set(authHeader);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns only Open reports, dropping the header row and any already-resolved rows", async () => {
+    server.use(
+      http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", () => {
+        return HttpResponse.json({
+          values: [
+            ["Report ID", "Timestamp", "Status", "Type", "Title", "Description", "Route", "App State", "Browser Info", "Recent Console Activity", "Screenshot Link"],
+            ["report-1", "2026-09-04T00:00:00.000Z", "Open", "Bug", "Open bug", "desc 1", "/route1", "state1", "browser1", "console1", "https://drive.google.com/file/d/abc/view"],
+            ["report-2", "2026-09-04T00:01:00.000Z", "Fixed", "UI Issue", "Already fixed bug", "desc 2", "/route2", "state2", "browser2", "console2", ""],
+            ["report-3", "2026-09-04T00:02:00.000Z", "open", "Workflow Issue", "Lowercase-status open bug", "desc 3", "/route3", "state3", "browser3", "console3", ""],
+          ],
+        });
+      })
+    );
+
+    const res = await request(app)
+      .get("/api/bug-reports/list")
+      .set(authHeader)
+      .query({ spreadsheetId: "sheet-abc" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.reports).toHaveLength(2);
+    expect(res.body.reports.map((r: any) => r.reportId)).toEqual(["report-1", "report-3"]);
+    expect(res.body.reports[0]).toMatchObject({
+      title: "Open bug",
+      type: "Bug",
+      route: "/route1",
+      screenshotLink: "https://drive.google.com/file/d/abc/view",
+    });
+  });
+});
+
+describe("POST /api/bug-reports/resolve", () => {
+  beforeEach(() => {
+    resetHandlersState();
+  });
+
+  it("401s with no authenticated session", async () => {
+    const res = await request(app).post("/api/bug-reports/resolve").send({ spreadsheetId: "sheet-abc", reportId: "report-1" });
+    expect(res.status).toBe(401);
+  });
+
+  it("400s when spreadsheetId or reportId is missing", async () => {
+    const res = await request(app).post("/api/bug-reports/resolve").set(authHeader).send({ spreadsheetId: "sheet-abc" });
+    expect(res.status).toBe(400);
+  });
+
+  it("404s when the report ID isn't found in the sheet", async () => {
+    server.use(
+      http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", () => {
+        return HttpResponse.json({ values: [["Report ID"], ["some-other-report"]] });
+      })
+    );
+
+    const res = await request(app)
+      .post("/api/bug-reports/resolve")
+      .set(authHeader)
+      .send({ spreadsheetId: "sheet-abc", reportId: "does-not-exist" });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("writes 'Fixed' to column C of the matched row", async () => {
+    server.use(
+      http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", () => {
+        return HttpResponse.json({
+          values: [
+            ["Report ID", "Timestamp", "Status"],
+            ["report-1", "2026-09-04T00:00:00.000Z", "Open"],
+            ["report-2", "2026-09-04T00:01:00.000Z", "Open"],
+          ],
+        });
+      })
+    );
+
+    let updateRange = "";
+    let updateValues: any[][] = [];
+    server.use(
+      http.put("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", async ({ request, params }) => {
+        updateRange = decodeURIComponent(String(params.range));
+        const body = (await request.json()) as any;
+        updateValues = body.values;
+        return HttpResponse.json({ updatedRows: 1 });
+      })
+    );
+
+    const res = await request(app)
+      .post("/api/bug-reports/resolve")
+      .set(authHeader)
+      .send({ spreadsheetId: "sheet-abc", reportId: "report-2" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
+    expect(updateRange).toBe("Bug-Reports!C3"); // header row 1 + report-1 row 2 -> report-2 is row 3
+    expect(updateValues).toEqual([["Fixed"]]);
+  });
+
+  it("also deletes the report's screenshot from Drive when the row has one, so resolved reports don't leave orphaned images behind", async () => {
+    server.use(
+      http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", () => {
+        return HttpResponse.json({
+          values: [
+            ["Report ID", "Timestamp", "Status", "Type", "Title", "Description", "Route", "App State", "Browser Info", "Console Activity", "Screenshot Link"],
+            ["report-1", "t", "Open", "Bug", "Title", "Desc", "/route", "state", "browser", "console", "https://drive.google.com/file/d/screenshot-file-id/view"],
+          ],
+        });
+      }),
+      http.put("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", () => {
+        return HttpResponse.json({ updatedRows: 1 });
+      })
+    );
+
+    let deletedFileId = "";
+    server.use(
+      http.delete("https://www.googleapis.com/drive/v3/files/:fileId", ({ params }) => {
+        deletedFileId = String(params.fileId);
+        return new HttpResponse(null, { status: 204 });
+      })
+    );
+
+    const res = await request(app)
+      .post("/api/bug-reports/resolve")
+      .set(authHeader)
+      .send({ spreadsheetId: "sheet-abc", reportId: "report-1" });
+
+    expect(res.status).toBe(200);
+    expect(deletedFileId).toBe("screenshot-file-id");
+  });
+
+  it("does not attempt a Drive delete when the resolved report never had a screenshot", async () => {
+    server.use(
+      http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", () => {
+        return HttpResponse.json({
+          values: [["Report ID", "Timestamp", "Status"], ["report-1", "t", "Open"]],
+        });
+      }),
+      http.put("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", () => {
+        return HttpResponse.json({ updatedRows: 1 });
+      })
+    );
+
+    let deleteCalled = false;
+    server.use(
+      http.delete("https://www.googleapis.com/drive/v3/files/:fileId", () => {
+        deleteCalled = true;
+        return new HttpResponse(null, { status: 204 });
+      })
+    );
+
+    const res = await request(app)
+      .post("/api/bug-reports/resolve")
+      .set(authHeader)
+      .send({ spreadsheetId: "sheet-abc", reportId: "report-1" });
+
+    expect(res.status).toBe(200);
+    expect(deleteCalled).toBe(false);
   });
 });

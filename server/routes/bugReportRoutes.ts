@@ -1,7 +1,8 @@
-import { Router, Request, Response } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import { google } from "googleapis";
 import { getAuthenticatedClient } from "../services/oauth";
-import { appendBugReportToSheet, buildReportFilename, uploadScreenshotToDrive, writeLocalReportFallback } from "../services/bugReportService";
+import { appendBugReportToSheet, buildReportFilename, deleteScreenshotFromDrive, findReportRow, listOpenBugReports, markReportResolved, uploadScreenshotToDrive, writeLocalReportFallback } from "../services/bugReportService";
+import { requireAuth } from "../middleware/requireAuth";
 import { BugReportPayload } from "../../src/types";
 
 export default function createBugReportRouter() {
@@ -57,6 +58,52 @@ export default function createBugReportRouter() {
         console.error("[BugReport] Local fallback also failed:", fallbackError);
         return res.status(500).json({ error: "Failed to save bug report" });
       }
+    }
+  });
+
+  // Viewing/resolving reports is a real admin action against a real
+  // spreadsheet, unlike submission above - gated behind the normal
+  // session the same as every other data-reading route in this app.
+  router.get("/list", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    const spreadsheetId = req.query.spreadsheetId as string;
+    if (!spreadsheetId) {
+      return res.status(400).json({ error: "spreadsheetId is required" });
+    }
+
+    try {
+      const client = getAuthenticatedClient(req.session!.tokens);
+      const sheets = google.sheets({ version: "v4", auth: client });
+      const reports = await listOpenBugReports(sheets, spreadsheetId);
+      res.json({ reports });
+    } catch (error: any) {
+      if (error.code === 404) {
+        return res.status(404).json({ error: "Bug Reports spreadsheet not found. Please check the ID in Settings." });
+      }
+      next(error);
+    }
+  });
+
+  router.post("/resolve", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    const { spreadsheetId, reportId } = req.body;
+    if (!spreadsheetId || !reportId) {
+      return res.status(400).json({ error: "spreadsheetId and reportId are required" });
+    }
+
+    try {
+      const client = getAuthenticatedClient(req.session!.tokens);
+      const sheets = google.sheets({ version: "v4", auth: client });
+      const { rowIndex, screenshotLink } = await findReportRow(sheets, spreadsheetId, reportId);
+      if (rowIndex === -1) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      await markReportResolved(sheets, spreadsheetId, rowIndex);
+      if (screenshotLink) {
+        const drive = google.drive({ version: "v3", auth: client });
+        await deleteScreenshotFromDrive(drive, screenshotLink);
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      next(error);
     }
   });
 
