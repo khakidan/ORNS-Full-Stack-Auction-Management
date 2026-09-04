@@ -113,4 +113,29 @@ describe("POST /api/bug-reports", () => {
     expect(appendCallCount).toBe(0);
     expect(await listBugReportFiles()).toHaveLength(1);
   });
+
+  it("accepts a realistic base64 screenshot payload - the default express.json() 100kb limit used to reject this with a 413, hit for real by an actual submitted bug report", async () => {
+    // ~390KB base64 string, matching the real payload size from the
+    // user-reported 413 (expected: 399592 bytes, limit: 102400).
+    const screenshotBase64 = "a".repeat(390_000);
+
+    const res = await request(app)
+      .post("/api/bug-reports")
+      .set(authHeader)
+      .send({ ...validBody, screenshotBase64 }); // no spreadsheet -> local fallback, simplest path to assert success
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, storage: "local" });
+  });
+
+  it("still rejects a genuinely oversized payload (well past the raised 5mb limit) with a real 413, not a silent hang or a misleading 500", async () => {
+    const screenshotBase64 = "a".repeat(6 * 1024 * 1024);
+
+    const res = await request(app)
+      .post("/api/bug-reports")
+      .set(authHeader)
+      .send({ ...validBody, screenshotBase64 });
+
+    expect(res.status).toBe(413);
+  });
 });

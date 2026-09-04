@@ -40,8 +40,12 @@ describe("bidRoutes - Legacy Compatibility & Error Handling", () => {
         bidManagementSheet: "Bid-Management",
       });
 
-    // The global errorHandler catch intercepts errors and outputs formatted JSON responses
-    expect(response.status).toBe(500); 
+    // errorHandler now forwards the real status Google's client library
+    // attaches to the thrown error (429) instead of forcing 500 for
+    // every error indiscriminately - this is also what actually lets
+    // fetchWithRetry's client-side retry/backoff (which checks for
+    // exactly 429 or 5xx) engage correctly for a real rate-limit error.
+    expect(response.status).toBe(429);
     expect(response.body).toHaveProperty("message");
     expect(response.body.message).toContain("Quota exceeded");
   });

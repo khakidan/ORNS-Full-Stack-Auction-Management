@@ -45,7 +45,12 @@ app.use(cors({
 }));
 
 // Middleware
-app.use(express.json());
+// Default express.json() body limit is 100kb - too small for the bug
+// report tool's base64-encoded screenshot payload (a real, ordinary
+// screenshot comfortably exceeds that; hit in practice, not a
+// hypothetical). 5mb covers a realistic full-page PNG screenshot with
+// real headroom while still bounding worst-case request size.
+app.use(express.json({ limit: "5mb" }));
 
 // Global middleware to prevent caching
 app.use(cacheControl);

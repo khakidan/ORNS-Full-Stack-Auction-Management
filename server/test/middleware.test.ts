@@ -307,6 +307,40 @@ describe("middleware - errorHandler", () => {
     expect(errorLogSpy).toHaveBeenCalledWith("Centralized Error:", err);
   });
 
+  it("Respects a real status set on the error (e.g. body-parser's 413 PayloadTooLargeError), instead of forcing 500", () => {
+    const errorLogSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const req = {} as Request;
+    const jsonMock = vi.fn();
+    const res = {
+      status: vi.fn().mockReturnValue({ json: jsonMock }),
+    } as unknown as Response;
+    const next = vi.fn();
+
+    const err = Object.assign(new Error("request entity too large"), { status: 413, type: "entity.too.large" });
+    errorHandler(err, req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(413);
+    expect(jsonMock).toHaveBeenCalledWith({
+      error: "Internal Server Error",
+      message: "request entity too large"
+    });
+  });
+
+  it("Also respects statusCode (not just status) - different middleware/libraries use either property", () => {
+    const errorLogSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const req = {} as Request;
+    const jsonMock = vi.fn();
+    const res = {
+      status: vi.fn().mockReturnValue({ json: jsonMock }),
+    } as unknown as Response;
+    const next = vi.fn();
+
+    const err = Object.assign(new Error("bad request"), { statusCode: 400 });
+    errorHandler(err, req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
   it("A thrown Error with special characters in the message returns the message unchanged", () => {
     const errorLogSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const req = {} as Request;
