@@ -17,13 +17,6 @@ each area.
 
 ### Redundant/duplicated logic
 
-- **`DocumentCreationTab.tsx` and `TicketDocumentCreationTab.tsx` are
-  ~200 of ~280 lines identical** - same folder-files card, refresh
-  button, and loading/empty/invalid states, differing only in the
-  spreadsheetId field and endpoint/button-label map. Extract a shared
-  `DocumentCreationPanel`/`FolderFilesTable`, the same way
-  `SpecialWinnerField` already consolidated the analogous Dashboard
-  duplication.
 - **27 identical auth-guard copies** - `if (!req.session?.tokens)
   return res.status(401).json({ error: "Unauthorized" });` repeated
   verbatim across `server/routes/{setupRoutes,bundleRoutes,dataRoutes,receiptRoutes,bidRoutes,productionRoutes}.ts`.
