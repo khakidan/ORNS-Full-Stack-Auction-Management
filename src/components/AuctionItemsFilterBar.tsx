@@ -10,6 +10,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+// SelectValue with no children renders the raw stored value, not the
+// matching SelectItem's label (see component-standards.md's documented
+// SelectValue failure mode) - "all" was showing verbatim instead of "All
+// Categories"/"All Types". For every other value the label equals the
+// value itself (a real category/item-type name), so only the "all"
+// sentinel needs mapping.
+const categoryLabel = (value: string) => (value === "all" ? "All Categories" : value);
+const itemTypeLabel = (value: string) => (value === "all" ? "All Types" : value);
+
 interface AuctionItemsFilterBarProps {
   searchTerm: string;
   onSearchTermChange: (value: string) => void;
@@ -49,10 +58,10 @@ export function AuctionItemsFilterBar({
           <Filter className="w-3 h-3" /> Category
         </Label>
         <Select value={selectedCategory} onValueChange={onSelectedCategoryChange}>
-          <SelectTrigger className="bg-white h-10">
-            <SelectValue placeholder="All Categories" />
+          <SelectTrigger className="bg-white h-10 w-full">
+            <SelectValue placeholder="All Categories">{categoryLabel}</SelectValue>
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="min-w-75">
             <SelectItem value="all">All Categories</SelectItem>
             {categories.sort().map((c) => (
               <SelectItem key={c} value={c}>
@@ -67,8 +76,8 @@ export function AuctionItemsFilterBar({
           <Filter className="w-3 h-3" /> Item Type
         </Label>
         <Select value={selectedItemType} onValueChange={onSelectedItemTypeChange}>
-          <SelectTrigger className="bg-white h-10">
-            <SelectValue placeholder="All Types" />
+          <SelectTrigger className="bg-white h-10 w-full">
+            <SelectValue placeholder="All Types">{itemTypeLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
