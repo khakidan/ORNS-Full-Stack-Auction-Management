@@ -71,6 +71,32 @@ export default function AuctionConfigurationCard({ config, setConfig, isOpen, on
           </div>
 
           <div className="space-y-4 border rounded-lg p-4 bg-slate-50/50">
+            <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Bug Reports</h3>
+
+            <div className="space-y-2">
+              <Label htmlFor="bugReportsSpreadsheetId">Bug Reports Spreadsheet ID</Label>
+              <Input
+                id="bugReportsSpreadsheetId"
+                placeholder="Paste full URL or ID"
+                value={config.bugReportsSpreadsheetId}
+                onChange={(e) => setConfig({ ...config, bugReportsSpreadsheetId: extractId(e.target.value) })}
+              />
+              <p className="text-xs text-muted-foreground">Central catalog every in-app bug report (Ctrl/Cmd+Shift+B) gets saved to.</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="bugReportsFolderId">Bug Reports Screenshots Folder ID</Label>
+              <Input
+                id="bugReportsFolderId"
+                placeholder="Paste full URL or ID"
+                value={config.bugReportsFolderId}
+                onChange={(e) => setConfig({ ...config, bugReportsFolderId: extractId(e.target.value) })}
+              />
+              <p className="text-xs text-muted-foreground">Optional - if left blank, reports still save without a screenshot link.</p>
+            </div>
+          </div>
+
+          <div className="space-y-4 border rounded-lg p-4 bg-slate-50/50">
             <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Google Apps Script Workflows</h3>
             <div className="space-y-2">
               <Label htmlFor="auctionItemsScriptId">1. Auction Item Data Entry Script ID</Label>

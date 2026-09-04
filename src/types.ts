@@ -72,4 +72,33 @@ export interface Config {
   auctionItemsScriptId: string;
   auctionTicketsScriptId: string;
   bidManagementScriptId: string;
+  bugReportsSpreadsheetId: string;
+  bugReportsFolderId: string;
+}
+
+export type BugReportType = "Bug" | "UI Issue" | "Workflow Issue";
+
+export interface BugReportConsoleEntry {
+  level: "error" | "warn";
+  message: string;
+  timestamp: string;
+}
+
+/**
+ * Shared shape of a submitted bug report - the client builds this and the
+ * server (server/routes/bugReportRoutes.ts) trusts it as-is (no further
+ * enrichment happens server-side), so every field the report needs to be
+ * self-contained must be captured client-side before POSTing.
+ */
+export interface BugReportPayload {
+  title: string;
+  description: string;
+  type: BugReportType;
+  timestamp: string;
+  route: string;
+  appState: string;
+  browserInfo: string;
+  consoleActivity: BugReportConsoleEntry[];
+  /** Base64-encoded PNG (no data: URL prefix), or null if not captured/included. */
+  screenshotBase64: string | null;
 }

@@ -49,6 +49,8 @@ const mockConfig = {
   receiptFolderId: "mock-receipts-folder",
   forPrintFolderId: "mock-print-folder",
   ornsLogoId: "mock-logo-id",
+  bugReportsSpreadsheetId: "mock-bug-reports-id",
+  bugReportsFolderId: "mock-bug-reports-folder",
 };
 
 const mockSaveConfig = vi.fn().mockResolvedValue(undefined);
@@ -126,6 +128,8 @@ describe("ConfigSettings", () => {
     expect(screen.getByLabelText("1. Auction Item Data Entry Script ID")).toBeInTheDocument();
     expect(screen.getByLabelText("2. Auction Tickets Script ID")).toBeInTheDocument();
     expect(screen.getByLabelText("3. Bid Management Script ID")).toBeInTheDocument();
+    expect(screen.getByLabelText("Bug Reports Spreadsheet ID")).toBeInTheDocument();
+    expect(screen.getByLabelText("Bug Reports Screenshots Folder ID")).toBeInTheDocument();
   });
 
   it("fields display current config values from useConfig", () => {
@@ -176,6 +180,29 @@ describe("ConfigSettings", () => {
     await waitFor(() => {
       expect(mockSaveConfig).toHaveBeenCalledWith(
         expect.objectContaining({ bidManagementSpreadsheetId: "1AbC-XyZ_123" })
+      );
+    });
+  });
+
+  it("clicking Save Configuration saves an edited Bug Reports spreadsheet/folder ID", async () => {
+    render(<ConfigSettings />);
+
+    fireEvent.click(screen.getByText("Auction Configuration"));
+    fireEvent.change(screen.getByLabelText("Bug Reports Spreadsheet ID"), {
+      target: { value: "https://docs.google.com/spreadsheets/d/1BugReports_XyZ/edit#gid=0" },
+    });
+    fireEvent.change(screen.getByLabelText("Bug Reports Screenshots Folder ID"), {
+      target: { value: "https://drive.google.com/drive/folders/1BugScreenshots_XyZ" },
+    });
+
+    fireEvent.click(screen.getByText("Save Configuration"));
+
+    await waitFor(() => {
+      expect(mockSaveConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bugReportsSpreadsheetId: "1BugReports_XyZ",
+          bugReportsFolderId: "1BugScreenshots_XyZ",
+        })
       );
     });
   });

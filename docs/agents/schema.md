@@ -25,6 +25,26 @@ This sheet tracks all event registrations, active bidders, and their checkout/pa
 | **Column J** | `Invoice URL` | String | **Automated Field**: Cached URL to PayPal invoice / printable PDF receipt |
 | **Column K** | `Invoice Total Amount` | Number | **Automated Field**: Calculated balance including PayPal processing fees |
 
+### Sheet: 'Bug-Reports'
+
+A separate, dedicated spreadsheet (its ID lives in `Config.bugReportsSpreadsheetId`, not the Bid-Management one) - the central catalog every in-app bug report (the floating button/Ctrl-Cmd-Shift-B dialog, `src/hooks/useBugReportState.ts`) writes to via `POST /api/bug-reports` (`server/routes/bugReportRoutes.ts`). See `AGENTS.md`'s "Bug Report Lifecycle" section for how to close one out once fixed.
+
+| Column Index | Field Name | Type | Description |
+|---|---|---|---|
+| Column A | `Report ID` | String | Timestamp + slugified title + random suffix - unique per report, never reused |
+| Column B | `Timestamp` | String (ISO) | When the report was submitted |
+| Column C | `Status` | String | `Open` on creation; flip to `Fixed` once shipped (see lifecycle note) |
+| Column D | `Type` | String | `Bug` / `UI Issue` / `Workflow Issue` |
+| Column E | `Title` | String | User-entered summary |
+| Column F | `Description` | String | User-entered detail |
+| Column G | `Route` | String | Auto-captured `activeWorkflow`/`activeBidTab` at submit time |
+| Column H | `App State` | String | Auto-captured bidder/item/attendee/winner counts, auction-closed flag, configured-spreadsheet flags |
+| Column I | `Browser Info` | String | Auto-captured user-agent, platform, viewport size |
+| Column J | `Recent Console Activity` | String | Last ~20 `console.error`/`warn` entries + uncaught errors (`src/lib/errorBuffer.ts`) at submit time |
+| Column K | `Screenshot Link` | String | Google Drive view link (uploaded to `Config.bugReportsFolderId`), blank if no screenshot was captured/configured |
+
+If the Sheets write itself fails (no spreadsheet configured, an expired/missing OAuth session, a Sheets API error), the server falls back to writing the report as a self-contained `.md` file (+ sibling `.png` if a screenshot was captured) under a gitignored local `bug-reports/` directory at the repo root, so a report is never silently lost.
+
 ---
 
 ## 2. Shared Config Schema (Cloud Firestore)
@@ -55,6 +75,8 @@ Firestore is utilized to synchronize system configuration, active operational pa
       "auctionItemsScriptId": "string (Apps Script deployment ID)",
       "auctionTicketsScriptId": "string (Apps Script deployment ID)",
       "bidManagementScriptId": "string (Apps Script deployment ID)",
+      "bugReportsSpreadsheetId": "string (Google Sheet ID - see 'Bug-Reports' sheet above)",
+      "bugReportsFolderId": "string (Google Drive folder ID for report screenshots, optional)",
       "updatedAt": "timestamp (server-set on save)",
       "updatedBy": "string (email of the saving admin)"
     }

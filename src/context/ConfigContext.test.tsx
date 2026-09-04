@@ -57,6 +57,8 @@ const FAKE_CONFIG: Config = {
   auctionItemsScriptId: "items-script",
   auctionTicketsScriptId: "tickets-script",
   bidManagementScriptId: "bm-script",
+  bugReportsSpreadsheetId: "bug-reports-id",
+  bugReportsFolderId: "bug-reports-folder",
 };
 
 /**

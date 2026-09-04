@@ -27,6 +27,8 @@ const defaultConfig: Config = {
   auctionItemsScriptId: localStorage.getItem("auctionItemsScriptId") || import.meta.env.VITE_AUCTION_ITEMS_SCRIPT_ID || "",
   auctionTicketsScriptId: localStorage.getItem("auctionTicketsScriptId") || import.meta.env.VITE_AUCTION_TICKETS_SCRIPT_ID || "",
   bidManagementScriptId: localStorage.getItem("bidManagementScriptId") || localStorage.getItem("googleScriptId") || import.meta.env.VITE_BID_MANAGEMENT_SCRIPT_ID || "",
+  bugReportsSpreadsheetId: localStorage.getItem("bugReportsSpreadsheetId") || import.meta.env.VITE_BUG_REPORTS_SPREADSHEET_ID || "",
+  bugReportsFolderId: localStorage.getItem("bugReportsFolderId") || import.meta.env.VITE_BUG_REPORTS_FOLDER_ID || "",
 };
 
 const ConfigContext = createContext<ConfigContextType | undefined>(undefined);

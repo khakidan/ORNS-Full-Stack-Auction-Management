@@ -79,6 +79,15 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules/@base-ui/react')) {
               return 'vendor-base-ui';
             }
+            if (id.includes('node_modules/html2canvas')) {
+              // Kept out of vendor-utils deliberately - html2canvas is
+              // only ever reached via a dynamic import() (see
+              // screenshotCapture.ts) when a bug report includes a
+              // screenshot. vendor-utils is already part of the eager
+              // initial-load path (date-fns, clsx, etc.), so merging
+              // html2canvas into it would defeat the lazy-load entirely.
+              return 'vendor-html2canvas';
+            }
             if (id.includes('node_modules')) {
               return 'vendor-utils';
             }

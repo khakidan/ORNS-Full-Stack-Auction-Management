@@ -11,6 +11,7 @@ import createSetupRouter from './routes/setupRoutes';
 import createBidRouter from './routes/bidRoutes';
 import createDataRouter from './routes/dataRoutes';
 import createProductionRouter from './routes/productionRoutes';
+import createBugReportRouter from './routes/bugReportRoutes';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -75,6 +76,12 @@ app.use("/api/receipts", createReceiptsRouter());
 app.use("/api/auction", createSetupRouter());
 app.use("/api/production", createProductionRouter());
 app.use("/api/bundle", createBundleRouter());
+// Mounted before the generic "/api"-prefixed, requireAuth-gated routers
+// below - bidRoutes.ts/dataRoutes.ts's `router.use(requireAuth)` matches
+// any "/api/..." path as a prefix (the same masking risk documented in
+// requireAuth.integration.test.ts), so registering this router first is
+// what actually lets its own routes stay reachable without a session.
+app.use("/api/bug-reports", createBugReportRouter());
 app.use("/api", createBidRouter());
 app.use("/api", createDataRouter());
 

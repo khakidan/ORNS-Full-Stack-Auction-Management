@@ -8,6 +8,7 @@ coverage/
 .env*
 !.env.example
 sessions/
+bug-reports/
 src-tauri/target/
 dist-desktop/
 gen/

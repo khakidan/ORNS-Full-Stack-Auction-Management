@@ -71,9 +71,23 @@ To keep developer directives clean, maintainable, and modular, the monolithic Ag
 For the complete guidelines and background, see [`/docs/agents/patterns.md`](./docs/agents/patterns.md).
 
 1.  **File Preservation**: **NEVER DELETE `server/routes/bidRoutes.ts`**. This managing endpoint handles critical transactional bid logs. Do not edit core SDK files (`src/services/firebase.ts`, `src/context/ConfigContext.tsx`, `firestore.rules`).
-2.  **Testing Mandate**: Always run tests and verify that all **680 tests continue to pass green**. Tests must be run in two partition batches to avoid memory sandbox timeouts:
-    *   **Backend (331 tests)**: `npx vitest run server/test/`
-    *   **Frontend (349 tests)**: `NODE_OPTIONS=--no-experimental-webstorage npx vitest run src/` (the flag is required on Node 22+ - `ConfigContext.tsx` reads `localStorage` at module load, and Node's own built-in Web Storage global can leave jsdom's `window.localStorage` undefined without it)
+2.  **Testing Mandate**: Always run tests and verify that all **723 tests continue to pass green**. Tests must be run in two partition batches to avoid memory sandbox timeouts:
+    *   **Backend (345 tests)**: `npx vitest run server/test/`
+    *   **Frontend (378 tests)**: `NODE_OPTIONS=--no-experimental-webstorage npx vitest run src/` (the flag is required on Node 22+ - `ConfigContext.tsx` reads `localStorage` at module load, and Node's own built-in Web Storage global can leave jsdom's `window.localStorage` undefined without it)
 3.  **Session Cookie Rules**: Session cookie **MUST** remain named **`orns_session`**. Do not revert it to `__session`.
 4.  **Code Splitting Rules**: The `manualChunks` function inside `vite.config.ts` must use the dynamic functional matcher structure.
 5.  **PayPal Surcharges**: NEVER calculate fees client-side; always utilize `PayPalService.calculatePayPalSurcharge` server-side.
+
+---
+
+## 🐛 In-App Bug Reports & Their Lifecycle
+
+The floating bug icon (bottom-left corner) / Ctrl-Cmd-Shift-B shortcut lets anyone using the app capture a bug/UI/workflow-friction note without breaking flow - it auto-captures the current route, app state, browser info, recent console activity, and an optional screenshot, then saves it as a row in the dedicated **Bug-Reports spreadsheet** (`Config.bugReportsSpreadsheetId`, see `schema.md`'s "Sheet: 'Bug-Reports'" section), with screenshots uploaded to `Config.bugReportsFolderId` on Drive. If that Sheets write fails for any reason (no spreadsheet configured, an expired session), the server falls back to a local `.md`/`.png` file pair under a gitignored `bug-reports/` directory at the repo root, so a report is never silently lost.
+
+**These reports are a working note, not a permanent record.** Once a report's underlying fix has actually shipped and been written up in `CHANGELOG.md` (the real permanent history), close the loop:
+
+*   Delete that report's row from the Bug-Reports spreadsheet (or flip its `Status` column to `Fixed` if you'd rather keep a short-term audit trail before a periodic cleanup pass).
+*   Delete its screenshot file from the Bug Reports Screenshots Drive folder, if it had one.
+*   If a report ever landed in the local `bug-reports/` fallback directory instead (check it occasionally - it means the Sheets write failed at submission time), delete its `.md`/`.png` files too once handled.
+
+Do not treat an open bug-report row as itself documentation of the fix - `CHANGELOG.md` is where the real "what happened and why" write-up belongs, exactly as it does for every other fix in this codebase.

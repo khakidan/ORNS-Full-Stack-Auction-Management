@@ -168,6 +168,8 @@ export function useConfigSettingsState() {
     const auctionItemsScriptId = extractId(config.auctionItemsScriptId);
     const auctionTicketsScriptId = extractId(config.auctionTicketsScriptId);
     const bidManagementScriptId = extractId(config.bidManagementScriptId);
+    const bugReportsSpreadsheetId = extractId(config.bugReportsSpreadsheetId);
+    const bugReportsFolderId = extractId(config.bugReportsFolderId);
 
     localStorage.setItem("bidManagementSpreadsheetId", bidMgtId);
     // Legacy support for older components that might still read 'spreadsheetId'
@@ -188,6 +190,8 @@ export function useConfigSettingsState() {
     localStorage.setItem("bidManagementScriptId", bidManagementScriptId);
     // Legacy support
     localStorage.setItem("googleScriptId", bidManagementScriptId);
+    localStorage.setItem("bugReportsSpreadsheetId", bugReportsSpreadsheetId);
+    localStorage.setItem("bugReportsFolderId", bugReportsFolderId);
 
     // Save to Firebase for cross-device sync
     try {
@@ -201,7 +205,9 @@ export function useConfigSettingsState() {
         ornsLogoId,
         auctionItemsScriptId,
         auctionTicketsScriptId,
-        bidManagementScriptId
+        bidManagementScriptId,
+        bugReportsSpreadsheetId,
+        bugReportsFolderId
       });
     } catch (err) {
       console.error("Firebase sync failed:", err);

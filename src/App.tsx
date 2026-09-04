@@ -21,6 +21,7 @@ import Items from "./components/Items";
 import BidEntry from "./components/BidEntry";
 import Checkout from "./components/Checkout";
 import Receipts from "./components/Receipts";
+import { BugReportButton } from "./components/BugReportButton";
 import { useAuction } from "./context/AuctionContext";
 
 const ConfigSettings = lazy(() => import("./components/ConfigSettings"));
@@ -454,6 +455,7 @@ export default function App() {
 
       <Toaster />
       <BackToTop />
+      <BugReportButton />
     </div>
   );
 }
