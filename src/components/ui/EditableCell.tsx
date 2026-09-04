@@ -141,7 +141,7 @@ export function EditableCell({
           size={singleLine ? "icon-xs" : undefined}
           icon={singleLine ? <Pencil className="w-3.5 h-3.5" /> : <Edit2 className="h-3 w-3" />}
           className={cn(
-            "opacity-0 group-hover:opacity-100 transition-opacity shrink-0",
+            "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity shrink-0",
             singleLine ? "text-slate-400 hover:text-slate-700 hover:bg-transparent" : "h-5 w-5"
           )}
           onClick={() => setIsEditing(true)}

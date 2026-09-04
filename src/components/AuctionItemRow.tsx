@@ -152,7 +152,7 @@ export function AuctionItemRow({
             variant="ghost"
             aria-label={`Delete ${item.name || "item"}`}
             icon={<Trash2 className="h-4 w-4" />}
-            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover/row:opacity-100 transition-opacity"
+            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 transition-opacity"
             onClick={() => onDeleteRequest(item)}
           />
         )}

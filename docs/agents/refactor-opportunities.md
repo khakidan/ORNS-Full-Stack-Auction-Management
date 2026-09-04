@@ -27,16 +27,6 @@ deep audit's "Redundant/duplicated logic" section has been closed. See
   `res.ok`** (`:28-35`) - the six calls at `:229-234` report success
   via the outer `handleSave` even on a 4xx response, since
   `fetchWithRetry` only throws for 429/5xx.
-- **Icon-only interactive elements hidden via `opacity-0
-  group-hover:opacity-100` have no keyboard-focus reveal** -
-  `src/components/ui/EditableCell.tsx:137-149`'s edit-trigger (used in
-  nearly every editable table cell app-wide) and the delete button in
-  `src/components/AuctionItemRow.tsx:150-158` are invisible to a
-  keyboard user tabbing to them, with no visible focus ring since
-  `opacity-0` hides the whole element. `component-standards.md`
-  requires focus outlines never be removed without replacement. Fix:
-  add `group-focus-within:opacity-100` alongside the existing
-  `group-hover:opacity-100`.
 - **`google-api.ts`'s `fetchWithRetry` mutates the caller's `options`
   object in place** (`src/services/google-api.ts:27-38`) - shallow-clones
   neither `options` nor `options.headers` before injecting the auth
