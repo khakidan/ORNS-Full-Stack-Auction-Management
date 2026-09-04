@@ -497,6 +497,55 @@ describe('Bidders - Search', () => {
   });
 });
 
+describe('Bidders - Empty state messaging', () => {
+  // User-reported bug: the empty-state message always read
+  // `No bidders found matching "${searchTerm}"` regardless of context -
+  // with no search term, that rendered the confusing, unpolished
+  // `No bidders found matching ""`. Fixed to match Items.tsx's own
+  // distinction (src/components/Items.tsx's emptyMessage): "nothing has
+  // ever loaded" gets a real, actionable message, "filtered down to
+  // nothing" gets a different one, and neither ever shows a bare `""`.
+  let user: ReturnType<typeof userEvent.setup>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    user = userEvent.setup();
+  });
+
+  afterEach(() => {
+    authOverride = null;
+  });
+
+  it('shows a real, actionable message - not a bare "" - when no bidders have loaded at all', () => {
+    authOverride = {
+      bidders: [],
+      attendees: [],
+      loading: false,
+      checkInBidder: mockCheckInBidder,
+      markBidderAsProxy: mockMarkBidderAsProxy,
+      fetchBidders: mockFetchBidders,
+      fetchAttendees: mockFetchAttendees,
+      isAuctionClosed: false,
+    };
+    render(<Bidders />);
+
+    expect(screen.getByText(/No bidders loaded yet/)).toBeInTheDocument();
+    expect(screen.getByText(/Set Up Bid Management App/)).toBeInTheDocument();
+    expect(screen.queryByText(/matching ""/)).not.toBeInTheDocument();
+  });
+
+  it('shows a filtered-specific message - not the "nothing loaded" one - when bidders exist but the search matches none of them', async () => {
+    render(<Bidders />);
+
+    const searchInput = screen.getByPlaceholderText("Search bidders...");
+    await user.type(searchInput, "NonexistentBidderName");
+
+    expect(screen.getByText("No bidders match your search or filters.")).toBeInTheDocument();
+    expect(screen.queryByText(/No bidders loaded yet/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/matching "NonexistentBidderName"/)).not.toBeInTheDocument();
+  });
+});
+
 describe('Bidders - Event Ticket Status', () => {
   let user: ReturnType<typeof userEvent.setup>;
 

@@ -17,7 +17,9 @@ interface BiddersTableProps {
   loading: boolean;
   sortConfig: SortConfig | null;
   onSort: (key: string) => void;
-  searchTerm: string;
+  /** Unfiltered bidder count, so the empty state can tell "nothing loaded yet" apart from "filtered down to nothing" - matches Items.tsx's own search/no-data distinction. */
+  totalBiddersCount: number;
+  hasActiveFilters: boolean;
   getAttendeeInfo: (bidder: Bidder) => BidderAttendeeInfo;
   isAuctionClosed: boolean;
   processingId: string | null;
@@ -55,7 +57,8 @@ export function BiddersTable({
   loading,
   sortConfig,
   onSort,
-  searchTerm,
+  totalBiddersCount,
+  hasActiveFilters,
   getAttendeeInfo,
   isAuctionClosed,
   processingId,
@@ -79,7 +82,13 @@ export function BiddersTable({
           <TableHead className="text-right px-4">Actions</TableHead>
         </TableRow>
       }
-      emptyMessage={`No bidders found matching "${searchTerm}"`}
+      emptyMessage={
+        totalBiddersCount === 0
+          ? "No bidders loaded yet. Run \"Set Up Bid Management App\" or add a walk-in ticket to get started."
+          : hasActiveFilters
+            ? "No bidders match your search or filters."
+            : "No bidders found."
+      }
       renderRow={(bidder) => (
         <BidderRow
           key={bidder.id}

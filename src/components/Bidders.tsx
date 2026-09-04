@@ -85,7 +85,8 @@ export default function Bidders() {
             loading={loading}
             sortConfig={state.sortConfig}
             onSort={state.handleSort}
-            searchTerm={state.searchTerm}
+            totalBiddersCount={bidders.length}
+            hasActiveFilters={state.hasActiveFilters}
             getAttendeeInfo={state.getAttendeeInfo}
             isAuctionClosed={isAuctionClosed}
             processingId={state.processingId}

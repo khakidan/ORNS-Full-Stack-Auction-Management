@@ -135,6 +135,11 @@ export function useBiddersState({
     });
   }, [bidders, attendees, searchTerm, statusFilter, paymentFilter, sourceFilter, sortConfig]);
 
+  // Distinguishes "nothing has ever loaded" from "filtered down to nothing" -
+  // BiddersTable.tsx uses this to pick the right empty-state message,
+  // matching Items.tsx's own search/no-data distinction.
+  const hasActiveFilters = searchTerm !== "" || statusFilter !== "all" || paymentFilter !== "all" || sourceFilter !== "all";
+
   const handleConfirmCheckInClick = async (bidder: Bidder) => {
     setProcessingId(bidder.id);
     await checkInBidder(bidder);
@@ -276,6 +281,7 @@ export function useBiddersState({
     sortConfig,
     handleSort,
     sortedBidders,
+    hasActiveFilters,
     getAttendeeInfo,
 
     // Check-in / proxy
