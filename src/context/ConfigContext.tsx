@@ -61,7 +61,13 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
           // Subscribe to global config
           unsubConfig = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
             if (docSnap.exists()) {
-              const data = docSnap.data() as Config;
+              // Merged over defaultConfig, not a blind cast - an existing
+              // Firestore doc written before a Config field was added
+              // (e.g. bugReportsSpreadsheetId/bugReportsFolderId) won't
+              // have that key at all, which would otherwise leave it
+              // `undefined` here instead of "" and trip Base UI's
+              // uncontrolled-to-controlled warning on that field's Input.
+              const data = { ...defaultConfig, ...(docSnap.data() as Partial<Config>) } as Config;
               setConfig(data);
 
               // Mirror to localStorage for components yet to be migrated

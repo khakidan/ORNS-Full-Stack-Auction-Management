@@ -32,8 +32,8 @@ service cloud.firestore {
     // Helper to validate Config object
     function isValidConfig(data) {
       return data.keys().hasAll([
-        'auctionItemsSpreadsheetId', 
-        'auctionTicketsSpreadsheetId', 
+        'auctionItemsSpreadsheetId',
+        'auctionTicketsSpreadsheetId',
         'bidManagementSpreadsheetId',
         'bidderNumbersSheet',
         'auctionItemsSheet',
@@ -45,10 +45,12 @@ service cloud.firestore {
         'auctionItemsScriptId',
         'auctionTicketsScriptId',
         'bidManagementScriptId',
+        'bugReportsSpreadsheetId',
+        'bugReportsFolderId',
         'updatedAt',
         'updatedBy'
-      ]) && 
-      data.keys().size() == 15 && // Strict key count
+      ]) &&
+      data.keys().size() == 17 && // Strict key count
       data.auctionItemsSpreadsheetId is string &&
       data.auctionItemsSpreadsheetId.size() <= 256 &&
       data.auctionTicketsSpreadsheetId is string &&
@@ -75,6 +77,10 @@ service cloud.firestore {
       data.auctionTicketsScriptId.size() <= 256 &&
       data.bidManagementScriptId is string &&
       data.bidManagementScriptId.size() <= 256 &&
+      data.bugReportsSpreadsheetId is string &&
+      data.bugReportsSpreadsheetId.size() <= 256 &&
+      data.bugReportsFolderId is string &&
+      data.bugReportsFolderId.size() <= 256 &&
       data.updatedAt is timestamp &&
       data.updatedBy is string && data.updatedBy.matches('.*@orns\\.org$');
     }
@@ -85,8 +91,8 @@ service cloud.firestore {
       allow update: if isOrnsUser() && isValidId(docId) && isValidConfig(incoming()) && (
         // Action: Update Config (allow changing any valid config field)
         incoming().diff(existing()).affectedKeys().hasOnly([
-          'auctionItemsSpreadsheetId', 
-          'auctionTicketsSpreadsheetId', 
+          'auctionItemsSpreadsheetId',
+          'auctionTicketsSpreadsheetId',
           'bidManagementSpreadsheetId',
           'bidderNumbersSheet',
           'auctionItemsSheet',
@@ -98,6 +104,8 @@ service cloud.firestore {
           'auctionItemsScriptId',
           'auctionTicketsScriptId',
           'bidManagementScriptId',
+          'bugReportsSpreadsheetId',
+          'bugReportsFolderId',
           'updatedAt',
           'updatedBy'
         ])

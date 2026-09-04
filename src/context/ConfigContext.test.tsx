@@ -174,6 +174,31 @@ describe("ConfigProvider - auth state and config sync", () => {
     expect(localStorage.getItem("googleScriptId")).toBe("bm-script");
   });
 
+  it("defaults a newly-added Config field to '' instead of undefined, for a Firestore doc saved before that field existed", async () => {
+    // Regression guard: adding bugReportsSpreadsheetId/bugReportsFolderId
+    // to the Config type doesn't retroactively add them to already-saved
+    // Firestore documents. A blind `docSnap.data() as Config` cast used
+    // to leave them `undefined` at runtime, which tripped Base UI's
+    // uncontrolled-to-controlled warning on that field's Input the first
+    // time an existing user opened Settings after this field was added.
+    const { bugReportsSpreadsheetId, bugReportsFolderId, ...oldShapeConfig } = FAKE_CONFIG;
+    const fb = makeFirebaseMock();
+    mockedGetFirebase.mockResolvedValue(fb.services as any);
+
+    const { result } = renderConfigHook();
+    await waitFor(() => expect(fb.services.onAuthStateChanged).toHaveBeenCalled());
+    act(() => fb.fireAuthChange({ email: "staff@orns.org" }));
+    await waitFor(() => expect(fb.services.onSnapshot).toHaveBeenCalled());
+
+    act(() => fb.fireSnapshot({ exists: () => true, data: () => oldShapeConfig }));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.config.bugReportsSpreadsheetId).toBe("");
+    expect(result.current.config.bugReportsFolderId).toBe("");
+    // Every field the old doc DID have must still come through untouched.
+    expect(result.current.config.auctionItemsSpreadsheetId).toBe("items-id");
+  });
+
   it("shows the @orns.org permission-denied toast and clears loading on a Firestore permission error", async () => {
     const fb = makeFirebaseMock();
     mockedGetFirebase.mockResolvedValue(fb.services as any);

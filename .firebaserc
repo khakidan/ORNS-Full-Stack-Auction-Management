@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "staging": "orns-auction-bid-management"
+  },
+  "targets": {},
+  "etags": {}
+}
