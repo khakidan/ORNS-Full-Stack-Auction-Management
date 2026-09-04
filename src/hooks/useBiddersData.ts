@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { getSheetData, updateSheetData } from "@/services/google-api";
 import { parseBidderRows } from "@/lib/bidderParsing";
+import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { Bidder } from "@/types";
 
 /**
@@ -66,7 +67,7 @@ export function useBiddersData(spreadsheetId: string, bidderNumbersSheet: string
       .catch(e => {
         // 4. Rollback on failure - scoped to just this bidder.
         setBidders(prev => prev.map(b => b.id === bidder.id ? { ...b, [field]: previousValue } : b));
-        toast.error(`Failed to sync updates—retrying... local state reverted.`);
+        toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
       });
   };
 

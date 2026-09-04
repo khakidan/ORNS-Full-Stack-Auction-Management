@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { getBidderAttendeeInfo } from "@/lib/bidderAttendeeInfo";
+import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { Bidder, Attendee } from "@/types";
 
 interface UseBiddersStateArgs {
@@ -174,7 +175,7 @@ export function useBiddersState({
         await fetchBidders();
       } catch (err: any) {
         console.error("Check-in error:", err);
-        toast.error("Failed to sync updates—retrying... local state reverted.");
+        toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
         await fetchBidders();
       } finally {
         setProcessingId(null);

@@ -138,7 +138,7 @@ describe("useBundling", () => {
         await result.current.executeBundle();
       });
 
-      expect(toast.error).toHaveBeenCalledWith("Failed to sync updates—retrying... local state reverted.");
+      expect(toast.error).toHaveBeenCalledWith("Failed to bundle items (status 500)");
       expect(result.current.isExecutingBundle).toBe(false);
       // Bundle stays open so the user's entered details aren't lost.
       expect(result.current.isBundling).toBe(true);

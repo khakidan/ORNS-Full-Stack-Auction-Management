@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { fetchWithRetry, getSheetData, getBaseUrl } from "@/services/google-api";
 import { parseBidGrid } from "@/lib/bidGridParsing";
+import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { Bidder, AuctionItem, Attendee } from "@/types";
 
 export interface WinnerRecord {
@@ -367,7 +368,7 @@ export function useCheckoutState({
       .catch((error: any) => {
         console.error("[Checkout] Sync error:", error);
         setWinners(prev => prev.map(w => w.bidderId === winner.bidderId ? { ...w, ...previousWinnerState } : w));
-        toast.error(`Failed to sync updates—retrying... local state reverted.`);
+        toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
       })
       .finally(() => {
         setIsSubmittingPayment(false);

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { fetchWithRetry, updateSheetData, getBaseUrl, deleteAuctionItem } from "@/services/google-api";
 import { parseDollar, calculateAutoBids, ValueCalculationTier } from "@/lib/auctionItemPricing";
+import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { AuctionItem } from "@/types";
 
 interface BundlingSelection {
@@ -216,7 +217,7 @@ export function useAuctionItemsTableState(
       .catch(() => {
         // Rollback
         setItems(previousItems);
-        toast.error("Failed to sync updates—retrying... local state reverted.");
+        toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
       })
       .finally(() => {
         setIsExecutingBulk(false);
@@ -336,7 +337,7 @@ export function useAuctionItemsTableState(
       .catch(e => {
         console.error(e);
         rollbackThisRow();
-        toast.error("Failed to sync updates—retrying... local state reverted.");
+        toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
       });
   };
 

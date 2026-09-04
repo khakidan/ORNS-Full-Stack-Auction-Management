@@ -186,7 +186,15 @@ export function useBundling(
       onBundleComplete();
     } catch (e: any) {
       console.error(e);
-      toast.error("Failed to sync updates—retrying... local state reverted.");
+      // executeBundle has no optimistic update to roll back - the bundle
+      // details form only closes/resets on success (see above) - so the
+      // shared ROLLBACK_SYNC_ERROR_MESSAGE (src/lib/toastMessages.ts)
+      // doesn't apply here. e.message is already a complete, accurate
+      // description (either the server's own error, or the "Failed to
+      // bundle items (status N)" fallback thrown above) - no extra
+      // prefix needed, unlike this file's other catches, whose thrown
+      // messages are bare network/JSON errors with no context of their own.
+      toast.error(e.message);
     } finally {
       setIsExecutingBundle(false);
     }

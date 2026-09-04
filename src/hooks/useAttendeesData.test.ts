@@ -200,7 +200,7 @@ describe("useAttendeesData.addAttendee", () => {
     });
 
     await waitFor(() => expect(result.current.attendees).toEqual([]));
-    expect(toast.error).toHaveBeenCalledWith("Failed to sync updates—retrying... local state reverted.");
+    expect(toast.error).toHaveBeenCalledWith("Failed to sync updates. Your local change has been reverted.");
   });
 
   it("scopes a failed rollback to just the one new entry - a second add's already-committed change must survive", async () => {
@@ -313,7 +313,7 @@ describe("useAttendeesData.removeAttendee", () => {
     });
 
     await waitFor(() => expect(result.current.attendees).toEqual([attendee]));
-    expect(toast.error).toHaveBeenCalledWith("Failed to sync updates—retrying... local state reverted.");
+    expect(toast.error).toHaveBeenCalledWith("Failed to sync updates. Your local change has been reverted.");
   });
 
   it("scopes a failed rollback to just the one removed attendee - a second removal's already-committed change must survive", async () => {

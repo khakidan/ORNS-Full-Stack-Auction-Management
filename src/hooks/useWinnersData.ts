@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { fetchWithRetry, getBaseUrl, getSheetData } from "@/services/google-api";
 import { parseBidGrid } from "@/lib/bidGridParsing";
+import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { Bidder } from "@/types";
 
 export function useWinnersData(spreadsheetId: string, bidders: Bidder[], bidManagementSheet: string, bidderNumbersSheet: string) {
@@ -95,7 +96,7 @@ export function useWinnersData(spreadsheetId: string, bidders: Bidder[], bidMana
           return next;
         });
         setTotalRaised(prev => prev - price);
-        toast.error(`Failed to sync updates—retrying... local state reverted.`);
+        toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
       });
   };
 

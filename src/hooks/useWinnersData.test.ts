@@ -201,7 +201,7 @@ describe("useWinnersData.recordWinningBid", () => {
 
     expect(result.current.winners).toEqual({});
     expect(result.current.totalRaised).toBe(0);
-    expect(toast.error).toHaveBeenCalledWith("Failed to sync updates—retrying... local state reverted.");
+    expect(toast.error).toHaveBeenCalledWith("Failed to sync updates. Your local change has been reverted.");
   });
 
   it("scopes a failed rollback to just the one item/amount - a second bid's already-committed change must survive", async () => {

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { updateSheetData } from "@/services/google-api";
+import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { Attendee } from "@/types";
 
 interface NewAttendeeEntry {
@@ -101,7 +102,7 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
         console.error(e);
         // Rollback
         setAttendees(prev => prev.map(a => a.id === attendee.id ? previousAttendeeState : a));
-        toast.error("Failed to sync updates—rolling back...");
+        toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
       });
   };
 
@@ -124,7 +125,7 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
         console.error(e);
         // Rollback
         setAttendees(prev => prev.map(a => a.id === attendee.id ? { ...a, paymentStatus: previousPaymentStatus } : a));
-        toast.error("Failed to sync updates—rolling back...");
+        toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
       });
   };
 

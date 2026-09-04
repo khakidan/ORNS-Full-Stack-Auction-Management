@@ -768,7 +768,7 @@ describe('Bidders - Check-In', () => {
     await user.click(screen.getByRole("button", { name: /yes, add to receipt/i }));
 
     await new Promise((r) => setTimeout(r, 0));
-    expect(toast.error).toHaveBeenCalledWith("Failed to sync updates—retrying... local state reverted.");
+    expect(toast.error).toHaveBeenCalledWith("Failed to sync updates. Your local change has been reverted.");
     expect(mockFetchBidders).toHaveBeenCalled();
   });
 });

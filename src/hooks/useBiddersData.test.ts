@@ -141,7 +141,7 @@ describe("useBiddersData", () => {
         expect(result.current.bidders[0].checkedIn).toBe(false);
       });
       expect(updateSheetData).not.toHaveBeenCalled();
-      expect(toast.error).toHaveBeenCalledWith("Failed to sync updates—retrying... local state reverted.");
+      expect(toast.error).toHaveBeenCalledWith("Failed to sync updates. Your local change has been reverted.");
     });
 
     it("rolls back when the sheet write itself fails", async () => {

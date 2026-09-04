@@ -17,13 +17,6 @@ each area.
 
 ### Redundant/duplicated logic
 
-- **Error-toast wording has drifted into three variants for the same
-  optimistic-rollback situation** - most call sites say `"Failed to
-  sync updates—retrying... local state reverted."`, `useTicketAttendeeState.ts:101,121`
-  says `"...rolling back..."`, and `useBundling.ts:225,229` reuses the
-  "local state reverted" wording for `executeBundle`, which has no
-  optimistic update to revert at all, and nothing anywhere actually
-  retries. Standardize on one accurate constant.
 - **`Class_AuctionItem.gs`'s constructor has no length guard on
   `rowData`** - `rowData[0].toString()` etc. assume all 12 columns are
   present; if the real Auction-Items sheet ever has fewer than 12

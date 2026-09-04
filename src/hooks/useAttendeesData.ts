@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { appendSheetData, clearSheetData, getSheetData } from "@/services/google-api";
 import { parseAttendeeRows } from "@/lib/attendeeParsing";
+import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { Attendee } from "@/types";
 
 const ATTENDEE_SHEETS = ["tickets", "staff tickets", "sponsor tickets"];
@@ -70,7 +71,7 @@ export function useAttendeesData(ticketsSpreadsheetId: string) {
         // captured whole-array snapshot, so another add/remove that
         // succeeded in the meantime isn't wiped out by this failure.
         setAttendees(prev => prev.filter(a => a.id !== tempId));
-        toast.error(`Failed to sync updates—retrying... local state reverted.`);
+        toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
       });
   };
 
@@ -88,7 +89,7 @@ export function useAttendeesData(ticketsSpreadsheetId: string) {
         // not a captured whole-array snapshot, so another add/remove that
         // succeeded in the meantime isn't wiped out by this failure.
         setAttendees(prev => prev.some(a => a.id === attendee.id) ? prev : [...prev, attendee]);
-        toast.error(`Failed to sync updates—retrying... local state reverted.`);
+        toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
       });
   };
 
