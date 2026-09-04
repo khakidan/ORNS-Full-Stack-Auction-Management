@@ -36,7 +36,7 @@ export function useAttendeesData(ticketsSpreadsheetId: string) {
     }
   }, [ticketsSpreadsheetId]);
 
-  const addAttendee = async (sheetName: string, rowData: any[]) => {
+  const addAttendee = async (sheetName: string, rowData: string[]) => {
     if (!ticketsSpreadsheetId) return;
 
     // Includes a random suffix, not just Date.now(), so two adds

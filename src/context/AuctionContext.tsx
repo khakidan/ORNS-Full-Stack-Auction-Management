@@ -22,7 +22,7 @@ interface AuctionContextType {
   checkInBidder: (bidder: Bidder) => Promise<void>;
   markBidderAsProxy: (bidder: Bidder) => Promise<void>;
   setAttendees: React.Dispatch<React.SetStateAction<Attendee[]>>;
-  addAttendee: (sheet: string, data: any[]) => Promise<void>;
+  addAttendee: (sheet: string, data: string[]) => Promise<void>;
   removeAttendee: (attendee: Attendee) => Promise<void>;
   recordWinningBid: (bidderId: string, itemId: string, price: number) => Promise<void>;
   isAuctionClosed: boolean;

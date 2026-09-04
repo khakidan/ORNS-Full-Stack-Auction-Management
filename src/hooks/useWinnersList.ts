@@ -35,8 +35,15 @@ export function useWinnersList({ bidders, items, fetchAllData, spreadsheetId, bi
       // Fetch special winners for alerts
       const specialData = await getSheetData(spreadsheetId, "Special-Winners!A2:B3");
       if (specialData.values) {
-        setSpecialWinners(specialData.values.map((row: any) => ({
-          name: row[0],
+        setSpecialWinners(specialData.values.map((row: string[]) => ({
+          // row[0] previously had no fallback despite `name` being typed
+          // string - a type-safety gap, not a currently-observable bug:
+          // its one consumer (useCheckoutPaymentFlow.ts's handleMarkPaid)
+          // only ever reads it through `.join(" and ")`, which already
+          // treats a genuinely `undefined` array element as an empty
+          // string. Still worth defaulting explicitly so the type stays
+          // honest for any future direct (non-`.join()`) use.
+          name: row[0]?.toString() || "",
           bidderId: row[1]?.toString() || ""
         })));
       }

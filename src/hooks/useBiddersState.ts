@@ -5,6 +5,17 @@ import { getBidderAttendeeInfo } from "@/lib/bidderAttendeeInfo";
 import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { Bidder, Attendee } from "@/types";
 
+// The only three keys sortedBidders' comparator below actually handles -
+// narrowing sortConfig/handleSort to this literal union (instead of a
+// bare `string`) is what lets valA/valB below be typed `string | number`
+// instead of `any`: any other key would previously fall through every
+// branch silently leaving valA/valB `undefined`, sorting nothing, with
+// no compiler signal that the key was never handled. Not reachable today
+// (BiddersTable.tsx's three SortableHead columns are the only callers,
+// and they only ever pass these three), but this makes that guarantee
+// checked at compile time instead of merely true by inspection.
+type BidderSortKey = "id" | "name" | "status";
+
 interface UseBiddersStateArgs {
   bidders: Bidder[];
   attendees: Attendee[];
@@ -53,14 +64,14 @@ export function useBiddersState({
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
 
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>({
+  const [sortConfig, setSortConfig] = useState<{ key: BidderSortKey; direction: "asc" | "desc" } | null>({
     key: "id",
     direction: "asc",
   });
 
   const getAttendeeInfo = (bidder: Bidder) => getBidderAttendeeInfo(bidder, attendees);
 
-  const handleSort = (key: string) => {
+  const handleSort = (key: BidderSortKey) => {
     let direction: "asc" | "desc" = "asc";
     if (sortConfig && sortConfig.key === key && sortConfig.direction === "asc") {
       direction = "desc";
@@ -103,8 +114,8 @@ export function useBiddersState({
       if (!sortConfig) return 0;
       const { key, direction } = sortConfig;
 
-      let valA: any;
-      let valB: any;
+      let valA: string | number;
+      let valB: string | number;
 
       if (key === "id") {
         valA = parseInt(a.id);

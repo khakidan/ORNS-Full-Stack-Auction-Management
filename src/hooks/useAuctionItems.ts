@@ -17,10 +17,10 @@ export function useAuctionItems(spreadsheetId: string | undefined) {
     try {
       const data = await getSheetData(spreadsheetId, "Value Calculations!A:B");
       if (data.values && data.values.length > 1) {
-        const tiers = data.values.slice(1).map((row: any[]) => ({
+        const tiers = data.values.slice(1).map((row: string[]) => ({
           minRange: parseFloat(row[0]?.toString().replace(/[^0-9.-]+/g, "") || "0"),
           minRaise: parseFloat(row[1]?.toString().replace(/[^0-9.-]+/g, "") || "0")
-        })).filter((t: any) => !isNaN(t.minRange) && !isNaN(t.minRaise) && t.minRaise > 0);
+        })).filter((t) => !isNaN(t.minRange) && !isNaN(t.minRaise) && t.minRaise > 0);
         setValueCalculations(tiers);
       }
     } catch (error) {
@@ -33,16 +33,16 @@ export function useAuctionItems(spreadsheetId: string | undefined) {
     try {
       const data = await getSheetData(spreadsheetId, "Categories!A:B");
       if (data.values && data.values.length > 1) {
-        const catsWithBase = data.values.slice(1).map((row: any[]) => {
+        const catsWithBase = data.values.slice(1).map((row: string[]) => {
           const catName = row[0]?.toString() || "";
           const parsedBase = parseInt(row[1]?.toString() || "0", 10) || 0;
           return {
             name: catName,
             base: parsedBase || getCategoryBase(catName)
           };
-        }).filter((c: any) => c.name);
+        }).filter((c) => c.name);
         setCategoriesWithBase(catsWithBase);
-        setCategories(catsWithBase.map((c: any) => c.name));
+        setCategories(catsWithBase.map((c) => c.name));
       }
     } catch (error) {
       console.error("Failed to fetch categories:", error);

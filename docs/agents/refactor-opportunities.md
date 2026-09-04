@@ -23,13 +23,6 @@ deep audit's "Redundant/duplicated logic" section has been closed. See
 
 ### Code quality
 
-- **Several `any` types could be narrowed to `string[]`/concrete
-  shapes**: `useAttendeesData.ts:34` (`rowData: any[]`),
-  `AuctionContext.tsx:26` (`data: any[]`), `useAuctionItems.ts:19,35,79`
-  (`row: any[]`), `useWinnersList.ts:38` (`row: any`, where
-  `name: row[0]` can be `undefined` while typed `string`),
-  `useBiddersState.ts:105-106` (`valA`/`valB` typed `any`, silently
-  unsorted for any sort key other than `id`/`name`/`status`).
 - **`useConfigSettingsState.ts`'s `syncSettingToCloud` never checks
   `res.ok`** (`:28-35`) - the six calls at `:229-234` report success
   via the outer `handleSave` even on a 4xx response, since
