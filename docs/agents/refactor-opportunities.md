@@ -23,10 +23,6 @@ deep audit's "Redundant/duplicated logic" section has been closed. See
 
 ### Code quality
 
-- **`useConfigSettingsState.ts`'s `syncSettingToCloud` never checks
-  `res.ok`** (`:28-35`) - the six calls at `:229-234` report success
-  via the outer `handleSave` even on a 4xx response, since
-  `fetchWithRetry` only throws for 429/5xx.
 - **`google-api.ts`'s `fetchWithRetry` mutates the caller's `options`
   object in place** (`src/services/google-api.ts:27-38`) - shallow-clones
   neither `options` nor `options.headers` before injecting the auth

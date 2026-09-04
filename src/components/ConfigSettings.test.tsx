@@ -6,6 +6,8 @@ import "@testing-library/jest-dom";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import ConfigSettings from "./ConfigSettings";
+import { fetchWithRetry } from "@/services/google-api";
+import { toast } from "sonner";
 
 // Card mock must forward onClick so the collapsible CardHeader
 // state toggles fire correctly via fireEvent.click + event bubbling
@@ -176,5 +178,34 @@ describe("ConfigSettings", () => {
         expect.objectContaining({ bidManagementSpreadsheetId: "1AbC-XyZ_123" })
       );
     });
+  });
+
+  it("shows the plain success toast when every cloud-settings sync call succeeds", async () => {
+    render(<ConfigSettings />);
+    fireEvent.click(screen.getByText("Save Configuration"));
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("Settings saved locally and synced to cloud");
+    });
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("shows a cloud-sync-failure toast, not the plain success toast, when a settings/update call returns a non-ok response - useConfigSettingsState.ts's syncSettingToCloud never checked res.ok, so a 4xx here used to be silently reported as full success", async () => {
+    vi.mocked(fetchWithRetry).mockImplementation(async (url) => {
+      if (url.toString().includes("/api/settings/update")) {
+        return { ok: false, status: 400, json: async () => ({ error: "Missing required fields" }) } as Response;
+      }
+      return { ok: true, json: async () => ({}) } as Response;
+    });
+
+    render(<ConfigSettings />);
+    fireEvent.click(screen.getByText("Save Configuration"));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.stringContaining("failed to sync")
+      );
+    });
+    expect(toast.success).not.toHaveBeenCalledWith("Settings saved locally and synced to cloud");
   });
 });

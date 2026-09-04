@@ -26,12 +26,16 @@ export function extractId(input: string): string {
 }
 
 async function syncSettingToCloud(spreadsheetId: string, key: string, value: string, description: string) {
-  await fetchWithRetry(`${getBaseUrl()}/api/settings/update`, {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/settings/update`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ spreadsheetId, key, value, description }),
     credentials: "include"
   });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to sync setting to cloud");
+  }
 }
 
 export function useConfigSettingsState() {
@@ -205,6 +209,7 @@ export function useConfigSettingsState() {
     }
 
     // Sync to Bid Management Spreadsheet (Legacy cloud sync)
+    let cloudSyncFailed = false;
     if (bidMgtId) {
       try {
         await syncSettingToCloud(bidMgtId, "ticketPrice", config.ticketPrice, "Standard Walk-In Ticket Price");
@@ -213,13 +218,18 @@ export function useConfigSettingsState() {
         await syncSettingToCloud(bidMgtId, "ornsLogoID", ornsLogoId, "ORNS Logo File ID");
         await syncSettingToCloud(bidMgtId, "auctionImportSheetID", auctionItemsId, "Auction Item Data Entry Spreadsheet ID");
         await syncSettingToCloud(bidMgtId, "auctionTicketSheetsID", auctionTicketsId, "Auction Tickets Spreadsheet ID");
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to sync settings to cloud:", err);
+        cloudSyncFailed = true;
       }
     }
 
     setSavingSettings(false);
-    toast.success("Settings saved locally and synced to cloud");
+    if (cloudSyncFailed) {
+      toast.error("Settings saved locally, but failed to sync to the Bid-Management spreadsheet's cloud settings. Check your Bid Management Spreadsheet ID.");
+    } else {
+      toast.success("Settings saved locally and synced to cloud");
+    }
     setTimeout(() => window.location.reload(), 1000);
   };
 
