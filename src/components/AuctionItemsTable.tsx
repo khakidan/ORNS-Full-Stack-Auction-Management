@@ -61,28 +61,28 @@ export function AuctionItemsTable({
       <Table className="w-full table-fixed">
         <TableHeader>
           <TableRow className="bg-slate-50 text-xs">
-            <TableHead style={{ width: "40px" }} className="px-2">
+            <TableHead className="w-10 px-2">
               <Checkbox checked={selectedItemsCount === items.length && items.length > 0} onCheckedChange={onToggleAll} />
             </TableHead>
-            <TableHead style={{ width: "7%" }} className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => onRequestSort("id")}>
+            <TableHead className="w-[7%] cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => onRequestSort("id")}>
               ID <SortIndicator sortConfig={sortConfig} columnKey="id" />
             </TableHead>
-            <TableHead style={{ width: "30%" }} className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => onRequestSort("name")}>
+            <TableHead className="w-[30%] cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => onRequestSort("name")}>
               Name & Description <SortIndicator sortConfig={sortConfig} columnKey="name" />
             </TableHead>
-            <TableHead style={{ width: "15%" }} className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => onRequestSort("category")}>
+            <TableHead className="w-[15%] cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => onRequestSort("category")}>
               Category <SortIndicator sortConfig={sortConfig} columnKey="category" />
             </TableHead>
-            <TableHead style={{ width: "18%" }} className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => onRequestSort("value")}>
+            <TableHead className="w-[18%] cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => onRequestSort("value")}>
               Value / Bids <SortIndicator sortConfig={sortConfig} columnKey="value" />
             </TableHead>
-            <TableHead style={{ width: "15%" }} className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => onRequestSort("donor")}>
+            <TableHead className="w-[15%] cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => onRequestSort("donor")}>
               Donor <SortIndicator sortConfig={sortConfig} columnKey="donor" />
             </TableHead>
-            <TableHead style={{ width: "15%" }} className="cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => onRequestSort("itemType")}>
+            <TableHead className="w-[15%] cursor-pointer select-none hover:bg-slate-100 transition-colors" onClick={() => onRequestSort("itemType")}>
               Type <SortIndicator sortConfig={sortConfig} columnKey="itemType" />
             </TableHead>
-            <TableHead style={{ width: "60px" }} className="text-center">
+            <TableHead className="w-15 text-center">
               Actions
             </TableHead>
           </TableRow>

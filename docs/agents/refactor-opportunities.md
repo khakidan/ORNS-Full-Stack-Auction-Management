@@ -52,17 +52,6 @@ deep audit's "Redundant/duplicated logic" section has been closed. See
   "Passed Audit Inspection" list previously claimed "no component syncs
   a computed value into a second `useState` via an effect" - that claim
   is now corrected below rather than left contradicting this entry.
-- **`AuctionItemsTable.tsx:64-85` uses inline `style={{ width: "..." }}`
-  on all 8 `<TableHead>` cells**, alongside a separate `className` on
-  each - `style_guide.md`'s "Inline style attributes are forbidden" rule
-  is violated outright here, and it's the only real hit anywhere in
-  `src/` outside test files. All 8 values are static (`"40px"`, `"7%"`,
-  `"30%"`, `"15%"` ×3, `"18%"`, `"60px"`), not computed at runtime, so
-  there's no runtime-value reason they can't move into `className` as
-  Tailwind width utilities (`w-10`/`w-15` for the two px values; the
-  percentages have no clean default-scale equivalent, so those would
-  stay arbitrary-bracket values, e.g. `w-[7%]`, in `className` rather
-  than a separate `style` prop).
 
 ### Test coverage gaps (`testing-philosophy.md`)
 
