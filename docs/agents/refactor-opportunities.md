@@ -23,24 +23,9 @@ deep audit's "Redundant/duplicated logic" section has been closed. See
 
 ### Code quality
 
-- **`AttendanceChart.tsx`'s donut chart may still clip at the top of the
-  circle - needs visual confirmation.** Reported live via the in-app bug
-  tool (2026-09-04, real user report against `/BidManagement` dashboard
-  tab, Chrome 152 on macOS, 1417x778 viewport): "The visual
-  representation of who's checked in, who's not, and who's a proxy
-  bidder is getting clipped at the top of the circle." The parent `Card`
-  has `overflow-hidden` (`src/components/ui/card.tsx`), and the original
-  `<PieChart width={280} height={250}>` with `cy="42%"`/`outerRadius={95}`
-  only left ~10px of top clearance before the pie's arc reaches y=0 -
-  applied a best-effort fix (bumped to `height={280}`/`cy="45%"`, ~31px
-  clearance) since the math checked out as directionally correct, but
-  this couldn't be visually verified - no browser tool is available in
-  this environment, and jsdom has no real layout engine to assert
-  computed pixel positions against. **Needs the user to confirm in a
-  real browser before this item is considered closed** - if the clipping
-  persists, the real cause is something this static analysis missed
-  (e.g. a sibling grid item forcing a shorter row height via CSS Grid's
-  default `align-items: stretch`).
+Nothing outstanding right now - every item flagged in the 2026-09-02 deep
+audit's "Code quality" section has been closed. See `CHANGELOG.md` for
+the individual fixes.
 
 ### Test coverage gaps (`testing-philosophy.md`)
 
