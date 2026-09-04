@@ -241,16 +241,15 @@ export default function App() {
       <aside
         className={cn(
           "bg-background border-r border-border shrink-0 flex-col fixed md:sticky inset-y-0 left-0 md:h-screen z-50 flex overflow-hidden transition-all duration-300 shadow-xl md:shadow-none",
-          isMobileMenuOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0",
-          isSidebarOpen ? "md:w-64" : "md:w-16"
+          isMobileMenuOpen ? "translate-x-0 w-max" : "-translate-x-full md:translate-x-0",
+          isSidebarOpen ? "md:w-max" : "md:w-16"
         )}
       >
-        <div className={cn("h-16 flex items-center border-b shrink-0", isSidebarOpen ? "px-4 justify-between" : "justify-center")}>
-          <div className={cn("flex items-center gap-2 overflow-hidden whitespace-nowrap", (!isSidebarOpen && !isMobileMenuOpen) && "hidden")}>
-            <WalletCards className="w-6 h-6 shrink-0 text-primary" />
-            <span className="text-lg font-bold tracking-tight">ORNS Auction</span>
-          </div>
-          <Button variant="ghost" size="icon" className={cn("shrink-0 h-8 w-8 hidden md:flex", isSidebarOpen ? "ml-2" : "")} onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+        <div className={cn("h-16 flex items-center border-b shrink-0 gap-2", (isSidebarOpen || isMobileMenuOpen) ? "px-4 w-max" : "justify-center")}>
+          {(isSidebarOpen || isMobileMenuOpen) && (
+            <span className="text-lg font-bold tracking-tight truncate">ORNS Auction</span>
+          )}
+          <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8 hidden md:flex" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
             {isSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </Button>
           <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8 md:hidden" onClick={() => setIsMobileMenuOpen(false)}>
@@ -258,7 +257,7 @@ export default function App() {
           </Button>
         </div>
 
-        <div className="flex-1 py-6 px-3 space-y-1 overflow-y-auto overflow-x-hidden flex flex-col">
+        <div className={cn("flex-1 py-6 px-3 space-y-1 overflow-y-auto overflow-x-hidden flex flex-col", (isSidebarOpen || isMobileMenuOpen) && "w-max")}>
           {(isSidebarOpen || isMobileMenuOpen) && <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Workflows</p>}
           
           <Button 
