@@ -1,4 +1,4 @@
-import { Trash2 } from "lucide-react";
+import { AlertTriangle, Trash2 } from "lucide-react";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { IconButton } from "@/components/ui/IconButton";
@@ -12,6 +12,7 @@ import {
 import { EditableCell } from "@/components/ui/EditableCell";
 import { Attendee } from "@/types";
 import { cn } from "@/lib/utils";
+import { hasMoreGuestsThanTicketsPurchased } from "@/lib/attendeeValidation";
 
 interface AttendeeRowProps {
   attendee: Attendee;
@@ -28,6 +29,8 @@ export function AttendeeRow({
   onUpdatePaymentStatus,
   onDeleteRequest,
 }: AttendeeRowProps) {
+  const guestsExceedTickets = hasMoreGuestsThanTicketsPurchased(a);
+
   return (
     <TableRow className="align-top hover:bg-slate-50/30">
       <TableCell>
@@ -46,12 +49,26 @@ export function AttendeeRow({
         </Badge>
       </TableCell>
       <TableCell className="text-center">
-        <div className="font-semibold mx-auto w-8 h-8 rounded-md bg-secondary text-secondary-foreground text-sm flex items-center justify-center">
+        <div
+          className={cn(
+            "font-semibold mx-auto w-8 h-8 rounded-md text-sm flex items-center justify-center",
+            guestsExceedTickets ? "bg-red-100 text-red-700 ring-1 ring-red-300" : "bg-secondary text-secondary-foreground"
+          )}
+          title={guestsExceedTickets ? `${a.guestsInfo.length} guests listed but only ${a.ticketsPurchased || 0} ticket(s) purchased` : undefined}
+        >
           {a.ticketsPurchased}
         </div>
       </TableCell>
       <TableCell className="text-base">
         <div className="space-y-3">
+          {guestsExceedTickets && (
+            <div className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>
+                {a.guestsInfo.length} guests listed but only {a.ticketsPurchased || 0} ticket(s) purchased - please correct in the spreadsheet.
+              </span>
+            </div>
+          )}
           {a.guestsInfo.map((g, idx) => (
             <div key={idx} className="flex flex-col gap-1.5 pb-2 border-b border-slate-100 last:border-0 last:pb-0">
               <div className="flex items-center gap-2">

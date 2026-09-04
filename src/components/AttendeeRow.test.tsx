@@ -134,3 +134,36 @@ describe("AttendeeRow - guest firstName/lastName editing", () => {
     expect(screen.getAllByText("Own #")).toHaveLength(1);
   });
 });
+
+describe("AttendeeRow - guests-exceed-tickets-purchased warning", () => {
+  // User-reported data-quality bug: "we have a bidder who has purchased 1
+  // ticket, but has 3 guests on their row... shouldn't allow a bidder to
+  // have less tickets purchased than guests" - the exact repro from the
+  // report is 1 ticket / 3 guests.
+  it("shows a visible warning when guest count exceeds tickets purchased, naming the real numbers", () => {
+    const attendee = makeAttendee({
+      ticketsPurchased: "1",
+      guestsInfo: [makeGuest({ guestIndex: 1 }), makeGuest({ guestIndex: 2 }), makeGuest({ guestIndex: 3 })],
+    });
+    renderRow(attendee);
+
+    expect(screen.getByText(/3 guests listed but only 1 ticket\(s\) purchased/)).toBeInTheDocument();
+  });
+
+  it("does not show a warning when guest count is within tickets purchased", () => {
+    const attendee = makeAttendee({
+      ticketsPurchased: "3",
+      guestsInfo: [makeGuest({ guestIndex: 1 }), makeGuest({ guestIndex: 2 })],
+    });
+    renderRow(attendee);
+
+    expect(screen.queryByText(/guests listed but only/)).not.toBeInTheDocument();
+  });
+
+  it("does not show a warning for a bidder with no guests, even with 0 tickets recorded", () => {
+    const attendee = makeAttendee({ ticketsPurchased: "0", guestsInfo: [] });
+    renderRow(attendee);
+
+    expect(screen.queryByText(/guests listed but only/)).not.toBeInTheDocument();
+  });
+});
