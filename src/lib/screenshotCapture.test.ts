@@ -28,6 +28,28 @@ describe("captureScreenshot", () => {
     expect(blob).toBeInstanceOf(Blob);
   });
 
+  it("forces a plain, parseable background color on the cloned document via onclone - foreignObjectRendering alone does not stop html2canvas's unconditional parseBackgroundColor() pre-step from hitting the same oklch parser crash, confirmed live in a real submitted bug report", async () => {
+    const fakeCanvas = { toBlob: (cb: (b: Blob | null) => void) => cb(new Blob(["fake-png"], { type: "image/png" })) };
+    mockHtml2Canvas.mockResolvedValue(fakeCanvas);
+
+    await captureScreenshot();
+
+    const options = mockHtml2Canvas.mock.calls[0][1];
+    expect(options.backgroundColor).toBe("#f8fafc");
+    expect(typeof options.onclone).toBe("function");
+
+    // Simulate html2canvas invoking onclone with the cloned document,
+    // the way it really does before its own backgroundColor read.
+    const fakeClonedDoc = {
+      documentElement: { style: {} as CSSStyleDeclaration },
+      body: { style: {} as CSSStyleDeclaration },
+    } as unknown as Document;
+    options.onclone(fakeClonedDoc);
+
+    expect(fakeClonedDoc.documentElement.style.backgroundColor).toBe("#f8fafc");
+    expect(fakeClonedDoc.body.style.backgroundColor).toBe("#f8fafc");
+  });
+
   it("returns null, not a throw, when html2canvas itself throws (e.g. the oklch parser bug this option works around)", async () => {
     mockHtml2Canvas.mockRejectedValue(new Error("Attempting to parse an unsupported color function \"oklch\""));
 

@@ -12,11 +12,11 @@ export function AttendanceChart({ bidderStats }: AttendanceChartProps) {
         <CardTitle>Attendance Overview</CardTitle>
       </CardHeader>
       <CardContent className="h-[320px] w-full flex items-center justify-center p-0">
-        <PieChart width={280} height={250}>
+        <PieChart width={280} height={280}>
           <Pie
             data={bidderStats}
             cx="50%"
-            cy="42%"
+            cy="45%"
             innerRadius={65}
             outerRadius={95}
             paddingAngle={5}

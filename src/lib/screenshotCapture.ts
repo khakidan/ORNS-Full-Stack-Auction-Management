@@ -5,11 +5,21 @@
  * (see vite.config.ts's dedicated `vendor-html2canvas` manualChunks
  * branch, which keeps this out of the eagerly-loaded vendor-utils chunk).
  *
- * `foreignObjectRendering: true` is required, not optional, on this app:
- * html2canvas 1.4.x's own manual CSS-color parser throws on `oklch()`,
- * which src/index.css's entire base theme uses (Tailwind v4 / shadcn
- * token system). That option delegates painting to the browser's native
- * SVG renderer instead, sidestepping the parser entirely.
+ * `foreignObjectRendering: true` alone is NOT enough on this app, despite
+ * being the documented fix for html2canvas 1.4.x's oklch()-parsing crash
+ * (confirmed live in a real submitted bug report before this fix - see
+ * CHANGELOG.md). html2canvas's own `renderElement()` unconditionally
+ * calls `parseBackgroundColor()` *before* it ever branches into the
+ * foreignObjectRendering path, which reads
+ * `getComputedStyle(document.body / documentElement).backgroundColor` -
+ * and modern Chrome now serializes that computed value in whatever color
+ * space it was declared in (oklch, for this app's Tailwind v4 theme)
+ * rather than always downgrading to rgb(). `foreignObjectRendering` only
+ * bypasses html2canvas's manual parser for the actual paint step; this
+ * one pre-step still hits it regardless of that option. Worked around by
+ * forcing a plain, parseable color onto the CLONED document's body/html
+ * via `onclone` (the clone happens before this backgroundColor read, so
+ * mutating the clone - not the live page - is both sufficient and safe).
  *
  * Captures `#root` specifically, not `document.body` - this app's Dialog
  * (@base-ui/react/dialog) portals its content to document.body, so the
@@ -23,7 +33,14 @@ export async function captureScreenshot(): Promise<Blob | null> {
     if (!target) return null;
 
     const { default: html2canvas } = await import("html2canvas");
-    const canvas = await html2canvas(target, { foreignObjectRendering: true });
+    const canvas = await html2canvas(target, {
+      foreignObjectRendering: true,
+      backgroundColor: "#f8fafc",
+      onclone: (clonedDoc: Document) => {
+        clonedDoc.documentElement.style.backgroundColor = "#f8fafc";
+        if (clonedDoc.body) clonedDoc.body.style.backgroundColor = "#f8fafc";
+      },
+    });
 
     return await new Promise<Blob | null>((resolve) => {
       canvas.toBlob((blob) => resolve(blob), "image/png");
