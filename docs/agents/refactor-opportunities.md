@@ -142,20 +142,7 @@ listed so future audits don't have to re-derive this, and so nobody
 
 ## Out of Scope, but Should be Fixed
 
-- **`text-[10px]`/`text-[11px]` is a widespread, repeated arbitrary
-  value (8 real files in `src/components/`) sitting below Tailwind's
-  smallest default step (`text-xs` = 12px).** Unlike the one-off
-  arbitrary widths/heights logged under "Code quality" above, this
-  isn't drift - it's used consistently enough, for the same two values,
-  across enough unrelated files (badges, filter labels, table
-  micro-text) that it reads as a real, already-adopted convention that
-  was just never promoted to a named token. `tailwind-style-guide.md`
-  doesn't currently document a `2xs`-style step. Needs a design
-  decision (add `--text-2xs`/`--text-3xs` tokens to `src/index.css`'s
-  `@theme inline` block the same way `--color-orns-red` was added as a
-  one-off token, or confirm 10px/11px should just stay as the
-  established arbitrary-value exception) - not something to
-  mechanically find-and-replace without that call being made first.
+Nothing outstanding right now.
 
 ---
 

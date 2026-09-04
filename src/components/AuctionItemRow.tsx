@@ -131,7 +131,7 @@ export function AuctionItemRow({
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 text-[10px] gap-1 px-2 border-purple-200 text-purple-700 hover:bg-purple-200 hover:text-purple-800 transition-colors w-fit"
+                className="h-7 text-xxs gap-1 px-2 border-purple-200 text-purple-700 hover:bg-purple-200 hover:text-purple-800 transition-colors w-fit"
                 disabled={isExecutingRestore}
                 onClick={() => onRestoreBundle(item.bundleId)}
               >

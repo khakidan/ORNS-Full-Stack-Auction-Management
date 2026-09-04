@@ -83,7 +83,7 @@ export function BundlingDialog({
               
               {aiSuggestions.length > 0 && (
                 <div className="bg-primary/5 p-3 rounded-lg border border-primary/20 space-y-2 mb-3">
-                  <span className="text-[10px] font-bold text-primary uppercase">Suggested by Gemini:</span>
+                  <span className="text-xxs font-bold text-primary uppercase">Suggested by Gemini:</span>
                   <div className="flex flex-wrap gap-2">
                     {aiSuggestions.map((name, i) => (
                       <Badge 

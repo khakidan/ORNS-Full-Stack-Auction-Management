@@ -45,7 +45,7 @@ export function DocumentCreationPanel({
           </p>
         )}
 
-        <p className="text-[10px] text-muted-foreground mt-4 px-1 italic">
+        <p className="text-xxs text-muted-foreground mt-4 px-1 italic">
           Note: Documents will be placed in your For Print folder.
         </p>
       </CardContent>

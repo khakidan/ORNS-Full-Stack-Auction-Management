@@ -57,7 +57,7 @@ export function AttendeeRow({
               <span className="font-medium text-slate-800 flex items-center gap-2 text-base">
                 {g.name || `Guest ${idx + 1}`}
                 {g.ownBidderNumber?.toLowerCase() === 'yes' && (
-                  <Badge variant="secondary" className="text-[11px] h-4 px-1 font-normal bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border-indigo-200">
+                  <Badge variant="secondary" className="text-xxs h-4 px-1 font-normal bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border-indigo-200">
                     Own #
                   </Badge>
                 )}

@@ -106,6 +106,20 @@ rarely be a reason to reach for `rounded-[Npx]`.
 
 ---
 
+## Type Scale
+
+Tailwind's default scale starts at `text-xs` (12px). This app adds exactly
+one step below that: `--text-xxs: 0.625rem` (10px, paired with
+`--text-xxs--line-height: 0.875rem`), defined in `src/index.css`'s
+`@theme inline` block the same way `--color-orns-red` was added as a
+one-off token. Use `text-xxs` for sub-`text-xs` micro-text - badge labels,
+uppercase section eyebrows, italic helper notes - rather than an arbitrary
+`text-[10px]`/`text-[11px]` bracket value; there is no sanctioned 11px
+step, so a call site that needs "a little smaller than `text-xs`" should
+use `text-xxs` (10px), not invent a new in-between arbitrary value.
+
+---
+
 # Component Styling
 
 Prefer the existing `variant`/`size` props on `Button`, `Badge`, `Card`,

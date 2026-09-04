@@ -53,7 +53,7 @@ export function FollowUpListPanel({
         </div>
       </ScrollArea>
       {note && (
-        <p className="text-[10px] text-muted-foreground italic mt-2">{note}</p>
+        <p className="text-xxs text-muted-foreground italic mt-2">{note}</p>
       )}
     </div>
   );

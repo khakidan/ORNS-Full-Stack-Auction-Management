@@ -43,7 +43,7 @@ export function AuctionItemsFilterBar({
   return (
     <div className="px-6 pb-6 flex flex-col md:flex-row gap-4 items-end border-b bg-slate-50/30">
       <div className="flex-1 w-full space-y-1.5">
-        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 ml-1">
+        <Label className="text-xxs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 ml-1">
           <Search className="w-3 h-3" /> Search Items
         </Label>
         <Input
@@ -54,7 +54,7 @@ export function AuctionItemsFilterBar({
         />
       </div>
       <div className="w-full md:w-60 space-y-1.5">
-        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 ml-1">
+        <Label className="text-xxs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 ml-1">
           <Filter className="w-3 h-3" /> Category
         </Label>
         <Select value={selectedCategory} onValueChange={onSelectedCategoryChange}>
@@ -72,7 +72,7 @@ export function AuctionItemsFilterBar({
         </Select>
       </div>
       <div className="w-full md:w-45 space-y-1.5">
-        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 ml-1">
+        <Label className="text-xxs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 ml-1">
           <Filter className="w-3 h-3" /> Item Type
         </Label>
         <Select value={selectedItemType} onValueChange={onSelectedItemTypeChange}>

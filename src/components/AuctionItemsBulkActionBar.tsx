@@ -37,7 +37,7 @@ export function AuctionItemsBulkActionBar({
         >
           <div className="flex flex-col">
             <span className="text-sm font-bold text-primary">{selectedItemsCount} items selected</span>
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Bulk Actions</span>
+            <span className="text-xxs text-muted-foreground uppercase tracking-wider font-semibold">Bulk Actions</span>
           </div>
           <div className="w-[1px] h-10 bg-border" />
           <div className="flex gap-2">
