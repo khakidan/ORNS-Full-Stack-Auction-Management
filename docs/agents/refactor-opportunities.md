@@ -23,16 +23,10 @@ deep audit's "Redundant/duplicated logic" section has been closed. See
 
 ### Code quality
 
-- **`useCheckoutState.ts` (416 lines) and `useAuctionItemsTableState.ts`
-  (437 lines)** are both past this codebase's own "over 400 is almost
-  certainly doing too much" line (`react-patterns.md`); each mixes list
-  parsing/filtering with per-row and batch mutation handlers. Candidate
-  for the same container-hook-split treatment already applied to every
-  other oversized file in this app.
 - **Several `any` types could be narrowed to `string[]`/concrete
   shapes**: `useAttendeesData.ts:34` (`rowData: any[]`),
   `AuctionContext.tsx:26` (`data: any[]`), `useAuctionItems.ts:19,35,79`
-  (`row: any[]`), `useCheckoutState.ts:117` (`row: any`, where
+  (`row: any[]`), `useWinnersList.ts:38` (`row: any`, where
   `name: row[0]` can be `undefined` while typed `string`),
   `useBiddersState.ts:105-106` (`valA`/`valB` typed `any`, silently
   unsorted for any sort key other than `id`/`name`/`status`).
