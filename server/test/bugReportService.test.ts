@@ -219,13 +219,13 @@ describe("findReportRow", () => {
 });
 
 describe("deleteScreenshotFromDrive", () => {
-  it("deletes the file whose ID is parsed from the real 'https://drive.google.com/file/d/<id>/view' link format uploadScreenshotToDrive builds", async () => {
+  it("deletes the file whose ID is parsed from the real 'https://drive.google.com/file/d/<id>/view' link format uploadScreenshotToDrive builds, with supportsAllDrives - the Bug Screenshots folder lives in a Shared Drive, and Drive rejects a delete without it", async () => {
     const deleteFn = vi.fn().mockResolvedValue({});
     const fakeDrive = { files: { delete: deleteFn } } as any;
 
     await deleteScreenshotFromDrive(fakeDrive, "https://drive.google.com/file/d/abc123/view");
 
-    expect(deleteFn).toHaveBeenCalledWith({ fileId: "abc123" });
+    expect(deleteFn).toHaveBeenCalledWith({ fileId: "abc123", supportsAllDrives: true });
   });
 
   it("no-ops without throwing when the link is empty or doesn't match the expected format", async () => {

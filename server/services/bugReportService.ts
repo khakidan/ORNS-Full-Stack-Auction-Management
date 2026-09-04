@@ -183,12 +183,21 @@ export async function markReportResolved(sheets: sheets_v4.Sheets, spreadsheetId
  * other Drive/Sheets side effects (e.g. the screenshot upload itself) -
  * a resolved report must not fail to save just because Drive cleanup
  * didn't work, so failures are logged and swallowed, never thrown.
+ *
+ * `supportsAllDrives: true` is required here the same way
+ * uploadScreenshotToDrive's create call already requires it - the Bug
+ * Screenshots folder lives in a Shared Drive, and the Drive API rejects
+ * (403/404) any operation against a file in a Shared Drive that omits
+ * this flag, delete included. Without it, this silently failed on every
+ * real resolve - swallowed by the catch above, so the report still
+ * marked "Fixed" successfully while its screenshot was quietly never
+ * deleted, with no visible error anywhere.
  */
 export async function deleteScreenshotFromDrive(drive: drive_v3.Drive, screenshotLink: string): Promise<void> {
   const match = screenshotLink.match(/\/file\/d\/([^/]+)\//);
   if (!match) return;
   try {
-    await drive.files.delete({ fileId: match[1] });
+    await drive.files.delete({ fileId: match[1], supportsAllDrives: true });
   } catch (error) {
     console.error("[BugReport] Failed to delete resolved report's screenshot from Drive:", error);
   }

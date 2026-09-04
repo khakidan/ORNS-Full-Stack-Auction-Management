@@ -269,9 +269,11 @@ describe("POST /api/bug-reports/resolve", () => {
     );
 
     let deletedFileId = "";
+    let deletedSupportsAllDrives: string | null = null;
     server.use(
-      http.delete("https://www.googleapis.com/drive/v3/files/:fileId", ({ params }) => {
+      http.delete("https://www.googleapis.com/drive/v3/files/:fileId", ({ params, request: req }) => {
         deletedFileId = String(params.fileId);
+        deletedSupportsAllDrives = new URL(req.url).searchParams.get("supportsAllDrives");
         return new HttpResponse(null, { status: 204 });
       })
     );
@@ -283,6 +285,11 @@ describe("POST /api/bug-reports/resolve", () => {
 
     expect(res.status).toBe(200);
     expect(deletedFileId).toBe("screenshot-file-id");
+    // The Bug Screenshots folder lives in a Shared Drive - Drive rejects
+    // a delete against a Shared Drive file that omits this, the exact
+    // real bug that silently left every resolved report's screenshot
+    // behind (swallowed by the route's own best-effort try/catch).
+    expect(deletedSupportsAllDrives).toBe("true");
   });
 
   it("does not attempt a Drive delete when the resolved report never had a screenshot", async () => {
