@@ -63,42 +63,6 @@ deep audit's "Redundant/duplicated logic" section has been closed. See
   percentages have no clean default-scale equivalent, so those would
   stay arbitrary-bracket values, e.g. `w-[7%]`, in `className` rather
   than a separate `style` prop).
-- **Several arbitrary Tailwind width/height values have a clean default-scale
-  equivalent already available, per `tailwind-style-guide.md`'s "Arbitrary
-  Values" rule** (Tailwind's scale: `w-37.5`=150px, `w-45`=180px, `w-60`=240px,
-  `w-75`=300px, `h-62.5`=250px, `h-75`=300px, `h-80`=320px, `h-100`=400px,
-  `w-35`=140px, `min-w-25`=100px, `min-h-20`=80px, `min-h-30`=120px,
-  `max-w-50`=200px):
-  - `src/components/AuctionItemsFilterBar.tsx:56` `w-[240px]` and `:74`
-    `w-[180px]` - notably, this same file's `SelectContent` at `:64`
-    already uses the proper scale form (`min-w-75`), added in the same
-    recent pass that left these two untouched - an internal
-    inconsistency worth cleaning up together.
-  - `src/components/BiddersFilterControls.tsx:55,68,79` `w-[150px]` ×3
-  - `src/components/TicketAttendeeTab.tsx:50` `w-[180px]`
-  - `src/components/AttendanceChart.tsx:14`, `src/components/ProxyBiddersCard.tsx:19`
-    `h-[320px]`
-  - `src/components/Receipts.tsx:69` `h-[400px]`, `:104` `w-[300px]`,
-    `:120` `max-w-[300px]`
-  - `src/components/FollowUpListPanel.tsx:46` `h-[300px]`
-  - `src/components/WinnerGrid.tsx:40` `h-[250px]`
-  - `src/components/AuctionItemsBulkActionBar.tsx:49` `w-[140px]`,
-    `src/components/BidderRow.tsx:61` `min-w-[140px]`
-  - `src/components/BugReportDialog.tsx:72` `min-h-[120px]`,
-    `src/components/ui/EditableCell.tsx:91` `min-h-[80px]`
-  - `src/components/WinnerCard.tsx:64,77` `min-w-[100px]`
-  - `src/components/FolderFilesCard.tsx:77`, `src/components/BidderRow.tsx:57`
-    `max-w-[200px]`
-
-  Not flagged (legitimate one-offs per the guide's own stated
-  exceptions): dialog max-width/max-height sizing in
-  `AddAuctionItemDialog.tsx`/`BundlingDialog.tsx`, the percentage column
-  widths in `AttendeesTable.tsx`/`Items.tsx` (no clean fractional
-  Tailwind equivalent), and `DataTableWrapper.tsx`/`Items.tsx`'s
-  `h-[650px]` (650 isn't a scale-clean value either, and it's a single
-  real usage site, not duplicated - a docblock comment in
-  `DataTableWrapper.tsx` merely illustrates the prop using the same
-  string as its one real caller).
 
 ### Test coverage gaps (`testing-philosophy.md`)
 

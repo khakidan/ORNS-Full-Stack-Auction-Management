@@ -47,7 +47,7 @@ export default function TicketAttendeeTab() {
         searchInputClassName="h-10"
         filters={
           <Select value={state.filterSource} onValueChange={state.setFilterSource}>
-            <SelectTrigger className="w-[180px] h-10">
+            <SelectTrigger className="w-45 h-10">
               <Filter className="w-4 h-4 mr-2" />
               <SelectValue placeholder="Source">{(value: string) => SOURCE_LABELS[value] ?? value}</SelectValue>
             </SelectTrigger>
@@ -92,7 +92,7 @@ export default function TicketAttendeeTab() {
             {state.filteredAttendees.length} entries found across participating sources.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex-1 overflow-auto p-0 min-h-[400px]">
+        <CardContent className="flex-1 overflow-auto p-0 min-h-100">
           <AttendeesTable
             attendees={state.filteredAttendees}
             loading={attendeesLoading}

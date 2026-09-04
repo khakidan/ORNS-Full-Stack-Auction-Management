@@ -16,7 +16,7 @@ export function ProxyBiddersCard({ proxyBidders }: ProxyBiddersCardProps) {
           Proxy Bidders ({proxyBidders.length})
         </CardTitle>
       </CardHeader>
-      <CardContent className="h-[320px]">
+      <CardContent className="h-80">
         <ScrollArea className="h-full pr-4">
           {proxyBidders.length > 0 ? (
             <div className="space-y-2">

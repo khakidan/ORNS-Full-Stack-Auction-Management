@@ -53,7 +53,7 @@ export function AuctionItemsFilterBar({
           className="bg-white h-10"
         />
       </div>
-      <div className="w-full md:w-[240px] space-y-1.5">
+      <div className="w-full md:w-60 space-y-1.5">
         <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 ml-1">
           <Filter className="w-3 h-3" /> Category
         </Label>
@@ -71,7 +71,7 @@ export function AuctionItemsFilterBar({
           </SelectContent>
         </Select>
       </div>
-      <div className="w-full md:w-[180px] space-y-1.5">
+      <div className="w-full md:w-45 space-y-1.5">
         <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 ml-1">
           <Filter className="w-3 h-3" /> Item Type
         </Label>

@@ -69,7 +69,7 @@ export function BugReportDialog({ open, onOpenChange, form, onFormChange, onSubm
               placeholder="What were you doing, what happened, what did you expect?"
               value={form.description}
               onChange={(e) => onFormChange({ ...form, description: e.target.value })}
-              className="min-h-[120px]"
+              className="min-h-30"
             />
           </div>
 

@@ -11,7 +11,7 @@ export function AttendanceChart({ bidderStats }: AttendanceChartProps) {
       <CardHeader>
         <CardTitle>Attendance Overview</CardTitle>
       </CardHeader>
-      <CardContent className="h-[320px] w-full flex items-center justify-center p-0">
+      <CardContent className="h-80 w-full flex items-center justify-center p-0">
         <PieChart width={280} height={280}>
           <Pie
             data={bidderStats}

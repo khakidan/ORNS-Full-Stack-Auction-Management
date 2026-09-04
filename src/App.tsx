@@ -211,7 +211,7 @@ export default function App() {
           <span className="text-sm font-bold">ORNS Auction</span>
         </div>
         <div className="flex items-center gap-2">
-           <span className="text-xs text-muted-foreground font-medium uppercase tracking-tight truncate max-w-[120px]">
+           <span className="text-xs text-muted-foreground font-medium uppercase tracking-tight truncate max-w-30">
              {activeWorkflow === 'items' && "Items"}
              {activeWorkflow === 'tickets' && "Tickets"}
              {activeWorkflow === 'bids' && "Bids"}

@@ -43,7 +43,7 @@ export function FollowUpListPanel({
           {count} {countLabel}
         </span>
       </div>
-      <ScrollArea className="h-[300px] rounded-md border bg-white p-4">
+      <ScrollArea className="h-75 rounded-md border bg-white p-4">
         <div className="space-y-3">
           {isEmpty ? (
             <div className="text-center py-12 text-muted-foreground italic">{emptyMessage}</div>

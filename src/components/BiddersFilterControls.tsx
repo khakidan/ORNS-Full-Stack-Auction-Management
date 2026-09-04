@@ -52,7 +52,7 @@ export function BiddersFilterControls({
   return (
     <>
       <Select value={statusFilter} onValueChange={onStatusFilterChange}>
-        <SelectTrigger className="h-10 w-[150px]">
+        <SelectTrigger className="h-10 w-37.5">
           <Filter className="w-3.5 h-3.5 mr-2 opacity-70" />
           <SelectValue placeholder="Status">{(value: string) => STATUS_LABELS[value] ?? value}</SelectValue>
         </SelectTrigger>
@@ -65,7 +65,7 @@ export function BiddersFilterControls({
       </Select>
 
       <Select value={paymentFilter} onValueChange={onPaymentFilterChange}>
-        <SelectTrigger className="h-10 w-[150px]">
+        <SelectTrigger className="h-10 w-37.5">
           <SelectValue placeholder="Payment">{(value: string) => PAYMENT_LABELS[value] ?? value}</SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -76,7 +76,7 @@ export function BiddersFilterControls({
       </Select>
 
       <Select value={sourceFilter} onValueChange={onSourceFilterChange}>
-        <SelectTrigger className="h-10 w-[150px]">
+        <SelectTrigger className="h-10 w-37.5">
           <SelectValue placeholder="Source">{(value: string) => SOURCE_LABELS[value] ?? value}</SelectValue>
         </SelectTrigger>
         <SelectContent>

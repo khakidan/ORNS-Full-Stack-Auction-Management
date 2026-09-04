@@ -141,7 +141,7 @@ export function BundlingDialog({
                 </LoadingButton>
               </Label>
               <Textarea 
-                className="min-h-[150px] text-xs font-mono"
+                className="min-h-37.5 text-xs font-mono"
                 value={bundleDetails.description || ""} 
                 onChange={(e) => setBundleDetails({...bundleDetails, description: e.target.value})}
               />

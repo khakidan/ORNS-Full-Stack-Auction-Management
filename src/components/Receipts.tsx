@@ -66,7 +66,7 @@ export default function Receipts() {
   if (isInvalidId) {
     return (
       <Card>
-        <CardContent className="h-[400px] flex items-center justify-center">
+        <CardContent className="h-100 flex items-center justify-center">
           <StatusStatePlaceholder
             icon={<FileText />}
             title="No Folder Configured"
@@ -101,7 +101,7 @@ export default function Receipts() {
           columnCount={3}
           header={
             <TableRow>
-              <TableHead className="w-[300px]">Document Name</TableHead>
+              <TableHead className="w-75">Document Name</TableHead>
               <TableHead>Last Modified</TableHead>
               <TableHead className="text-right">Action</TableHead>
             </TableRow>
@@ -117,7 +117,7 @@ export default function Receipts() {
               <TableCell className="font-medium">
                 <div className="flex items-center gap-2">
                   {file.iconLink && <img src={file.iconLink} alt="icon" className="w-4 h-4" />}
-                  <span className="truncate max-w-[300px]" title={file.name}>
+                  <span className="truncate max-w-75" title={file.name}>
                     {file.name}
                   </span>
                 </div>

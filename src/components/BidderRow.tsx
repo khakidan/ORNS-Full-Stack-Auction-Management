@@ -54,11 +54,11 @@ export function BidderRow({
           </div>
         )}
       </TableCell>
-      <TableCell className="hidden lg:table-cell text-muted-foreground text-sm max-w-[200px] truncate">
+      <TableCell className="hidden lg:table-cell text-muted-foreground text-sm max-w-50 truncate">
         {bidder.email || "—"}
       </TableCell>
       <TableCell>
-        <div className="flex flex-col gap-2 min-w-[140px]">
+        <div className="flex flex-col gap-2 min-w-35">
           {/* Ticket Payment Status */}
           <div className="flex flex-col gap-1">
             <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">

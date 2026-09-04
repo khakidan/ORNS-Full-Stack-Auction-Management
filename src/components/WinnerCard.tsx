@@ -61,7 +61,7 @@ export function WinnerCard({
         <LoadingButton
           variant="outline"
           size="sm"
-          className="flex-1 min-w-[100px] gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 min-w-25 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => onEmailReceipt(winner)}
           disabled={!hasEmail || isProcessingThisWinner}
           loading={processingId === `${winner.bidderId}-email`}
@@ -74,7 +74,7 @@ export function WinnerCard({
         <LoadingButton
           variant="outline"
           size="sm"
-          className="flex-1 min-w-[100px] gap-2"
+          className="flex-1 min-w-25 gap-2"
           onClick={() => onPrintReceipt(winner)}
           disabled={isProcessingThisWinner}
           loading={processingId === `${winner.bidderId}-print`}

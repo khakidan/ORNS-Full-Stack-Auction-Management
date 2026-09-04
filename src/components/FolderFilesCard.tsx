@@ -74,7 +74,7 @@ export function FolderFilesCard({ files, loadingFiles, isInvalidFolder, onRefres
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         {file.iconLink && <img src={file.iconLink} alt="" className="w-4 h-4" referrerPolicy="no-referrer" />}
-                        <span className="truncate max-w-[200px] sm:max-w-xs" title={file.name}>{file.name}</span>
+                        <span className="truncate max-w-50 sm:max-w-xs" title={file.name}>{file.name}</span>
                       </div>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground whitespace-nowrap">

@@ -37,7 +37,7 @@ export function WinnerGrid({
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       {loading ? (
         Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i} className="animate-pulse bg-slate-100 h-[250px]" />
+          <Card key={i} className="animate-pulse bg-slate-100 h-62.5" />
         ))
       ) : winners.length > 0 ? (
         winners.map((winner) => {

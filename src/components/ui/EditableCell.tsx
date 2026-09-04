@@ -65,7 +65,7 @@ export function EditableCell({
 
   if (isEditing) {
     return (
-      <div className="flex flex-col gap-2 min-w-[9rem] w-full">
+      <div className="flex flex-col gap-2 min-w-36 w-full">
         {type === "select" ? (
           <Select
             value={tempValue}
@@ -88,7 +88,7 @@ export function EditableCell({
           <Textarea
             value={tempValue}
             onChange={(e) => setTempValue(e.target.value)}
-            className="text-sm min-h-[80px] w-full"
+            className="text-sm min-h-20 w-full"
             autoFocus
             disabled={saving}
             onKeyDown={(e) => {
