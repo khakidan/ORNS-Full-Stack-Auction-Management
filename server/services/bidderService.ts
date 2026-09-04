@@ -1,6 +1,7 @@
 import { sheets_v4 } from "googleapis";
 import { getColumnLetter } from "../utils/columnUtils";
 import { executeGoogleSheetsTransaction, SheetOp } from "../services/sheetsService";
+import { withLock } from "../utils/asyncLock";
 
 export interface WalkInParams {
   firstName: string;
@@ -42,8 +43,24 @@ export interface CheckInResult {
 /**
  * Registers a new walk-in bidder across multiple spreadsheets.
  * Logic extracted from legacy bidRoutes.ts
+ *
+ * Wrapped in withLock, keyed per Bid-Management spreadsheet: this function
+ * computes the next bidder ID and the next open Bid-Management column pair
+ * from a fresh read, then writes to them - two walk-ins registered within
+ * the same read/write window (a real risk once more than one person works
+ * the door) would otherwise be able to compute the same ID/columns, and
+ * the second write would silently clobber the first's data. See
+ * docs/agents/ROADMAP.md's "Concurrency Safety for Simultaneous Bidder
+ * Operations" milestone.
  */
 export async function registerWalkInBidder(
+  sheets: sheets_v4.Sheets,
+  params: WalkInParams
+): Promise<BidderResult> {
+  return withLock(`bidder-numbers:${params.spreadsheetId}`, () => registerWalkInBidderLocked(sheets, params));
+}
+
+async function registerWalkInBidderLocked(
   sheets: sheets_v4.Sheets,
   params: WalkInParams
 ): Promise<BidderResult> {

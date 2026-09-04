@@ -12,3 +12,4 @@ This document outlines the high-level roadmap and future milestones of the **ORN
 
 ### Milestone B: Advanced Reporting Dashboards
 - Expand the analytics engine within `/src/components/Dashboard.tsx` to visualize bid distributions over time, total funds raised by category, and real-time checkout percentages via D3 charts.
+

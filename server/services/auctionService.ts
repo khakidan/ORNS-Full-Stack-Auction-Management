@@ -2,6 +2,7 @@ import { google, sheets_v4 } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
 import { getColumnLetter } from "../utils/columnUtils";
 import { executeGoogleSheetsTransaction, SheetOp } from "../services/sheetsService";
+import { withLock } from "../utils/asyncLock";
 
 export interface RecordWinningBidParams {
   bidderId: string;
@@ -49,8 +50,26 @@ export interface CloseAuctionResult {
 /**
  * Records a winning bid for a bidder.
  * If the bidder has already checked out, it also records the bid in a "Follow-Up" sheet.
+ *
+ * Wrapped in withLock, keyed per Bid-Management spreadsheet: this function
+ * finds the winning bidder's own column (safe, identity-based), then scans
+ * down that column for the first empty row from a fresh read, then writes
+ * to it. If the same bidder wins two items and two different staff record
+ * them within the same read/write window - a normal, good outcome at a
+ * live auction, not an edge case - both computations can land on the same
+ * "first empty row," and the second recorded win silently overwrites the
+ * first: a lost winning-bid record, meaning a sold item never gets
+ * invoiced. See docs/agents/ROADMAP.md's "Concurrency Safety for
+ * Simultaneous Bidder Operations" milestone.
  */
 export async function recordWinningBid(
+  sheets: sheets_v4.Sheets,
+  params: RecordWinningBidParams
+): Promise<WinningBidResult> {
+  return withLock(`bidder-numbers:${params.spreadsheetId}`, () => recordWinningBidLocked(sheets, params));
+}
+
+async function recordWinningBidLocked(
   sheets: sheets_v4.Sheets,
   params: RecordWinningBidParams
 ): Promise<WinningBidResult> {
@@ -164,8 +183,28 @@ export async function recordWinningBid(
 /**
  * Marks a bidder as paid across spreadsheets and executes their checkout.
  * Relies on Apps Script bridge for core payment logic.
+ *
+ * Wrapped in withLock, keyed per Bid-Management spreadsheet, as
+ * defense-in-depth alongside recordWinningBid/registerWalkInBidder above,
+ * even though this path is already safe on its own (Class_GoogleAIStudio.gs's
+ * recordPayment finds its target row by scanning for the bidder's own ID -
+ * not a computed "next open slot" - and every payment-method branch writes
+ * a specific final value, not an incrementally-computed one, so concurrent
+ * calls are naturally idempotent). Keeps every bidder-mutating write path
+ * in this app protected by the same rule, and the lock is held across the
+ * full Apps Script bridge round-trip (script.scripts.run), which also
+ * fully serializes the underlying .gs execution - no LockService needed
+ * on that side. See docs/agents/ROADMAP.md's "Concurrency Safety for
+ * Simultaneous Bidder Operations" milestone.
  */
 export async function checkoutMarkPaid(
+  auth: OAuth2Client,
+  params: CheckoutParams
+): Promise<CheckoutResult> {
+  return withLock(`bidder-numbers:${params.spreadsheetId}`, () => checkoutMarkPaidLocked(auth, params));
+}
+
+async function checkoutMarkPaidLocked(
   auth: OAuth2Client,
   params: CheckoutParams
 ): Promise<CheckoutResult> {
