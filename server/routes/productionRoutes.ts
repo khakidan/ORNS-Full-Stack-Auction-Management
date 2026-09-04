@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
 import { requireAuth } from '../middleware/requireAuth';
+import { ensureBidderNumbersSheet } from '../services/syncService';
 
 export default function createProductionRouter() {
   const router = Router();
@@ -96,8 +97,25 @@ export default function createProductionRouter() {
    * TICKETS SPREADSHEET COMMANDS
    */
 
-  router.post("/tickets/bidder-labels", (req, res, next) => {
-    const { folderId, bidManagementSpreadsheetId } = req.body;
+  router.post("/tickets/bidder-labels", async (req, res, next) => {
+    const { folderId, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId } = req.body;
+
+    // Real auction workflow (see CHANGELOG.md): bidder labels get printed
+    // 2-3 days before the auction, while "Set Up Bid Management App" - and
+    // therefore Bidder-Numbers, the sheet the label-generation Apps Script
+    // requires - isn't run until day-of. Build it here first if it isn't
+    // there yet, so labels don't depend on Bid-Management being set up.
+    // Idempotent (a no-op once Bidder-Numbers has real data), so re-running
+    // this to regenerate labels never reassigns a number already printed.
+    if (bidManagementSpreadsheetId) {
+      try {
+        const client = getAuthenticatedClient(req.session.tokens);
+        await ensureBidderNumbersSheet(client, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId || "");
+      } catch (error: any) {
+        return res.status(400).json({ error: error.message });
+      }
+    }
+
     handleAppsScriptCall(req, res, next, "apiCreateBidderLabels", process.env.SCRIPT_ID_TICKETS!, [folderId || "", bidManagementSpreadsheetId || ""]);
   });
 

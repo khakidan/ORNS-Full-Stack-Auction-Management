@@ -80,7 +80,12 @@ describe("Document and Presentation Creation workflow", () => {
     {
       endpoint: "/api/production/tickets/bidder-labels",
       funcName: "apiCreateBidderLabels",
-      payload: { folderId: "test-folder-id", bidManagementSpreadsheetId: "test-bm-id" },
+      // The default MSW Bidder-Numbers handler (handlers.ts) already
+      // returns populated data, so ensureBidderNumbersSheet's idempotency
+      // check short-circuits as a no-op here - the dedicated
+      // "bidder-labels: builds Bidder-Numbers first" describe block below
+      // covers the build-when-missing path explicitly.
+      payload: { folderId: "test-folder-id", bidManagementSpreadsheetId: "test-bm-id", auctionTicketsSpreadsheetId: "test-tickets-id" },
       expectedParams: ["test-folder-id", "test-bm-id"],
     },
   ];
@@ -174,5 +179,128 @@ describe("Document and Presentation Creation workflow", () => {
     expect(appsScriptCallCount).toBe(0);
 
     process.env.SCRIPT_ID_ITEM_ENTRY = originalScriptId;
+  });
+
+  describe("/api/production/tickets/bidder-labels - builds Bidder-Numbers first when it's missing", () => {
+    // Real auction workflow (see CHANGELOG.md): bidder labels are printed
+    // 2-3 days before the auction; "Set Up Bid Management App" - the thing
+    // that used to be the only way Bidder-Numbers got created - isn't run
+    // until day-of. This route now builds Bidder-Numbers itself first if
+    // it's missing, so label generation doesn't depend on that ever having
+    // happened.
+    it("builds Bidder-Numbers from staff/tickets/sponsor rows, then still calls the label Apps Script function", async () => {
+      let sheetCreated = false;
+      let writtenValues: any[][] | null = null;
+
+      server.use(
+        // Bidder-Numbers is empty (no data rows) - the idempotency check must see this as "missing".
+        http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ request }) => {
+          const url = new URL(request.url);
+          const range = decodeURIComponent(url.pathname.split("/").pop() || "");
+          if (range.includes("Bidder-Numbers")) return HttpResponse.json({ values: [] });
+          if (range.includes("'tickets'")) {
+            return HttpResponse.json({
+              values: [
+                ["Header"],
+                ["Alice", "One", "alice@example.com"],
+              ],
+            });
+          }
+          if (range.includes("staff")) return HttpResponse.json({ values: [["Header"], ["Staff", "Member", "staff@example.com"]] });
+          if (range.includes("sponsor")) return HttpResponse.json({ values: [] });
+          return HttpResponse.json({ values: [] });
+        }),
+        // No sheets exist yet in Bid-Management (matches the reported bug's "never set up" state).
+        http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId", () => {
+          if (sheetCreated) {
+            return HttpResponse.json({ sheets: [{ properties: { title: "Bidder-Numbers", sheetId: 555 } }] });
+          }
+          return HttpResponse.json({ sheets: [] });
+        }),
+        http.post("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId\\:batchUpdate", async ({ request }) => {
+          const body = await request.clone().json() as any;
+          if (body.requests?.some((r: any) => r.addSheet?.properties?.title === "Bidder-Numbers")) {
+            sheetCreated = true;
+          }
+          return HttpResponse.json({});
+        }),
+        http.put("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", async ({ request }) => {
+          const url = new URL(request.url);
+          if (decodeURIComponent(url.pathname).includes("Bidder-Numbers")) {
+            const body = await request.clone().json() as any;
+            writtenValues = body.values;
+          }
+          return HttpResponse.json({ updatedRows: 1 });
+        })
+      );
+
+      const response = await request(app)
+        .post("/api/production/tickets/bidder-labels")
+        .set(authHeader)
+        .send({ folderId: "test-folder-id", bidManagementSpreadsheetId: "test-bm-id", auctionTicketsSpreadsheetId: "test-tickets-id" });
+
+      expect(response.status).toBe(200);
+      expect(productionScriptCallLog).toContain("apiCreateBidderLabels");
+
+      expect(writtenValues).not.toBeNull();
+      const dataRows = writtenValues!.slice(1);
+      expect(dataRows.map((r: any[]) => `${r[1]} ${r[2]}`)).toEqual(["Staff Member", "Alice One"]);
+    });
+
+    it("does NOT rebuild Bidder-Numbers when it already has data - never reassigns a number already printed on a label", async () => {
+      // Uses the default MSW handler (handlers.ts), which returns a
+      // populated Bidder-Numbers sheet - no build-path requests should fire.
+      let ticketsSheetRead = false;
+      server.use(
+        http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ request }) => {
+          const url = new URL(request.url);
+          const range = decodeURIComponent(url.pathname.split("/").pop() || "");
+          if (range.includes("Bidder-Numbers")) {
+            return HttpResponse.json({ values: [["ID", "First Name", "Last Name", "Email"], ["101", "Already", "Printed", "already@example.com"]] });
+          }
+          if (range.includes("'tickets'") || range.includes("staff") || range.includes("sponsor")) {
+            ticketsSheetRead = true;
+          }
+          return HttpResponse.json({ values: [] });
+        })
+      );
+
+      const response = await request(app)
+        .post("/api/production/tickets/bidder-labels")
+        .set(authHeader)
+        .send({ folderId: "test-folder-id", bidManagementSpreadsheetId: "test-bm-id", auctionTicketsSpreadsheetId: "test-tickets-id" });
+
+      expect(response.status).toBe(200);
+      expect(ticketsSheetRead).toBe(false);
+    });
+
+    it("returns a 400 with a real error message when the Auction Tickets spreadsheet ID is missing", async () => {
+      const response = await request(app)
+        .post("/api/production/tickets/bidder-labels")
+        .set(authHeader)
+        .send({ folderId: "test-folder-id", bidManagementSpreadsheetId: "test-bm-id" }); // no auctionTicketsSpreadsheetId
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatch(/Auction Tickets spreadsheet ID/);
+      expect(appsScriptCallCount).toBe(0);
+    });
+
+    it("skips the Bidder-Numbers pre-step entirely when no bidManagementSpreadsheetId is given (existing validation still applies downstream)", async () => {
+      let bidderNumbersChecked = false;
+      server.use(
+        http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ request }) => {
+          const url = new URL(request.url);
+          if (decodeURIComponent(url.pathname).includes("Bidder-Numbers")) bidderNumbersChecked = true;
+          return HttpResponse.json({ values: [] });
+        })
+      );
+
+      await request(app)
+        .post("/api/production/tickets/bidder-labels")
+        .set(authHeader)
+        .send({ folderId: "test-folder-id" });
+
+      expect(bidderNumbersChecked).toBe(false);
+    });
   });
 });

@@ -36,7 +36,7 @@ export default function TicketDocumentCreationTab() {
       const res = await fetchWithRetry(`${getBaseUrl()}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderId: forPrintFolderId, bidManagementSpreadsheetId })
+        body: JSON.stringify({ folderId: forPrintFolderId, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId: spreadsheetId })
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);

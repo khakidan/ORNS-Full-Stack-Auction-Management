@@ -55,7 +55,7 @@ describe("TicketDocumentCreationTab", () => {
     mockedFetchWithRetry.mockResolvedValue(emptyFilesResponse);
   });
 
-  it("POSTs to bidder-labels with folderId and bidManagementSpreadsheetId from config", async () => {
+  it("POSTs to bidder-labels with folderId, bidManagementSpreadsheetId, and auctionTicketsSpreadsheetId from config", async () => {
     mockedFetchWithRetry.mockImplementation(async (url: any) => {
       if (typeof url === "string" && url.includes("/tickets/bidder-labels")) {
         return { ok: true, status: 200, json: async () => ({ success: true }) } as Response;
@@ -79,6 +79,7 @@ describe("TicketDocumentCreationTab", () => {
         body: JSON.stringify({
           folderId: mockConfig.forPrintFolderId,
           bidManagementSpreadsheetId: mockConfig.bidManagementSpreadsheetId,
+          auctionTicketsSpreadsheetId: mockConfig.auctionTicketsSpreadsheetId,
         }),
       })
     );
