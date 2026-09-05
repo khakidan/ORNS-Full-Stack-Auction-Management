@@ -8,9 +8,12 @@
  * a new page break and table copy are appended.
  *
  * @param {Bidder[]} bidders  Already-fetched, already-validated bidder array
- *   (see BidderManager#getAllBidders). Fetching happens BEFORE this class is
- *   constructed so a failed/unmatched lookup never leaves a wasted, empty
- *   template copy behind in Drive.
+ *   (Node reads the Bid-Management app's real "Bidder-Numbers" sheet and
+ *   passes the finished list in - see Class_GoogleAIStudio.gs's
+ *   createBidderLabels and server/services/syncService.ts's
+ *   getBidderLabelList). Fetching happens BEFORE this class is constructed
+ *   so a failed/missing lookup never leaves a wasted, empty template copy
+ *   behind in Drive.
  */
 class BidderLabelsDoc extends DocService {
     constructor ( bidders, folderID = null ) {

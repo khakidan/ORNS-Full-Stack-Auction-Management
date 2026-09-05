@@ -81,12 +81,14 @@ describe("Document and Presentation Creation workflow", () => {
       endpoint: "/api/production/tickets/bidder-labels",
       funcName: "apiCreateBidderLabels",
       // The default MSW Bidder-Numbers handler (handlers.ts) already
-      // returns populated data, so ensureBidderNumbersSheet's idempotency
-      // check short-circuits as a no-op here - the dedicated
-      // "bidder-labels: builds Bidder-Numbers first" describe block below
-      // covers the build-when-missing path explicitly.
+      // returns populated data ([["42", "John", "Doe", "john@example.com", ...]]),
+      // so ensureBidderNumbersSheet's idempotency check short-circuits as a
+      // no-op here - the dedicated "bidder-labels: builds Bidder-Numbers
+      // first" describe block below covers the build-when-missing path
+      // explicitly. getBidderLabelList then reads that same row back as
+      // the { name, number } list forwarded to the Apps Script call.
       payload: { folderId: "test-folder-id", bidManagementSpreadsheetId: "test-bm-id", auctionTicketsSpreadsheetId: "test-tickets-id" },
-      expectedParams: ["test-folder-id", "test-bm-id"],
+      expectedParams: ["test-folder-id", [{ name: "John Doe", number: "42" }]],
     },
   ];
 
@@ -193,11 +195,17 @@ describe("Document and Presentation Creation workflow", () => {
       let writtenValues: any[][] | null = null;
 
       server.use(
-        // Bidder-Numbers is empty (no data rows) - the idempotency check must see this as "missing".
+        // Bidder-Numbers starts empty (no data rows) - the idempotency check
+        // must see this as "missing" - but once ensureBidderNumbersSheet has
+        // written it, getBidderLabelList's own read-back must see those same
+        // rows, so this simulates a real read-after-write instead of always
+        // returning empty.
         http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ request }) => {
           const url = new URL(request.url);
           const range = decodeURIComponent(url.pathname.split("/").pop() || "");
-          if (range.includes("Bidder-Numbers")) return HttpResponse.json({ values: [] });
+          if (range.includes("Bidder-Numbers")) {
+            return HttpResponse.json({ values: writtenValues ? writtenValues.slice(1) : [] });
+          }
           if (range.includes("'tickets'")) {
             return HttpResponse.json({
               values: [
@@ -245,6 +253,18 @@ describe("Document and Presentation Creation workflow", () => {
       expect(writtenValues).not.toBeNull();
       const dataRows = writtenValues!.slice(1);
       expect(dataRows.map((r: any[]) => `${r[1]} ${r[2]}`)).toEqual(["Staff Member", "Alice One"]);
+
+      // The whole point of this fix: the freshly-built Bidder-Numbers rows
+      // must flow straight through to the Apps Script call as a plain
+      // { name, number } list - no second, independent re-derivation of
+      // bidder numbers happens on the GAS side anymore.
+      expect(lastAppsScriptParams).toEqual([
+        "test-folder-id",
+        [
+          { name: "Staff Member", number: "101" },
+          { name: "Alice One", number: "102" },
+        ],
+      ]);
     });
 
     it("does NOT rebuild Bidder-Numbers when it already has data - never reassigns a number already printed on a label", async () => {

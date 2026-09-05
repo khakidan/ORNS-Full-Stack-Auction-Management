@@ -1,16 +1,22 @@
 /**
  * Tests the REAL source of
  * scripts/GoogleAppsScriptsCode/TicketsSpreadsheet/Class_GoogleAIStudio.gs's
- * injectable `bidderManager` override and the fetch-before-construct
- * ordering in `createBidderLabels` - bidders are looked up and validated
- * BEFORE BidderLabelsDoc (which copies the Avery template into Drive) is
- * ever constructed, so a hard error (unmatched bidders, missing sync) never
- * leaves an orphaned empty Drive doc behind.
+ * `createBidderLabels` - it used to re-derive bidder numbers itself (via an
+ * injected `BidderManager` cross-reading the Bid-Management spreadsheet by
+ * name/email matching); it now just receives an already-fetched, already-
+ * matched `{name, number}[]` list built by Node
+ * (server/services/syncService.ts's getBidderLabelList, called from
+ * server/routes/productionRoutes.ts before this Apps Script function ever
+ * runs) - see refactor-opportunities.md's Code Hardening item #5.
  *
  * Deliberately NOT tested here: the full label-document generation itself
- * (BidderLabelsDoc/DocumentApp/DriveApp output) - same scoping call made for
- * the Items-spreadsheet's 8 document generators, see
- * gs-items-google-ai-studio.test.ts and refactor-opportunities.md.
+ * (BidderLabelsDoc/DocumentApp/DriveApp output, and the resulting
+ * bidders.map(b => new Bidder(...)) conversion, which only runs once that
+ * pipeline is reached) - same scoping call made for the Items-spreadsheet's
+ * 8 document generators, see gs-items-google-ai-studio.test.ts and
+ * refactor-opportunities.md. This file only pins the validate-before-
+ * construct ordering: an empty/missing bidders list must throw before
+ * BidderLabelsDoc (not loaded here) is ever touched.
  *
  * Loaded via helpers/loadGasClass, not a Node reimplementation.
  *
@@ -26,42 +32,19 @@ const { GoogleAIStudio } = loadGasClasses(
   ["GoogleAIStudio"]
 );
 
-describe("GoogleAIStudio bidderManager override", () => {
-  it("uses the injected bidderManager instead of constructing a real one", () => {
-    const fakeBidderManager = { marker: "this is the fake" };
-    const studio = new GoogleAIStudio({ bidderManager: fakeBidderManager });
-    expect(studio.bidderManager).toBe(fakeBidderManager);
-  });
-
-  it("lazily throws building a real BidderManager only when no override is given", () => {
-    // Class_BidderManager.gs is deliberately NOT loaded here, so the real
-    // fallback path (`new BidderManager()`) throws ReferenceError - the
-    // correct failure mode per loadGasClass.ts's own testing philosophy.
-    expect(() => new GoogleAIStudio()).toThrow(/BidderManager is not defined/);
-  });
-
-  it("propagates getAllBidders's hard error without ever reaching BidderLabelsDoc construction", () => {
+describe("GoogleAIStudio.createBidderLabels", () => {
+  it("throws a clear error when an empty bidders array is given, before BidderLabelsDoc is ever touched", () => {
     // BidderLabelsDoc.gs is deliberately NOT loaded here. If createBidderLabels
-    // called `new BidderLabelsDoc(...)` before this throw, the failure would
+    // reached `new BidderLabelsDoc(...)` before this throw, the failure would
     // instead be "BidderLabelsDoc is not defined" - a different error, proving
-    // the fetch-then-construct ordering was violated.
-    const fakeBidderManager = {
-      getAllBidders: () => { throw new Error("unmatched bidders: Ghost Person"); },
-    };
-    const studio = new GoogleAIStudio({ bidderManager: fakeBidderManager });
-
-    expect(() => studio.createBidderLabels(null, "bm-id")).toThrow("unmatched bidders: Ghost Person");
+    // the validate-before-construct ordering was violated.
+    const studio = new GoogleAIStudio();
+    expect(() => studio.createBidderLabels("folder-1", [])).toThrow(/No bidders were provided/);
   });
 
-  it("passes bidManagementSpreadsheetId through to getAllBidders", () => {
-    let receivedId: string | undefined;
-    const fakeBidderManager = {
-      getAllBidders: (id: string) => { receivedId = id; throw new Error("stop here"); },
-    };
-    const studio = new GoogleAIStudio({ bidderManager: fakeBidderManager });
-
-    expect(() => studio.createBidderLabels("folder-1", "bm-id-42")).toThrow("stop here");
-    expect(receivedId).toBe("bm-id-42");
+  it("throws the same error when bidders is omitted entirely", () => {
+    const studio = new GoogleAIStudio();
+    expect(() => studio.createBidderLabels("folder-1")).toThrow(/No bidders were provided/);
   });
 });
 
@@ -71,13 +54,12 @@ describe("apiCreateBidderLabels bridge function", () => {
       ["scripts/GoogleAppsScriptsCode/TicketsSpreadsheet/Class_GoogleAIStudio.gs"],
       ["apiCreateBidderLabels"]
     );
-    // With no BidderManager.gs loaded and no overrides available to a bare
-    // function call, GoogleAIStudio() throws building its default
-    // BidderManager - apiCreateBidderLabels's try/catch must still convert
-    // that into the {success:false} shape the Node app expects, exactly as
-    // it would for a real hard-error (e.g. unmatched bidders).
-    const result = apiCreateBidderLabels("folder-1", "bm-id");
+    // No bidders passed - createBidderLabels's own validation throws, and
+    // apiCreateBidderLabels's try/catch must still convert that into the
+    // {success:false} shape the Node app expects.
+    const result = apiCreateBidderLabels("folder-1", []);
     expect(result.success).toBe(false);
     expect(typeof result.error).toBe("string");
+    expect(result.error).toMatch(/No bidders were provided/);
   });
 });

@@ -260,6 +260,37 @@ export async function ensureBidderNumbersSheet(client: any, spreadsheetId: strin
   return { created: true, count: finalBidders.length };
 }
 
+/**
+ * Reads the Bid-Management spreadsheet's "Bidder-Numbers" sheet (the single
+ * source of truth, guaranteed populated by `ensureBidderNumbersSheet` before
+ * this is called) and returns a flat, number-sorted { name, number } list
+ * for bidder-label generation.
+ *
+ * This replaces what used to be a second, independent lookup inside
+ * `scripts/GoogleAppsScriptsCode/TicketsSpreadsheet/Class_BidderManager.gs`'s
+ * `getAllBidders()` - that GAS class re-read the Auction Tickets
+ * spreadsheet's staff/tickets/sponsor sheets and re-matched each person
+ * against Bidder-Numbers by a normalized name/email key that its own code
+ * comment admitted "must stay byte-for-byte identical" to this file's
+ * formatting logic. Reading the already-built Bidder-Numbers rows directly
+ * needs no matching at all - the ID and name are already sitting right next
+ * to each other in the same row - so there is no second implementation left
+ * to drift out of sync.
+ */
+export async function getBidderLabelList(client: any, spreadsheetId: string): Promise<{ name: string; number: string }[]> {
+  const sheets = google.sheets({ version: "v4", auth: client });
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Bidder-Numbers!A2:D" });
+  const rows = res.data.values || [];
+
+  return rows
+    .filter((row: any[]) => row && row[0])
+    .map((row: any[]) => ({
+      name: `${row[1] || ""} ${row[2] || ""}`.trim(),
+      number: String(row[0])
+    }))
+    .sort((a: { number: string }, b: { number: string }) => parseInt(a.number, 10) - parseInt(b.number, 10));
+}
+
 export async function performSheetSync(client: any, spreadsheetId: string, customAuctionImportSheetID?: string, customAuctionTicketSheetsID?: string) {
   const sheets = google.sheets({ version: "v4", auth: client });
 

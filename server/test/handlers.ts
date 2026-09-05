@@ -52,11 +52,17 @@ export const handlers = [
       });
     }
     if (url.pathname.includes('Bidder-Numbers')) {
+      const header = ["ID", "First Name", "Last Name", "Email", "Phone", "Checked In", "Checked Out", "Is Paid", "Invoice URL", "Invoice Total Amount", "PayPal Fee Status", "Checkout Timestamp"];
+      const dataRow = ["42", "John", "Doe", "john@example.com", "555-0199", "TRUE", "FALSE", "FALSE", "", "", "", ""];
+      // A range that starts at row 2 (e.g. "Bidder-Numbers!A2:D", as
+      // getBidderLabelList requests) mirrors the real Sheets API and skips
+      // the header row - every other range shape (e.g. "A:L", "A1:...")
+      // keeps returning header+data, matching every other test's existing
+      // expectations of this default handler.
+      const decodedRange = decodeURIComponent(url.pathname.split("/").pop() || "");
+      const startsAtRowTwo = /![A-Z]+2(?![0-9])/.test(decodedRange);
       return HttpResponse.json({
-        values: [
-          ["ID", "First Name", "Last Name", "Email", "Phone", "Checked In", "Checked Out", "Is Paid", "Invoice URL", "Invoice Total Amount", "PayPal Fee Status", "Checkout Timestamp"],
-          ["42", "John", "Doe", "john@example.com", "555-0199", "TRUE", "FALSE", "FALSE", "", "", "", ""]
-        ]
+        values: startsAtRowTwo ? [dataRow] : [header, dataRow]
       });
     }
     if (url.pathname.includes('Categories')) {
