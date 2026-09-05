@@ -3,7 +3,7 @@ import { useConfig } from "./ConfigContext";
 import { useAuth } from "./AuthContext";
 import { Bidder, AuctionItem, Attendee } from "@/types";
 import { useBiddersData } from "@/hooks/useBiddersData";
-import { useItemsData } from "@/hooks/useItemsData";
+import { useAuctionItems } from "@/hooks/useAuctionItems";
 import { useAttendeesData } from "@/hooks/useAttendeesData";
 import { useWinnersData } from "@/hooks/useWinnersData";
 import { useAuctionStatusData } from "@/hooks/useAuctionStatusData";
@@ -39,20 +39,26 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   const { authenticated: isApiAuthenticated } = useAuth();
 
   const biddersData = useBiddersData(spreadsheetId, config.bidderNumbersSheet);
-  const itemsData = useItemsData(spreadsheetId, config.auctionItemsSheet);
+  // Items live in the separate Auction Items spreadsheet, not a copy synced
+  // into Bid Management - see docs/agents/refactor-opportunities.md's Code
+  // Hardening item #1 / CHANGELOG.md. useAuctionItems already implements
+  // "fetch live, full-fidelity items from a spreadsheet ID" (it's what the
+  // top-level Auction Items workflow uses too), and returns the same
+  // AuctionItem[] shape the old useItemsData did.
+  const itemsData = useAuctionItems(config.auctionItemsSpreadsheetId);
   const attendeesData = useAttendeesData(ticketsSpreadsheetId);
   const winnersData = useWinnersData(spreadsheetId, biddersData.bidders, config.bidManagementSheet, config.bidderNumbersSheet);
   const auctionStatusData = useAuctionStatusData(spreadsheetId, config.bidManagementSheet, config.bidderNumbersSheet);
 
   const { fetchBidders, setLoading } = biddersData;
-  const { fetchItems } = itemsData;
+  const { refresh: refreshItems } = itemsData;
   const { fetchAttendees } = attendeesData;
   const { fetchAuctionStatus, requestCloseAuction } = auctionStatusData;
 
   const fetchAllData = useCallback(async () => {
     setLoading(true);
-    await Promise.all([fetchBidders(), fetchItems(), fetchAttendees(), fetchAuctionStatus()]);
-  }, [setLoading, fetchBidders, fetchItems, fetchAttendees, fetchAuctionStatus]);
+    await Promise.all([fetchBidders(), refreshItems(), fetchAttendees(), fetchAuctionStatus()]);
+  }, [setLoading, fetchBidders, refreshItems, fetchAttendees, fetchAuctionStatus]);
 
   const closeAuction = useCallback(async () => {
     const succeeded = await requestCloseAuction();

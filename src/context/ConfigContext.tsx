@@ -18,7 +18,6 @@ const defaultConfig: Config = {
   auctionTicketsSpreadsheetId: localStorage.getItem("auctionTicketsSpreadsheetId") || import.meta.env.VITE_AUCTION_TICKETS_SPREADSHEET_ID || "",
   bidManagementSpreadsheetId: localStorage.getItem("bidManagementSpreadsheetId") || localStorage.getItem("spreadsheetId") || import.meta.env.VITE_BID_MANAGEMENT_SPREADSHEET_ID || "",
   bidderNumbersSheet: localStorage.getItem("bidderNumbersSheet") || import.meta.env.VITE_BIDDER_NUMBERS_SHEET || "Bidder-Numbers",
-  auctionItemsSheet: localStorage.getItem("auctionItemsSheet") || import.meta.env.VITE_AUCTION_ITEMS_SHEET || "Auction-Items",
   bidManagementSheet: localStorage.getItem("bidManagementSheet") || import.meta.env.VITE_BID_MANAGEMENT_SHEET || "Bid-Management",
   receiptFolderId: localStorage.getItem("receiptFolderId") || import.meta.env.VITE_RECEIPT_FOLDER_ID || "",
   forPrintFolderId: localStorage.getItem("forPrintFolderId") || import.meta.env.VITE_FOR_PRINT_FOLDER_ID || "",

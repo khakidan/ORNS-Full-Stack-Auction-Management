@@ -44,12 +44,12 @@ export default function createReceiptsRouter() {
 
 
   router.post("/email-all", async (req, res, next) => {
-    const { spreadsheetId } = req.body;
+    const { spreadsheetId, itemsSpreadsheetId } = req.body;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
 
     try {
       const client = getAuthenticatedClient(req.session.tokens);
-      const sentCount = await processAllEmails(client, spreadsheetId);
+      const sentCount = await processAllEmails(client, spreadsheetId, itemsSpreadsheetId);
       res.json({ success: true, sentCount });
     } catch (error) {
       next(error);
@@ -57,12 +57,12 @@ export default function createReceiptsRouter() {
   });
 
   router.post("/email-only", async (req, res, next) => {
-    const { bidderId, spreadsheetId } = req.body;
+    const { bidderId, spreadsheetId, itemsSpreadsheetId } = req.body;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
 
     try {
       const client = getAuthenticatedClient(req.session.tokens);
-      const result = await processEmail(client, spreadsheetId, String(bidderId));
+      const result = await processEmail(client, spreadsheetId, String(bidderId), itemsSpreadsheetId);
 
       if (!result.success) return res.status(400).json({ error: result.error });
 

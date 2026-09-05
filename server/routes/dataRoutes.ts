@@ -23,7 +23,7 @@ export default function createDataRouter() {
 
   // Sync bidders via Node.js Google Sheets integration
   router.post("/bidders/sync", async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, auctionImportSheetID, auctionTicketSheetsID } = req.body;
+    const { spreadsheetId, auctionTicketSheetsID } = req.body;
     if (!spreadsheetId) {
       return res.status(400).json({ error: "spreadsheetId is required to sync and setup bid management." });
     }
@@ -31,8 +31,8 @@ export default function createDataRouter() {
     try {
       const client = getAuthenticatedClient(req.session.tokens);
       console.log(`[Sync Route] Initiating Native Node.js sheet setup for spreadsheet: ${spreadsheetId}...`);
-      
-      const result = await performSheetSync(client, spreadsheetId, auctionImportSheetID, auctionTicketSheetsID);
+
+      const result = await performSheetSync(client, spreadsheetId, auctionTicketSheetsID);
 
       res.json({ success: true, result });
     } catch (error: any) {

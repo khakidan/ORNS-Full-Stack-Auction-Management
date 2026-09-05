@@ -201,7 +201,7 @@ describe('Receipt Email-All workflow', () => {
     const response = await request(app)
       .post('/api/receipts/email-all')
       .set(authHeader)
-      .send({ spreadsheetId: 'test-spreadsheet-id' });
+      .send({ spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
@@ -243,7 +243,7 @@ describe('Receipt Email-Only workflow', () => {
     const response = await request(app)
       .post('/api/receipts/email-only')
       .set(authHeader)
-      .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id' });
+      .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
@@ -253,7 +253,7 @@ describe('Receipt Email-Only workflow', () => {
     const response = await request(app)
       .post('/api/receipts/email-only')
       .set(authHeader)
-      .send({ bidderId: '999', spreadsheetId: 'test-spreadsheet-id' });
+      .send({ bidderId: '999', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
 
     expect(response.status).toBe(400);
     expect(response.body.error).toContain('No email address found');

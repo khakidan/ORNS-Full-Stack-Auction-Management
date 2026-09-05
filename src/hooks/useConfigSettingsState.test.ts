@@ -76,7 +76,6 @@ const BASE_CONFIG: Config = {
   auctionTicketsSpreadsheetId: "mock-tickets-id",
   bidManagementSpreadsheetId: "mock-bid-mgt-id",
   bidderNumbersSheet: "Bidder-Numbers",
-  auctionItemsSheet: "Auction-Items",
   bidManagementSheet: "Bid-Management",
   receiptFolderId: "mock-receipts-folder",
   forPrintFolderId: "mock-print-folder",

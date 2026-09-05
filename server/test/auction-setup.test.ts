@@ -96,10 +96,14 @@ describe("setupRoutes - /api/auction/setup-new", () => {
 
   describe("master spreadsheet reset (destructive step)", () => {
     // The default mocked spreadsheets.get (handlers.ts) only lists
-    // Bidder-Numbers/Bid-Management/Auction-Status/tickets - no
-    // Auction-Items - so every test in this block overrides it with all
-    // three deletable tabs plus two tabs that must NOT be deleted
-    // (Auction-Status, tickets), to pin the "only the right tabs" behavior.
+    // Bidder-Numbers/Bid-Management/Auction-Status/tickets - so every test
+    // in this block overrides it with the two deletable tabs plus a
+    // leftover "Auction-Items" tab (a stale copy a pre-fix Bid Management
+    // spreadsheet might still have lying around - see
+    // docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+    // CHANGELOG.md, since performSheetSync no longer creates this sheet at
+    // all) plus two tabs that must NOT be deleted (Auction-Status,
+    // tickets), to pin the "only the right tabs, and no longer Auction-Items" behavior.
     const bidManagementSheetsMetadata = () =>
       http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId', () => {
         return HttpResponse.json({
@@ -113,7 +117,7 @@ describe("setupRoutes - /api/auction/setup-new", () => {
         });
       });
 
-    it("deletes exactly the Auction-Items/Bid-Management/Bidder-Numbers tabs, resets Auction-Status, and clears Special-Winners/Follow-Up - nothing else", async () => {
+    it("deletes exactly the Bid-Management/Bidder-Numbers tabs (leaving a leftover Auction-Items tab alone), resets Auction-Status, and clears Special-Winners/Follow-Up - nothing else", async () => {
       server.use(bidManagementSheetsMetadata());
 
       const response = await request(app)
@@ -130,12 +134,13 @@ describe("setupRoutes - /api/auction/setup-new", () => {
       expect(results).toContainEqual(expect.objectContaining({ success: true }));
 
       // Exactly one batchUpdate against Bid-Management, deleting exactly
-      // the 3 named tabs by sheetId - Auction-Status (103) and tickets
-      // (104) must survive.
+      // the 2 named tabs by sheetId - Auction-Status (103), tickets (104),
+      // and a leftover Auction-Items tab (105, no longer written by
+      // performSheetSync) must all survive.
       const bidMgmtDeletes = sheetBatchUpdateRequests.filter(r => r.spreadsheetId === "bidmgmt-id");
       expect(bidMgmtDeletes).toHaveLength(1);
       const deletedSheetIds = bidMgmtDeletes[0].requests.map((r: any) => r.deleteSheet.sheetId).sort();
-      expect(deletedSheetIds).toEqual([101, 102, 105]);
+      expect(deletedSheetIds).toEqual([101, 102]);
 
       // Auction-Status!A2 reset back to true (open), not left cleared/false.
       expect(lastBulkWritePayload).toEqual([[true]]);

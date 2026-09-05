@@ -4,6 +4,7 @@ import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 
 interface UseCheckoutBatchActionsArgs {
   spreadsheetId: string;
+  itemsSpreadsheetId: string;
   folderId: string;
 }
 
@@ -14,7 +15,7 @@ interface UseCheckoutBatchActionsArgs {
  * useCheckoutState.ts (was 416 lines) so that container stays focused on
  * composing the split-out pieces.
  */
-export function useCheckoutBatchActions({ spreadsheetId, folderId }: UseCheckoutBatchActionsArgs) {
+export function useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, folderId }: UseCheckoutBatchActionsArgs) {
   const [isPrintingAll, setIsPrintingAll] = useState(false);
   const [isEmailingAll, setIsEmailingAll] = useState(false);
   const [showPrintConfirm, setShowPrintConfirm] = useState(false);
@@ -53,7 +54,7 @@ export function useCheckoutBatchActions({ spreadsheetId, folderId }: UseCheckout
       const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/email-all`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ spreadsheetId }),
+        body: JSON.stringify({ spreadsheetId, itemsSpreadsheetId }),
         credentials: "include"
       });
 

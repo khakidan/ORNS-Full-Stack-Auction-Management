@@ -13,6 +13,7 @@ export default function Checkout() {
   const { bidders, items, loading, fetchAllData, attendees } = useAuction();
   const { config } = useConfig();
   const spreadsheetId = config.bidManagementSpreadsheetId;
+  const itemsSpreadsheetId = config.auctionItemsSpreadsheetId;
   const ticketsSpreadsheetId = config.auctionTicketsSpreadsheetId;
   const bidManagementSheet = config.bidManagementSheet;
   const bidderNumbersSheet = config.bidderNumbersSheet;
@@ -24,6 +25,7 @@ export default function Checkout() {
     attendees,
     fetchAllData,
     spreadsheetId,
+    itemsSpreadsheetId,
     ticketsSpreadsheetId,
     bidManagementSheet,
     bidderNumbersSheet,

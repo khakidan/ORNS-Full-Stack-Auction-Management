@@ -44,7 +44,6 @@ const mockConfig = {
   bidManagementScriptId: "mock-bid-mgt-script",
   ticketPrice: "35",
   bidderNumbersSheet: "Bidder-Numbers",
-  auctionItemsSheet: "Auction-Items",
   bidManagementSheet: "Bid-Management",
   receiptFolderId: "mock-receipts-folder",
   forPrintFolderId: "mock-print-folder",

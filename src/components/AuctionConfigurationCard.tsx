@@ -130,7 +130,6 @@ export default function AuctionConfigurationCard({ config, setConfig, isOpen, on
           {/* Hidden Fields kept for state management */}
           <div className="hidden">
             <Input value={config.bidderNumbersSheet} onChange={(e) => setConfig({ ...config, bidderNumbersSheet: e.target.value })} />
-            <Input value={config.auctionItemsSheet} onChange={(e) => setConfig({ ...config, auctionItemsSheet: e.target.value })} />
             <Input value={config.bidManagementSheet} onChange={(e) => setConfig({ ...config, bidManagementSheet: e.target.value })} />
             <Input value={config.receiptFolderId} onChange={(e) => setConfig({ ...config, receiptFolderId: extractId(e.target.value) })} />
             <Input value={config.forPrintFolderId} onChange={(e) => setConfig({ ...config, forPrintFolderId: extractId(e.target.value) })} />

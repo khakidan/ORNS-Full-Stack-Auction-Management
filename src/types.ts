@@ -65,7 +65,6 @@ export interface Config {
   auctionTicketsSpreadsheetId: string;
   bidManagementSpreadsheetId: string;
   bidderNumbersSheet: string;
-  auctionItemsSheet: string;
   bidManagementSheet: string;
   receiptFolderId: string;
   forPrintFolderId: string;

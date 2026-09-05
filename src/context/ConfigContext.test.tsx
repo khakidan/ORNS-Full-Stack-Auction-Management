@@ -48,7 +48,6 @@ const FAKE_CONFIG: Config = {
   auctionTicketsSpreadsheetId: "tickets-id",
   bidManagementSpreadsheetId: "bm-id",
   bidderNumbersSheet: "Bidder-Numbers",
-  auctionItemsSheet: "Auction-Items",
   bidManagementSheet: "Bid-Management",
   receiptFolderId: "receipt-folder",
   forPrintFolderId: "print-folder",

@@ -193,7 +193,6 @@ export function useConfigSettingsState() {
     localStorage.setItem("auctionTicketsSpreadsheetId", auctionTicketsId);
 
     localStorage.setItem("bidderNumbersSheet", config.bidderNumbersSheet);
-    localStorage.setItem("auctionItemsSheet", config.auctionItemsSheet);
     localStorage.setItem("bidManagementSheet", config.bidManagementSheet);
     localStorage.setItem("receiptFolderId", receiptFolderId);
     localStorage.setItem("forPrintFolderId", forPrintFolderId);

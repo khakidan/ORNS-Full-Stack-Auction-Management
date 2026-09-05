@@ -67,7 +67,7 @@ describe("processAllEmails - per-bidder resilience", () => {
     mockBidderNumbers();
     mockedProcessEmail.mockResolvedValue({ success: true });
 
-    const sentCount = await processAllEmails(fakeClient, "ss-id");
+    const sentCount = await processAllEmails(fakeClient, "ss-id", "items-ss-id");
 
     expect(sentCount).toBe(3);
     expect(processEmail).toHaveBeenCalledTimes(3);
@@ -84,12 +84,12 @@ describe("processAllEmails - per-bidder resilience", () => {
       return { success: true };
     });
 
-    const sentCount = await processAllEmails(fakeClient, "ss-id");
+    const sentCount = await processAllEmails(fakeClient, "ss-id", "items-ss-id");
     expect(sentCount).toBe(2);
 
     // Every bidder was still attempted, not just the ones before the failure.
     expect(processEmail).toHaveBeenCalledTimes(3);
-    expect(processEmail).toHaveBeenCalledWith(fakeClient, "ss-id", "103");
+    expect(processEmail).toHaveBeenCalledWith(fakeClient, "ss-id", "103", "items-ss-id");
   });
 
   it("does not count a bidder whose processEmail call returns success: false", async () => {
@@ -99,7 +99,7 @@ describe("processAllEmails - per-bidder resilience", () => {
       return { success: true };
     });
 
-    const sentCount = await processAllEmails(fakeClient, "ss-id");
+    const sentCount = await processAllEmails(fakeClient, "ss-id", "items-ss-id");
 
     expect(sentCount).toBe(2);
   });
@@ -113,10 +113,10 @@ describe("processAllEmails - per-bidder resilience", () => {
     ]);
     mockedProcessEmail.mockResolvedValue({ success: true });
 
-    const sentCount = await processAllEmails(fakeClient, "ss-id");
+    const sentCount = await processAllEmails(fakeClient, "ss-id", "items-ss-id");
 
     expect(sentCount).toBe(1);
     expect(processEmail).toHaveBeenCalledTimes(1);
-    expect(processEmail).toHaveBeenCalledWith(fakeClient, "ss-id", "101");
+    expect(processEmail).toHaveBeenCalledWith(fakeClient, "ss-id", "101", "items-ss-id");
   });
 });

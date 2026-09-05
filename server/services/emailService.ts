@@ -85,11 +85,14 @@ export function createRawEmail(to: string, subject: string, htmlBody: string, fr
   return Buffer.from(message, 'utf-8').toString("base64").replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export async function processEmail(client: OAuth2Client, spreadsheetId: string, bidderId: string) {
+export async function processEmail(client: OAuth2Client, spreadsheetId: string, bidderId: string, itemsSpreadsheetId: string) {
   const sheets = google.sheets({ version: "v4", auth: client });
   const bMgmt = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bid-Management'!A1:ZZ1000" });
   const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });
-  const aucItems = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:Z" });
+  // Items live in the separate Auction Items spreadsheet, not a copy synced
+  // into Bid Management - see docs/agents/refactor-opportunities.md's Code
+  // Hardening item #1 / CHANGELOG.md.
+  const aucItems = await sheets.spreadsheets.values.get({ spreadsheetId: itemsSpreadsheetId, range: "'Auction-Items'!A:Z" });
 
   const numData = bNum.data.values || [];
   let email = '';

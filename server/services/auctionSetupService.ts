@@ -202,7 +202,7 @@ export async function setupNewAuction(
       shts.forEach(sheet => {
         const nm = sheet.properties?.title;
         const id = sheet.properties?.sheetId;
-        const deleteSheetsList = ["Auction-Items", "Bid-Management", "Bidder-Numbers"];
+        const deleteSheetsList = ["Bid-Management", "Bidder-Numbers"];
         if (nm && deleteSheetsList.includes(nm) && id !== undefined) {
            reqs.push({ deleteSheet: { sheetId: id } });
         }

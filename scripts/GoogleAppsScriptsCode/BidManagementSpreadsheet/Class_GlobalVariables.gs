@@ -21,7 +21,6 @@ class GlobalVariables {
         // ── Sheet name constants ─────────────────────────────────────────────
         this.bidManagementString = 'Bid-Management';
         this.bidNumbersString = 'Bidder-Numbers';
-        this.auctionItemsString = 'Auction-Items';
 
         if ( overrides.config !== undefined ) {
             this.config = overrides.config;

@@ -28,18 +28,18 @@ export async function createAllReceipts(script: script_v1.Script, scriptId: stri
       return response.data.response?.result;
 }
 
-export async function processAllEmails(client: OAuth2Client, spreadsheetId: string) {
+export async function processAllEmails(client: OAuth2Client, spreadsheetId: string, itemsSpreadsheetId: string) {
     const sheets = google.sheets({ version: "v4", auth: client });
     const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });
     const numData = bNum.data.values || [];
     let sentCount = 0;
-    
+
     for (let i = 1; i < numData.length; i++) {
         const id = String(numData[i][0] || "").trim();
         const email = String(numData[i][3] || "").trim();
         if (id && email) {
             try {
-                const r = await processEmail(client, spreadsheetId, id);
+                const r = await processEmail(client, spreadsheetId, id, itemsSpreadsheetId);
                 if (r.success) sentCount++;
             } catch (e: any) {
                 // One bidder's bad/corrupted data (e.g. a negative item price

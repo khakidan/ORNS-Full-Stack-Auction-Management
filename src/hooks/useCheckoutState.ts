@@ -19,6 +19,7 @@ interface UseCheckoutStateArgs {
   attendees: Attendee[];
   fetchAllData: () => Promise<void>;
   spreadsheetId: string;
+  itemsSpreadsheetId: string;
   ticketsSpreadsheetId: string;
   bidManagementSheet: string;
   bidderNumbersSheet: string;
@@ -48,14 +49,15 @@ export function useCheckoutState({
   attendees,
   fetchAllData,
   spreadsheetId,
+  itemsSpreadsheetId,
   ticketsSpreadsheetId,
   bidManagementSheet,
   bidderNumbersSheet,
   folderId,
 }: UseCheckoutStateArgs) {
   const winnersList = useWinnersList({ bidders, items, fetchAllData, spreadsheetId, bidManagementSheet });
-  const receiptActions = useCheckoutReceiptActions({ spreadsheetId, folderId });
-  const batchActions = useCheckoutBatchActions({ spreadsheetId, folderId });
+  const receiptActions = useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, folderId });
+  const batchActions = useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, folderId });
   const paymentFlow = useCheckoutPaymentFlow({
     bidders,
     attendees,

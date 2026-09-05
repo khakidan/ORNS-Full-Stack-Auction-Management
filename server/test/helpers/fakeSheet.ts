@@ -86,8 +86,10 @@ export class FakeSheet {
 
 export class FakeSpreadsheet {
   private sheets: Record<string, FakeSheet> = {};
+  private sheetOrder: string[] = [];
 
   addSheet(name: string, data: any[][] = []) {
+    if (!(name in this.sheets)) this.sheetOrder.push(name);
     this.sheets[name] = new FakeSheet(data);
     return this.sheets[name];
   }
@@ -98,5 +100,12 @@ export class FakeSpreadsheet {
 
   insertSheet(name: string) {
     return this.addSheet(name);
+  }
+
+  /** Sheets in insertion order - used by callers that fall back to the
+   * workbook's first tab when a specific sheet name isn't found (e.g.
+   * AuctionItemManager.gs's loadItemNameMap_). */
+  getSheets(): FakeSheet[] {
+    return this.sheetOrder.map((name) => this.sheets[name]);
   }
 }

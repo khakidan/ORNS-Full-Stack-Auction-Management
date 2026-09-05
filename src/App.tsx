@@ -135,9 +135,8 @@ export default function App() {
       const res = await fetchWithRetry(`${getBaseUrl()}/api/bidders/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           spreadsheetId,
-          auctionImportSheetID: config.auctionItemsSpreadsheetId,
           auctionTicketSheetsID: config.auctionTicketsSpreadsheetId
         }),
         credentials: "include"

@@ -77,7 +77,7 @@ describe("emailService.processEmail", () => {
   it("sends the receipt email for a bidder with real won items", async () => {
     mockSheets();
 
-    const result = await processEmail(fakeClient, "ss-id", "101");
+    const result = await processEmail(fakeClient, "ss-id", "101", "items-ss-id");
 
     expect(result).toEqual({ success: true });
   });
@@ -85,7 +85,7 @@ describe("emailService.processEmail", () => {
   it("returns a clean error when the bidder has no email on file", async () => {
     mockSheets({ bidderNumbers: [BIDDER_NUMBERS_ROWS[0], ["101", "Alice", "One", "", "", "", "", "", "", ""]] });
 
-    const result = await processEmail(fakeClient, "ss-id", "101");
+    const result = await processEmail(fakeClient, "ss-id", "101", "items-ss-id");
 
     expect(result).toEqual({ success: false, error: "No email address found for this bidder." });
   });
@@ -93,7 +93,7 @@ describe("emailService.processEmail", () => {
   it("returns a clean error when the bidder isn't in the Bid-Management matrix", async () => {
     mockSheets({ bidManagement: [["999", "", "102", ""], ["f", "f", "f", "f"], ["f", "f", "f", "f"]] });
 
-    const result = await processEmail(fakeClient, "ss-id", "101");
+    const result = await processEmail(fakeClient, "ss-id", "101", "items-ss-id");
 
     expect(result).toEqual({ success: false, error: "Bidder not found in Bid-Management matrix." });
   });
@@ -101,7 +101,7 @@ describe("emailService.processEmail", () => {
   it("returns a clean error when the bidder won no items", async () => {
     mockSheets({ bidManagement: [["101", "", "102", ""], ["f", "f", "f", "f"], ["f", "f", "f", "f"]] });
 
-    const result = await processEmail(fakeClient, "ss-id", "101");
+    const result = await processEmail(fakeClient, "ss-id", "101", "items-ss-id");
 
     expect(result).toEqual({ success: false, error: "No items won for this bidder." });
   });
@@ -124,7 +124,7 @@ describe("emailService.processEmail", () => {
       })
     );
 
-    const result = await processEmail(fakeClient, "ss-id", "101");
+    const result = await processEmail(fakeClient, "ss-id", "101", "items-ss-id");
 
     expect(result).toEqual({ success: true });
     const decoded = Buffer.from(sentRaw.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8");

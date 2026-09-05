@@ -5,6 +5,7 @@ import type { WinnerRecord } from "./useCheckoutState";
 
 interface UseCheckoutReceiptActionsArgs {
   spreadsheetId: string;
+  itemsSpreadsheetId: string;
   folderId: string;
 }
 
@@ -13,7 +14,7 @@ interface UseCheckoutReceiptActionsArgs {
  * bidder's receipt). Split out of useCheckoutState.ts (was 416 lines) so
  * that container stays focused on composing the split-out pieces.
  */
-export function useCheckoutReceiptActions({ spreadsheetId, folderId }: UseCheckoutReceiptActionsArgs) {
+export function useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, folderId }: UseCheckoutReceiptActionsArgs) {
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const handleEmailReceipt = async (winner: WinnerRecord) => {
@@ -24,7 +25,8 @@ export function useCheckoutReceiptActions({ spreadsheetId, folderId }: UseChecko
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bidderId: winner.bidderId,
-          spreadsheetId
+          spreadsheetId,
+          itemsSpreadsheetId
         }),
         credentials: "include"
       });

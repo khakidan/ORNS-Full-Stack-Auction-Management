@@ -476,15 +476,6 @@ describe('Full bid-to-checkout lifecycle', () => {
             ]
           });
         }
-        if (range.includes("Auction-Items")) {
-          return HttpResponse.json({
-            values: [
-              ["Item Number", "Category", "Item Name", "Description", "Value", "Opening Bid", "Min Raise", "Donated By", "Physical Item, Certificate, or Both?", "Status", "Bundle ID", "Bundled Date/Time"],
-              ["801", "Food", "Pizza Night", "A pizza dinner", "$50.00", "$22.50", "$5.00", "Joe's Pizza", "Certificate", "Active", "", ""],
-              ["803", "Food", "Sushi Dinner", "A sushi dinner", "$150.00", "$67.50", "$10.00", "Sushi Place", "Certificate", "Active", "", ""]
-            ]
-          });
-        }
         return HttpResponse.json({ values: [] });
       })
     );
@@ -589,14 +580,6 @@ describe('Full bid-to-checkout lifecycle', () => {
               ["Total", ""],
               ["", ""],
               ["", ""]
-            ]
-          });
-        }
-        if (range.includes("Auction-Items")) {
-          return HttpResponse.json({
-            values: [
-              ["Item Number", "Category", "Item Name", "Description", "Value", "Opening Bid", "Min Raise", "Donated By", "Physical Item, Certificate, or Both?", "Status", "Bundle ID", "Bundled Date/Time"],
-              ["801", "Food", "Pizza Night", "A pizza dinner", "$50.00", "$22.50", "$5.00", "Joe's Pizza", "Certificate", "Active", "", ""]
             ]
           });
         }
