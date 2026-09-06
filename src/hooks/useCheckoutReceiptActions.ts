@@ -49,7 +49,6 @@ export function useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, f
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bidderId: winner.bidderId,
-          emailReceipt: false,
           spreadsheetId,
           itemsSpreadsheetId,
           receiptFolderId: folderId,

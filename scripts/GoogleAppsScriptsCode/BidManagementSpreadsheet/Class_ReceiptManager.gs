@@ -1,6 +1,6 @@
 /**
  * Data manager. Orchestrates the receipt lifecycle by coordinating
- * AuctionItemManager, EmailManager, and ReceiptDoc.
+ * AuctionItemManager and ReceiptDoc.
  *
  * Responsibilities:
  *   - Accept an already-built Receipt (Node resolves a bidder's winning
@@ -10,22 +10,27 @@
  *     Class_GoogleAIStudio.gs's createIndividualReceipt/createAllReceipts;
  *     this class no longer looks any of that up itself, and no longer
  *     calls PayPalService at all)
- *   - Dispatch emails via EmailManager
  *   - Delegate doc writing to ReceiptDoc
  *
  * Has no menu-driven entry points of its own - individual and batch
  * receipt generation are driven by GoogleAIStudio.createIndividualReceipt/
  * .createAllReceipts, which construct a ReceiptManager and call its
  * lower-level methods (processBatch_, etc.) directly.
+ *
+ * No longer dispatches emails itself - Class_EmailManager.gs/Class_Email.gs
+ * (GmailApp.sendEmail, triggered via a `shouldSendEmails`/`emailReceipt`
+ * flag no live caller ever set to true) are deleted; the app's one real
+ * "email a receipt" feature is Node's /email-only and /email-all routes
+ * (server/services/emailService.ts). See
+ * docs/agents/refactor-opportunities.md's Code Hardening item #2, Step 5
+ * / CHANGELOG.md.
  */
 class ReceiptManager extends GlobalVariables {
     constructor ( folderID = null ) {
         super();
         this.folderID = folderID; // ← stored so processBatch_() can pass it to ReceiptDoc
         this.auctionItemManager = new AuctionItemManager();
-        this.emailManager = new EmailManager();
 
-        this.shouldSendEmails = false;
         this.tableNumber = 0;
 
         this.currentReceipt = null;
@@ -46,28 +51,6 @@ class ReceiptManager extends GlobalVariables {
             console.error( `ReceiptManager: QR generation failed. ${ e.message }` );
             return null;
         }
-    }
-
-    // ── Email dispatch ───────────────────────────────────────────────────────
-    /**
-     * Sends the receipt email for the current receipt if email is toggled on.
-     */
-    handleEmailDispatch_ () {
-        if ( !this.shouldSendEmails ) return;
-        if ( !this.currentReceipt.email ) return;
-
-        // adjustedTotal/paymentUrl were already resolved by Node (see
-        // server/services/receiptDataService.ts's resolveInvoiceUrl) and
-        // attached to the receipt via Receipt.fromData - falls back to
-        // totalCost/a generic link only if somehow missing.
-        const adjustedTotal = this.currentReceipt.adjustedTotal != null ? this.currentReceipt.adjustedTotal : this.currentReceipt.totalCost;
-        const feeAmount = adjustedTotal - this.currentReceipt.totalCost;
-        const paymentUrl = this.currentReceipt.paymentUrl || 'https://www.paypal.com';
-
-        const email = this.emailManager.buildReceiptEmail(
-            this.currentReceipt, paymentUrl, adjustedTotal.toFixed( 2 ), feeAmount.toFixed( 2 )
-        );
-        this.emailManager.send( email );
     }
 
     // ── Entry points ─────────────────────────────────────────────────────────
@@ -107,11 +90,6 @@ class ReceiptManager extends GlobalVariables {
                     // resolved by Node and are on this.currentReceipt (see
                     // Receipt.fromData)
                     doc.writeReceiptBody_( this.currentReceipt, this );
-
-                    // 3. Handle email if batch request wants them
-                    if ( this.shouldSendEmails ) {
-                        this.handleEmailDispatch_();
-                    }
 
                     this.tableNumber++;
                     if ( this.tableNumber % 10 === 0 ) doc.saveAndClose_();

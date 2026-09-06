@@ -81,7 +81,7 @@ describe('Receipt Generate workflow', () => {
     const response = await request(app)
       .post('/api/receipts/generate')
       .set(authHeader)
-      .send({ bidderId: '42', emailReceipt: false, spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
+      .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
@@ -89,7 +89,7 @@ describe('Receipt Generate workflow', () => {
     expect(productionScriptCallLog).toContain('apiCreateIndividualReceipt');
   });
 
-  it('Happy path — emailReceipt flag and Node-resolved receipt data are forwarded to Apps Script', async () => {
+  it('Happy path — Node-resolved receipt data is forwarded to Apps Script', async () => {
     let capturedScriptBody: any = null;
 
     server.use(
@@ -108,7 +108,7 @@ describe('Receipt Generate workflow', () => {
     const response = await request(app)
       .post('/api/receipts/generate')
       .set(authHeader)
-      .send({ bidderId: '42', emailReceipt: true, spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
+      .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
 
     expect(response.status).toBe(200);
     expect(capturedScriptBody).not.toBeNull();
@@ -117,12 +117,13 @@ describe('Receipt Generate workflow', () => {
     // Node resolves the receipt itself now (see receiptDataService.ts)
     // instead of Class_ReceiptManager.gs looking it up a second,
     // independent way - see refactor-opportunities.md's Code Hardening
-    // item #2 / CHANGELOG.md. folderID (3rd position) is still never
-    // wired through from Node.
+    // item #2 / CHANGELOG.md. folderID (2nd position) is still never
+    // wired through from Node. No `emailReceipt` parameter any more -
+    // Step 5 deleted the GAS-side email path it gated, which nothing
+    // ever actually triggered (the client always sent `false`).
     const expectedTotal = calculatePayPalSurcharge(50).total;
     expect(requestBody.parameters).toEqual([
       "42",
-      true,
       null,
       {
         bidId: "42",
@@ -147,7 +148,7 @@ describe('Receipt Generate workflow', () => {
   it('Auth failure', async () => {
     const response = await request(app)
       .post('/api/receipts/generate')
-      .send({ bidderId: '42', emailReceipt: false, spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
+      .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
     expect(response.status).toBe(401);
     expect(appsScriptCallCount).toBe(0);
   });
@@ -159,7 +160,7 @@ describe('Receipt Generate workflow', () => {
     const response = await request(app)
       .post('/api/receipts/generate')
       .set(authHeader)
-      .send({ bidderId: '42', emailReceipt: false, spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
+      .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
 
     expect(response.status).toBe(500);
     expect(response.body.error).toContain('SCRIPT_ID_BID_MANAGEMENT');
@@ -171,7 +172,7 @@ describe('Receipt Generate workflow', () => {
     const response = await request(app)
       .post('/api/receipts/generate')
       .set(authHeader)
-      .send({ bidderId: '42', emailReceipt: false });
+      .send({ bidderId: '42' });
 
     expect(response.status).toBe(400);
     expect(response.body.error).toBe('spreadsheetId required');

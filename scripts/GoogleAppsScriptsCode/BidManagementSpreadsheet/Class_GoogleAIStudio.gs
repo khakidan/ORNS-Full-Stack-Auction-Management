@@ -28,7 +28,6 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
      */
     createAllReceipts ( folderID = null, receipts = [] ) {
         const mgr = new ReceiptManager( folderID ); // ← folderID threaded to ReceiptManager
-        mgr.shouldSendEmails = false;
 
         const totalRows = receipts.length;
         const midPoint = Math.ceil( totalRows / 2 );
@@ -42,7 +41,6 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
     /**
      * Clean production pipeline for processing individual external endpoint receipt builds.
      * @param {string|number} bidderId
-     * @param {boolean}       emailReceipt
      * @param {string|null}   folderID  Drive folder ID passed in from the API call.
      * @param {Object|null}   receiptData  Already-built receipt data for
      *   this bidder, including the already-resolved PayPal `paymentUrl`/
@@ -55,7 +53,7 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
      *   CHANGELOG.md.
      * @returns {{success: boolean, docId?: string, subtotal?: number, paymentUrl?: string, error?: string}}
      */
-    createIndividualReceipt ( bidderId, emailReceipt, folderID = null, receiptData = null ) {
+    createIndividualReceipt ( bidderId, folderID = null, receiptData = null ) {
         if ( bidderId === null || bidderId === undefined || bidderId.toString().trim() === '' ) {
             return { success: false, error: 'Provided Bidder ID is empty or invalid.' };
         }
@@ -74,10 +72,6 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
         if ( !mgr.currentReceipt.hasWinningItems() ) return { success: false, error: 'No items won.' };
 
         const paymentUrl = mgr.currentReceipt.paymentUrl;
-
-        if ( emailReceipt === true ) {
-            mgr.handleEmailDispatch_();
-        }
 
         const doc = new ReceiptDoc( folderID ); // ← folderID passed directly to ReceiptDoc
         doc.setDoc_( `${ mgr.currentReceipt.lastName }, ${ mgr.currentReceipt.firstName }` );
@@ -109,14 +103,9 @@ function apiCreateAllReceipts ( folderID, receipts ) {
     }
 }
 
-function apiCreateIndividualReceipt ( bidderId, emailReceipt, folderID, receiptData ) {
+function apiCreateIndividualReceipt ( bidderId, folderID, receiptData ) {
     try {
-        // BUG FIX: this bridge function used to drop `receiptData` entirely -
-        // it never forwarded it to createIndividualReceipt, so every real
-        // call from Node (which always sends the resolved receipt as the
-        // 4th Apps Script parameter) failed with "No receipt data
-        // provided." See docs/agents/CHANGELOG.md.
-        return new GoogleAIStudio().createIndividualReceipt( bidderId, emailReceipt, folderID, receiptData );
+        return new GoogleAIStudio().createIndividualReceipt( bidderId, folderID, receiptData );
     } catch ( e ) {
         return { success: false, error: e.toString() };
     }

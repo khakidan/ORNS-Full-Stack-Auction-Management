@@ -12,7 +12,7 @@ export default function createReceiptsRouter() {
   router.use(requireAuth);
 
   router.post("/generate", async (req, res, next) => {
-    const { bidderId, emailReceipt, spreadsheetId, itemsSpreadsheetId, paypalIsSandbox } = req.body;
+    const { bidderId, spreadsheetId, itemsSpreadsheetId, paypalIsSandbox } = req.body;
     const scriptId = process.env.SCRIPT_ID_BID_MANAGEMENT;
 
     if (!scriptId) return res.status(500).json({ error: "SCRIPT_ID_BID_MANAGEMENT not configured." });
@@ -33,7 +33,7 @@ export default function createReceiptsRouter() {
       if (receiptResult.success === false) return res.status(400).json({ error: receiptResult.error });
 
       const script = google.script({ version: "v1", auth: client });
-      const result = await createIndividualReceipt(script, scriptId, bidderId, !!emailReceipt, receiptResult.receipt);
+      const result = await createIndividualReceipt(script, scriptId, bidderId, receiptResult.receipt);
       res.json({ success: true, ...result });
     } catch (error) {
       next(error);

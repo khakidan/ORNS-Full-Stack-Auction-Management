@@ -3,16 +3,16 @@ import { OAuth2Client } from "google-auth-library";
 import { processEmail } from "./emailService";
 import { BidderReceiptData } from "./receiptDataService";
 
-export async function createIndividualReceipt(script: script_v1.Script, scriptId: string, bidderId: string, emailReceipt: boolean, receiptData: BidderReceiptData) {
+export async function createIndividualReceipt(script: script_v1.Script, scriptId: string, bidderId: string, receiptData: BidderReceiptData) {
     const response = await script.scripts.run({
         scriptId,
         requestBody: {
           function: "apiCreateIndividualReceipt",
-          // folderID (3rd position) has never actually been wired through
+          // folderID (2nd position) has never actually been wired through
           // from Node - kept as an explicit null so receiptData lands in
-          // the same 4th position Class_GoogleAIStudio.gs's function
+          // the same 3rd position Class_GoogleAIStudio.gs's function
           // signature expects, rather than silently shifting it.
-          parameters: [String(bidderId), !!emailReceipt, null, receiptData],
+          parameters: [String(bidderId), null, receiptData],
           devMode: true,
         },
       });

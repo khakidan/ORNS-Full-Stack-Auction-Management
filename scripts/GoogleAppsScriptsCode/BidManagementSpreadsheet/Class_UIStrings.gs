@@ -111,8 +111,6 @@ class UIStrings {
         this.collectPaymentMsg = 'Collect payment from the bidder now (cash or check preferred), then click OK to mark them as paid.';
         this.checkOutCancelledTitle = 'Check-Out Cancelled';
         this.checkOutCancelledMsg = 'The bidder has not been checked out. Please re-run check-out when ready.';
-        this.emailReceiptTitle = 'Email Receipt';
-        this.emailReceiptCheckoutQuestion = 'Would you like to email this receipt to the bidder?';
         this.receiptReadyTitle = 'Receipt Ready';
         this.receiptReadyMsg = ( total ) => `Total due: ${ total }. The receipt has been saved to the folder. Please print it now.`;
     }
