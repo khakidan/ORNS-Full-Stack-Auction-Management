@@ -145,6 +145,42 @@ describe("bidRoutes - /api/auction/record-winning-bid", () => {
     expect(response.status).toBe(400);
     expect(response.body.error).toContain("Bidder 1001 not found");
   });
+
+  // Regression guard for the hardening audit's finding: the old `!price`
+  // check only rejected falsy values, not non-numeric ones. A non-numeric
+  // price used to get stored as-is, and receiptDataService.ts's
+  // resolveWonItems (`parseFloat(...) || 0`) would then silently treat it
+  // as $0 - the item recorded as "won" but invoiced for nothing. See
+  // docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+  // CHANGELOG.md.
+  it("returns 400 for a non-numeric price instead of silently recording it", async () => {
+    setupBidMocks();
+
+    const response = await request(app)
+      .post("/api/auction/record-winning-bid")
+      .set(authHeader)
+      .send({ ...validBody, price: "not-a-number", idempotencyKey: "bad-price-key-workflow" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain("price must be a valid number");
+  });
+
+  it("accepts a numeric-string price by coercing it to a number", async () => {
+    setupBidMocks();
+
+    const response = await request(app)
+      .post("/api/auction/record-winning-bid")
+      .set(authHeader)
+      .send({ ...validBody, price: "150.50", idempotencyKey: "numeric-string-price-key-workflow" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(lastBulkWritePayload).toEqual(
+      expect.arrayContaining([
+        expect.arrayContaining([validBody.itemId, 150.5])
+      ])
+    );
+  });
 });
 
 describe("bidRoutes - /api/bidders/walk-in", () => {

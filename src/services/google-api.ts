@@ -139,10 +139,15 @@ export async function appendSheetData(spreadsheetId: string, range: string, valu
 
 export async function deleteAuctionItem(spreadsheetId: string, rowIndex: number) {
   if (!spreadsheetId) throw new Error("Invalid Spreadsheet ID");
+  // idempotencyKey generated once here, before fetchWithRetry's internal
+  // retries reuse this same body - matches add-item/bulk-update-items'
+  // existing convention. Found in a hardening audit - see
+  // docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+  // CHANGELOG.md.
   const res = await fetchWithRetry(`${getBaseUrl()}/api/auction/delete-item`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ spreadsheetId, rowIndex }),
+    body: JSON.stringify({ spreadsheetId, rowIndex, idempotencyKey: window.crypto.randomUUID() }),
     credentials: "include"
   });
   if (!res.ok) {

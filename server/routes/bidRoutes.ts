@@ -29,6 +29,18 @@ export default function createBidRouter() {
       return res.status(400).json({ error: "Missing required fields for recording winning bid." });
     }
 
+    // Found in a hardening audit (docs/agents/refactor-opportunities.md's
+    // Code Hardening item #1 / CHANGELOG.md): the `!price` check above only
+    // rejects falsy values, not non-numeric ones. A non-numeric price used
+    // to get stored as-is, and receiptDataService.ts's resolveWonItems
+    // (`parseFloat(...) || 0`) would then silently treat it as $0 - the
+    // item recorded as "won" but invoiced for nothing, with no error
+    // surfaced anywhere.
+    const numericPrice = typeof price === "number" ? price : parseFloat(price);
+    if (isNaN(numericPrice) || !isFinite(numericPrice)) {
+      return res.status(400).json({ error: "price must be a valid number." });
+    }
+
     const cached = checkIdempotency(req, res, idempotencyKey);
     if (cached) return;
 
@@ -39,7 +51,7 @@ export default function createBidRouter() {
       const result = await recordWinningBid(sheets, {
         bidderId,
         itemId,
-        price,
+        price: numericPrice,
         spreadsheetId,
         bidManagementSheet,
         bidderNumbersSheet

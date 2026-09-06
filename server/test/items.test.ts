@@ -594,8 +594,30 @@ describe("Delete Auction Item workflow", () => {
       .post("/api/auction/delete-item")
       .set(authHeader)
       .send({ spreadsheetId });
-      
+
     expect(response.status).toBe(400);
+  });
+
+  // Regression guard for the hardening audit's finding: this route had no
+  // idempotencyKey, unlike its add-item/bulk-update-items siblings. See
+  // docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+  // CHANGELOG.md.
+  it("returns cached response for a duplicate idempotency key instead of deleting twice", async () => {
+    const key = "delete-dup-key";
+
+    const first = await request(app)
+      .post("/api/auction/delete-item")
+      .set(authHeader)
+      .send({ spreadsheetId, rowIndex: 2, idempotencyKey: key });
+    expect(first.status).toBe(200);
+    expect(first.body.duplicated).toBeUndefined();
+
+    const second = await request(app)
+      .post("/api/auction/delete-item")
+      .set(authHeader)
+      .send({ spreadsheetId, rowIndex: 2, idempotencyKey: key });
+    expect(second.status).toBe(200);
+    expect(second.body.duplicated).toBe(true);
   });
 
   it("Re-sequencing after delete", async () => {
@@ -729,6 +751,102 @@ describe("Delete Auction Item workflow", () => {
         .set(authHeader)
         .send({ key: 'ticketPrice', value: '40' });
       expect(response.status).toBe(400);
+    });
+
+    // Regression guard for the hardening audit's finding: this route had
+    // neither withLock nor an idempotency key, unlike sibling mutating
+    // routes. See docs/agents/refactor-opportunities.md's Code Hardening
+    // item #1 / CHANGELOG.md.
+    it('returns cached response for a duplicate idempotency key instead of writing twice', async () => {
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+          const url = new URL(request.url);
+          if (url.pathname.includes('_Settings')) {
+            return HttpResponse.json({ values: [['ticketPrice', '35', 'Price per ticket']] });
+          }
+          return HttpResponse.json({ values: [] });
+        })
+      );
+      const key = 'settings-dup-key';
+
+      const first = await request(app)
+        .post('/api/settings/update')
+        .set(authHeader)
+        .send({ spreadsheetId, key: 'ticketPrice', value: '40', idempotencyKey: key });
+      expect(first.status).toBe(200);
+      expect(first.body.duplicated).toBeUndefined();
+      expect(updateCallCount).toBe(1);
+
+      const second = await request(app)
+        .post('/api/settings/update')
+        .set(authHeader)
+        .send({ spreadsheetId, key: 'ticketPrice', value: '40', idempotencyKey: key });
+      expect(second.status).toBe(200);
+      expect(second.body.duplicated).toBe(true);
+      // The second, duplicate request must never re-hit the Sheets API.
+      expect(updateCallCount).toBe(1);
+    });
+
+    it('does not start a second concurrent settings/update read (same spreadsheet) until the first has fully finished writing', async () => {
+      const callOrder: string[] = [];
+      let releaseFirst: () => void;
+      const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+
+      let readCount = 0;
+      server.use(
+        http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', async ({ request }) => {
+          const url = new URL(request.url);
+          if (url.pathname.includes('_Settings')) {
+            readCount++;
+            const isFirst = readCount === 1;
+            callOrder.push(isFirst ? 'A-start' : 'B-start');
+            if (isFirst) await firstGate;
+            return HttpResponse.json({ values: [['ticketPrice', '35', 'Price per ticket']] });
+          }
+          return HttpResponse.json({ values: [] });
+        }),
+        http.put('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+          const url = new URL(request.url);
+          if (decodeURIComponent(url.pathname).includes('_Settings')) {
+            callOrder.push(readCount === 1 ? 'A-end' : 'B-end');
+          }
+          return HttpResponse.json({ updatedRows: 1 });
+        })
+      );
+
+      const rawRequestA = request(app)
+        .post('/api/settings/update')
+        .set(authHeader)
+        .send({ spreadsheetId, key: 'ticketPrice', value: '40', idempotencyKey: 'lock-key-a' });
+      const rawRequestB = request(app)
+        .post('/api/settings/update')
+        .set(authHeader)
+        .send({ spreadsheetId, key: 'ticketPrice', value: '50', idempotencyKey: 'lock-key-b' });
+
+      // supertest's Test object is a *lazy* thenable - it doesn't actually
+      // dispatch the HTTP request until something awaits/calls .then() on
+      // it. Wrapping each in its own immediately-invoked async function
+      // forces dispatch to happen NOW (both requests genuinely in flight
+      // concurrently), rather than only once Promise.all below consumes
+      // them - which would otherwise dispatch A, let it fully resolve, and
+      // only then dispatch B, silently defeating this entire test.
+      const requestA = (async () => await rawRequestA)();
+      const requestB = (async () => await rawRequestB)();
+
+      // Fired both without awaiting either yet. Give both a moment to
+      // actually reach the mocked read, then release A.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      releaseFirst!();
+
+      const [responseA, responseB] = await Promise.all([requestA, requestB]);
+
+      expect(responseA.status).toBe(200);
+      expect(responseB.status).toBe(200);
+      // With the lock: B can't even start its own read until A fully
+      // finishes writing. Without it: B (ungated) would read the same
+      // stale row A read, and both writes would target the same row
+      // independently rather than being serialized.
+      expect(callOrder).toEqual(['A-start', 'A-end', 'B-start', 'B-end']);
     });
   });
 });

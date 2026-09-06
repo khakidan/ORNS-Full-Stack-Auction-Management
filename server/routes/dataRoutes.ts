@@ -14,6 +14,7 @@ import {
 import { checkIdempotency, saveIdempotency } from '../utils/idempotency';
 import { updateAttendeeField } from '../services/bidderService';
 import { requireAuth } from '../middleware/requireAuth';
+import { withLock } from '../utils/asyncLock';
 
 export default function createDataRouter() {
   const router = Router();
@@ -49,52 +50,68 @@ export default function createDataRouter() {
   });
 
   router.post("/settings/update", async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, key, value, description } = req.body;
+    const { spreadsheetId, key, value, description, idempotencyKey } = req.body;
     if (!spreadsheetId || !key) return res.status(400).json({ error: "Missing required fields" });
+
+    // Found in a hardening audit (docs/agents/refactor-opportunities.md's
+    // Code Hardening item #1 / CHANGELOG.md): this route had neither
+    // withLock nor an idempotency key, unlike sibling mutating routes -
+    // low likelihood given Settings is normally single-admin, but it does
+    // the same unsafe shape as everything else here (read the full
+    // '_Settings'!A:C range to find a key's row, then write back to it) so
+    // it gets the same protection for consistency's sake. A distinct lock
+    // key from `auction-items:*`/`bidder-numbers:*` - a different sheet
+    // entirely.
+    const cached = checkIdempotency(req, res, idempotencyKey);
+    if (cached) return;
 
     try {
       const client = getAuthenticatedClient(req.session.tokens);
       const sheets = google.sheets({ version: "v4", auth: client });
 
-      // 1. Get all settings
-      const result = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: "_Settings!A:C",
-      });
-
-      const rows = result.data.values || [];
-      let rowIndex = -1;
-
-      for (let i = 0; i < rows.length; i++) {
-        if (rows[i][0] === key) {
-          rowIndex = i + 1;
-          break;
-        }
-      }
-
-      if (rowIndex !== -1) {
-        // 2. Update existing
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range: `_Settings!B${rowIndex}:C${rowIndex}`,
-          valueInputOption: "USER_ENTERED",
-          requestBody: {
-            values: [[value, description || rows[rowIndex - 1][2] || ""]],
-          },
-        });
-      } else {
-        // 3. Append new
-        await sheets.spreadsheets.values.append({
+      await withLock(`settings:${spreadsheetId}`, async () => {
+        // 1. Get all settings
+        const result = await sheets.spreadsheets.values.get({
           spreadsheetId,
           range: "_Settings!A:C",
-          valueInputOption: "USER_ENTERED",
-          requestBody: {
-            values: [[key, value, description || ""]],
-          },
         });
-      }
 
-      res.json({ success: true });
+        const rows = result.data.values || [];
+        let rowIndex = -1;
+
+        for (let i = 0; i < rows.length; i++) {
+          if (rows[i][0] === key) {
+            rowIndex = i + 1;
+            break;
+          }
+        }
+
+        if (rowIndex !== -1) {
+          // 2. Update existing
+          await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `_Settings!B${rowIndex}:C${rowIndex}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: {
+              values: [[value, description || rows[rowIndex - 1][2] || ""]],
+            },
+          });
+        } else {
+          // 3. Append new
+          await sheets.spreadsheets.values.append({
+            spreadsheetId,
+            range: "_Settings!A:C",
+            valueInputOption: "USER_ENTERED",
+            requestBody: {
+              values: [[key, value, description || ""]],
+            },
+          });
+        }
+      });
+
+      const response = { success: true };
+      saveIdempotency(idempotencyKey, response);
+      res.json(response);
     } catch (error: any) {
       if (error.code === 404) {
         return res.status(404).json({ error: "Spreadsheet or Settings tab not found. Please check your IDs." });
@@ -137,10 +154,20 @@ export default function createDataRouter() {
 
   // Delete Auction Item Row
   router.post("/auction/delete-item", async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, rowIndex } = req.body;
+    const { spreadsheetId, rowIndex, idempotencyKey } = req.body;
     if (!spreadsheetId || !rowIndex) {
       return res.status(400).json({ error: "Missing required parameters for deletion" });
     }
+
+    // Found in a hardening audit (docs/agents/refactor-opportunities.md's
+    // Code Hardening item #1 / CHANGELOG.md): this route had no
+    // idempotencyKey, unlike its add-item/bulk-update-items siblings -
+    // closing the inconsistency (low real risk on its own, since
+    // re-deleting an already-blanked row is a no-op, but a retried
+    // duplicate should still short-circuit like every other mutating
+    // route here does).
+    const cached = checkIdempotency(req, res, idempotencyKey);
+    if (cached) return;
 
     try {
       const client = getAuthenticatedClient(req.session.tokens);
@@ -152,6 +179,7 @@ export default function createDataRouter() {
       });
 
       clearCacheForSpreadsheet(spreadsheetId);
+      saveIdempotency(idempotencyKey, result);
       res.json(result);
     } catch (error: any) {
       console.error("[Server Error] delete-item:", error);

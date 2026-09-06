@@ -8,7 +8,7 @@ This document details the exact execution parameters required to run the test su
 
 ## The Sandbox Constraint
 
-Running the full test suite (931 tests) as a single execution block will exceed memory limits and trigger a **command timeout** in AI Studio's sandbox. 
+Running the full test suite (936 tests) as a single execution block will exceed memory limits and trigger a **command timeout** in AI Studio's sandbox. 
 
 To prevent execution freezes and ensure continuous status verification, the test suite is strictly partitioned into two operational batches.
 
@@ -17,10 +17,10 @@ To prevent execution freezes and ensure continuous status verification, the test
 ## Execution Guide
 
 ### Batch 1: Backend Layer
-Contains 470 integration and unit tests validating route pathways, middleware hooks, crypto managers, Sheets mocking configurations, and concurrency-safety guards on every bidder-mutating write path (`registerWalkInBidder`/`recordWinningBid`/`checkoutMarkPaid`/`checkInBidderWithBid`, all serialized per Bid-Management spreadsheet via `withLock`) as well as every Auction-Items-mutating write path (`itemService.ts`'s `addItem`/`deleteItem`/`updateItem`/`bulkUpdateItems` and `bundleService.ts`'s `processBundle`/`restoreBundle`, all serialized per Items spreadsheet via a separate `auction-items:${spreadsheetId}` `withLock` key); (via a Node `vm`-based harness loading the real source) the Tickets spreadsheet's bidder-number lookup/label generation, the Items spreadsheet's `AuctionItem`/`AuctionItem.fromData` and `GoogleAIStudio._executeGeneration`, and the still-live `Class_PayPalService.gs`/`PayPalSweeper.gs` reference copies (kept alongside their Node ports below until Step 4's manual production confirmation - see refactor-opportunities.md); the Node-side `itemDataService.ts` port of the Items spreadsheet's valid/sorted item resolution; the Node-side `paypalService.ts` port of the PayPal client (sandbox/production base-URL selection, invoice creation/cancellation, offline payment recording, live status lookup); `receiptDataService.ts`'s PayPal invoice get-or-create logic (reuse/cancel-and-recreate/create-new, ported from `Class_ReceiptManager.gs`'s now-removed `getOrCreateInvoiceUrl`); `auctionService.ts`'s `checkoutMarkPaid` payment-recording logic (cash/check/credit_card branches, the live PayPal-invoice-status gate, and its deferred-to-sweeper path), ported from `Class_GoogleAIStudio.gs`'s now-removed `recordPayment`/`apiRecordPayment`; and `paypalSweeperJob.ts`'s background reconciliation sweep (resolve/escalate/timestamp-seed branches, per-row error resilience, and the sandbox-flag passthrough), ported from `PayPalSweeper.gs`'s `checkPendingPayPalInvoices`.
+Contains 475 integration and unit tests validating route pathways, middleware hooks, crypto managers, Sheets mocking configurations, and concurrency-safety guards on every bidder-mutating write path (`registerWalkInBidder`/`recordWinningBid`/`checkoutMarkPaid`/`checkInBidderWithBid`, all serialized per Bid-Management spreadsheet via `withLock`), every Auction-Items-mutating write path (`itemService.ts`'s `addItem`/`deleteItem`/`updateItem`/`bulkUpdateItems` and `bundleService.ts`'s `processBundle`/`restoreBundle`, all serialized per Items spreadsheet via a separate `auction-items:${spreadsheetId}` `withLock` key), and `settings/update` (serialized via its own `settings:${spreadsheetId}` key) - plus `record-winning-bid`'s numeric `price` validation and the `delete-item`/`settings/update` idempotency-key coverage; (via a Node `vm`-based harness loading the real source) the Tickets spreadsheet's bidder-number lookup/label generation, the Items spreadsheet's `AuctionItem`/`AuctionItem.fromData` and `GoogleAIStudio._executeGeneration`, and the still-live `Class_PayPalService.gs`/`PayPalSweeper.gs` reference copies (kept alongside their Node ports below until Step 4's manual production confirmation - see refactor-opportunities.md); the Node-side `itemDataService.ts` port of the Items spreadsheet's valid/sorted item resolution; the Node-side `paypalService.ts` port of the PayPal client (sandbox/production base-URL selection, invoice creation/cancellation, offline payment recording, live status lookup); `receiptDataService.ts`'s PayPal invoice get-or-create logic (reuse/cancel-and-recreate/create-new, ported from `Class_ReceiptManager.gs`'s now-removed `getOrCreateInvoiceUrl`); `auctionService.ts`'s `checkoutMarkPaid` payment-recording logic (cash/check/credit_card branches, the live PayPal-invoice-status gate, and its deferred-to-sweeper path), ported from `Class_GoogleAIStudio.gs`'s now-removed `recordPayment`/`apiRecordPayment`; and `paypalSweeperJob.ts`'s background reconciliation sweep (resolve/escalate/timestamp-seed branches, per-row error resilience, and the sandbox-flag passthrough), ported from `PayPalSweeper.gs`'s `checkPendingPayPalInvoices`.
 
 ```bash
-npx vitest run server/test/
+NODE_OPTIONS=--no-experimental-webstorage npx vitest run server/test/
 ```
 
 ### Batch 2: Frontend Layer
@@ -30,7 +30,7 @@ Contains 461 interactive components and state tests confirming layout flows, sea
 NODE_OPTIONS=--no-experimental-webstorage npx vitest run src/
 ```
 
-The `NODE_OPTIONS` flag is required here (not optional) on Node 22+: `ConfigContext.tsx` reads the bare `localStorage` global at module-load time, and Node's own built-in Web Storage global can leave jsdom's `window.localStorage` unavailable in this sandbox's test environment unless that experimental feature is disabled. Without it, `ConfigContext.test.tsx` fails outright with `TypeError: Cannot read properties of undefined (reading 'getItem')`.
+The `NODE_OPTIONS` flag is required (not optional) for Batch 2 on Node 22+: `ConfigContext.tsx` reads the bare `localStorage` global at module-load time, and Node's own built-in Web Storage global can leave jsdom's `window.localStorage` unavailable in this sandbox's test environment unless that experimental feature is disabled. Without it, `ConfigContext.test.tsx` fails outright with `TypeError: Cannot read properties of undefined (reading 'getItem')`. For Batch 1 the same flag is optional - the backend suite never touches `localStorage` - but it's included above to silence Node's cosmetic `ExperimentalWarning: localStorage is not available because --localstorage-file was not provided` notice, which is otherwise harmless noise unrelated to test results.
 
 ---
 
@@ -40,8 +40,8 @@ Always execute both batches and confirm the final aggregates prior to declaring 
 
 | Batch Name | Path Parameter | Target Tests Count |
 |---|---|---|
-| **Batch 1 (Backend)** | `server/test/` | **470 passed** |
+| **Batch 1 (Backend)** | `server/test/` | **475 passed** |
 | **Batch 2 (Frontend)** | `src/` | **461 passed** |
-| **Combined Aggregate** | *All Test Files* | **931 passed** |
+| **Combined Aggregate** | *All Test Files* | **936 passed** |
 
 *Do not run a bare `npx vitest run` without specifying these directory boundaries.*
