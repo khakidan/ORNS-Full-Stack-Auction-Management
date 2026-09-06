@@ -30,9 +30,10 @@ interface FilterToolbarProps {
 /**
  * Shared search + filter bar for table-driven views. Consolidates the
  * near-identical search/filter layout that used to be hand-rolled in
- * Items.tsx, Checkout.tsx, and Bidders.tsx (see refactor-opportunities.md).
- * AuctionItemsTab has its own distinct labeled-field variant
- * (AuctionItemsFilterBar.tsx) and isn't migrated to this one.
+ * Items.tsx, Checkout.tsx, Bidders.tsx, and (since it moved off its own
+ * bespoke Card-child bar - see CHANGELOG.md's "Search & Filter Actions
+ * inside the main content area" fix) AuctionItemsTab.tsx too, via
+ * AuctionItemsFilterControls.tsx in the `filters` slot.
  */
 export function FilterToolbar({
   searchValue,

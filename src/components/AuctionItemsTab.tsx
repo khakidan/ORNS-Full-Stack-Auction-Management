@@ -7,12 +7,13 @@ import { Loader2, Package, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { StatusStatePlaceholder } from "@/components/ui/StatusStatePlaceholder";
+import { FilterToolbar } from "@/components/FilterToolbar";
 
 import { useAuctionItems } from "@/hooks/useAuctionItems";
 import { useBundling } from "@/hooks/useBundling";
 import { useAuctionItemsTableState } from "@/hooks/useAuctionItemsTableState";
 import { BundlingDialog } from "@/components/BundlingDialog";
-import { AuctionItemsFilterBar } from "@/components/AuctionItemsFilterBar";
+import { AuctionItemsFilterControls } from "@/components/AuctionItemsFilterControls";
 import { AuctionItemsList } from "@/components/AuctionItemsList";
 import { AuctionItemsBulkActionBar } from "@/components/AuctionItemsBulkActionBar";
 import { AddAuctionItemDialog } from "@/components/AddAuctionItemDialog";
@@ -103,41 +104,50 @@ export default function AuctionItemsTab() {
   }
 
   return (
-    <>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Auction Items Database</CardTitle>
-            <CardDescription>
-              Showing {table.sortedItems.length} of {items.length} items from the Auction-Items spreadsheet. Click the edit icon to make changes.
-            </CardDescription>
-          </div>
-          <div className="flex gap-2">
+    <div className="space-y-6">
+      <FilterToolbar
+        searchValue={table.searchTerm}
+        onSearchChange={table.setSearchTerm}
+        searchPlaceholder="Search by name, description, donor..."
+        searchClassName="md:max-w-xs"
+        searchInputClassName="h-10"
+        filtersWrap={false}
+        filters={
+          <AuctionItemsFilterControls
+            selectedCategory={table.selectedCategory}
+            onSelectedCategoryChange={table.setSelectedCategory}
+            selectedItemType={table.selectedItemType}
+            onSelectedItemTypeChange={table.setSelectedItemType}
+            categories={categories}
+            onReset={table.resetFilters}
+            sortConfig={table.sortConfig}
+            onSortConfigChange={table.setSortConfig}
+          />
+        }
+        trailing={
+          <>
             {!isAuctionClosed && (
               <Button onClick={table.openAddItemDialog} className="flex items-center gap-2">
                 <Plus className="w-4 h-4" /> Add New Item
               </Button>
             )}
             {isAuctionClosed && (
-              <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 py-1.5 px-3">
+              <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 h-10 px-4">
                 Auction Closed (Read Only)
               </Badge>
             )}
-          </div>
+          </>
+        }
+      />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Auction Items Database</CardTitle>
+          <CardDescription>
+            Showing {table.sortedItems.length} of {items.length} items from the Auction-Items spreadsheet. Click the edit icon to make changes.
+          </CardDescription>
         </CardHeader>
-        <AuctionItemsFilterBar
-          searchTerm={table.searchTerm}
-          onSearchTermChange={table.setSearchTerm}
-          selectedCategory={table.selectedCategory}
-          onSelectedCategoryChange={table.setSelectedCategory}
-          selectedItemType={table.selectedItemType}
-          onSelectedItemTypeChange={table.setSelectedItemType}
-          categories={categories}
-          onReset={table.resetFilters}
-          sortConfig={table.sortConfig}
-          onSortConfigChange={table.setSortConfig}
-        />
-        <CardContent className="p-0 -mt-4">
+        <CardContent className="p-0">
           <AuctionItemsList
             items={table.sortedItems}
             selectedRows={table.selectedRows}
@@ -218,6 +228,6 @@ export default function AuctionItemsTab() {
         variant="destructive"
         icon={<Trash2 className="w-5 h-5" />}
       />
-    </>
+    </div>
   );
 }

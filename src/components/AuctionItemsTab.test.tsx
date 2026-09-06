@@ -104,13 +104,15 @@ describe("AuctionItemsTab - Layout", () => {
     expect(selectAllBar?.className).not.toContain("bg-slate-50");
   });
 
-  it("cancels the Card's own gap-4 above the 'Select all' bar, since AuctionItemsFilterBar.tsx's border already sits right above it", () => {
+  it("renders the search/filter bar above the Card, matching Bidders.tsx/TicketAttendeeTab.tsx's convention, instead of as a bespoke bar inside it", () => {
     render(<AuctionItemsTab />);
 
-    const selectAllText = screen.getByText(/Select all \d+ items/);
-    // selectAllText -> select-all bar div -> AuctionItemsList's root div -> CardContent
-    const cardContent = selectAllText.parentElement?.parentElement?.parentElement;
-    expect(cardContent?.className.split(/\s+/)).toContain("-mt-4");
+    const heading = screen.getByText("Auction Items Database");
+    // Bare CardHeader (no override) is correct once the filter bar is no
+    // longer a Card child - see CHANGELOG.md's "Search & Filter Actions
+    // inside the main content area" fix.
+    const cardHeader = heading.parentElement;
+    expect(cardHeader?.className).not.toContain("flex-row");
   });
 });
 

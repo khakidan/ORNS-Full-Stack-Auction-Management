@@ -35,7 +35,7 @@ export function categoryBadgeClass(category: string): string {
   return CATEGORY_PALETTE[Math.abs(hash) % CATEGORY_PALETTE.length];
 }
 
-// itemType is a fixed 3-value enum (see AuctionItemsFilterBar.tsx's own
+// itemType is a fixed 3-value enum (see AuctionItemsFilterControls.tsx's own
 // "Physical Item"/"Certificate"/"Both" <select> options), so it gets an
 // explicit color/icon map instead of the hash above - and deliberately
 // none of these overlap with the Bundle badge's purple.

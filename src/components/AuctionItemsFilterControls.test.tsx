@@ -18,15 +18,13 @@ import "@testing-library/jest-dom";
 import type { ComponentProps } from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import { AuctionItemsFilterBar } from "./AuctionItemsFilterBar";
+import { AuctionItemsFilterControls } from "./AuctionItemsFilterControls";
 
 const CATEGORIES = ["Arts, Crafts and Jewelry", "Entertainment & Experiences", "Food"];
 
-function renderBar(overrides: Partial<ComponentProps<typeof AuctionItemsFilterBar>> = {}) {
+function renderControls(overrides: Partial<ComponentProps<typeof AuctionItemsFilterControls>> = {}) {
   return render(
-    <AuctionItemsFilterBar
-      searchTerm=""
-      onSearchTermChange={vi.fn()}
+    <AuctionItemsFilterControls
       selectedCategory="all"
       onSelectedCategoryChange={vi.fn()}
       selectedItemType="all"
@@ -40,9 +38,9 @@ function renderBar(overrides: Partial<ComponentProps<typeof AuctionItemsFilterBa
   );
 }
 
-describe("AuctionItemsFilterBar - Select display labels and popup width", () => {
+describe("AuctionItemsFilterControls - Select display labels and popup width", () => {
   it("shows the friendly 'All Categories'/'All Types' labels, not the raw stored value 'all'", () => {
-    renderBar();
+    renderControls();
 
     expect(screen.getByText("All Categories")).toBeInTheDocument();
     expect(screen.getByText("All Types")).toBeInTheDocument();
@@ -50,13 +48,13 @@ describe("AuctionItemsFilterBar - Select display labels and popup width", () => 
   });
 
   it("shows a real selected category's own name as the trigger label", () => {
-    renderBar({ selectedCategory: "Food" });
+    renderControls({ selectedCategory: "Food" });
 
     expect(screen.getAllByText("Food").length).toBeGreaterThan(0);
   });
 
   it("renders every category option's full, untruncated text when the dropdown is open", () => {
-    renderBar();
+    renderControls();
 
     fireEvent.click(screen.getAllByRole("combobox")[0]);
 
@@ -66,15 +64,13 @@ describe("AuctionItemsFilterBar - Select display labels and popup width", () => 
   });
 });
 
-describe("AuctionItemsFilterBar - Layout", () => {
-  it("gives the controls comfortable room above the border, since AuctionItemsTab.tsx cancels out the Card's own gap-4 after this bar", () => {
-    renderBar();
+describe("AuctionItemsFilterControls - Reset", () => {
+  it("calls onReset when 'Reset Filters' is clicked", () => {
+    const onReset = vi.fn();
+    renderControls({ onReset });
 
-    const searchInput = screen.getByPlaceholderText("Search by name, description, donor...");
-    // The root filter-bar div is the search field's grandparent (input -> its space-y-1.5 wrapper -> root).
-    const root = searchInput.parentElement?.parentElement;
-    const classes = root?.className.split(/\s+/) ?? [];
-    expect(classes).not.toContain("pb-6");
-    expect(classes).toContain("pb-4");
+    fireEvent.click(screen.getByText("Reset Filters"));
+
+    expect(onReset).toHaveBeenCalledTimes(1);
   });
 });
