@@ -257,8 +257,25 @@ async function registerWalkInBidderLocked(
 
 /**
  * Checks in a bidder and optionally adds a check-in bid (e.g. for ticket payment).
+ *
+ * Wrapped in withLock, keyed per Bid-Management spreadsheet - the exact
+ * same "scan the bidder's own column for the first empty row from a
+ * fresh read, then write to it" pattern `recordWinningBid` (see
+ * auctionService.ts) is wrapped for, and for the same reason: two staff
+ * checking in the same bidder's initial ticket-payment bid within the
+ * same read/write window could otherwise compute the same "first empty
+ * row" and the second write would silently clobber the first. Found in
+ * a hardening audit - see docs/agents/refactor-opportunities.md's Code
+ * Hardening item #1 / CHANGELOG.md.
  */
 export async function checkInBidderWithBid(
+  sheets: sheets_v4.Sheets,
+  params: CheckInParams
+): Promise<CheckInResult> {
+  return withLock(`bidder-numbers:${params.spreadsheetId}`, () => checkInBidderWithBidLocked(sheets, params));
+}
+
+async function checkInBidderWithBidLocked(
   sheets: sheets_v4.Sheets,
   params: CheckInParams
 ): Promise<CheckInResult> {

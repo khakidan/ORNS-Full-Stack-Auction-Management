@@ -18,7 +18,7 @@
  * history/sanity-check discipline).
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { registerWalkInBidder } from "../services/bidderService";
+import { registerWalkInBidder, checkInBidderWithBid } from "../services/bidderService";
 
 const SPREADSHEET_ID = "bm-spreadsheet-id";
 const BIDDER_NUMBERS_SHEET = "Bidder-Numbers";
@@ -110,5 +110,91 @@ describe("registerWalkInBidder - concurrency", () => {
     // Bid-Management must have written to two DIFFERENT column ranges, not the same one twice.
     expect(bidManagementWrites).toHaveLength(2);
     expect(bidManagementWrites[0].range).not.toBe(bidManagementWrites[1].range);
+  });
+});
+
+describe("checkInBidderWithBid - concurrency (defense-in-depth)", () => {
+  // checkInBidderWithBid does the exact same "scan the bidder's own
+  // Bid-Management column for the first empty row from a fresh read,
+  // then write to it" pattern recordWinningBid/registerWalkInBidder are
+  // wrapped in withLock for - two staff checking in bidders around the
+  // same time (e.g. two check-in stations, or two staff processing the
+  // same physical ticket at nearly the same moment) is a realistic risk
+  // this closes. Found in a hardening audit - see
+  // docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+  // CHANGELOG.md. Mirrors auctionService.test.ts's checkoutMarkPaid
+  // concurrency test: gate the first call's initial wide read, prove the
+  // second call's own read doesn't even start until the first fully
+  // finishes.
+  it("does not start a second concurrent check-in's Bid-Management read until the first one (same spreadsheet) has fully finished", async () => {
+    const callOrder: string[] = [];
+    let releaseFirst: () => void;
+    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+
+    // Row 0: header pairs for bidders 201 (cols 0/1) and 202 (cols 2/3).
+    // Rows 1-2 are name/label rows (not scanned); row 3 onward is the
+    // first available bid slot for each bidder's own column.
+    const bidManagementGrid: any[][] = [
+      ["201", "", "202", ""],
+      ["Winner", "One", "Other", "Two"],
+      ["Item #:", "Price:", "Item #:", "Price:"],
+    ];
+    const bidderNumbersRows: any[][] = [
+      ["ID", "First Name", "Last Name", "Email", "Checked In"],
+      ["201", "Jane", "Doe", "jane@example.com", false],
+      ["202", "Sam", "Roe", "sam@example.com", false],
+    ];
+
+    let wideReadCount = 0;
+    const fake = {
+      spreadsheets: {
+        values: {
+          get: async ({ range }: { range: string }) => {
+            if (range.includes("Bid-Management") && range.includes("1:300")) {
+              wideReadCount++;
+              const isFirst = wideReadCount === 1;
+              callOrder.push(isFirst ? "201-start" : "202-start");
+              if (isFirst) await firstGate;
+              return { data: { values: bidManagementGrid.map((r) => [...r]) } };
+            }
+            if (range.includes("Bidder-Numbers")) {
+              return { data: { values: bidderNumbersRows.map((r) => [...r]) } };
+            }
+            return { data: { values: [] } };
+          },
+          update: async ({ range }: { range: string }) => {
+            // The Bidder-Numbers "mark checked-in" write is always the
+            // LAST op executeGoogleSheetsTransaction applies for a given
+            // check-in - the reliable point to mark "fully finished" at,
+            // keyed by which bidder's own row (E2 vs E3) it targets.
+            if (range.includes("Bidder-Numbers")) {
+              callOrder.push(range.includes("E2") ? "201-end" : "202-end");
+            }
+            return { data: {} };
+          },
+        },
+      },
+    } as any;
+
+    const checkIn201 = checkInBidderWithBid(fake, {
+      bidderId: "201", spreadsheetId: "same-bm-id", bidManagementSheet: "Bid-Management", bidderNumbersSheet: "Bidder-Numbers", bidValue: 35,
+    });
+    const checkIn202 = checkInBidderWithBid(fake, {
+      bidderId: "202", spreadsheetId: "same-bm-id", bidManagementSheet: "Bid-Management", bidderNumbersSheet: "Bidder-Numbers", bidValue: 35,
+    });
+
+    // Fired both without awaiting either yet. Give both a moment to
+    // actually reach the mocked Bid-Management read, then release 201.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    releaseFirst!();
+
+    const [result201, result202] = await Promise.all([checkIn201, checkIn202]);
+
+    expect(result201.success).toBe(true);
+    expect(result202.success).toBe(true);
+    // With the lock: 202 can't even start its own read until 201 fully
+    // finishes. Without it: 202 (ungated) would complete before 201's
+    // gate is ever released.
+    expect(callOrder).toEqual(["201-start", "201-end", "202-start", "202-end"]);
   });
 });
