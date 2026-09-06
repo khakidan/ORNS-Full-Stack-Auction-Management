@@ -275,6 +275,31 @@ afterEach(() => {
   configOverride = null;
 });
 
+// Regression guards for a user-reported UI issue: too much white space
+// under the page header, and the 4 filter selects (Status/Payment/Source/
+// Sort) wrapping onto multiple lines instead of staying on one row. See
+// docs/agents/CHANGELOG.md.
+describe('Bidders - Layout', () => {
+  it('keeps the filter selects on one row instead of wrapping', () => {
+    render(<Bidders />);
+
+    const statusSelect = screen.getAllByTestId("mock-select")[0];
+    // BiddersFilterControls' selects render inside FilterToolbar's filters
+    // wrapper - that wrapper is what must stay non-wrapping.
+    const filtersWrapper = statusSelect.parentElement;
+    expect(filtersWrapper?.className).toContain("flex-nowrap");
+    expect(filtersWrapper?.className).not.toContain("flex-wrap");
+  });
+
+  it('does not use the old oversized header padding', () => {
+    render(<Bidders />);
+
+    const heading = screen.getByText("Bidder Check-In");
+    const cardHeader = heading.parentElement;
+    expect(cardHeader?.className).not.toContain("py-6");
+  });
+});
+
 describe('Bidders - Sort and Filter', () => {
   let user: ReturnType<typeof userEvent.setup>;
 

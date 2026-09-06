@@ -41,6 +41,7 @@ export default function Bidders() {
         searchPlaceholder="Search bidders..."
         searchClassName="md:max-w-xs"
         searchInputClassName="h-10"
+        filtersWrap={false}
         filters={
           <BiddersFilterControls
             statusFilter={state.statusFilter}
@@ -75,7 +76,7 @@ export default function Bidders() {
       />
 
       <Card>
-        <CardHeader className="px-4 py-6 md:px-6">
+        <CardHeader className="pb-3">
           <CardTitle>Bidder Check-In</CardTitle>
           <CardDescription>
             Search by last name. Mark bidders as present or as proxy bidders.

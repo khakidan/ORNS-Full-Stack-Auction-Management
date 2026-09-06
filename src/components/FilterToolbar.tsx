@@ -13,6 +13,15 @@ interface FilterToolbarProps {
   searchInputClassName?: string;
   /** Dropdown filters (e.g. <Select> elements), rendered next to the search input. */
   filters?: ReactNode;
+  /**
+   * Set false to keep every filter on one row (horizontally scrollable as
+   * a last resort on very narrow viewports) instead of letting them wrap
+   * onto a second/third line - found via a user-reported bug on
+   * Bidders.tsx, whose 4 filter selects wrapped messily once a 4th
+   * ("Sort by") was added. Defaults to the original wrapping behavior so
+   * every other caller is unaffected.
+   */
+  filtersWrap?: boolean;
   /** Right-aligned content - a count badge, a refresh button, an action button. */
   trailing?: ReactNode;
   className?: string;
@@ -32,6 +41,7 @@ export function FilterToolbar({
   searchClassName,
   searchInputClassName,
   filters,
+  filtersWrap = true,
   trailing,
   className,
 }: FilterToolbarProps) {
@@ -47,7 +57,11 @@ export function FilterToolbar({
             onChange={(e) => onSearchChange(e.target.value)}
           />
         </div>
-        {filters && <div className="flex flex-wrap gap-2 w-full md:w-auto">{filters}</div>}
+        {filters && (
+          <div className={cn("flex gap-2 w-full md:w-auto", filtersWrap ? "flex-wrap" : "flex-nowrap overflow-x-auto")}>
+            {filters}
+          </div>
+        )}
       </div>
       {trailing && <div className="flex gap-2 w-full md:w-auto items-center justify-center md:justify-end">{trailing}</div>}
     </div>
