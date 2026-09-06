@@ -3,12 +3,12 @@
  * and per-category sections, one page break between each category.
  *
  * @param {string}             fileName    Document name (without year prefix).
- * @param {AuctionItemManager} itemManager Provides AuctionItem instances.
+ * @param {AuctionItem[]} items  Already-resolved, valid/sorted items.
  */
 class CatalogDoc extends DocService {
-    constructor ( fileName, itemManager, folderID = null ) {
+    constructor ( fileName, items, folderID = null ) {
         super( fileName, folderID );
-        this.itemManager = itemManager;
+        this.items = items;
 
         this.category1 = '';
         this.category2 = '';
@@ -58,7 +58,7 @@ class CatalogDoc extends DocService {
     }
 
     loopThroughAllAuctionItemsForCatalogDoc_ () {
-        const items = this.itemManager.getValidSortedItems();
+        const items = this.items;
         const total = items.length;
 
         for ( let i = 0; i < total; i++ ) {

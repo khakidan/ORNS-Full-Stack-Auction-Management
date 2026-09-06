@@ -3,12 +3,12 @@
  * skipping Live and Movie Night items.
  *
  * @param {string}             fileName
- * @param {AuctionItemManager} itemManager
+ * @param {AuctionItem[]} items  Already-resolved, valid/sorted items.
  */
 class TableTentDoc extends DocService {
-    constructor ( fileName, itemManager, folderID = null ) {
+    constructor ( fileName, items, folderID = null ) {
         super( fileName, folderID );
-        this.itemManager = itemManager;
+        this.items = items;
 
         this.donatedByHeaderText = 'Donated By:';
         this.disclaimerTextLine1 = '• For Display Purposes Only •';
@@ -37,7 +37,7 @@ class TableTentDoc extends DocService {
 
     // ── Loop ─────────────────────────────────────────────────────────────────
     loopThroughAllAuctionItemsForTableTents_ () {
-        const items = this.itemManager.getValidSortedItems();
+        const items = this.items;
 
         for ( const item of items ) {
             if ( item.category === 'Live' || item.category === 'Movie Night' ) continue;

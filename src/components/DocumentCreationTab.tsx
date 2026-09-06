@@ -45,7 +45,7 @@ export default function DocumentCreationTab() {
       const res = await fetchWithRetry(`${getBaseUrl()}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderId: config.forPrintFolderId })
+        body: JSON.stringify({ folderId: config.forPrintFolderId, spreadsheetId })
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);

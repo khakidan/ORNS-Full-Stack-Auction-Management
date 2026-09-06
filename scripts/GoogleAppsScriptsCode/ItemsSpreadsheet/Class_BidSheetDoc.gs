@@ -3,12 +3,12 @@
  * skipping Live and Movie Night items.
  *
  * @param {string}             fileName
- * @param {AuctionItemManager} itemManager
+ * @param {AuctionItem[]} items  Already-resolved, valid/sorted items.
  */
 class BidSheetDoc extends DocService {
-    constructor ( fileName, itemManager, folderID = null ) {
+    constructor ( fileName, items, folderID = null ) {
         super( fileName, folderID );
-        this.itemManager = itemManager;
+        this.items = items;
 
         this.valueLabel = `${ this.tab7 }Value: $`;
         this.minRaiseLabel = 'MINIMUM RAISE: $';
@@ -74,7 +74,7 @@ class BidSheetDoc extends DocService {
 
     // ── Loop ─────────────────────────────────────────────────────────────────
     loopThroughAllAuctionItems_ () {
-        const printableItems = this.itemManager.getValidSortedItems().filter( function ( item ) {
+        const printableItems = this.items.filter( function ( item ) {
             return item.category !== 'Live' && item.category !== 'Movie Night';
         } );
 

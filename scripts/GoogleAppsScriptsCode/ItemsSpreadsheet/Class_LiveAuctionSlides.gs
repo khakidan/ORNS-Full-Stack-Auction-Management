@@ -3,12 +3,12 @@
  * Google Slides presentation: title slide, disclaimer, one slide per Live item,
  * and the Open Appeal paddle-raise section.
  *
- * @param {AuctionItemManager} itemManager
+ * @param {AuctionItem[]} items  Already-resolved, valid/sorted items.
  */
 class LiveAuctionSlides extends SlidesService {
-    constructor ( itemManager, folderID = null ) {
+    constructor ( items, folderID = null ) {
         super( folderID ); // passes to SlidesService, which applies the override
-        this.itemManager = itemManager;
+        this.items = items;
 
         this.OPEN_PADDLE_DESCRIPTION =
             'Your support of ORNS makes a difference! All of your contributions help update ' +
@@ -76,7 +76,7 @@ class LiveAuctionSlides extends SlidesService {
         // Uses getValidSortedItems() (not a raw index loop) so inactive/deleted
         // items never appear on stage, and items are shown in ID order -
         // matching every other document generator's behavior.
-        const liveItems = this.itemManager.getValidSortedItems().filter( item => item.isLive() );
+        const liveItems = this.items.filter( item => item.isLive() );
 
         for ( const item of liveItems ) {
             const file = this.getSlidesFile_();

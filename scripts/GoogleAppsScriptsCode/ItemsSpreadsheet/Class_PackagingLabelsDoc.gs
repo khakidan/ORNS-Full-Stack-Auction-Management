@@ -7,9 +7,9 @@
  * doc rather than creating a new one via DocService's constructor.
  */
 class PackagingLabelsDoc extends DocService {
-    constructor ( itemManager, folderID = null ) {
+    constructor ( items, folderID = null ) {
         super( null, folderID ); // null = no new doc; TemplateManager handles file placement
-        this.itemManager = itemManager;
+        this.items = items;
 
         // Pass folderID so TemplateManager places the copy in the correct folder
         const templateManager = new TemplateManager( folderID );
@@ -33,7 +33,7 @@ class PackagingLabelsDoc extends DocService {
 
     // ── Label-queue builder ──────────────────────────────────────────────────
     _prepareLabels () {
-        const items = this.itemManager.getValidSortedItems();
+        const items = this.items;
 
         for ( const item of items ) {
             if ( item.phyOrCert === 'Physical Item' || item.phyOrCert === 'Certificate' ) {

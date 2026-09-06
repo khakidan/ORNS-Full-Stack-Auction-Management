@@ -2,13 +2,14 @@
  * Document Generator. Produces a printable table listing every auction item
  * so the bundling team can annotate it by hand during their meeting.
  *
- * @param {string}             fileName
- * @param {AuctionItemManager} itemManager
+ * @param {string}        fileName
+ * @param {AuctionItem[]} items  Already-resolved, valid/sorted items - see
+ *   Class_GoogleAIStudio.gs's createBundlingDoc.
  */
 class BundlingMeetingDoc extends DocService {
-    constructor ( fileName, itemManager, folderID = null ) {
+    constructor ( fileName, items, folderID = null ) {
         super( fileName, folderID );
-        this.itemManager = itemManager;
+        this.items = items;
     }
 
     // ── Printable-doc helpers ────────────────────────────────────────────────
@@ -43,7 +44,7 @@ class BundlingMeetingDoc extends DocService {
         this.writeBundlingInfoTable_();
         const table = this.getDoc_().getBody().getTables()[ 0 ];
         const firstRow = table.getRow( 1 );
-        const items = this.itemManager.getValidSortedItems();
+        const items = this.items;
 
         for ( let i = 0; i < items.length; i++ ) {
             const item = items[ i ];

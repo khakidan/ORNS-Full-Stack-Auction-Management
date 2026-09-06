@@ -21,6 +21,26 @@ const mockTokens = {
 };
 const authHeader = { "x-google-tokens": JSON.stringify(mockTokens) };
 
+// Node now resolves the Items spreadsheet's valid/sorted item list itself
+// (itemDataService.ts's getValidSortedItems, the Node port of
+// Class_AuctionItemManager.gs's getValidSortedItems - see
+// docs/agents/refactor-opportunities.md's Code Hardening item #3) and
+// forwards it as a parameter to every item-entry Apps Script call. This is
+// exactly what parsing handlers.ts's default Auction-Items fixture (both
+// rows "Active", already ID-ascending) resolves to.
+const EXPECTED_DEFAULT_ITEMS = [
+  {
+    id: "801", category: "Food", name: "Pizza Night", description: "A pizza dinner",
+    value: "$50.00", openingBid: "$22.50", minRaise: "$5.00", donor: "Joe's Pizza",
+    itemType: "Certificate", status: "Active", bundleId: "", bundledDateTime: "", rowIndex: 2,
+  },
+  {
+    id: "803", category: "Food", name: "Sushi Dinner", description: "A sushi dinner",
+    value: "$150.00", openingBid: "$67.50", minRaise: "$10.00", donor: "Sushi Place",
+    itemType: "Certificate", status: "Active", bundleId: "", bundledDateTime: "", rowIndex: 3,
+  },
+];
+
 describe("Document and Presentation Creation workflow", () => {
   // Audit Confirmation: Ticket Document Creation is fully covered below.
   // The fetchFiles endpoint (/api/drive/files/:folderId) is a general Drive utility, and
@@ -40,42 +60,42 @@ describe("Document and Presentation Creation workflow", () => {
     {
       endpoint: "/api/production/item-entry/bundling-doc",
       funcName: "apiCreateBundlingDoc",
-      payload: { folderId: "test-folder-id" },
+      payload: { folderId: "test-folder-id", spreadsheetId: "test-items-ss-id" },
     },
     {
       endpoint: "/api/production/item-entry/item-labels",
       funcName: "apiCreateItemLabels",
-      payload: { folderId: "test-folder-id" },
+      payload: { folderId: "test-folder-id", spreadsheetId: "test-items-ss-id" },
     },
     {
       endpoint: "/api/production/item-entry/slideshow",
       funcName: "apiCreateSlideshow",
-      payload: { folderId: "test-folder-id" },
+      payload: { folderId: "test-folder-id", spreadsheetId: "test-items-ss-id" },
     },
     {
       endpoint: "/api/production/item-entry/bidding-guide-cover",
       funcName: "apiCreateBiddingGuideCoverPage",
-      payload: { folderId: "test-folder-id" },
+      payload: { folderId: "test-folder-id", spreadsheetId: "test-items-ss-id" },
     },
     {
       endpoint: "/api/production/item-entry/bidding-guide-inner",
       funcName: "apiCreateBiddingGuideInnerPages",
-      payload: { folderId: "test-folder-id" },
+      payload: { folderId: "test-folder-id", spreadsheetId: "test-items-ss-id" },
     },
     {
       endpoint: "/api/production/item-entry/bid-sheets",
       funcName: "apiCreateBidSheets",
-      payload: { folderId: "test-folder-id" },
+      payload: { folderId: "test-folder-id", spreadsheetId: "test-items-ss-id" },
     },
     {
       endpoint: "/api/production/item-entry/catalog",
       funcName: "apiCreateCatalog",
-      payload: { folderId: "test-folder-id" },
+      payload: { folderId: "test-folder-id", spreadsheetId: "test-items-ss-id" },
     },
     {
       endpoint: "/api/production/item-entry/table-tents",
       funcName: "apiCreateTableTents",
-      payload: { folderId: "test-folder-id" },
+      payload: { folderId: "test-folder-id", spreadsheetId: "test-items-ss-id" },
     },
     {
       endpoint: "/api/production/tickets/bidder-labels",
@@ -106,8 +126,10 @@ describe("Document and Presentation Creation workflow", () => {
         // Confirms the payload fields actually reach the Apps Script call as
         // parameters, not just that some function got called - a payload
         // handling bug (wrong key, wrong array position) wouldn't have
-        // failed this test before this assertion existed.
-        const expected = expectedParams ?? ((payload as any).folderId !== undefined ? [(payload as any).folderId] : []);
+        // failed this test before this assertion existed. Every item-entry
+        // case now also expects Node's resolved item list as the 2nd
+        // parameter (see EXPECTED_DEFAULT_ITEMS above).
+        const expected = expectedParams ?? ((payload as any).folderId !== undefined ? [(payload as any).folderId, EXPECTED_DEFAULT_ITEMS] : []);
         expect(lastAppsScriptParams).toEqual(expected);
       });
 
@@ -136,7 +158,7 @@ describe("Document and Presentation Creation workflow", () => {
     const response = await request(app)
       .post("/api/production/item-entry/bundling-doc")
       .set(authHeader)
-      .send({ folderId: "fail-folder-id" });
+      .send({ folderId: "fail-folder-id", spreadsheetId: "test-items-ss-id" });
 
     expect(response.status).toBe(500);
     expect(response.body?.success).not.toBe(true);
@@ -161,10 +183,21 @@ describe("Document and Presentation Creation workflow", () => {
     const response = await request(app)
       .post("/api/production/item-entry/catalog")
       .set(authHeader)
-      .send({ folderId: "test-folder-id" });
+      .send({ folderId: "test-folder-id", spreadsheetId: "test-items-ss-id" });
 
     expect(response.status).toBe(400);
     expect(response.body).toEqual({ success: false, error: "Auction-Items sheet is empty" });
+  });
+
+  it("returns 400 when spreadsheetId is missing", async () => {
+    const response = await request(app)
+      .post("/api/production/item-entry/catalog")
+      .set(authHeader)
+      .send({ folderId: "test-folder-id" });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: "spreadsheetId required" });
+    expect(appsScriptCallCount).toBe(0);
   });
 
   it("returns 400 when the target environment's script ID isn't configured", async () => {
@@ -174,7 +207,7 @@ describe("Document and Presentation Creation workflow", () => {
     const response = await request(app)
       .post("/api/production/item-entry/catalog")
       .set(authHeader)
-      .send({ folderId: "test-folder-id" });
+      .send({ folderId: "test-folder-id", spreadsheetId: "test-items-ss-id" });
 
     expect(response.status).toBe(400);
     expect(response.body).toEqual({ error: "Missing Target Environment Script ID" });

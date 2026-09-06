@@ -6,27 +6,6 @@
 
 class GoogleAIStudio {
     /**
-     * @param {Object} [overrides] Optional dependency injection, used by unit
-     *   tests. `itemManager` replaces the lazily-constructed
-     *   `new AuctionItemManager()` outright, letting tests supply one built
-     *   from a fake sheet without needing a real spreadsheet at all.
-     *   Production call sites (`new GoogleAIStudio()`) never pass this.
-     */
-    constructor ( overrides = {} ) {
-        this._itemManager = overrides.itemManager || null;
-    }
-
-    /**
-     * Lazy-loaded getter for the item manager.
-     */
-    get itemManager () {
-        if ( !this._itemManager ) {
-            this._itemManager = new AuctionItemManager();
-        }
-        return this._itemManager;
-    }
-
-    /**
      * Centralized runner that handles execution, logging, and error handling.
      * @param {Function} generateAction - Callback containing the generation call.
      * @param {string}   successMessage
@@ -45,10 +24,15 @@ class GoogleAIStudio {
 
     /**
      * @param {string|null} folderID  Drive folder ID passed in from the API call.
+     * @param {Object[]}    items     Already-resolved, valid/sorted item data -
+     *   see server/services/itemDataService.ts's getValidSortedItems. Node
+     *   resolves this itself now instead of this class looking it up - see
+     *   docs/agents/refactor-opportunities.md's Code Hardening item #3 /
+     *   CHANGELOG.md.
      * @returns {Object}
      */
-    createBundlingDoc ( folderID = null ) {
-        const generator = new BundlingMeetingDoc( 'Items Up For Auction', this.itemManager, folderID );
+    createBundlingDoc ( folderID = null, items = [] ) {
+        const generator = new BundlingMeetingDoc( 'Items Up For Auction', items.map( AuctionItem.fromData ), folderID );
         return this._executeGeneration(
             () => generator.generateBundlingDoc(),
             'Bundling document created successfully.',
@@ -58,10 +42,11 @@ class GoogleAIStudio {
 
     /**
      * @param {string|null} folderID
+     * @param {Object[]}    items
      * @returns {Object}
      */
-    createItemLabels ( folderID = null ) {
-        const generator = new PackagingLabelsDoc( this.itemManager, folderID );
+    createItemLabels ( folderID = null, items = [] ) {
+        const generator = new PackagingLabelsDoc( items.map( AuctionItem.fromData ), folderID );
         return this._executeGeneration(
             () => generator.generateLabels(),
             'Item labels created successfully.',
@@ -71,10 +56,11 @@ class GoogleAIStudio {
 
     /**
      * @param {string|null} folderID
+     * @param {Object[]}    items
      * @returns {Object}
      */
-    createSlideshow ( folderID = null ) {
-        const generator = new LiveAuctionSlides( this.itemManager, folderID );
+    createSlideshow ( folderID = null, items = [] ) {
+        const generator = new LiveAuctionSlides( items.map( AuctionItem.fromData ), folderID );
         return this._executeGeneration(
             () => generator.generatePresentation(),
             'Live auction slideshow created successfully.',
@@ -84,10 +70,11 @@ class GoogleAIStudio {
 
     /**
      * @param {string|null} folderID
+     * @param {Object[]}    items
      * @returns {Object}
      */
-    createBiddingGuideCoverPage ( folderID = null ) {
-        const generator = new BiddingGuideDoc( 'Auction Bidding Guide Cover Page', this.itemManager, folderID );
+    createBiddingGuideCoverPage ( folderID = null, items = [] ) {
+        const generator = new BiddingGuideDoc( 'Auction Bidding Guide Cover Page', items.map( AuctionItem.fromData ), folderID );
         return this._executeGeneration(
             () => generator.generateCoverPage(),
             'Cover page created successfully.',
@@ -97,10 +84,11 @@ class GoogleAIStudio {
 
     /**
      * @param {string|null} folderID
+     * @param {Object[]}    items
      * @returns {Object}
      */
-    createBiddingGuideInnerPages ( folderID = null ) {
-        const generator = new BiddingGuideDoc( 'Auction Bidding Guide Inner Pages', this.itemManager, folderID );
+    createBiddingGuideInnerPages ( folderID = null, items = [] ) {
+        const generator = new BiddingGuideDoc( 'Auction Bidding Guide Inner Pages', items.map( AuctionItem.fromData ), folderID );
         return this._executeGeneration(
             () => generator.generateInnerPages(),
             'Inner pages created successfully.',
@@ -110,10 +98,11 @@ class GoogleAIStudio {
 
     /**
      * @param {string|null} folderID
+     * @param {Object[]}    items
      * @returns {Object}
      */
-    createBidSheets ( folderID = null ) {
-        const generator = new BidSheetDoc( 'Bid Sheets', this.itemManager, folderID );
+    createBidSheets ( folderID = null, items = [] ) {
+        const generator = new BidSheetDoc( 'Bid Sheets', items.map( AuctionItem.fromData ), folderID );
         return this._executeGeneration(
             () => generator.generateBidSheets(),
             'Bid sheets created successfully.',
@@ -123,10 +112,11 @@ class GoogleAIStudio {
 
     /**
      * @param {string|null} folderID
+     * @param {Object[]}    items
      * @returns {Object}
      */
-    createCatalog ( folderID = null ) {
-        const generator = new CatalogDoc( 'Auction Catalog', this.itemManager, folderID );
+    createCatalog ( folderID = null, items = [] ) {
+        const generator = new CatalogDoc( 'Auction Catalog', items.map( AuctionItem.fromData ), folderID );
         return this._executeGeneration(
             () => generator.generateCatalog(),
             'Auction catalog created successfully.',
@@ -136,10 +126,11 @@ class GoogleAIStudio {
 
     /**
      * @param {string|null} folderID
+     * @param {Object[]}    items
      * @returns {Object}
      */
-    createTableTents ( folderID = null ) {
-        const generator = new TableTentDoc( 'Table Tents', this.itemManager, folderID );
+    createTableTents ( folderID = null, items = [] ) {
+        const generator = new TableTentDoc( 'Table Tents', items.map( AuctionItem.fromData ), folderID );
         return this._executeGeneration(
             () => generator.generateTableTents(),
             'Table tents created successfully.',
@@ -150,17 +141,18 @@ class GoogleAIStudio {
 
 // ==============================================================================
 // GLOBAL API WRAPPERS
-// Pass folderID as the first argument when calling via the Apps Script API.
-// Example from Google AI Studio: run("apiCreateBundlingDoc", ["your-folder-id-here"])
+// Pass folderID and the resolved items array as arguments when calling via
+// the Apps Script API. Example from Node: run("apiCreateBundlingDoc",
+// [folderID, items])
 // ==============================================================================
 
 const API_BRIDGE = new GoogleAIStudio();
 
-function apiCreateBundlingDoc ( folderID ) { return API_BRIDGE.createBundlingDoc( folderID ); }
-function apiCreateItemLabels ( folderID ) { return API_BRIDGE.createItemLabels( folderID ); }
-function apiCreateSlideshow ( folderID ) { return API_BRIDGE.createSlideshow( folderID ); }
-function apiCreateBiddingGuideCoverPage ( folderID ) { return API_BRIDGE.createBiddingGuideCoverPage( folderID ); }
-function apiCreateBiddingGuideInnerPages ( folderID ) { return API_BRIDGE.createBiddingGuideInnerPages( folderID ); }
-function apiCreateBidSheets ( folderID ) { return API_BRIDGE.createBidSheets( folderID ); }
-function apiCreateCatalog ( folderID ) { return API_BRIDGE.createCatalog( folderID ); }
-function apiCreateTableTents ( folderID ) { return API_BRIDGE.createTableTents( folderID ); }
+function apiCreateBundlingDoc ( folderID, items ) { return API_BRIDGE.createBundlingDoc( folderID, items ); }
+function apiCreateItemLabels ( folderID, items ) { return API_BRIDGE.createItemLabels( folderID, items ); }
+function apiCreateSlideshow ( folderID, items ) { return API_BRIDGE.createSlideshow( folderID, items ); }
+function apiCreateBiddingGuideCoverPage ( folderID, items ) { return API_BRIDGE.createBiddingGuideCoverPage( folderID, items ); }
+function apiCreateBiddingGuideInnerPages ( folderID, items ) { return API_BRIDGE.createBiddingGuideInnerPages( folderID, items ); }
+function apiCreateBidSheets ( folderID, items ) { return API_BRIDGE.createBidSheets( folderID, items ); }
+function apiCreateCatalog ( folderID, items ) { return API_BRIDGE.createCatalog( folderID, items ); }
+function apiCreateTableTents ( folderID, items ) { return API_BRIDGE.createTableTents( folderID, items ); }

@@ -4,12 +4,12 @@
  *   2. Inner pages — schedule of events + live auction item listings
  *
  * @param {string}             fileName
- * @param {AuctionItemManager} itemManager
+ * @param {AuctionItem[]} items  Already-resolved, valid/sorted items.
  */
 class BiddingGuideDoc extends DocService {
-    constructor ( fileName, itemManager, folderID = null ) {
+    constructor ( fileName, items, folderID = null ) {
         super( fileName, folderID );
-        this.itemManager = itemManager;
+        this.items = items;
 
         this.myBidderNumberText = 'MY BIDDER NUMBER:';
         this.schedOfEventsText = 'Schedule of Events';
@@ -107,7 +107,7 @@ class BiddingGuideDoc extends DocService {
         // Uses getValidSortedItems() (not a raw index loop) so inactive/deleted
         // items are never printed, and items are shown in ID order - matching
         // every other document generator's behavior.
-        const liveItems = this.itemManager.getValidSortedItems().filter( item => item.isLive() );
+        const liveItems = this.items.filter( item => item.isLive() );
 
         for ( const item of liveItems ) {
             if ( this.getFirstEntry_() === 0 ) this.writeLiveAuctionCategoryHeader_();

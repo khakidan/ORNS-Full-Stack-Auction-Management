@@ -138,7 +138,7 @@ describe("DocumentCreationTab", () => {
     ["Create Auction Catalog Doc", "/api/production/item-entry/catalog", "apiCreateCatalog", "Auction Catalog"],
     ["Create Table Tents Doc", "/api/production/item-entry/table-tents", "apiCreateTableTents", "Table Tents"],
     ["Create Live Auction Slideshow", "/api/production/item-entry/slideshow", "apiCreateSlideshow", "Create Slideshow"],
-  ])("'%s' POSTs to %s with the configured folderId", async (buttonText, endpoint, funcName, toastLabel) => {
+  ])("'%s' POSTs to %s with the configured folderId and spreadsheetId", async (buttonText, endpoint, funcName, toastLabel) => {
     // The generation call itself resolves with a plain success body.
     mockedFetchWithRetry.mockImplementation(async (url: any) => {
       if (typeof url === "string" && url.includes(endpoint)) {
@@ -160,7 +160,7 @@ describe("DocumentCreationTab", () => {
       expect.stringContaining(endpoint),
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ folderId: mockConfig.forPrintFolderId }),
+        body: JSON.stringify({ folderId: mockConfig.forPrintFolderId, spreadsheetId: mockConfig.auctionItemsSpreadsheetId }),
       })
     );
     await waitFor(() => {

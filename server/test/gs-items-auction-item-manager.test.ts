@@ -1,15 +1,16 @@
 /**
  * Tests the REAL source of
- * scripts/GoogleAppsScriptsCode/ItemsSpreadsheet/Class_AuctionItemManager.gs's
- * `getValidSortedItems` and Class_AuctionItem.gs's display-fallback helpers -
- * the shared data layer every one of the 8 api* document-generation bridge
- * functions reads from. Loaded via helpers/loadGasClass, not a Node
- * reimplementation.
+ * scripts/GoogleAppsScriptsCode/ItemsSpreadsheet/Class_AuctionItem.gs's
+ * display-fallback helpers and its `fromData` static factory (Code
+ * Hardening item #3) - the shared data layer every one of the 8 api*
+ * document-generation bridge functions consumes. Loaded via
+ * helpers/loadGasClass, not a Node reimplementation.
  *
- * This is the exact layer the "Live items skip the status filter" bug lived
- * in (fixed - see CHANGELOG.md), so it's the highest-leverage place to test:
- * get this right and every generator's item selection is correct by
- * construction.
+ * `Class_AuctionItemManager.gs` (this file used to also test its
+ * `getValidSortedItems`) is deleted - Node now resolves the valid/sorted
+ * item list itself (see server/test/itemDataService.test.ts) and hands
+ * it to GAS as a parameter. See docs/agents/refactor-opportunities.md's
+ * Code Hardening item #3 / CHANGELOG.md.
  *
  * IMPORTANT: this only tests this repo's reference copy. Fixes here don't
  * take effect in the live spreadsheet until manually pasted into the Apps
@@ -17,82 +18,17 @@
  */
 import { describe, it, expect } from "vitest";
 import { loadGasClasses } from "./helpers/loadGasClass";
-import { FakeSpreadsheet } from "./helpers/fakeSheet";
 
-const { AuctionItemManager, AuctionItem } = loadGasClasses(
-  [
-    "scripts/GoogleAppsScriptsCode/ItemsSpreadsheet/Class_GlobalVariables.gs",
-    "scripts/GoogleAppsScriptsCode/ItemsSpreadsheet/Class_AuctionItem.gs",
-    "scripts/GoogleAppsScriptsCode/ItemsSpreadsheet/Class_AuctionItemManager.gs",
-  ],
-  ["AuctionItemManager", "AuctionItem"]
+const { AuctionItem } = loadGasClasses(
+  ["scripts/GoogleAppsScriptsCode/ItemsSpreadsheet/Class_AuctionItem.gs"],
+  ["AuctionItem"]
 );
-
-// Column layout (0-indexed): id, category, name, description, value,
-// openingBid, minRaise, donatedBy, phyOrCert, status, bundleID, bundleTS
-const HEADER = ["Item Number", "Category", "Item Name", "Description", "Value", "Opening Bid", "Min Raise", "Donated By", "Physical/Cert", "Status", "Bundle ID", "Bundled Date/Time"];
 
 function itemRow(id: string, overrides: Record<number, any> = {}) {
   const row = [id, "Food", `Item ${id}`, "A description", "100", "50", "5", "A Donor", "Physical Item", "Active", "", ""];
   Object.entries(overrides).forEach(([i, v]) => { row[Number(i)] = v; });
   return row;
 }
-
-function fakeManagerWithItems(rows: any[][]) {
-  const spreadsheet = new FakeSpreadsheet();
-  spreadsheet.addSheet("Auction-Items", [HEADER, ...rows]);
-  return new AuctionItemManager({ activeSpreadSheet: spreadsheet, config: {} });
-}
-
-describe("AuctionItemManager.getValidSortedItems", () => {
-  it("excludes items with status 'inactive' or 'deleted' (case/whitespace-insensitive)", () => {
-    const mgr = fakeManagerWithItems([
-      itemRow("101", { 9: "Active" }),
-      itemRow("102", { 9: "inactive" }),
-      itemRow("103", { 9: "Deleted" }),
-      itemRow("104", { 9: "  DELETED  " }),
-      itemRow("105", { 9: "" }), // blank status counts as valid
-    ]);
-
-    const ids = mgr.getValidSortedItems().map((i: any) => i.id);
-    expect(ids).toEqual(["101", "105"]);
-  });
-
-  it("sorts numerically by ID, not lexicographically", () => {
-    // Lexicographic sort would put "150" after "1301" ("1" < "1" but "3" < "5"
-    // wins on the second char) - this is exactly the ordering every printed
-    // document and the live-auction slideshow depends on.
-    const mgr = fakeManagerWithItems([
-      itemRow("1301"),
-      itemRow("150"),
-      itemRow("201"),
-    ]);
-
-    const ids = mgr.getValidSortedItems().map((i: any) => i.id);
-    expect(ids).toEqual(["150", "201", "1301"]);
-  });
-
-  it("returns an empty array when the Auction-Items sheet doesn't exist", () => {
-    const spreadsheet = new FakeSpreadsheet(); // no sheets added
-    const mgr = new AuctionItemManager({ activeSpreadSheet: spreadsheet, config: {} });
-    expect(mgr.getValidSortedItems()).toEqual([]);
-  });
-
-  it("returns an empty array when the sheet has only a header row", () => {
-    const mgr = fakeManagerWithItems([]);
-    expect(mgr.getValidSortedItems()).toEqual([]);
-  });
-
-  it("constructs real AuctionItem instances with every field populated from the row", () => {
-    const mgr = fakeManagerWithItems([itemRow("301", { 1: "Retail", 2: "Gift Card", 7: "Acme Co." })]);
-    const [item] = mgr.getValidSortedItems();
-
-    expect(item.id).toBe("301");
-    expect(item.category).toBe("Retail");
-    expect(item.name).toBe("Gift Card");
-    expect(item.donatedBy).toBe("Acme Co.");
-  });
-});
 
 describe("AuctionItem display-fallback helpers", () => {
   it("isLive() is true only for the 'Live' category", () => {
@@ -136,5 +72,44 @@ describe("AuctionItem display-fallback helpers", () => {
     expect(idOnly.getDisplayOpeningBid()).toBe("5");
     expect(idOnly.getDisplayMinRaise()).toBe("5");
     expect(idOnly.hasOpeningBid()).toBe(false);
+  });
+});
+
+describe("AuctionItem.fromData", () => {
+  it("reconstructs a real AuctionItem instance from Node's resolved item shape", () => {
+    const item = AuctionItem.fromData({
+      id: "301",
+      category: "Retail",
+      name: "Gift Card",
+      description: "A card",
+      value: "100",
+      openingBid: "50",
+      minRaise: "5",
+      donor: "Acme Co.",
+      itemType: "Certificate",
+      status: "Active",
+      bundleId: "",
+      bundledDateTime: "",
+    });
+
+    expect(item).toBeInstanceOf(AuctionItem);
+    expect(item.id).toBe("301");
+    expect(item.category).toBe("Retail");
+    expect(item.name).toBe("Gift Card");
+    // Field-name translation: Node's resolver uses donor/itemType/bundleId/
+    // bundledDateTime (src/types.ts's AuctionItem shape); this class uses
+    // donatedBy/phyOrCert/bundleID/bundleTimeStamp.
+    expect(item.donatedBy).toBe("Acme Co.");
+    expect(item.phyOrCert).toBe("Certificate");
+    expect(item.isLive()).toBe(false);
+  });
+
+  it("defaults missing fields to '' the same way the constructor does", () => {
+    const item = AuctionItem.fromData({ id: "101" });
+    expect(item.category).toBe("");
+    expect(item.donatedBy).toBe("");
+    expect(item.bundleID).toBe("");
+    expect(item.getDisplayValue()).toBe("500");
+    expect(item.hasOpeningBid()).toBe(false);
   });
 });

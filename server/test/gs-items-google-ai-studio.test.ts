@@ -2,8 +2,16 @@
  * Tests the REAL source of
  * scripts/GoogleAppsScriptsCode/ItemsSpreadsheet/Class_GoogleAIStudio.gs's
  * `_executeGeneration` (the shared success/error-wrapping contract all 8
- * api* document-generation bridge functions rely on) and the injectable
- * `itemManager` override.
+ * api* document-generation bridge functions rely on).
+ *
+ * The class's former `itemManager` lazy getter/constructor override is
+ * gone (Code Hardening item #3) - the 8 `create*` methods now receive an
+ * already-resolved `items` array directly (see
+ * server/test/itemDataService.test.ts and
+ * server/test/gs-items-auction-item-manager.test.ts's `AuctionItem.fromData`
+ * coverage) instead of lazily constructing an `AuctionItemManager` that
+ * reads the sheet itself. See docs/agents/refactor-opportunities.md's
+ * Code Hardening item #3 / CHANGELOG.md.
  *
  * Deliberately NOT tested here: the 8 `create*` methods' actual document
  * output (createBundlingDoc, createItemLabels, etc.) - each constructs a
@@ -47,22 +55,5 @@ describe("GoogleAIStudio._executeGeneration", () => {
     expect(() => studio._executeGeneration(() => { throw "a bare string throw"; }, "msg", "label")).not.toThrow();
     const result = studio._executeGeneration(() => { throw "a bare string throw"; }, "msg", "label");
     expect(result.success).toBe(false);
-  });
-});
-
-describe("GoogleAIStudio itemManager override", () => {
-  it("uses the injected itemManager instead of constructing a real one", () => {
-    const fakeItemManager = { marker: "this is the fake" };
-    const studio = new GoogleAIStudio({ itemManager: fakeItemManager });
-    expect(studio.itemManager).toBe(fakeItemManager);
-  });
-
-  it("lazily constructs a real AuctionItemManager when no override is given", () => {
-    // AuctionItemManager.gs is deliberately NOT loaded here, so the real
-    // fallback path (`new AuctionItemManager()`) throws ReferenceError -
-    // the correct failure mode per loadGasClass.ts's own testing philosophy,
-    // and proof the getter doesn't silently swallow a missing override.
-    const studio = new GoogleAIStudio();
-    expect(() => studio.itemManager).toThrow(/AuctionItemManager is not defined/);
   });
 });

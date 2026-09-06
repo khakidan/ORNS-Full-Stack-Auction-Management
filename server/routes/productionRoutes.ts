@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
 import { requireAuth } from '../middleware/requireAuth';
 import { ensureBidderNumbersSheet, getBidderLabelList } from '../services/syncService';
+import { getValidSortedItems } from '../services/itemDataService';
 
 export default function createProductionRouter() {
   const router = Router();
@@ -51,46 +52,67 @@ export default function createProductionRouter() {
 
   /**
    * ITEM ENTRY SPREADSHEET COMMANDS
+   *
+   * Node resolves the valid, sorted item list itself (see
+   * itemDataService.ts's getValidSortedItems, the Node port of
+   * Class_AuctionItemManager.gs's getValidSortedItems) and hands it to
+   * each Doc/Slides generator as a parameter, instead of every generator
+   * opening the Items spreadsheet and resolving it independently inside
+   * GAS - purely for architectural consistency with the rest of this
+   * app's GAS projects (Code Hardening item #3), the same "Node resolves
+   * data, GAS only turns it into an artifact" shape already used for
+   * receipts and bidder labels. See docs/agents/refactor-opportunities.md
+   * / CHANGELOG.md.
    */
+  const handleItemEntryDoc = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+    functionName: string
+  ) => {
+    const { folderId, spreadsheetId } = req.body;
+    if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
+
+    try {
+      const client = getAuthenticatedClient(req.session.tokens);
+      const sheets = google.sheets({ version: "v4", auth: client });
+      const items = await getValidSortedItems(sheets, spreadsheetId);
+      await handleAppsScriptCall(req, res, next, functionName, process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || "", items]);
+    } catch (error) {
+      next(error);
+    }
+  };
 
   router.post("/item-entry/bundling-doc", (req, res, next) => {
-    const { folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateBundlingDoc", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
+    handleItemEntryDoc(req, res, next, "apiCreateBundlingDoc");
   });
 
   router.post("/item-entry/item-labels", (req, res, next) => {
-    const { folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateItemLabels", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
+    handleItemEntryDoc(req, res, next, "apiCreateItemLabels");
   });
 
   router.post("/item-entry/slideshow", (req, res, next) => {
-    const { folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateSlideshow", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
+    handleItemEntryDoc(req, res, next, "apiCreateSlideshow");
   });
 
   router.post("/item-entry/bidding-guide-cover", (req, res, next) => {
-    const { folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateBiddingGuideCoverPage", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
+    handleItemEntryDoc(req, res, next, "apiCreateBiddingGuideCoverPage");
   });
 
   router.post("/item-entry/bidding-guide-inner", (req, res, next) => {
-    const { folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateBiddingGuideInnerPages", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
+    handleItemEntryDoc(req, res, next, "apiCreateBiddingGuideInnerPages");
   });
 
   router.post("/item-entry/bid-sheets", (req, res, next) => {
-    const { folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateBidSheets", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
+    handleItemEntryDoc(req, res, next, "apiCreateBidSheets");
   });
 
   router.post("/item-entry/catalog", (req, res, next) => {
-    const { folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateCatalog", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
+    handleItemEntryDoc(req, res, next, "apiCreateCatalog");
   });
 
   router.post("/item-entry/table-tents", (req, res, next) => {
-    const { folderId } = req.body;
-    handleAppsScriptCall(req, res, next, "apiCreateTableTents", process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || ""]);
+    handleItemEntryDoc(req, res, next, "apiCreateTableTents");
   });
 
   /**
