@@ -32,10 +32,16 @@ vi.mock("@/context/AuctionContext", () => ({
     bidders: [
       { id: "142", firstName: "Test", lastName: "Bidder", checkedIn: true, isProxy: false },
       // Second bidder with checkedIn: false for the validation test
-      { id: "999", firstName: "Unchecked", lastName: "Guest", checkedIn: false, isProxy: false }
+      { id: "999", firstName: "Unchecked", lastName: "Guest", checkedIn: false, isProxy: false },
+      // A data-quality edge case seen in practice: a bidder row with an
+      // empty-string id. Regression guard below for the bug this exposed.
+      { id: "", firstName: "Blank", lastName: "Bidder", checkedIn: true, isProxy: false }
     ],
     items: [
-      { id: "1301", name: "Sample Item" }
+      { id: "1301", name: "Sample Item" },
+      // Same data-quality edge case for items - e.g. an inactive/bundled
+      // row whose id was blanked out but is still present in the array.
+      { id: "", name: "New Art Bundle" }
     ],
     recordWinningBid: mockRecordWinningBid
   })
@@ -100,6 +106,31 @@ describe("BidEntry", () => {
     expect(toast.error).toHaveBeenCalledWith(
       "Bidder must be checked in (or be a proxy bidder)"
     );
+  });
+
+  // Regression guard for a user-reported bug: an item/bidder row with an
+  // empty-string id (a real data-quality issue seen in practice) used to
+  // match `.find(i => i.id === itemId)` as soon as the input was empty too
+  // (`"" === ""`), showing that row's name/label under a blank field. See
+  // docs/agents/CHANGELOG.md.
+  it("does not show an item or bidder label when the Item Number/Bidder ID fields are empty, even if a row has a blank id", () => {
+    render(<BidEntry />);
+
+    expect(screen.queryByText("New Art Bundle")).not.toBeInTheDocument();
+    expect(screen.queryByText("Blank Bidder")).not.toBeInTheDocument();
+  });
+
+  // Regression guard for a user-reported UI issue: the field wrapper divs
+  // had no vertical spacing between the Label and its Input, so the label
+  // text rendered flush against the input box. See
+  // docs/agents/CHANGELOG.md.
+  it("gives each field's Label some breathing room from its Input", () => {
+    render(<BidEntry />);
+
+    for (const labelText of ["Item Number", "Bidder ID", "Winning Bid ($)"]) {
+      const label = screen.getByText(labelText);
+      expect(label.parentElement?.className).toContain("space-y-2");
+    }
   });
 
   it("form clears after successful submission", async () => {

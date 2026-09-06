@@ -21,8 +21,14 @@ export default function BidEntry() {
   const [price, setPrice] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const selectedItem = items.find(i => i.id === itemId);
-  const selectedBidder = bidders.find(b => b.id === bidderId);
+  // Guarded against an empty itemId/bidderId matching an item/bidder whose
+  // own id happens to be an empty string too (a real data issue seen in
+  // practice) - without this, `.find(i => i.id === itemId)` would return
+  // that item/bidder as soon as the field is empty, showing its name/label
+  // under a blank input. Found via a user-reported bug - see
+  // docs/agents/CHANGELOG.md.
+  const selectedItem = itemId.trim() ? items.find(i => i.id === itemId) : undefined;
+  const selectedBidder = bidderId.trim() ? bidders.find(b => b.id === bidderId) : undefined;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,7 +79,7 @@ export default function BidEntry() {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Item ID */}
-          <div>
+          <div className="space-y-2">
             <Label>Item Number</Label>
             <div className="relative">
               <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
@@ -90,7 +96,7 @@ export default function BidEntry() {
           </div>
 
           {/* Bidder ID */}
-          <div>
+          <div className="space-y-2">
             <Label>Bidder ID</Label>
             <div className="relative">
               <User className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
@@ -105,7 +111,7 @@ export default function BidEntry() {
           </div>
 
           {/* Price */}
-          <div>
+          <div className="space-y-2">
             <Label>Winning Bid ($)</Label>
             <Input type="number" step="0.01" placeholder="150.00" value={price} onChange={e => setPrice(e.target.value)} disabled={submitting} />
           </div>
