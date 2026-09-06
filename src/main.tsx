@@ -5,6 +5,7 @@ import './index.css';
 import { ConfigProvider } from './context/ConfigContext';
 import { AuctionProvider } from './context/AuctionContext';
 import { AuthProvider } from './context/AuthContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { initErrorCapture } from './lib/errorBuffer';
 
 // Must run before the app renders so no early console.error/window error
@@ -13,12 +14,14 @@ initErrorCapture();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ConfigProvider>
-      <AuthProvider>
-        <AuctionProvider>
-          <App />
-        </AuctionProvider>
-      </AuthProvider>
-    </ConfigProvider>
+    <ErrorBoundary>
+      <ConfigProvider>
+        <AuthProvider>
+          <AuctionProvider>
+            <App />
+          </AuctionProvider>
+        </AuthProvider>
+      </ConfigProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

@@ -58,10 +58,6 @@ individual fixes.
    - [x] ~~`server/services/bidderService.ts`'s `checkInBidderWithBid` was never wrapped in `withLock`~~ **Done - see `CHANGELOG.md`.** Now wrapped in the same `bidder-numbers:${spreadsheetId}` lock its siblings (`registerWalkInBidder`/`recordWinningBid`/`checkoutMarkPaid`) already use.
    - [x] ~~`server/services/itemService.ts`'s `addItem`/`deleteItem`/`updateItem`/`bulkUpdateItems` and `server/services/bundleService.ts`'s `processBundle`/`restoreBundle` all read the full `'Auction-Items'!A:L` range, mutate the in-memory 2D array, then overwrite the whole range - none imported or used `withLock` at all~~ **Done - see `CHANGELOG.md`.** Now all six are wrapped in a new `auction-items:${spreadsheetId}` lock key - a different resource than `bidder-numbers:*`, so it doesn't serialize against the bidder-mutating functions.
 
-   **Real risk - no client-side error boundary anywhere:**
-
-   - Confirmed via grep: zero `ErrorBoundary`/`componentDidCatch` in `src/`; `src/main.tsx` renders `ConfigProvider > AuthProvider > AuctionProvider > App` with no catch boundary at any level. Any render-time exception (e.g. a malformed/missing Sheets response reaching a `.map`/property access) white-screens the entire app with no recovery path - including mid-checkout or mid-bidding at a live event, where a crash is especially high-cost. Needs a top-level boundary around `<App />` at minimum.
-
    **Minor:**
 
    - `server/routes/bidRoutes.ts`'s `POST /auction/record-winning-bid` validates `price` only by truthiness (`!price`), not that it's numeric. A non-numeric `price` gets stored as-is; `receiptDataService.ts`'s `resolveWonItems` (`parseFloat(...) || 0`) then silently treats it as $0 - the item is recorded as "won" but invoiced for nothing, with no error surfaced anywhere. Low likelihood (the UI always sends a number today) but silent rather than loud if it ever happens.
