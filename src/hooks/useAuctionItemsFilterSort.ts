@@ -6,6 +6,11 @@ export interface BundlingSelection {
   [rowIndex: number]: boolean;
 }
 
+export interface AuctionItemSortConfig {
+  key: keyof AuctionItem | null;
+  direction: "asc" | "desc";
+}
+
 /**
  * Filtering, sorting, search, and row-selection state for the auction
  * items table. Split out of useAuctionItemsTableState.ts (was 437
@@ -13,7 +18,7 @@ export interface BundlingSelection {
  * pieces.
  */
 export function useAuctionItemsFilterSort(items: AuctionItem[]) {
-  const [sortConfig, setSortConfig] = useState<{ key: keyof AuctionItem | null; direction: "asc" | "desc" }>({ key: "id", direction: "asc" });
+  const [sortConfig, setSortConfig] = useState<AuctionItemSortConfig>({ key: "id", direction: "asc" });
   const [selectedRows, setSelectedRows] = useState<BundlingSelection>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -109,12 +114,6 @@ export function useAuctionItemsFilterSort(items: AuctionItem[]) {
     }
   };
 
-  const requestSort = (key: keyof AuctionItem) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') { direction = 'desc'; }
-    setSortConfig({ key, direction });
-  };
-
   const resetFilters = () => {
     setSearchTerm("");
     setSelectedCategory("all");
@@ -123,7 +122,7 @@ export function useAuctionItemsFilterSort(items: AuctionItem[]) {
 
   return {
     sortConfig,
-    requestSort,
+    setSortConfig,
     searchTerm,
     setSearchTerm,
     selectedCategory,

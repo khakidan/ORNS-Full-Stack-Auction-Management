@@ -38,7 +38,7 @@ export function useAuctionItemsTableState(
   return {
     // Filter/sort/search
     sortConfig: filterSort.sortConfig,
-    requestSort: filterSort.requestSort,
+    setSortConfig: filterSort.setSortConfig,
     searchTerm: filterSort.searchTerm,
     setSearchTerm: filterSort.setSearchTerm,
     selectedCategory: filterSort.selectedCategory,

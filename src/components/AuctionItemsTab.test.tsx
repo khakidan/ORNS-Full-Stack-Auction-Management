@@ -3,7 +3,7 @@
  */
 import React from "react";
 import "@testing-library/jest-dom";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AuctionItemsTab from "./AuctionItemsTab";
 import { vi, describe, it, expect, beforeEach } from "vitest";
@@ -163,37 +163,36 @@ describe("AuctionItemsTab - Sort and Filter", () => {
   });
 
   it("Sort by Category - items grouped", async () => {
-    const user = userEvent.setup();
     render(<AuctionItemsTab />);
 
-    // Click Category column header
-    // Use getByRole if possible, or getByText
-    const categoryHeader = screen.getByRole("columnheader", { name: /category/i });
-    await user.click(categoryHeader);
+    // The old clickable column-header sort was replaced by a "Sort by"
+    // select once the table became a flexible row list - see
+    // refactor-opportunities.md's "UI / Layout Tweaks" item.
+    const selects = screen.getAllByTestId("mock-select");
+    const sortSelect = selects[2];
 
-    // Get the rows after sorting.
-    // The rendered EditableCells use inputs, so we can check the values.
-    // Alternatively, we can just find all rows and verify the order.
-    const allRows = screen.getAllByRole("row");
-    // Row 0 is header. Rows 1..4 are data rows.
-    
-    // Check they are sorted by Category: "Food", "Food", "Health & Beauty", "Health & Beauty"
-    // Since "Food" < "Health & Beauty", ascending order.
-    // To identify rows, we can check the content of the first few columns
-    
-    expect(within(allRows[1]).getByText("Food 1")).toBeInTheDocument();
-    expect(within(allRows[2]).getByText("Food 2")).toBeInTheDocument();
-    expect(within(allRows[3]).getByText("Health 1")).toBeInTheDocument();
-    expect(within(allRows[4]).getByText("Health 2")).toBeInTheDocument();
-    
+    const rowOrder = () =>
+      screen.getAllByTestId(/^auction-item-row-/).map((el) => el.getAttribute("data-testid"));
+
+    fireEvent.change(sortSelect, { target: { value: "category-asc" } });
+
+    // Sorted by Category ascending: "Food" (rows 2,3) before "Health & Beauty" (rows 4,5).
+    expect(rowOrder()).toEqual([
+      "auction-item-row-2",
+      "auction-item-row-3",
+      "auction-item-row-4",
+      "auction-item-row-5",
+    ]);
+
     // Reverse sort
-    await user.click(categoryHeader);
-    
-    const allRowsDesc = screen.getAllByRole("row");
-    expect(within(allRowsDesc[1]).getByText("Health 1")).toBeInTheDocument();
-    expect(within(allRowsDesc[2]).getByText("Health 2")).toBeInTheDocument();
-    expect(within(allRowsDesc[3]).getByText("Food 1")).toBeInTheDocument();
-    expect(within(allRowsDesc[4]).getByText("Food 2")).toBeInTheDocument();
+    fireEvent.change(sortSelect, { target: { value: "category-desc" } });
+
+    expect(rowOrder()).toEqual([
+      "auction-item-row-4",
+      "auction-item-row-5",
+      "auction-item-row-2",
+      "auction-item-row-3",
+    ]);
   });
 });
 

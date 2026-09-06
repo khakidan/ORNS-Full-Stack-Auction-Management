@@ -1,20 +1,21 @@
 /**
  * @vitest-environment jsdom
  *
- * Regression guard for the keyboard-focus-reveal gap flagged in
- * refactor-opportunities.md: the delete IconButton is hidden via
- * `opacity-0 group-hover/row:opacity-100`, which never reveals it for a
- * keyboard user tabbing to it without a mouse hovering the row -
- * component-standards.md requires focus outlines never be removed
- * without replacement. jsdom doesn't apply real CSS (no computed
- * opacity to read), so the only way to pin this fix here is asserting
- * the `group-focus-within/row:opacity-100` class itself is present
- * alongside the existing `group-hover/row:opacity-100`.
+ * Rewritten for the row-based redesign (see refactor-opportunities.md's
+ * "UI / Layout Tweaks" item and CHANGELOG.md) - AuctionItemRow.tsx is no
+ * longer a <table> row, so this no longer wraps it in <table>/<tbody>,
+ * and the old per-field EditableCell inline editors are gone in favor of
+ * a single "Edit" icon opening EditAuctionItemDialog.tsx (tested
+ * separately). The keyboard-focus-reveal regression guard from the
+ * original version of this file is preserved, just re-scoped: the
+ * hover/focus-reveal classes now live on the shared actions wrapper
+ * (matching AttendeeRow.tsx/BidderRow.tsx's convention), not on each
+ * button individually.
  */
 import "@testing-library/jest-dom";
 import type { ComponentProps } from "react";
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { AuctionItemRow } from "./AuctionItemRow";
 import { AuctionItem } from "@/types";
 
@@ -36,38 +37,72 @@ const ITEM: AuctionItem = {
 
 function renderRow(overrides: Partial<ComponentProps<typeof AuctionItemRow>> = {}) {
   return render(
-    <table>
-      <tbody>
-        <AuctionItemRow
-          item={ITEM}
-          isSelected={false}
-          onToggleSelect={() => {}}
-          onUpdate={() => {}}
-          isAuctionClosed={false}
-          categories={["Experiences"]}
-          isExecutingRestore={false}
-          restoreBundleId={null}
-          onRestoreBundle={() => {}}
-          onDeleteRequest={() => {}}
-          {...overrides}
-        />
-      </tbody>
-    </table>
+    <AuctionItemRow
+      item={ITEM}
+      isSelected={false}
+      onToggleSelect={() => {}}
+      onEditRequest={() => {}}
+      isAuctionClosed={false}
+      isExecutingRestore={false}
+      restoreBundleId={null}
+      onRestoreBundle={() => {}}
+      onDeleteRequest={() => {}}
+      {...overrides}
+    />
   );
 }
 
-describe("AuctionItemRow - delete-button keyboard-focus reveal", () => {
-  it("reveals the delete button on focus-within, not just hover", () => {
+describe("AuctionItemRow - action-button keyboard-focus reveal", () => {
+  it("reveals the Edit/Delete buttons on focus-within, not just hover", () => {
     renderRow();
 
     const deleteButton = screen.getByRole("button", { name: `Delete ${ITEM.name}` });
-    expect(deleteButton.className).toContain("group-hover/row:opacity-100");
-    expect(deleteButton.className).toContain("group-focus-within/row:opacity-100");
+    const actionsWrapper = deleteButton.parentElement;
+    expect(actionsWrapper?.className).toContain("group-hover/row:opacity-100");
+    expect(actionsWrapper?.className).toContain("group-focus-within/row:opacity-100");
   });
 
-  it("does not render the delete button once the auction is closed", () => {
+  it("does not render Edit/Delete buttons once the auction is closed", () => {
     renderRow({ isAuctionClosed: true });
 
     expect(screen.queryByRole("button", { name: `Delete ${ITEM.name}` })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: `Edit ${ITEM.name}` })).not.toBeInTheDocument();
+  });
+});
+
+describe("AuctionItemRow - editing", () => {
+  it("opens the edit dialog for this item when the Edit button is clicked", () => {
+    const onEditRequest = vi.fn();
+    renderRow({ onEditRequest });
+
+    screen.getByRole("button", { name: `Edit ${ITEM.name}` }).click();
+
+    expect(onEditRequest).toHaveBeenCalledWith(ITEM);
+  });
+});
+
+describe("AuctionItemRow - selection", () => {
+  it("calls onToggleSelect with this item's rowIndex when the checkbox is clicked", () => {
+    const onToggleSelect = vi.fn();
+    renderRow({ onToggleSelect });
+
+    screen.getByRole("checkbox").click();
+
+    expect(onToggleSelect).toHaveBeenCalledWith(ITEM.rowIndex);
+  });
+});
+
+describe("AuctionItemRow - bundle restore", () => {
+  it("shows the Restore Items button for a bundled Active item, and calls onRestoreBundle with the bundle token", () => {
+    const onRestoreBundle = vi.fn();
+    renderRow({ item: { ...ITEM, bundleId: "BND-1", status: "Active" }, onRestoreBundle });
+
+    screen.getByRole("button", { name: /restore items/i }).click();
+    expect(onRestoreBundle).toHaveBeenCalledWith("BND-1");
+  });
+
+  it("hides the Restore Items button once the auction is closed", () => {
+    renderRow({ item: { ...ITEM, bundleId: "BND-1", status: "Active" }, isAuctionClosed: true });
+    expect(screen.queryByRole("button", { name: /restore items/i })).not.toBeInTheDocument();
   });
 });

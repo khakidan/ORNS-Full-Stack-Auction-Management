@@ -62,7 +62,6 @@ Use standard React `<Suspense>` components to wrap these workflows when they are
 | *Lazy:* `AuctionItemsWorkflow` | 43.39 kB | 11.83 kB |
 | *Lazy:* `AuctionTicketsWorkflow` | 16.79 kB | 5.39 kB |
 | *Lazy:* `ConfigSettings` | 14.90 kB | 4.45 kB |
-| *Lazy:* `EditableCell` (auto-split - only reachable from the lazy workflow chunks above) | 3.14 kB | 1.36 kB |
 | *Lazy:* `firebase-applet-config.json` | 0.58 kB | 0.36 kB |
 
 `firebase/app`/`auth`/`firestore` are no longer part of the initial

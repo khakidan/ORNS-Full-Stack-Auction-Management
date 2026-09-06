@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useConfig } from "@/context/ConfigContext";
 import { useAuction } from "@/context/AuctionContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,9 +13,11 @@ import { useBundling } from "@/hooks/useBundling";
 import { useAuctionItemsTableState } from "@/hooks/useAuctionItemsTableState";
 import { BundlingDialog } from "@/components/BundlingDialog";
 import { AuctionItemsFilterBar } from "@/components/AuctionItemsFilterBar";
-import { AuctionItemsTable } from "@/components/AuctionItemsTable";
+import { AuctionItemsList } from "@/components/AuctionItemsList";
 import { AuctionItemsBulkActionBar } from "@/components/AuctionItemsBulkActionBar";
 import { AddAuctionItemDialog } from "@/components/AddAuctionItemDialog";
+import { EditAuctionItemDialog, AuctionItemEditChange } from "@/components/EditAuctionItemDialog";
+import { AuctionItem } from "@/types";
 
 export default function AuctionItemsTab() {
   const { config } = useConfig();
@@ -30,6 +33,36 @@ export default function AuctionItemsTab() {
   } = useAuctionItems(spreadsheetId);
 
   const table = useAuctionItemsTableState(items, setItems, spreadsheetId, valueCalculations, fetchData);
+
+  // Single-item edit dialog state - replaces the 9 separate per-field
+  // EditableCell inline editors that used to live in AuctionItemRow.tsx,
+  // mirroring EditAttendeeDialog.tsx's pattern on the Attendee List. Kept
+  // local here (not in useAuctionItemsTableState.ts) since it's pure UI
+  // state - the actual save logic reuses table.handleUpdate unchanged.
+  const [itemToEdit, setItemToEdit] = useState<AuctionItem | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  const handleEditSave = async (rowIndex: number, changes: AuctionItemEditChange[]) => {
+    setIsSavingEdit(true);
+    try {
+      // Category triggers a server-side resequencing + full resync
+      // (see useAuctionItemUpdate.ts) - applied last so it doesn't race
+      // with the other fields' own optimistic updates/background syncs
+      // still in flight from the same Save.
+      const nonCategoryChanges = changes.filter((c) => c.field !== "category");
+      const categoryChange = changes.find((c) => c.field === "category");
+
+      await Promise.all(
+        nonCategoryChanges.map((c) => table.handleUpdate(rowIndex, c.field, c.colLetter, c.value))
+      );
+      if (categoryChange) {
+        await table.handleUpdate(rowIndex, categoryChange.field, categoryChange.colLetter, categoryChange.value);
+      }
+    } finally {
+      setIsSavingEdit(false);
+      setItemToEdit(null);
+    }
+  };
 
   const {
     isBundling, setIsBundling,
@@ -101,18 +134,18 @@ export default function AuctionItemsTab() {
           onSelectedItemTypeChange={table.setSelectedItemType}
           categories={categories}
           onReset={table.resetFilters}
+          sortConfig={table.sortConfig}
+          onSortConfigChange={table.setSortConfig}
         />
         <CardContent className="p-0">
-          <AuctionItemsTable
+          <AuctionItemsList
             items={table.sortedItems}
-            sortConfig={table.sortConfig}
-            onRequestSort={table.requestSort}
             selectedRows={table.selectedRows}
+            selectedItemsCount={table.selectedItemsCount}
             onToggleRow={table.toggleRow}
             onToggleAll={table.toggleAll}
-            onUpdate={table.handleUpdate}
+            onEditRequest={setItemToEdit}
             isAuctionClosed={isAuctionClosed}
-            categories={categories}
             isExecutingRestore={isExecutingRestore}
             restoreBundleId={restoreBundleId}
             onRestoreBundle={handleRestoreBundle}
@@ -163,6 +196,15 @@ export default function AuctionItemsTab() {
         onNewItemChange={table.setNewItem}
         onSubmit={table.handleAddItem}
         isSubmitting={table.isSubmittingItem}
+      />
+
+      <EditAuctionItemDialog
+        item={itemToEdit}
+        open={!!itemToEdit}
+        onOpenChange={(open) => !open && setItemToEdit(null)}
+        categories={categories}
+        onSave={handleEditSave}
+        isSaving={isSavingEdit}
       />
 
       <ConfirmationDialog

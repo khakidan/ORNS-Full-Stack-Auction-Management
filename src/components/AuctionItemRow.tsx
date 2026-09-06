@@ -1,162 +1,150 @@
 import { motion } from "motion/react";
-import { Loader2, Package, RotateCcw, Trash2 } from "lucide-react";
-import { TableCell } from "@/components/ui/table";
+import { Heart, Loader2, Package, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/IconButton";
 import { Badge } from "@/components/ui/badge";
-import { EditableCell } from "@/components/ui/EditableCell";
 import { AuctionItem } from "@/types";
+import { categoryBadgeClass, ITEM_TYPE_STYLES } from "@/lib/itemBadgeColors";
 import { cn } from "@/lib/utils";
 
 interface AuctionItemRowProps {
   item: AuctionItem;
   isSelected: boolean;
   onToggleSelect: (rowIndex: number) => void;
-  onUpdate: (rowIndex: number, field: keyof AuctionItem, colLetter: string, value: string) => void;
+  onEditRequest: (item: AuctionItem) => void;
   isAuctionClosed: boolean;
-  categories: string[];
   isExecutingRestore: boolean;
   restoreBundleId: string | null;
   onRestoreBundle: (bundleId: string) => void;
   onDeleteRequest: (item: AuctionItem) => void;
 }
 
+/**
+ * Redesigned to match ItemRow.tsx's row-based visual language (see
+ * refactor-opportunities.md's "UI / Layout Tweaks" item - the user asked
+ * to bring the read-only Bid Management "Items" tab's layout here too),
+ * replacing the old <table> row with 9 separate per-field EditableCell
+ * inline editors. All the same editing/delete/bundle functionality is
+ * preserved - editing now opens EditAuctionItemDialog.tsx (one form, one
+ * Save, mirroring EditAttendeeDialog.tsx's pattern on the Attendee List)
+ * instead of 9 separate inline pencil-icons. Selection/delete/bundle
+ * restore stay as direct row actions, since those are still single-click
+ * operations, not multi-field edits.
+ */
 export function AuctionItemRow({
   item,
   isSelected,
   onToggleSelect,
-  onUpdate,
+  onEditRequest,
   isAuctionClosed,
-  categories,
   isExecutingRestore,
   restoreBundleId,
   onRestoreBundle,
   onDeleteRequest,
 }: AuctionItemRowProps) {
+  const hasFinancials = !!(item.value || item.openingBid || item.minRaise || item.donor);
+  const isBundled = !!item.bundleId && item.status === "Active";
+  const typeStyle = item.itemType ? ITEM_TYPE_STYLES[item.itemType] : undefined;
+  const TypeIcon = typeStyle?.icon;
+
   return (
-    <motion.tr
+    <motion.div
       layout
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className={cn("group/row border-b transition-colors", isSelected && "bg-primary/5")}
+      data-testid={`auction-item-row-${item.rowIndex}`}
+      className={cn(
+        "group/row flex items-start gap-4 px-5 py-4 border-b last:border-0 hover:bg-muted/50 transition-colors",
+        isSelected && "bg-primary/5"
+      )}
     >
-      <TableCell className="px-2 align-top pt-4">
+      <div className="pt-1">
         <Checkbox checked={isSelected} onCheckedChange={() => onToggleSelect(item.rowIndex)} />
-      </TableCell>
-      <TableCell className="font-mono text-xs align-top">
-        <EditableCell
-          value={item.id}
-          onSave={(val) => onUpdate(item.rowIndex, "id", "A", val)}
-          disabled={isAuctionClosed}
-        />
-      </TableCell>
-      <TableCell className="align-top">
-        <div className="space-y-3">
-          <div className="font-medium text-base text-foreground">
-            <EditableCell
-              value={item.name}
-              onSave={(val) => onUpdate(item.rowIndex, "name", "C", val)}
-              disabled={isAuctionClosed}
-            />
-          </div>
-          <div className="text-sm text-muted-foreground">
-            <EditableCell
-              type="textarea"
-              value={item.description}
-              onSave={(val) => onUpdate(item.rowIndex, "description", "D", val)}
-              disabled={isAuctionClosed}
-            />
-          </div>
+      </div>
+
+      <div className="w-13 shrink-0 flex flex-col items-center gap-0.5 pt-0.5">
+        <div className="w-10 h-10 rounded-md bg-secondary text-secondary-foreground flex items-center justify-center font-mono font-bold text-sm">
+          {item.id}
         </div>
-      </TableCell>
-      <TableCell className="align-top text-sm">
-        <EditableCell
-          type="select"
-          options={categories}
-          value={item.category}
-          onSave={(val) => onUpdate(item.rowIndex, "category", "B", val)}
-          disabled={isAuctionClosed}
-        />
-      </TableCell>
-      <TableCell className="align-top text-sm space-y-2">
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground w-12 shrink-0">Value:</span>
-          <EditableCell
-            value={item.value}
-            onSave={(val) => onUpdate(item.rowIndex, "value", "E", val)}
-            disabled={isAuctionClosed}
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground w-12 shrink-0">Open:</span>
-          <EditableCell
-            value={item.openingBid}
-            onSave={(val) => onUpdate(item.rowIndex, "openingBid", "F", val)}
-            disabled={isAuctionClosed}
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground w-12 shrink-0">Raise:</span>
-          <EditableCell
-            value={item.minRaise}
-            onSave={(val) => onUpdate(item.rowIndex, "minRaise", "G", val)}
-            disabled={isAuctionClosed}
-          />
-        </div>
-      </TableCell>
-      <TableCell className="align-top text-sm">
-        <EditableCell
-          value={item.donor}
-          onSave={(val) => onUpdate(item.rowIndex, "donor", "H", val)}
-          disabled={isAuctionClosed}
-        />
-      </TableCell>
-      <TableCell className="align-top text-sm">
-        <EditableCell
-          type="select"
-          options={["Physical Item", "Certificate", "Both"]}
-          value={item.itemType}
-          onSave={(val) => onUpdate(item.rowIndex, "itemType", "I", val)}
-          disabled={isAuctionClosed}
-        />
-        {item.bundleId && item.status === "Active" && (
-          <div className="mt-4 flex flex-col gap-2">
-            <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-100 w-fit">
-              <Package className="w-3 h-3 mr-1" />
-              Bundle
+        <span className="text-[10px] uppercase text-muted-foreground">Item</span>
+      </div>
+
+      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-semibold text-[15px]">{item.name || <span className="italic text-muted-foreground">Untitled item</span>}</span>
+          {item.category && (
+            <Badge variant="outline" className={cn("text-xs font-normal", categoryBadgeClass(item.category))}>
+              {item.category}
             </Badge>
-            {!isAuctionClosed && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xxs gap-1 px-2 border-purple-200 text-purple-700 hover:bg-purple-200 hover:text-purple-800 transition-colors w-fit"
-                disabled={isExecutingRestore}
-                onClick={() => onRestoreBundle(item.bundleId)}
-              >
-                {isExecutingRestore && restoreBundleId === item.bundleId ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <RotateCcw className="w-3 h-3" />
-                )}
-                Restore Items
-              </Button>
+          )}
+          {typeStyle && TypeIcon && (
+            <Badge variant="outline" className={cn("text-xs font-normal", typeStyle.className)}>
+              <TypeIcon className="w-3 h-3 mr-1" /> {item.itemType}
+            </Badge>
+          )}
+          {isBundled && (
+            <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-100 w-fit text-xs font-normal">
+              <Package className="w-3 h-3 mr-1" /> Bundle
+            </Badge>
+          )}
+        </div>
+
+        {item.description && (
+          <p className="text-sm text-muted-foreground line-clamp-2">{item.description}</p>
+        )}
+
+        {hasFinancials && (
+          <div className="flex items-center gap-3.5 flex-wrap text-sm text-muted-foreground">
+            {item.value && <span>Value: <span className="font-medium text-foreground">{item.value}</span></span>}
+            {item.openingBid && <span>Opening: <span className="font-medium text-foreground">{item.openingBid}</span></span>}
+            {item.minRaise && <span>Raise: <span className="font-medium text-foreground">{item.minRaise}</span></span>}
+            {item.donor && (
+              <span className="flex items-center gap-1">
+                <Heart className="w-3.5 h-3.5 shrink-0" />
+                {item.donor}
+              </span>
             )}
           </div>
         )}
-      </TableCell>
-      <TableCell className="align-top text-center px-2">
-        {!isAuctionClosed && (
+
+        {isBundled && !isAuctionClosed && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xxs gap-1 px-2 border-purple-200 text-purple-700 hover:bg-purple-100 hover:text-purple-800 transition-colors w-fit mt-0.5"
+            disabled={isExecutingRestore}
+            onClick={() => onRestoreBundle(item.bundleId)}
+          >
+            {isExecutingRestore && restoreBundleId === item.bundleId ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <RotateCcw className="w-3 h-3" />
+            )}
+            Restore Items
+          </Button>
+        )}
+      </div>
+
+      {!isAuctionClosed && (
+        <div className="flex gap-1 shrink-0 pt-0.5 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 transition-opacity">
+          <IconButton
+            variant="ghost"
+            aria-label={`Edit ${item.name || "item"}`}
+            icon={<Pencil className="w-3.5 h-3.5" />}
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            onClick={() => onEditRequest(item)}
+          />
           <IconButton
             variant="ghost"
             aria-label={`Delete ${item.name || "item"}`}
-            icon={<Trash2 className="h-4 w-4" />}
-            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 transition-opacity"
+            icon={<Trash2 className="w-3.5 h-3.5" />}
+            className="h-7 w-7 text-muted-foreground hover:text-destructive"
             onClick={() => onDeleteRequest(item)}
           />
-        )}
-      </TableCell>
-    </motion.tr>
+        </div>
+      )}
+    </motion.div>
   );
 }

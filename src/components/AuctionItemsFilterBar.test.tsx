@@ -33,6 +33,8 @@ function renderBar(overrides: Partial<ComponentProps<typeof AuctionItemsFilterBa
       onSelectedItemTypeChange={vi.fn()}
       categories={CATEGORIES}
       onReset={vi.fn()}
+      sortConfig={{ key: "id", direction: "asc" }}
+      onSortConfigChange={vi.fn()}
       {...overrides}
     />
   );

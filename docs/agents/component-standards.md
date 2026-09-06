@@ -22,12 +22,14 @@ style, on `@base-ui/react` primitives** (`components.json`) - not Radix
 directly, and not a from-scratch component set. `src/components/ui/`
 currently contains: `alert-dialog.tsx`, `badge.tsx`, `button.tsx`,
 `card.tsx`, `checkbox.tsx`, `ConfirmationDialog.tsx`, `dialog.tsx`,
-`EditableCell.tsx` (app-specific), `IconButton.tsx` (app-specific),
-`input.tsx`, `label.tsx`, `LoadingButton.tsx` (app-specific),
-`scroll-area.tsx`, `select.tsx`, `separator.tsx`, `sheet.tsx`,
-`sonner.tsx` (toasts), `table.tsx`, `tabs.tsx`, `textarea.tsx`. Check
-this list (or `file-reference.md`) before assuming a pattern isn't
-componentized yet.
+`IconButton.tsx` (app-specific), `input.tsx`, `label.tsx`,
+`LoadingButton.tsx` (app-specific), `scroll-area.tsx`, `select.tsx`,
+`separator.tsx`, `sheet.tsx`, `sonner.tsx` (toasts), `table.tsx`,
+`tabs.tsx`, `textarea.tsx`. Check this list (or `file-reference.md`)
+before assuming a pattern isn't componentized yet. (`EditableCell.tsx`
+was deleted once its last two consumers - `AttendeeRow.tsx`, then
+`AuctionItemRow.tsx` - both moved to a single-dialog edit pattern
+instead of per-field inline editing; see `CHANGELOG.md`.)
 
 `IconButton`, `LoadingButton`, and `ConfirmationDialog` were the three
 gaps this doc used to flag as missing (see "Icon-Only Buttons" and
