@@ -87,7 +87,7 @@ export default function TicketAttendeeTab() {
       />
 
       <Card className="flex flex-col min-h-0">
-        <CardHeader className="pb-3">
+        <CardHeader>
           <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-primary" /> Attendee List</CardTitle>
           <CardDescription>
             {state.filteredAttendees.length} entries found across participating sources.

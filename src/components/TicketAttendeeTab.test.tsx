@@ -157,6 +157,16 @@ vi.mock("@/context/AuctionContext", () => ({
   })
 }));
 
+describe('TicketAttendeeTab - Layout', () => {
+  it('does not add extra bottom padding under the Attendee List header', () => {
+    render(<TicketAttendeeTab />);
+
+    const heading = screen.getByText("Attendee List");
+    const cardHeader = heading.parentElement;
+    expect(cardHeader?.className.split(/\s+/)).not.toContain("pb-3");
+  });
+});
+
 describe('TicketAttendeeTab - Sort and Filter', () => {
   beforeEach(() => {
     vi.clearAllMocks();

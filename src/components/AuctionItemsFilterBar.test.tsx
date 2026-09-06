@@ -65,3 +65,16 @@ describe("AuctionItemsFilterBar - Select display labels and popup width", () => 
     }
   });
 });
+
+describe("AuctionItemsFilterBar - Layout", () => {
+  it("gives the controls comfortable room above the border, since AuctionItemsTab.tsx cancels out the Card's own gap-4 after this bar", () => {
+    renderBar();
+
+    const searchInput = screen.getByPlaceholderText("Search by name, description, donor...");
+    // The root filter-bar div is the search field's grandparent (input -> its space-y-1.5 wrapper -> root).
+    const root = searchInput.parentElement?.parentElement;
+    const classes = root?.className.split(/\s+/) ?? [];
+    expect(classes).not.toContain("pb-6");
+    expect(classes).toContain("pb-4");
+  });
+});

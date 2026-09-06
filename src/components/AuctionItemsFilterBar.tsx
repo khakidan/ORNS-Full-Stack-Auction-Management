@@ -73,7 +73,7 @@ export function AuctionItemsFilterBar({
   onSortConfigChange,
 }: AuctionItemsFilterBarProps) {
   return (
-    <div className="px-6 pb-6 flex flex-col md:flex-row gap-4 items-end border-b bg-slate-50/30">
+    <div className="px-6 pb-4 flex flex-col md:flex-row gap-4 items-end border-b bg-slate-50/30">
       <div className="flex-1 w-full space-y-1.5">
         <Label className="text-xxs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 ml-1">
           <Search className="w-3 h-3" /> Search Items

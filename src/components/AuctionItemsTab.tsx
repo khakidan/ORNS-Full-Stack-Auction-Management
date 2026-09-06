@@ -137,7 +137,7 @@ export default function AuctionItemsTab() {
           sortConfig={table.sortConfig}
           onSortConfigChange={table.setSortConfig}
         />
-        <CardContent className="p-0">
+        <CardContent className="p-0 -mt-4">
           <AuctionItemsList
             items={table.sortedItems}
             selectedRows={table.selectedRows}

@@ -44,7 +44,7 @@ export function AuctionItemsList({
 }: AuctionItemsListProps) {
   return (
     <div className="flex flex-col">
-      <div className="flex items-center gap-3 px-5 py-2.5 border-b bg-slate-50/60 text-xs">
+      <div className="flex items-center gap-3 px-5 py-2.5 border-b text-xs">
         <Checkbox
           checked={selectedItemsCount === items.length && items.length > 0}
           onCheckedChange={onToggleAll}

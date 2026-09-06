@@ -95,6 +95,25 @@ vi.mock("@/hooks/useBundling", () => ({
   })
 }));
 
+describe("AuctionItemsTab - Layout", () => {
+  it("does not tint the 'Select all' bar's background, so it doesn't read as an oddly-empty highlighted box", () => {
+    render(<AuctionItemsTab />);
+
+    const selectAllText = screen.getByText(/Select all \d+ items/);
+    const selectAllBar = selectAllText.parentElement;
+    expect(selectAllBar?.className).not.toContain("bg-slate-50");
+  });
+
+  it("cancels the Card's own gap-4 above the 'Select all' bar, since AuctionItemsFilterBar.tsx's border already sits right above it", () => {
+    render(<AuctionItemsTab />);
+
+    const selectAllText = screen.getByText(/Select all \d+ items/);
+    // selectAllText -> select-all bar div -> AuctionItemsList's root div -> CardContent
+    const cardContent = selectAllText.parentElement?.parentElement?.parentElement;
+    expect(cardContent?.className.split(/\s+/)).toContain("-mt-4");
+  });
+});
+
 describe("AuctionItemsTab - Sort and Filter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
