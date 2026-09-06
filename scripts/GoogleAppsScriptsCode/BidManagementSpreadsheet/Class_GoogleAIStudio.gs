@@ -20,18 +20,24 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
     /**
      * Triggers batch printing layout receipts.
      * @param {string|null} folderID  Drive folder ID passed in from the API call.
+     * @param {Object[]} receipts  Already-built receipt data for every
+     *   bidder with at least one winning item, sorted ascending by last
+     *   name - see server/services/receiptDataService.ts's
+     *   buildAllBidderReceipts. Node resolves this itself now instead of
+     *   this class looking it up - see
+     *   docs/agents/refactor-opportunities.md's Code Hardening item #2 /
+     *   CHANGELOG.md.
      * @returns {{success: boolean, error?: string}}
      */
-    createAllReceipts ( folderID = null ) {
+    createAllReceipts ( folderID = null, receipts = [] ) {
         const mgr = new ReceiptManager( folderID ); // ← folderID threaded to ReceiptManager
         mgr.shouldSendEmails = false;
 
-        const allData = mgr.bidderManager.getSortedBidderData_();
-        const totalRows = allData.length;
-        const midPoint = Math.ceil( ( totalRows - 1 ) / 2 ) + 1;
+        const totalRows = receipts.length;
+        const midPoint = Math.ceil( totalRows / 2 );
 
-        mgr.processBatch_( 'Receipts - 1st Half', allData, 1, midPoint );
-        mgr.processBatch_( 'Receipts - 2nd Half', allData, midPoint, totalRows );
+        mgr.processBatch_( 'Receipts - 1st Half', receipts, 0, midPoint );
+        mgr.processBatch_( 'Receipts - 2nd Half', receipts, midPoint, totalRows );
 
         return { success: true };
     }
@@ -41,21 +47,26 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
      * @param {string|number} bidderId
      * @param {boolean}       emailReceipt
      * @param {string|null}   folderID  Drive folder ID passed in from the API call.
+     * @param {Object|null}   receiptData  Already-built receipt data for
+     *   this bidder - see server/services/receiptDataService.ts's
+     *   buildBidderReceipt. Node resolves this itself now instead of this
+     *   class looking it up - see docs/agents/refactor-opportunities.md's
+     *   Code Hardening item #2 / CHANGELOG.md.
      * @returns {{success: boolean, docId?: string, subtotal?: number, paymentUrl?: string, error?: string}}
      */
-    createIndividualReceipt ( bidderId, emailReceipt, folderID = null ) {
+    createIndividualReceipt ( bidderId, emailReceipt, folderID = null, receiptData = null ) {
         if ( bidderId === null || bidderId === undefined || bidderId.toString().trim() === '' ) {
             return { success: false, error: 'Provided Bidder ID is empty or invalid.' };
+        }
+        if ( !receiptData ) {
+            return { success: false, error: 'No receipt data provided.' };
         }
 
         const sanitizedId = bidderId.toString().trim();
         const mgr = new ReceiptManager();
         mgr.currentBidId = sanitizedId;
+        mgr.currentReceipt = Receipt.fromData( receiptData );
 
-        const col = mgr.findBidderColInBidSheet_( mgr.currentBidId );
-        if ( col === -1 ) return { success: false, error: 'Bidder ID not found in matrix.' };
-
-        mgr.currentReceipt = mgr.buildReceipt_( col );
         if ( !mgr.currentReceipt.hasWinningItems() ) return { success: false, error: 'No items won.' };
 
         const paymentUrl = mgr.getOrCreateInvoiceUrl( sanitizedId, mgr.currentReceipt );

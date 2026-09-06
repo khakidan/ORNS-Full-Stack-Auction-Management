@@ -50,6 +50,7 @@ export function useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, f
           bidderId: winner.bidderId,
           emailReceipt: false,
           spreadsheetId,
+          itemsSpreadsheetId,
           receiptFolderId: folderId
         }),
         credentials: "include"

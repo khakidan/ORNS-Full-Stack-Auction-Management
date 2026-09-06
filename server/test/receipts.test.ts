@@ -68,6 +68,7 @@ const emailSheetHandler = http.get(
 describe('Receipt Generate workflow', () => {
   beforeEach(() => {
     resetHandlersState();
+    server.use(emailSheetHandler);
   });
 
   afterEach(() => {
@@ -79,7 +80,7 @@ describe('Receipt Generate workflow', () => {
     const response = await request(app)
       .post('/api/receipts/generate')
       .set(authHeader)
-      .send({ bidderId: '42', emailReceipt: false });
+      .send({ bidderId: '42', emailReceipt: false, spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
@@ -87,10 +88,11 @@ describe('Receipt Generate workflow', () => {
     expect(productionScriptCallLog).toContain('apiCreateIndividualReceipt');
   });
 
-  it('Happy path — emailReceipt flag is forwarded to Apps Script', async () => {
+  it('Happy path — emailReceipt flag and Node-resolved receipt data are forwarded to Apps Script', async () => {
     let capturedScriptBody: any = null;
 
     server.use(
+      emailSheetHandler,
       http.post(
         'https://script.googleapis.com/v1/scripts/:scriptId\\:run',
         async ({ request }) => {
@@ -105,19 +107,38 @@ describe('Receipt Generate workflow', () => {
     const response = await request(app)
       .post('/api/receipts/generate')
       .set(authHeader)
-      .send({ bidderId: '42', emailReceipt: true });
+      .send({ bidderId: '42', emailReceipt: true, spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
 
     expect(response.status).toBe(200);
     expect(capturedScriptBody).not.toBeNull();
     const requestBody = capturedScriptBody?.requestBody ?? capturedScriptBody;
     expect(requestBody.function).toBe("apiCreateIndividualReceipt");
-    expect(requestBody.parameters).toEqual(["42", true]);
+    // Node resolves the receipt itself now (see receiptDataService.ts)
+    // instead of Class_ReceiptManager.gs looking it up a second,
+    // independent way - see refactor-opportunities.md's Code Hardening
+    // item #2 / CHANGELOG.md. folderID (3rd position) is still never
+    // wired through from Node.
+    expect(requestBody.parameters).toEqual([
+      "42",
+      true,
+      null,
+      {
+        bidId: "42",
+        firstName: "John",
+        lastName: "Doe",
+        email: "john@example.com",
+        itemsWon: ["801"],
+        itemNames: ["Pizza Night"],
+        itemPrices: [50],
+        totalCost: 50
+      }
+    ]);
   });
 
   it('Auth failure', async () => {
     const response = await request(app)
       .post('/api/receipts/generate')
-      .send({ bidderId: '42', emailReceipt: false });
+      .send({ bidderId: '42', emailReceipt: false, spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
     expect(response.status).toBe(401);
     expect(appsScriptCallCount).toBe(0);
   });
@@ -129,12 +150,22 @@ describe('Receipt Generate workflow', () => {
     const response = await request(app)
       .post('/api/receipts/generate')
       .set(authHeader)
-      .send({ bidderId: '42', emailReceipt: false });
+      .send({ bidderId: '42', emailReceipt: false, spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
 
     expect(response.status).toBe(500);
     expect(response.body.error).toContain('SCRIPT_ID_BID_MANAGEMENT');
 
     process.env.SCRIPT_ID_BID_MANAGEMENT = originalId;
+  });
+
+  it('Missing spreadsheetId — returns 400', async () => {
+    const response = await request(app)
+      .post('/api/receipts/generate')
+      .set(authHeader)
+      .send({ bidderId: '42', emailReceipt: false });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('spreadsheetId required');
   });
 });
 
@@ -143,6 +174,7 @@ describe('Receipt Generate workflow', () => {
 describe('Receipt Generate-All workflow', () => {
   beforeEach(() => {
     resetHandlersState();
+    server.use(emailSheetHandler);
   });
 
   afterEach(() => {
@@ -154,7 +186,7 @@ describe('Receipt Generate-All workflow', () => {
     const response = await request(app)
       .post('/api/receipts/generate-all')
       .set(authHeader)
-      .send({});
+      .send({ spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
@@ -165,7 +197,7 @@ describe('Receipt Generate-All workflow', () => {
   it('Auth failure', async () => {
     const response = await request(app)
       .post('/api/receipts/generate-all')
-      .send({});
+      .send({ spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
     expect(response.status).toBe(401);
     expect(appsScriptCallCount).toBe(0);
   });
@@ -177,10 +209,20 @@ describe('Receipt Generate-All workflow', () => {
     const response = await request(app)
       .post('/api/receipts/generate-all')
       .set(authHeader)
-      .send({});
+      .send({ spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
 
     expect(response.status).toBe(500);
     process.env.SCRIPT_ID_BID_MANAGEMENT = originalId;
+  });
+
+  it('Missing spreadsheetId — returns 400', async () => {
+    const response = await request(app)
+      .post('/api/receipts/generate-all')
+      .set(authHeader)
+      .send({});
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('spreadsheetId required');
   });
 });
 

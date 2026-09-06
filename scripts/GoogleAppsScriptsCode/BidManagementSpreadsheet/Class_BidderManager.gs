@@ -2,7 +2,6 @@
  * Data manager. Extends GlobalVariables for spreadsheet and config access.
  *
  * Responsibilities:
- *   - Lazy-load and own the Bidder-Numbers sheet data
  *   - Load bidder rows from the external ticket spreadsheet
  *   - Orchestrate the full bidder-sheet setup workflow
  */
@@ -40,32 +39,6 @@ class BidderManager extends GlobalVariables {
         this.auctionTicketsString = 'tickets';
         this.auctionStaffTicketsString = 'staff tickets';
         this.auctionSponsorTicketsString = 'sponsor tickets';
-    }
-
-    // ── Sheet data getter ────────────────────────────────────────────────────
-    /** Lazy-loads and caches the Bidder-Numbers sheet data. */
-    get bidders () {
-        if ( this._bidders ) return this._bidders;
-        const sheet = this.activeSpreadSheet.getSheetByName( this.bidNumbersString );
-        if ( !sheet ) return { sheet: null, lastRow: 0, lastCol: 0, range: [], loopLength: 0 };
-
-        const lastRow = sheet.getLastRow();
-        const lastCol = sheet.getLastColumn() || 1;
-        const dataRange = lastRow > 1
-            ? sheet.getRange( 2, 1, lastRow - 1, lastCol ).getValues()
-            : [];
-
-        this._bidders = { sheet, lastRow, lastCol, range: dataRange, loopLength: Math.max( 0, lastRow - 1 ) };
-        return this._bidders;
-    }
-
-    /** Full data range including header row (needed for email column lookup). */
-    get biddersFullData () {
-        if ( !this._biddersFullData ) {
-            const sheet = this.activeSpreadSheet.getSheetByName( this.bidNumbersString );
-            this._biddersFullData = sheet ? sheet.getDataRange().getValues() : [];
-        }
-        return this._biddersFullData;
     }
 
     // ── Ticket-package loader ────────────────────────────────────────────────
@@ -231,44 +204,4 @@ class BidderManager extends GlobalVariables {
         sheet.getRange( 2, 1, totalBidders, 1 ).setValues( ids );
     }
 
-    /**
-     * Sorts the Bidder-Numbers sheet by last name (column 3) in ascending order.
-     * Called by ReceiptManager before batch receipt generation so receipts are
-     * printed in alphabetical order.
-     */
-    sortByLastName_ () {
-        const sheet = this.bidders.sheet;
-        if ( sheet && sheet.getLastRow() > 1 ) {
-            sheet.getRange( 2, 1, sheet.getLastRow() - 1, sheet.getLastColumn() ).sort( 3 );
-        }
-    }
-
-    /**
-     * Returns the full Bidder-Numbers sheet data sorted alphabetically by last name
-     * (column index 2, zero-based) entirely in memory — the underlying sheet is
-     * never modified.
-     *
-     * The returned array preserves the header row at index 0, matching the shape
-     * that getDataRange().getValues() would normally return, so callers can use
-     * the same index arithmetic they would against the raw sheet data.
-     *
-     * @returns {Array[][]} Header row + sorted data rows, or an empty array if
-     *                      the sheet is missing or contains only a header.
-     */
-    getSortedBidderData_ () {
-        const sheet = this.activeSpreadSheet.getSheetByName( this.bidNumbersString );
-        if ( !sheet || sheet.getLastRow() <= 1 ) return [];
-
-        const allData = sheet.getDataRange().getValues();
-        const header = allData[ 0 ];
-        const dataRows = allData.slice( 1 );
-
-        dataRows.sort( ( a, b ) => {
-            const lastA = ( a[ 2 ] || '' ).toString().toLowerCase();
-            const lastB = ( b[ 2 ] || '' ).toString().toLowerCase();
-            return lastA.localeCompare( lastB );
-        } );
-
-        return [ header, ...dataRows ];
-    }
 }

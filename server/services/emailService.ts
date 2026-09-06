@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
 import { calculatePayPalSurcharge } from "../utils/financeUtils";
+import { buildItemNameLookup, findBidderColumn, resolveWonItems } from "./receiptDataService";
 
 export function generateEmailHtml(receipt: any, paymentUrl: string, adjustedTotal: string, feeAmount: string): string {
   const itemRows = receipt.itemsWon.map((id: string, i: number) => `
@@ -117,55 +118,12 @@ export async function processEmail(client: OAuth2Client, spreadsheetId: string, 
   if (!email) return { success: false, error: "No email address found for this bidder." };
 
   const mgmtData = bMgmt.data.values || [];
-  let colIndex = -1;
-  const headerRow = mgmtData[0] || [];
-  for (let c = 0; c < headerRow.length; c += 2) {
-    if (String(headerRow[c]).trim() === String(bidderId).trim()) {
-      colIndex = c;
-      break;
-    }
-  }
-
+  const colIndex = findBidderColumn(mgmtData, bidderId);
   if (colIndex === -1) return { success: false, error: "Bidder not found in Bid-Management matrix." };
 
-  // Determine dynamic column indices for Auction-Items
   const itemsRows = aucItems.data.values || [];
-  const itemsHead = itemsRows[0] || [];
-  const itemsHeadLower = itemsHead.map(h => String(h || "").toLowerCase().trim());
-  
-  const getCol = (names: string[], defaultIdx: number) => {
-    const idx = itemsHeadLower.findIndex(h => names.some(n => h === n || h.includes(n)));
-    return idx !== -1 ? idx : defaultIdx;
-  };
-
-  const itemIdIdx = getCol(["item number", "number", "id"], 0);
-  const itemNameIdx = getCol(["item name", "name"], 2);
-
-  const itemsWon: string[] = [];
-  const itemNames: string[] = [];
-  const itemPrices: number[] = [];
-  let totalCost = 0;
-
-  for (let r = 3; r < mgmtData.length; r++) {
-    const row = mgmtData[r];
-    const itemId = row[colIndex];
-    if (itemId) {
-      const price = parseFloat(String(row[colIndex + 1]).replace(/[^0-9.]/g, '')) || 0;
-      itemsWon.push(String(itemId));
-      itemPrices.push(price);
-      totalCost += price;
-
-      let iName = "Unknown Item";
-      for (let j = 1; j < itemsRows.length; j++) {
-        const itemRow = itemsRows[j];
-        if (String(itemRow[itemIdIdx] || "").trim() === String(itemId).trim()) {
-          iName = itemRow[itemNameIdx] || "Unknown Item";
-          break;
-        }
-      }
-      itemNames.push(iName);
-    }
-  }
+  const getItemName = buildItemNameLookup(itemsRows);
+  const { itemsWon, itemNames, itemPrices, totalCost } = resolveWonItems(mgmtData, colIndex, getItemName);
 
   if (itemsWon.length === 0) return { success: false, error: "No items won for this bidder." };
 

@@ -37,4 +37,24 @@ class Receipt {
         this.itemPrices.push( price );
         this.totalCost += ( Number( price ) || 0 );
     }
+
+    /**
+     * Reconstructs a Receipt from a plain { bidId, firstName, lastName,
+     * email, itemsWon, itemNames, itemPrices, totalCost } object - the
+     * shape server/services/receiptDataService.ts's buildBidderReceipt/
+     * buildAllBidderReceipts already computed, passed in here as an Apps
+     * Script API parameter instead of this class looking any of it up
+     * itself. See docs/agents/refactor-opportunities.md's Code Hardening
+     * item #2 / CHANGELOG.md.
+     * @param {Object} data
+     * @returns {Receipt}
+     */
+    static fromData ( data ) {
+        const receipt = new Receipt( data.bidId, data.firstName, data.lastName, data.email );
+        receipt.itemsWon = data.itemsWon || [];
+        receipt.itemNames = data.itemNames || [];
+        receipt.itemPrices = data.itemPrices || [];
+        receipt.totalCost = data.totalCost || 0;
+        return receipt;
+    }
 }

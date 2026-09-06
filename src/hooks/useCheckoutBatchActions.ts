@@ -30,7 +30,7 @@ export function useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, fol
       const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/generate-all`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ spreadsheetId, receiptFolderId: folderId }),
+        body: JSON.stringify({ spreadsheetId, itemsSpreadsheetId, receiptFolderId: folderId }),
         credentials: "include"
       });
 

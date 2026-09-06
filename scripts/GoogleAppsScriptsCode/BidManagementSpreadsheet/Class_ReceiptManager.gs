@@ -1,124 +1,35 @@
 /**
- * Data manager. Orchestrates the full receipt lifecycle by coordinating
- * BidderManager, AuctionItemManager, EmailManager, and ReceiptDoc.
+ * Data manager. Orchestrates the receipt lifecycle by coordinating
+ * AuctionItemManager, EmailManager, and ReceiptDoc.
  *
  * Responsibilities:
- *   - Look up a bidder's column in the Bid-Management sheet
- *   - Build a Receipt data model from that column's data
- *   - Calculate fees and generate PayPal links
+ *   - Accept an already-built Receipt (Node resolves a bidder's winning
+ *     items/total from the Bid-Management sheet - see
+ *     server/services/receiptDataService.ts - and passes it in via
+ *     Class_GoogleAIStudio.gs's createIndividualReceipt/createAllReceipts;
+ *     this class no longer looks any of that up itself)
+ *   - Calculate fees and get/create the PayPal invoice link
  *   - Dispatch emails via EmailManager
  *   - Delegate doc writing to ReceiptDoc
  *
  * Has no menu-driven entry points of its own - individual and batch
  * receipt generation are driven by GoogleAIStudio.createIndividualReceipt/
  * .createAllReceipts, which construct a ReceiptManager and call its
- * lower-level methods (buildReceipt_, processBatch_, etc.) directly.
+ * lower-level methods (processBatch_, etc.) directly.
  */
 class ReceiptManager extends GlobalVariables {
     constructor ( folderID = null ) {
         super();
         this.folderID = folderID; // ← stored so processBatch_() can pass it to ReceiptDoc
         this.customPaymentUrl = null;
-        this.bidderManager = new BidderManager();
         this.auctionItemManager = new AuctionItemManager();
         this.emailManager = new EmailManager();
 
         this.shouldSendEmails = false;
-        this.testEmailOverride = null;
-        this.testEmailSent = false;
         this.tableNumber = 0;
 
         this.currentReceipt = null;
         this.currentBidId = null;
-    }
-
-    // ── Bid-sheet data getter ────────────────────────────────────────────────
-    /** Lazy-loads the Bid-Management sheet data. */
-    get bidManagement () {
-        if ( this._bidManagement ) return this._bidManagement;
-        const sheet = this.activeSpreadSheet.getSheetByName( this.bidManagementString );
-        if ( !sheet ) return { sheet: null, lastRow: 0, lastCol: 0, range: [], loopLength: 0 };
-
-        const lastRow = sheet.getLastRow();
-        const lastCol = sheet.getLastColumn() || 1;
-        const dataRange = lastRow > 0
-            ? sheet.getRange( 1, 1, lastRow, lastCol ).getValues()
-            : [];
-
-        this._bidManagement = { sheet, lastRow, lastCol, range: dataRange, loopLength: Math.max( 0, lastRow - 1 ) };
-        return this._bidManagement;
-    }
-
-    // ── Data lookups ─────────────────────────────────────────────────────────
-    /**
-     * Finds the 0-based column index for a bidder ID in the Bid-Management sheet.
-     * @param {string|number} bidId
-     * @param {number} [startIndex=0]
-     * @returns {number}  Column index, or -1 if not found.
-     */
-    findBidderColInBidSheet_ ( bidId, startIndex = 0 ) {
-        const { range, lastCol } = this.bidManagement;
-        if ( !range || !range.length ) return -1;
-
-        for ( let i = startIndex; i < lastCol; i += 2 ) {
-            const cellValue = range[ 0 ][ i ];
-            // NULL PROTECTION: Skip empty column headers
-            if ( cellValue !== null && cellValue !== undefined && cellValue !== '' ) {
-                if ( cellValue.toString().trim() === bidId.toString().trim() ) return i;
-            }
-        }
-        return -1;
-    }
-
-    /**
-     * Looks up the email for a bidder by ID from the Bidder-Numbers full data.
-     * @param {string|number} bidId
-     * @returns {string}
-     */
-    getEmailForBidder_ ( bidId ) {
-        const fullData = this.bidderManager.biddersFullData;
-        if ( !fullData.length ) return '';
-
-        const emailCol = fullData[ 0 ].indexOf( 'Email' );
-        if ( emailCol === -1 ) return '';
-
-        for ( let i = 1; i < fullData.length; i++ ) {
-            const cellValue = fullData[ i ][ 0 ];
-            // NULL PROTECTION: Skip empty rows
-            if ( cellValue !== null && cellValue !== undefined && cellValue !== '' ) {
-                if ( cellValue.toString().trim() === bidId.toString().trim() ) {
-                    return fullData[ i ][ emailCol ] || '';
-                }
-            }
-        }
-        return '';
-    }
-
-    /**
-     * Reads the Bid-Management sheet column for the current bidder and builds
-     * a Receipt data model with all won items, names, prices, and total.
-     * @param {number} col  0-based column index.
-     * @returns {Receipt}
-     */
-    buildReceipt_ ( col ) {
-        const { range, lastRow } = this.bidManagement;
-        const firstName = range[ 1 ][ col ];
-        const lastName = range[ 1 ][ col + 1 ];
-        const email = this.getEmailForBidder_( this.currentBidId );
-
-        const receipt = new Receipt( this.currentBidId, firstName, lastName, email );
-
-        for ( let row = 3; row < lastRow; row++ ) {
-            const itemId = range[ row ][ col ];
-            const itemPrice = range[ row ][ col + 1 ];
-            if ( itemId !== '' && itemId !== undefined && itemId !== null ) {
-                const normalizedId = parseFloat( itemId ).toString();
-                const itemName = this.auctionItemManager.getItemName( normalizedId );
-                receipt.addItem( normalizedId, itemName, itemPrice );
-            }
-        }
-
-        return receipt;
     }
 
     // ── Financial helpers ────────────────────────────────────────────────────
@@ -141,33 +52,17 @@ class ReceiptManager extends GlobalVariables {
     }
 
     /**
-     * Centralized layout link resolver for document components.
-     * Delegates heavy generation lifting to the custom PayPalService container.
-     *
-     * @param {string|number} adjustedTotal - Handled downstream (calculated dynamically by service)
-     * @param {string|number} bidderId - Unique identification identifier of the target customer.
+     * Returns the payment URL for the receipt currently being generated.
+     * Always set by createIndividualReceipt/processBatch_ via
+     * getOrCreateInvoiceUrl BEFORE any Doc-writing happens (Doc-writing is
+     * the only caller of this method), so there is nothing left to look
+     * up here.
+     * @param {string|number} adjustedTotal - Unused; kept for call-site compatibility with ReceiptDoc.gs.
+     * @param {string|number} bidderId - Unused; kept for call-site compatibility with ReceiptDoc.gs.
      * @return {string} Direct checkout gateway URL.
      */
     getPaymentLink ( adjustedTotal, bidderId ) {
-        // 1. If we already generated the URL in the API loop, just return it immediately
-        if ( this.customPaymentUrl ) {
-            return this.customPaymentUrl;
-        }
-
-        // 2. Otherwise, fall back to our unified generator method
-        try {
-            const col = this.findBidderColInBidSheet_( bidderId.toString() );
-            if ( col === -1 ) return "https://www.paypal.com";
-
-            const receipt = this.buildReceipt_( col );
-            if ( !receipt.hasWinningItems() ) return "https://www.paypal.com";
-
-            return this.getOrCreateInvoiceUrl( bidderId, receipt );
-
-        } catch ( error ) {
-            Logger.log( `💥 [ReceiptManager Fallback Link triggered]: ${ error.toString() }` );
-            return "https://www.paypal.com";
-        }
+        return this.customPaymentUrl || "https://www.paypal.com";
     }
 
     /**
@@ -189,46 +84,34 @@ class ReceiptManager extends GlobalVariables {
     // ── Email dispatch ───────────────────────────────────────────────────────
     /**
      * Sends the receipt email for the current receipt if email is toggled on.
-     * In test mode, only ever sends one email (to the test address).
      */
     handleEmailDispatch_ () {
         if ( !this.shouldSendEmails ) return;
-        if ( this.testEmailOverride && this.testEmailSent ) return;
-
-        const targetEmail = this.testEmailOverride || this.currentReceipt.email;
-        if ( !targetEmail ) return;
-
-        if ( this.testEmailOverride ) this.testEmailSent = true;
+        if ( !this.currentReceipt.email ) return;
 
         const adjustedTotal = this.calculateAdjustedTotalWithFees( this.currentReceipt.totalCost );
         const feeAmount = adjustedTotal - this.currentReceipt.totalCost;
         const paymentUrl = this.getPaymentLink( adjustedTotal.toFixed( 2 ), this.currentBidId );
 
-        const receiptCopy = Object.assign( new Receipt(
-            this.currentReceipt.bidId, this.currentReceipt.firstName,
-            this.currentReceipt.lastName, targetEmail
-        ), {
-            itemsWon: this.currentReceipt.itemsWon,
-            itemNames: this.currentReceipt.itemNames,
-            itemPrices: this.currentReceipt.itemPrices,
-            totalCost: this.currentReceipt.totalCost
-        } );
-
         const email = this.emailManager.buildReceiptEmail(
-            receiptCopy, paymentUrl, adjustedTotal.toFixed( 2 ), feeAmount.toFixed( 2 )
+            this.currentReceipt, paymentUrl, adjustedTotal.toFixed( 2 ), feeAmount.toFixed( 2 )
         );
         this.emailManager.send( email );
     }
 
     // ── Entry points ─────────────────────────────────────────────────────────
     /**
-     * Processes a slice of the bidder list into a single batch receipt document.
+     * Processes a slice of the already-built receipt list into a single
+     * batch receipt document.
      * @param {string}   fileName
-     * @param {Array[][]} allBidderData  Full sorted bidder data including header.
+     * @param {Object[]} receipts  Already-built receipt data (see
+     *   server/services/receiptDataService.ts's buildAllBidderReceipts),
+     *   sorted ascending by last name, already filtered to bidders with
+     *   at least one winning item.
      * @param {number}   start
      * @param {number}   end
      */
-    processBatch_ ( fileName, allBidderData, start, end ) {
+    processBatch_ ( fileName, receipts, start, end ) {
         const doc = new ReceiptDoc( this.folderID );
         doc.setDoc_( fileName );
         doc.writeHeader_();
@@ -236,38 +119,33 @@ class ReceiptManager extends GlobalVariables {
 
         for ( let i = start; i < end; i++ ) {
             try {
-                const rawBidderId = allBidderData[ i ][ 0 ];
-                // NULL PROTECTION
-                if ( rawBidderId === null || rawBidderId === undefined || rawBidderId.toString().trim() === '' ) continue;
+                const data = receipts[ i ];
+                if ( !data ) continue;
 
-                this.currentBidId = rawBidderId.toString().trim();
-                const col = this.findBidderColInBidSheet_( this.currentBidId );
+                this.currentBidId = data.bidId.toString().trim();
+                this.currentReceipt = Receipt.fromData( data );
 
-                if ( col !== -1 ) {
-                    this.currentReceipt = this.buildReceipt_( col );
+                if ( this.currentReceipt.hasWinningItems() ) {
+                    // 1. Get/Create the invoice URL *before* writing the receipt
+                    const paymentUrl = this.getOrCreateInvoiceUrl( this.currentBidId, this.currentReceipt );
+                    this.customPaymentUrl = paymentUrl;
 
-                    if ( this.currentReceipt.hasWinningItems() ) {
-                        // 1. Get/Create the invoice URL *before* writing the receipt
-                        const paymentUrl = this.getOrCreateInvoiceUrl( this.currentBidId, this.currentReceipt );
-                        this.customPaymentUrl = paymentUrl;
-
-                        // 2. Add page break if not the first entry
-                        if ( this.tableNumber > 0 ) {
-                            doc.reopenDoc_();
-                            doc.getDoc_().getBody().appendPageBreak();
-                        }
-
-                        // 3. Write body (which now uses the correct customPaymentUrl)
-                        doc.writeReceiptBody_( this.currentReceipt, this );
-
-                        // 4. Handle email if batch request wants them
-                        if ( this.shouldSendEmails ) {
-                            this.handleEmailDispatch_();
-                        }
-
-                        this.tableNumber++;
-                        if ( this.tableNumber % 10 === 0 ) doc.saveAndClose_();
+                    // 2. Add page break if not the first entry
+                    if ( this.tableNumber > 0 ) {
+                        doc.reopenDoc_();
+                        doc.getDoc_().getBody().appendPageBreak();
                     }
+
+                    // 3. Write body (which now uses the correct customPaymentUrl)
+                    doc.writeReceiptBody_( this.currentReceipt, this );
+
+                    // 4. Handle email if batch request wants them
+                    if ( this.shouldSendEmails ) {
+                        this.handleEmailDispatch_();
+                    }
+
+                    this.tableNumber++;
+                    if ( this.tableNumber % 10 === 0 ) doc.saveAndClose_();
                 }
             } catch ( e ) {
                 console.error( `ReceiptManager.processBatch_: error at index ${ i }. ${ e.message }` );
@@ -280,47 +158,6 @@ class ReceiptManager extends GlobalVariables {
         doc.writeFooter_();
         doc.saveAndClose_();
         doc.convertToPdfAndMove_( true );
-    }
-
-    /**
-     * Enables test mode — all outgoing emails go to testEmail; only one is sent.
-     * @param {string} testEmail
-     */
-    enableTestMode ( testEmail ) {
-        this.testEmailOverride = testEmail;
-    }
-
-    /**
-     * Sends emails to all winning bidders without creating any Google Documents.
-     */
-    sendAllEmailsOnly () {
-        this.shouldSendEmails = true;
-        this.bidderManager.sortByLastName_();
-
-        const bidderSheet = this.activeSpreadSheet.getSheetByName( this.bidNumbersString );
-        const allBidderData = bidderSheet.getDataRange().getValues();
-
-        // Start from index 1 (skipping header)
-        for ( let i = 1; i < allBidderData.length; i++ ) {
-            try {
-                this.currentBidId = allBidderData[ i ][ 0 ];
-                // Skip empty rows to prevent null errors
-                if ( this.currentBidId === null || this.currentBidId === undefined || this.currentBidId === '' ) continue;
-
-                const col = this.findBidderColInBidSheet_( this.currentBidId );
-
-                if ( col !== -1 ) {
-                    this.currentReceipt = this.buildReceipt_( col );
-                    if ( this.currentReceipt.hasWinningItems() ) {
-                        // Only handle the email part
-                        this.handleEmailDispatch_();
-                    }
-                }
-            } catch ( e ) {
-                console.error( `ReceiptManager.sendAllEmailsOnly: error at index ${ i }. ${ e.message }` );
-            }
-            this.currentReceipt = null;
-        }
     }
 
     /**
@@ -425,8 +262,6 @@ class ReceiptManager extends GlobalVariables {
 
         const invoiceResult = paypal.createAndSendInvoice( bidderInfo, lineItems );
 
-        // ✅ These three lines were missing — without them the method returns undefined,
-        //    customPaymentUrl never gets set, and getPaymentLink creates a second invoice.
         bidderSheet.getRange( targetRowIndex, 10 ).setValue( invoiceResult.checkoutUrl );
         bidderSheet.getRange( targetRowIndex, 11 ).setValue( invoiceResult.totalAmount );
 
