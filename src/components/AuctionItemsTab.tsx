@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useConfig } from "@/context/ConfigContext";
 import { useAuction } from "@/context/AuctionContext";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { ListPageCard } from "@/components/ui/ListPageCard";
 import { Button } from "@/components/ui/button";
 import { Loader2, Package, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -140,29 +141,24 @@ export default function AuctionItemsTab() {
         }
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Auction Items Database</CardTitle>
-          <CardDescription>
-            Showing {table.sortedItems.length} of {items.length} items from the Auction-Items spreadsheet. Click the edit icon to make changes.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <AuctionItemsList
-            items={table.sortedItems}
-            selectedRows={table.selectedRows}
-            selectedItemsCount={table.selectedItemsCount}
-            onToggleRow={table.toggleRow}
-            onToggleAll={table.toggleAll}
-            onEditRequest={setItemToEdit}
-            isAuctionClosed={isAuctionClosed}
-            isExecutingRestore={isExecutingRestore}
-            restoreBundleId={restoreBundleId}
-            onRestoreBundle={handleRestoreBundle}
-            onDeleteRequest={table.setItemToDelete}
-          />
-        </CardContent>
-      </Card>
+      <ListPageCard
+        title="Auction Items Database"
+        description={`Showing ${table.sortedItems.length} of ${items.length} items from the Auction-Items spreadsheet. Click the edit icon to make changes.`}
+      >
+        <AuctionItemsList
+          items={table.sortedItems}
+          selectedRows={table.selectedRows}
+          selectedItemsCount={table.selectedItemsCount}
+          onToggleRow={table.toggleRow}
+          onToggleAll={table.toggleAll}
+          onEditRequest={setItemToEdit}
+          isAuctionClosed={isAuctionClosed}
+          isExecutingRestore={isExecutingRestore}
+          restoreBundleId={restoreBundleId}
+          onRestoreBundle={handleRestoreBundle}
+          onDeleteRequest={table.setItemToDelete}
+        />
+      </ListPageCard>
 
       <AuctionItemsBulkActionBar
         selectedItemsCount={table.selectedItemsCount}

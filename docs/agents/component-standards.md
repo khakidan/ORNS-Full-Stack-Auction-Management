@@ -23,9 +23,11 @@ directly, and not a from-scratch component set. `src/components/ui/`
 currently contains: `alert-dialog.tsx`, `badge.tsx`, `button.tsx`,
 `card.tsx`, `checkbox.tsx`, `ConfirmationDialog.tsx`, `dialog.tsx`,
 `IconButton.tsx` (app-specific), `input.tsx`, `label.tsx`,
-`LoadingButton.tsx` (app-specific), `scroll-area.tsx`, `select.tsx`,
-`separator.tsx`, `sheet.tsx`, `sonner.tsx` (toasts), `table.tsx`,
-`tabs.tsx`, `textarea.tsx`. Check this list (or `file-reference.md`)
+`ListPageCard.tsx` (app-specific), `LoadingButton.tsx` (app-specific),
+`scroll-area.tsx`, `select.tsx`, `separator.tsx`, `sheet.tsx`,
+`sonner.tsx` (toasts), `StatusStatePlaceholder.tsx` (app-specific),
+`table.tsx`, `tabs.tsx`, `textarea.tsx`. Check this list (or
+`file-reference.md`)
 before assuming a pattern isn't componentized yet. (`EditableCell.tsx`
 was deleted once its last two consumers - `AttendeeRow.tsx`, then
 `AuctionItemRow.tsx` - both moved to a single-dialog edit pattern
@@ -39,9 +41,15 @@ app-wide (confirmed 2026-09-04: `IconButton` in `AttendeeRow.tsx`,
 files including `Checkout.tsx`, `BidEntry.tsx`, `ConfigSettings.tsx`;
 `ConfirmationDialog` in `TicketAttendeeTab.tsx`, `Checkout.tsx`,
 `AuctionItemsTab.tsx`, `PendingPaymentDialog.tsx`). There is still no
-card-primitives subdirectory - `Card`/`CardHeader`/`CardContent`/
-`CardFooter` from `card.tsx` are used directly, which remains correct
-practice, not a gap.
+generic card-primitives subdirectory - `Card`/`CardHeader`/`CardContent`/
+`CardFooter` from `card.tsx` are used directly wherever a page's Card
+layout is genuinely one-off, which remains correct practice, not a gap.
+Where four pages independently hand-rolled the *same* Card skeleton
+(the search-and-list pages below), that duplication was real and is now
+consolidated: `ListPageCard.tsx` wraps `Card`/`CardHeader`/`CardContent`
+with the shared bare-header, `p-0`-content shape those four pages all
+need, closing off the exact per-page `className` override drift that
+caused the whitespace double-gap bugs (see `CHANGELOG.md`).
 
 There are seven top-level workflow views under `src/components/`
 (`Dashboard.tsx`, `Bidders.tsx`, `Items.tsx`, `BidEntry.tsx`,

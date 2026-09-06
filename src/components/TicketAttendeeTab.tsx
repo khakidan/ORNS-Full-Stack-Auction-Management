@@ -1,5 +1,5 @@
 import { Users, Trash2, Filter, RefreshCw } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ListPageCard } from "@/components/ui/ListPageCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -86,24 +86,22 @@ export default function TicketAttendeeTab() {
         }
       />
 
-      <Card className="flex flex-col min-h-0">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-primary" /> Attendee List</CardTitle>
-          <CardDescription>
-            {state.filteredAttendees.length} entries found across participating sources.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex-1 overflow-auto p-0 min-h-100">
-          <AttendeesList
-            attendees={state.filteredAttendees}
-            loading={attendeesLoading}
-            isAuctionClosed={isAuctionClosed}
-            onEdit={state.setAttendeeToEdit}
-            onUpdatePaymentStatus={state.updatePaymentStatus}
-            onDeleteRequest={state.setAttendeeToDelete}
-          />
-        </CardContent>
-      </Card>
+      <ListPageCard
+        icon={<Users className="w-5 h-5 text-primary" />}
+        title="Attendee List"
+        description={`${state.filteredAttendees.length} entries found across participating sources.`}
+        className="flex flex-col min-h-0"
+        contentClassName="flex-1 overflow-auto min-h-100"
+      >
+        <AttendeesList
+          attendees={state.filteredAttendees}
+          loading={attendeesLoading}
+          isAuctionClosed={isAuctionClosed}
+          onEdit={state.setAttendeeToEdit}
+          onUpdatePaymentStatus={state.updatePaymentStatus}
+          onDeleteRequest={state.setAttendeeToDelete}
+        />
+      </ListPageCard>
 
       <EditAttendeeDialog
         attendee={state.attendeeToEdit}

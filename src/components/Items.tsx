@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuction } from "@/context/AuctionContext";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { ListPageCard } from "@/components/ui/ListPageCard";
 import { Tag } from "lucide-react";
 import { FilterToolbar } from "@/components/FilterToolbar";
 import { ItemsList } from "@/components/ItemsList";
@@ -39,29 +39,18 @@ export default function Items() {
         }
       />
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <CardTitle className="flex items-center gap-2">
-                <Tag className="w-5 h-5 text-primary" />
-                Auction Catalog
-              </CardTitle>
-              <CardDescription>
-                Full list of auction items. Item numbers should match the display cards.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <ItemsList
-            items={filteredItems}
-            loading={loading}
-            hasActiveSearch={searchTerm.length > 0}
-            winners={winners}
-          />
-        </CardContent>
-      </Card>
+      <ListPageCard
+        icon={<Tag className="w-5 h-5 text-primary" />}
+        title="Auction Catalog"
+        description="Full list of auction items. Item numbers should match the display cards."
+      >
+        <ItemsList
+          items={filteredItems}
+          loading={loading}
+          hasActiveSearch={searchTerm.length > 0}
+          winners={winners}
+        />
+      </ListPageCard>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 // src/components/Bidders.tsx
 import { useAuction } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { ListPageCard } from "@/components/ui/ListPageCard";
 import { Badge } from "@/components/ui/badge";
 import { FilterToolbar } from "@/components/FilterToolbar";
 import { BiddersFilterControls } from "@/components/BiddersFilterControls";
@@ -75,28 +75,23 @@ export default function Bidders() {
         }
       />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle>Bidder Check-In</CardTitle>
-          <CardDescription>
-            Search by last name. Mark bidders as present or as proxy bidders.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <BiddersList
-            bidders={state.sortedBidders}
-            loading={loading}
-            totalBiddersCount={bidders.length}
-            hasActiveFilters={state.hasActiveFilters}
-            getAttendeeInfo={state.getAttendeeInfo}
-            isAuctionClosed={isAuctionClosed}
-            processingId={state.processingId}
-            isAddingTicketToReceipt={state.isAddingTicketToReceipt}
-            onCheckInAttempt={state.handleCheckInAttempt}
-            onMarkAsProxy={state.markAsProxy}
-          />
-        </CardContent>
-      </Card>
+      <ListPageCard
+        title="Bidder Check-In"
+        description="Search by last name. Mark bidders as present or as proxy bidders."
+      >
+        <BiddersList
+          bidders={state.sortedBidders}
+          loading={loading}
+          totalBiddersCount={bidders.length}
+          hasActiveFilters={state.hasActiveFilters}
+          getAttendeeInfo={state.getAttendeeInfo}
+          isAuctionClosed={isAuctionClosed}
+          processingId={state.processingId}
+          isAddingTicketToReceipt={state.isAddingTicketToReceipt}
+          onCheckInAttempt={state.handleCheckInAttempt}
+          onMarkAsProxy={state.markAsProxy}
+        />
+      </ListPageCard>
 
       <PendingPaymentDialog
         pendingCheckIn={state.pendingCheckIn}
