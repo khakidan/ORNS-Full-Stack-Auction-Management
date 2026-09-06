@@ -6,6 +6,21 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
+
+// dataRoutes.ts's /paypal-sweeper/status and /paypal-sweeper/run-now
+// routes call straight into paypalSweeperJob.ts, which reaches real
+// Firestore/PayPal via firebaseAdmin.ts/paypalService.ts - mocked here at
+// the module boundary so these route-level tests stay hermetic (that
+// logic's own coverage lives in paypalSweeperJob.test.ts, fully mocked
+// there instead). Matches auth.test.ts's existing convention for the same
+// module.
+const mockGetSweeperStatus = vi.fn();
+const mockRunPaypalSweep = vi.fn();
+vi.mock("../services/paypalSweeperJob", () => ({
+  getSweeperStatus: (...args: unknown[]) => mockGetSweeperStatus(...args),
+  runPaypalSweep: (...args: unknown[]) => mockRunPaypalSweep(...args),
+}));
+
 import { app } from "../app";
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
@@ -848,5 +863,64 @@ describe("Delete Auction Item workflow", () => {
       // independently rather than being serialized.
       expect(callOrder).toEqual(['A-start', 'A-end', 'B-start', 'B-end']);
     });
+  });
+});
+
+// Drives the Configuration page's PayPal sweeper status card - see
+// docs/agents/refactor-opportunities.md's Code Hardening item #2 and
+// CHANGELOG.md.
+describe("PayPal Sweeper status routes", () => {
+  beforeEach(() => {
+    mockGetSweeperStatus.mockReset();
+    mockRunPaypalSweep.mockReset();
+  });
+
+  it("GET /paypal-sweeper/status returns the service's status object", async () => {
+    const status = {
+      credentialConfigured: true,
+      credentialUpdatedBy: "staff@orns.org",
+      credentialUpdatedAt: "2026-01-01T00:00:00.000Z",
+      intervalMinutes: 5,
+      scheduleRunning: true,
+      lastRunAt: "2026-01-01T00:05:00.000Z",
+      lastResult: { pending: 1, resolved: 1, escalated: 0 },
+      nextRunAt: "2026-01-01T00:10:00.000Z",
+    };
+    mockGetSweeperStatus.mockResolvedValue(status);
+
+    const response = await request(app).get("/api/paypal-sweeper/status").set(authHeader);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(status);
+  });
+
+  it("GET /paypal-sweeper/status requires auth", async () => {
+    const response = await request(app).get("/api/paypal-sweeper/status");
+    expect(response.status).toBe(401);
+    expect(mockGetSweeperStatus).not.toHaveBeenCalled();
+  });
+
+  it("POST /paypal-sweeper/run-now triggers an immediate sweep and returns its outcome", async () => {
+    mockRunPaypalSweep.mockResolvedValue({ pending: 2, resolved: 1, escalated: 1 });
+
+    const response = await request(app).post("/api/paypal-sweeper/run-now").set(authHeader);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ pending: 2, resolved: 1, escalated: 1 });
+    expect(mockRunPaypalSweep).toHaveBeenCalledTimes(1);
+  });
+
+  it("POST /paypal-sweeper/run-now requires auth", async () => {
+    const response = await request(app).post("/api/paypal-sweeper/run-now");
+    expect(response.status).toBe(401);
+    expect(mockRunPaypalSweep).not.toHaveBeenCalled();
+  });
+
+  it("forwards a thrown error from the status check to the error handler", async () => {
+    mockGetSweeperStatus.mockRejectedValue(new Error("Firestore unavailable"));
+
+    const response = await request(app).get("/api/paypal-sweeper/status").set(authHeader);
+
+    expect(response.status).toBe(500);
   });
 });

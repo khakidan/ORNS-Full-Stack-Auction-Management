@@ -1,3 +1,5 @@
+import { SweeperStatus, PaypalSweepOutcome } from "@/types";
+
 export const getBaseUrl = () => {
   return "";
 };
@@ -153,6 +155,29 @@ export async function deleteAuctionItem(spreadsheetId: string, rowIndex: number)
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
     throw new Error(errorData.error || "Failed to delete auction item");
+  }
+  return res.json();
+}
+
+export async function getPaypalSweeperStatus(): Promise<SweeperStatus> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/paypal-sweeper/status`, {
+    credentials: "include"
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to fetch PayPal sweeper status");
+  }
+  return res.json();
+}
+
+export async function runPaypalSweepNow(): Promise<PaypalSweepOutcome> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/paypal-sweeper/run-now`, {
+    method: "POST",
+    credentials: "include"
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to run PayPal sweep");
   }
   return res.json();
 }

@@ -52,7 +52,7 @@ vi.mock("../services/firebaseAdmin", () => ({
   getAdminFirestore: () => makeFakeAdminDb(),
 }));
 
-import { runPaypalSweep, persistSweeperCredential } from "../services/paypalSweeperJob";
+import { runPaypalSweep, persistSweeperCredential, getSweeperStatus, startPaypalSweeperSchedule } from "../services/paypalSweeperJob";
 
 const HEADER = ["ID", "First", "Last", "Email", "CheckedIn", "Proxy", "CheckedOut", "Paid", "Method", "InvoiceURL", "Amount", "Timestamp"];
 
@@ -241,5 +241,52 @@ describe("runPaypalSweep - resolving/escalating pending rows", () => {
     mockBidderNumbers([]);
     await runPaypalSweep();
     expect(lastPayPalServiceCtorArgs).toEqual({ isSandbox: false });
+  });
+});
+
+// Drives the Configuration page's sweeper status card - see
+// docs/agents/refactor-opportunities.md's Code Hardening item #2 and
+// CHANGELOG.md.
+describe("getSweeperStatus", () => {
+  it("reports the credential as not configured when no refresh token is stored", async () => {
+    sweeperDoc = {};
+    const status = await getSweeperStatus();
+    expect(status.credentialConfigured).toBe(false);
+    expect(status.credentialUpdatedBy).toBeNull();
+    expect(status.credentialUpdatedAt).toBeNull();
+  });
+
+  it("reports the credential as configured with who/when it was last set", async () => {
+    sweeperDoc = { refreshToken: "tok", updatedBy: "staff@orns.org", updatedAt: "2026-01-01T00:00:00.000Z" };
+    const status = await getSweeperStatus();
+    expect(status.credentialConfigured).toBe(true);
+    expect(status.credentialUpdatedBy).toBe("staff@orns.org");
+    expect(status.credentialUpdatedAt).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("records a completed run's outcome and computes nextRunAt one interval past it", async () => {
+    mockBidderNumbers([]);
+    const beforeRun = Date.now();
+
+    const result = await runPaypalSweep();
+    const status = await getSweeperStatus();
+
+    expect(status.lastResult).toEqual(result);
+    expect(status.lastRunAt).not.toBeNull();
+    expect(new Date(status.lastRunAt!).getTime()).toBeGreaterThanOrEqual(beforeRun);
+
+    const lastRunMs = new Date(status.lastRunAt!).getTime();
+    const nextRunMs = new Date(status.nextRunAt!).getTime();
+    expect(nextRunMs - lastRunMs).toBe(status.intervalMinutes * 60 * 1000);
+  });
+
+  it("reports scheduleRunning once startPaypalSweeperSchedule has been called", async () => {
+    const timer = startPaypalSweeperSchedule();
+    try {
+      const status = await getSweeperStatus();
+      expect(status.scheduleRunning).toBe(true);
+    } finally {
+      clearInterval(timer);
+    }
   });
 });

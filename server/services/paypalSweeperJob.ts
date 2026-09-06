@@ -57,6 +57,61 @@ export interface PaypalSweepResult {
 export type PaypalSweepOutcome = PaypalSweepResult | { skipped: string };
 
 /**
+ * In-process record of the sweeper's own health, for the Configuration
+ * page's status card (Code Hardening item #2's two manual-only steps -
+ * "an admin must sign in once" and "confirm the Node job is running
+ * reliably" - were otherwise unverifiable from inside the app itself; see
+ * docs/agents/refactor-opportunities.md). Deliberately in-memory, not
+ * Firestore: this is a live "is the current server process healthy"
+ * signal, not a durable record - it resets on restart by design, which is
+ * itself useful information (a status card showing "no runs yet" right
+ * after a deploy is accurate, not stale).
+ */
+let lastRun: { at: string; outcome: PaypalSweepOutcome } | null = null;
+let scheduleStartedAt: number | null = null;
+let configuredIntervalMinutes = DEFAULT_INTERVAL_MINUTES;
+
+export interface SweeperStatus {
+  credentialConfigured: boolean;
+  credentialUpdatedBy: string | null;
+  credentialUpdatedAt: string | null;
+  intervalMinutes: number;
+  scheduleRunning: boolean;
+  lastRunAt: string | null;
+  lastResult: PaypalSweepOutcome | null;
+  nextRunAt: string | null;
+}
+
+/**
+ * Reads both halves of "is the background sweep actually working": the
+ * stored credential (`persistSweeperCredential` only ever runs on a real
+ * login) and this process's own record of its last run. `nextRunAt` is a
+ * best-effort estimate (last run time, or schedule start if it hasn't run
+ * yet, plus one interval) - accurate for a steady `setInterval`, but not a
+ * guarantee, since a slow sweep or a process restart can shift it.
+ */
+export async function getSweeperStatus(): Promise<SweeperStatus> {
+  const db = getAdminFirestore();
+  const snap = await db.collection(SWEEPER_CREDENTIAL_COLLECTION).doc(SWEEPER_CREDENTIAL_DOC).get();
+  const data = snap.data();
+
+  const intervalMs = configuredIntervalMinutes * 60 * 1000;
+  const anchor = lastRun ? new Date(lastRun.at).getTime() : scheduleStartedAt;
+  const nextRunAt = anchor !== null ? new Date(anchor + intervalMs).toISOString() : null;
+
+  return {
+    credentialConfigured: !!data?.refreshToken,
+    credentialUpdatedBy: data?.updatedBy ?? null,
+    credentialUpdatedAt: data?.updatedAt ?? null,
+    intervalMinutes: configuredIntervalMinutes,
+    scheduleRunning: scheduleStartedAt !== null,
+    lastRunAt: lastRun?.at ?? null,
+    lastResult: lastRun?.outcome ?? null,
+    nextRunAt,
+  };
+}
+
+/**
  * Escalation destination for stuck PayPal verifications - deliberately
  * NOT the client-facing "Follow-Up" sheet (Dashboard's Post-Checkout Item
  * Wins panel / recordWinningBidLocked in auctionService.ts), which owns a
@@ -94,8 +149,13 @@ async function ensureFollowUpSheet(sheets: ReturnType<typeof google.sheets>, spr
  * `PayPalSweeper.gs`'s `checkPendingPayPalInvoices` exactly, evaluating
  * rows bottom-up. One row's failure is logged and skipped rather than
  * aborting the whole sweep.
+ *
+ * The public entry point wraps this in `runPaypalSweep` below, which
+ * records the outcome into `lastRun` for `getSweeperStatus` - every real
+ * return path (skipped, or the pending/resolved/escalated tally) funnels
+ * through that one wrapper regardless of which early-return branch fires.
  */
-export async function runPaypalSweep(): Promise<PaypalSweepOutcome> {
+async function runPaypalSweepInner(): Promise<PaypalSweepOutcome> {
   const client = await getSweeperAuthClient();
   if (!client) {
     return { skipped: "No background-sync credential stored yet - have an admin sign in once to enable the sweeper." };
@@ -217,6 +277,17 @@ export async function runPaypalSweep(): Promise<PaypalSweepOutcome> {
 }
 
 /**
+ * Public entry point - runs the sweep and records the outcome (used by
+ * the schedule below, and by the Configuration page's manual "Run Sweep
+ * Now" button via the /api/paypal-sweeper/run-now route).
+ */
+export async function runPaypalSweep(): Promise<PaypalSweepOutcome> {
+  const outcome = await runPaypalSweepInner();
+  lastRun = { at: new Date().toISOString(), outcome };
+  return outcome;
+}
+
+/**
  * Starts the recurring sweep on a fixed interval - the Node-side
  * replacement for `PayPalSweeper.gs`'s time-driven trigger. Called once
  * from server.ts (never from server/app.ts, which the test suite
@@ -226,6 +297,9 @@ export async function runPaypalSweep(): Promise<PaypalSweepOutcome> {
 export function startPaypalSweeperSchedule(): NodeJS.Timeout {
   const intervalMinutes = Number(process.env.PAYPAL_SWEEPER_INTERVAL_MINUTES) || DEFAULT_INTERVAL_MINUTES;
   const intervalMs = intervalMinutes * 60 * 1000;
+
+  configuredIntervalMinutes = intervalMinutes;
+  scheduleStartedAt = Date.now();
 
   console.log(`[PayPalSweeper] Scheduled to run every ${intervalMinutes} minute(s).`);
 

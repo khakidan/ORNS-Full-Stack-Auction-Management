@@ -6,6 +6,7 @@ import SetupNewAuctionCard from "./SetupNewAuctionCard";
 import AuctionConfigurationCard from "./AuctionConfigurationCard";
 import TicketPricingCard from "./TicketPricingCard";
 import PayPalIntegrationCard from "./PayPalIntegrationCard";
+import PayPalSweeperStatusCard from "./PayPalSweeperStatusCard";
 import ManualCopyDialog from "./ManualCopyDialog";
 
 export default function ConfigSettings() {
@@ -48,6 +49,8 @@ export default function ConfigSettings() {
       <TicketPricingCard config={config} setConfig={setConfig} />
 
       <PayPalIntegrationCard config={config} setConfig={setConfig} />
+
+      <PayPalSweeperStatusCard />
 
       <div className="flex flex-col sm:flex-row gap-3 pt-6 pb-6">
         <LoadingButton

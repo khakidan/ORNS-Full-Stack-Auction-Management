@@ -133,3 +133,28 @@ export interface BugReportListItem {
   consoleActivity: string;
   screenshotLink: string;
 }
+
+/** One sweep's outcome (server/services/paypalSweeperJob.ts's PaypalSweepOutcome). */
+export type PaypalSweepOutcome =
+  | { pending: number; resolved: number; escalated: number }
+  | { skipped: string };
+
+/**
+ * GET /api/paypal-sweeper/status's response shape - drives the
+ * Configuration page's sweeper status card, the only way to confirm
+ * from inside the app (rather than server logs) that the two manual-only
+ * steps from Code Hardening item #2 have actually happened: an admin
+ * signing in once (credentialConfigured), and the background job running
+ * reliably (lastRunAt/lastResult). See
+ * docs/agents/refactor-opportunities.md.
+ */
+export interface SweeperStatus {
+  credentialConfigured: boolean;
+  credentialUpdatedBy: string | null;
+  credentialUpdatedAt: string | null;
+  intervalMinutes: number;
+  scheduleRunning: boolean;
+  lastRunAt: string | null;
+  lastResult: PaypalSweepOutcome | null;
+  nextRunAt: string | null;
+}

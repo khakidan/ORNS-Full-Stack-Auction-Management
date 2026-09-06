@@ -15,6 +15,7 @@ import { checkIdempotency, saveIdempotency } from '../utils/idempotency';
 import { updateAttendeeField } from '../services/bidderService';
 import { requireAuth } from '../middleware/requireAuth';
 import { withLock } from '../utils/asyncLock';
+import { getSweeperStatus, runPaypalSweep } from '../services/paypalSweeperJob';
 
 export default function createDataRouter() {
   const router = Router();
@@ -45,6 +46,32 @@ export default function createDataRouter() {
       if (error.message.includes("Cannot re-sync") || error.message.includes("Missing '")) {
         return res.status(400).json({ error: error.message });
       }
+      next(error);
+    }
+  });
+
+  // Status for the Configuration page's PayPal sweeper card - surfaces
+  // the two manual-only steps from Code Hardening item #2 (an admin
+  // signing in once to store a background-sync credential, and the
+  // Node job actually running reliably) so they're visible from inside
+  // the app instead of only inferable from server logs. See
+  // docs/agents/refactor-opportunities.md.
+  router.get("/paypal-sweeper/status", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const status = await getSweeperStatus();
+      res.json(status);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Lets an admin trigger an immediate sweep from the Configuration page
+  // rather than waiting up to the full interval to confirm it's working.
+  router.post("/paypal-sweeper/run-now", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await runPaypalSweep();
+      res.json(result);
+    } catch (error) {
       next(error);
     }
   });
