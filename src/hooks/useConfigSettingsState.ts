@@ -205,6 +205,7 @@ export function useConfigSettingsState() {
     localStorage.setItem("googleScriptId", bidManagementScriptId);
     localStorage.setItem("bugReportsSpreadsheetId", bugReportsSpreadsheetId);
     localStorage.setItem("bugReportsFolderId", bugReportsFolderId);
+    localStorage.setItem("paypalIsSandbox", String(config.paypalIsSandbox));
 
     // Save to Firebase for cross-device sync
     try {

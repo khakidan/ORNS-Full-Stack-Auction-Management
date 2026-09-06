@@ -58,6 +58,7 @@ const FAKE_CONFIG: Config = {
   bidManagementScriptId: "bm-script",
   bugReportsSpreadsheetId: "bug-reports-id",
   bugReportsFolderId: "bug-reports-folder",
+  paypalIsSandbox: true,
 };
 
 /**

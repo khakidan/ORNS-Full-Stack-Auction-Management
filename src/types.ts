@@ -75,6 +75,13 @@ export interface Config {
   bidManagementScriptId: string;
   bugReportsSpreadsheetId: string;
   bugReportsFolderId: string;
+  /**
+   * true = PayPal sandbox mode (safe for testing, no real invoices/emails).
+   * false = production mode (real invoices sent to real bidders). Defaults
+   * to true everywhere it's read so a missing/unset value never accidentally
+   * means production.
+   */
+  paypalIsSandbox: boolean;
 }
 
 export type BugReportType = "Bug" | "UI Issue" | "Workflow Issue";

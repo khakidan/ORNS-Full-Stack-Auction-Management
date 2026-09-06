@@ -1,0 +1,309 @@
+/**
+ * Tests server/services/paypalService.ts - the Node port of
+ * scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_PayPalService.gs
+ * (see server/test/gs-paypal-service.test.ts for the GAS reference-copy's
+ * own tests, which this mirrors method-for-method). See
+ * docs/agents/refactor-opportunities.md's Code Hardening item #2, Step 1.
+ */
+import { describe, it, expect, vi } from "vitest";
+import { PayPalService } from "../services/paypalService";
+import { calculatePayPalSurcharge } from "../utils/financeUtils";
+
+function mockFetchResponse(status: number, body: unknown) {
+  const text = typeof body === "string" ? body : JSON.stringify(body);
+  return {
+    status,
+    text: async () => text,
+    json: async () => (typeof body === "string" ? JSON.parse(body) : body),
+  } as Response;
+}
+
+function newService(overrides: Record<string, unknown> = {}) {
+  return new PayPalService({
+    clientId: "test-client-id",
+    clientSecret: "test-client-secret",
+    isSandbox: true,
+    fetcher: vi.fn(),
+    ...overrides,
+  });
+}
+
+describe("PayPalService.extractInvoiceIdFromUrl", () => {
+  it("extracts the ID from a real production URL (# fragment, INV2- prefix)", () => {
+    const paypal = newService();
+    expect(
+      paypal.extractInvoiceIdFromUrl("https://www.paypal.com/invoice/p/#INV2-6WTA-NK56-2FAQ-PVGR")
+    ).toBe("INV2-6WTA-NK56-2FAQ-PVGR");
+  });
+
+  it("normalizes a real sandbox URL's lowercase inv- prefix to INV2-", () => {
+    const paypal = newService();
+    expect(
+      paypal.extractInvoiceIdFromUrl("https://www.sandbox.paypal.com/invoice/p/#inv-H38U-JGHJ-F3UZ-HLX3")
+    ).toBe("INV2-H38U-JGHJ-F3UZ-HLX3");
+  });
+
+  it("does not double-prefix a fragment that's already INV2-", () => {
+    const paypal = newService();
+    expect(
+      paypal.extractInvoiceIdFromUrl("https://www.paypal.com/invoice/p/#INV2-AZ93-LKDZ-4VNS-A6KZ")
+    ).toBe("INV2-AZ93-LKDZ-4VNS-A6KZ");
+  });
+
+  it("falls back to the last path segment when there's no # fragment", () => {
+    const paypal = newService();
+    expect(paypal.extractInvoiceIdFromUrl("https://www.paypal.com/invoice/p/INV2-XXXX")).toBe("INV2-XXXX");
+  });
+
+  it("returns null for empty, null, or non-string input", () => {
+    const paypal = newService();
+    expect(paypal.extractInvoiceIdFromUrl("")).toBeNull();
+    expect(paypal.extractInvoiceIdFromUrl(null)).toBeNull();
+    expect(paypal.extractInvoiceIdFromUrl(undefined)).toBeNull();
+    expect(paypal.extractInvoiceIdFromUrl(12345 as any)).toBeNull();
+  });
+});
+
+describe("PayPalService credential resolution", () => {
+  it("falls back to env vars when no overrides are given", async () => {
+    vi.stubEnv("PAYPAL_CLIENT_ID", "");
+    vi.stubEnv("PAYPAL_CLIENT_SECRET", "");
+    const paypal = new PayPalService({ fetcher: vi.fn() });
+    await expect((paypal as any).getAccessToken_()).rejects.toThrow(/Missing PayPal credentials/);
+    vi.unstubAllEnvs();
+  });
+});
+
+describe("PayPalService sandbox/production base URL selection", () => {
+  it("targets api-m.sandbox.paypal.com when isSandbox is true", async () => {
+    const fetcher = vi.fn().mockResolvedValue(mockFetchResponse(200, { access_token: "tok" }));
+    const paypal = newService({ fetcher, isSandbox: true });
+    await (paypal as any).getAccessToken_();
+    expect(fetcher).toHaveBeenCalledWith("https://api-m.sandbox.paypal.com/v1/oauth2/token", expect.anything());
+  });
+
+  it("targets the live api-m.paypal.com when isSandbox is false", async () => {
+    const fetcher = vi.fn().mockResolvedValue(mockFetchResponse(200, { access_token: "tok" }));
+    const paypal = newService({ fetcher, isSandbox: false });
+    await (paypal as any).getAccessToken_();
+    expect(fetcher).toHaveBeenCalledWith("https://api-m.paypal.com/v1/oauth2/token", expect.anything());
+  });
+
+  it("defaults to sandbox when isSandbox is omitted and no env var is set", async () => {
+    vi.stubEnv("PAYPAL_IS_SANDBOX", "");
+    const fetcher = vi.fn().mockResolvedValue(mockFetchResponse(200, { access_token: "tok" }));
+    const paypal = new PayPalService({ fetcher, clientId: "id", clientSecret: "secret" });
+    await (paypal as any).getAccessToken_();
+    expect(fetcher).toHaveBeenCalledWith("https://api-m.sandbox.paypal.com/v1/oauth2/token", expect.anything());
+    vi.unstubAllEnvs();
+  });
+
+  it("honors PAYPAL_IS_SANDBOX=false from the environment when no override is given", async () => {
+    vi.stubEnv("PAYPAL_IS_SANDBOX", "false");
+    const fetcher = vi.fn().mockResolvedValue(mockFetchResponse(200, { access_token: "tok" }));
+    const paypal = new PayPalService({ fetcher, clientId: "id", clientSecret: "secret" });
+    await (paypal as any).getAccessToken_();
+    expect(fetcher).toHaveBeenCalledWith("https://api-m.paypal.com/v1/oauth2/token", expect.anything());
+    vi.unstubAllEnvs();
+  });
+});
+
+describe("PayPalService.cancelInvoice", () => {
+  it("sends a cancel request with a non-recipient-facing note", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(204, ""));
+    const paypal = newService({ fetcher });
+
+    await paypal.cancelInvoice("INV2-CANCEL-ME");
+
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      "https://api-m.sandbox.paypal.com/v2/invoicing/invoices/INV2-CANCEL-ME/cancel",
+      expect.objectContaining({ method: "POST" })
+    );
+    const payload = JSON.parse(fetcher.mock.calls[1][1].body);
+    expect(payload.send_to_recipient).toBe(false);
+  });
+});
+
+describe("PayPalService.getAccessToken_", () => {
+  it("throws when credentials are missing", async () => {
+    const paypal = newService({ clientId: "", clientSecret: "" });
+    await expect((paypal as any).getAccessToken_()).rejects.toThrow(/Missing PayPal credentials/);
+  });
+
+  it("returns the access token on a 200 response", async () => {
+    const fetcher = vi.fn().mockResolvedValue(mockFetchResponse(200, { access_token: "token-abc-123" }));
+    const paypal = newService({ fetcher });
+    await expect((paypal as any).getAccessToken_()).resolves.toBe("token-abc-123");
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://api-m.sandbox.paypal.com/v1/oauth2/token",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("throws with the response body when PayPal returns a non-200", async () => {
+    const fetcher = vi.fn().mockResolvedValue(mockFetchResponse(401, "invalid_client"));
+    const paypal = newService({ fetcher });
+    await expect((paypal as any).getAccessToken_()).rejects.toThrow(/PayPal API Authentication Failed/);
+  });
+});
+
+describe("PayPalService.createAndSendInvoice", () => {
+  it("builds one line item per winning item plus a surcharge line, and returns the checkout URL", async () => {
+    const capturedBodies: string[] = [];
+    const responses = [
+      mockFetchResponse(200, { access_token: "tok" }),
+      mockFetchResponse(201, { id: "INV2-TEST-0000-0000-0001" }),
+      mockFetchResponse(200, {
+        links: [{ rel: "payer-action", href: "https://www.sandbox.paypal.com/invoice/p/#inv-TEST0000000001" }],
+      }),
+    ];
+    let callIndex = 0;
+    const fetcher = vi.fn((_url: string, options: any) => {
+      capturedBodies.push(options.body);
+      return Promise.resolve(responses[callIndex++]);
+    });
+    const paypal = newService({ fetcher, clientId: "id", clientSecret: "secret" });
+
+    const result = await paypal.createAndSendInvoice(
+      { email: "bidder@example.com", firstName: "Jane", lastName: "Doe", id: "101" },
+      [
+        { name: "Gift Card", amount: 100 },
+        { name: "Ten Raffle Tickets", amount: 30 },
+      ]
+    );
+
+    const feeData = calculatePayPalSurcharge(130); // 100 + 30
+
+    expect(result).toEqual({
+      invoiceId: "INV2-TEST-0000-0000-0001",
+      totalAmount: feeData.total,
+      checkoutUrl: "https://www.sandbox.paypal.com/invoice/p/#inv-TEST0000000001",
+    });
+
+    // capturedBodies[0] is the token request; [1] is the draft invoice
+    const draftPayload = JSON.parse(capturedBodies[1]);
+    expect(draftPayload.items).toEqual([
+      { name: "Gift Card", quantity: "1", unit_amount: { currency_code: "USD", value: "100.00" } },
+      { name: "Ten Raffle Tickets", quantity: "1", unit_amount: { currency_code: "USD", value: "30.00" } },
+      { name: "Merchant Processing Surcharge Fee", quantity: "1", unit_amount: { currency_code: "USD", value: feeData.surcharge.toFixed(2) } },
+    ]);
+    expect(draftPayload.detail.reference).toBe("Bidder #101");
+    expect(draftPayload.primary_recipients[0].billing_info.email_address).toBe("bidder@example.com");
+  });
+
+  it("falls back to a constructed checkout URL when the send response has no payer-action link", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(201, { id: "INV2-TEST-0000-0000-0002" }))
+      .mockResolvedValueOnce(mockFetchResponse(202, ""));
+
+    const paypal = newService({ fetcher, isSandbox: true });
+    const result = await paypal.createAndSendInvoice(
+      { email: "bidder@example.com", firstName: "Jane", lastName: "Doe", id: "101" },
+      [{ name: "Item", amount: 50 }]
+    );
+
+    expect(result.checkoutUrl).toBe("https://www.sandbox.paypal.com/invoice/p/#INV2-TEST-0000-0000-0002");
+  });
+
+  it("throws when bidderInfo has no email", async () => {
+    const paypal = newService();
+    await expect(
+      paypal.createAndSendInvoice({ firstName: "Jane" } as any, [{ name: "x", amount: 1 }])
+    ).rejects.toThrow(/must include an email address/);
+  });
+
+  it("throws when lineItems is empty", async () => {
+    const paypal = newService();
+    await expect(paypal.createAndSendInvoice({ email: "a@b.com" } as any, [])).rejects.toThrow(/non-empty array/);
+  });
+});
+
+describe("PayPalService.recordOfflinePayment", () => {
+  it("normalizes a bare 16-char share token into the API's INV2- resource ID", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(200, {}));
+    const paypal = newService({ fetcher });
+    await paypal.recordOfflinePayment("8MZG5YJDQA37VE2R", "CASH", 100);
+    expect(fetcher).toHaveBeenCalledWith(
+      expect.stringContaining("/v2/invoicing/invoices/INV2-8MZG-5YJD-QA37-VE2R/payments"),
+      expect.anything()
+    );
+  });
+
+  it("leaves an already-prefixed invoice ID unchanged", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(200, {}));
+    const paypal = newService({ fetcher });
+    await paypal.recordOfflinePayment("INV2-AZ93-LKDZ-4VNS-A6KZ", "CASH", 100);
+    expect(fetcher).toHaveBeenCalledWith(
+      expect.stringContaining("/v2/invoicing/invoices/INV2-AZ93-LKDZ-4VNS-A6KZ/payments"),
+      expect.anything()
+    );
+  });
+
+  it("sends the payment method uppercased and the amount as a fixed-2 string", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(200, {}));
+    const paypal = newService({ fetcher });
+    await paypal.recordOfflinePayment("INV2-AZ93-LKDZ-4VNS-A6KZ", "cash", 42.5);
+    // calls[0] is the token fetch; the payment-recording request is calls[1]
+    const payload = JSON.parse(fetcher.mock.calls[1][1].body);
+    expect(payload.method).toBe("CASH");
+    expect(payload.amount).toEqual({ currency_code: "USD", value: "42.50" });
+  });
+
+  it.each([200, 202, 204])("treats a %i response as success", async (status) => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(status, {}));
+    const paypal = newService({ fetcher });
+    await expect(paypal.recordOfflinePayment("INV2-X", "CASH", 10)).resolves.toBe(true);
+  });
+
+  it("treats any other status as failure", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(404, "not found"));
+    const paypal = newService({ fetcher });
+    await expect(paypal.recordOfflinePayment("INV2-X", "CASH", 10)).resolves.toBe(false);
+  });
+});
+
+describe("PayPalService.getInvoiceStatus", () => {
+  it("returns the status field on a 200 response", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(200, { status: "PAID" }));
+    const paypal = newService({ fetcher });
+    await expect(paypal.getInvoiceStatus("INV2-X")).resolves.toBe("PAID");
+  });
+
+  it("throws with the response body on a non-200", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(404, "invoice not found"));
+    const paypal = newService({ fetcher });
+    await expect(paypal.getInvoiceStatus("INV2-X")).rejects.toThrow(/PayPal Live Lookup Failed/);
+  });
+
+  it("throws when no invoice ID is given", async () => {
+    const paypal = newService();
+    await expect(paypal.getInvoiceStatus("")).rejects.toThrow(/Invoice ID is required/);
+  });
+});

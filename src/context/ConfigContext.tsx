@@ -28,6 +28,9 @@ const defaultConfig: Config = {
   bidManagementScriptId: localStorage.getItem("bidManagementScriptId") || localStorage.getItem("googleScriptId") || import.meta.env.VITE_BID_MANAGEMENT_SCRIPT_ID || "",
   bugReportsSpreadsheetId: localStorage.getItem("bugReportsSpreadsheetId") || import.meta.env.VITE_BUG_REPORTS_SPREADSHEET_ID || "",
   bugReportsFolderId: localStorage.getItem("bugReportsFolderId") || import.meta.env.VITE_BUG_REPORTS_FOLDER_ID || "",
+  // Only an explicit "false" opts into production mode - any other/missing
+  // value (including a stale non-boolean localStorage entry) stays sandbox.
+  paypalIsSandbox: localStorage.getItem("paypalIsSandbox") !== "false",
 };
 
 const ConfigContext = createContext<ConfigContextType | undefined>(undefined);

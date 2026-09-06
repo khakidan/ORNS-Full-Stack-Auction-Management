@@ -86,6 +86,7 @@ const BASE_CONFIG: Config = {
   bidManagementScriptId: "mock-bid-mgt-script",
   bugReportsSpreadsheetId: "mock-bug-reports-id",
   bugReportsFolderId: "mock-bug-reports-folder",
+  paypalIsSandbox: true,
 };
 
 function mockUseConfig(config: Config) {
