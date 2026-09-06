@@ -254,5 +254,31 @@ export const handlers = [
   // to resolve the sender's email address, whereas the global app handler uses v3.
   http.get('https://www.googleapis.com/oauth2/v2/userinfo', () => {
     return HttpResponse.json({ email: 'test@example.com', name: 'Test User' });
+  }),
+
+  // PayPal sandbox handlers - default success responses so any test that
+  // exercises server/services/paypalService.ts through
+  // receiptDataService.ts's resolveInvoiceUrl (without overriding these)
+  // gets a deterministic, harmless mock instead of ever reaching real
+  // PayPal, sandbox or otherwise (setup.ts throws on any unmocked
+  // external request, including api-m.paypal.com - the production host
+  // is deliberately left unmocked so a test that accidentally resolves
+  // to production fails loudly instead of silently "succeeding").
+  http.post('https://api-m.sandbox.paypal.com/v1/oauth2/token', () => {
+    return HttpResponse.json({ access_token: 'mock-paypal-sandbox-token' });
+  }),
+  http.post('https://api-m.sandbox.paypal.com/v2/invoicing/invoices', () => {
+    return HttpResponse.json({ id: 'INV2-MOCK-0000-0000-0001' }, { status: 201 });
+  }),
+  http.post('https://api-m.sandbox.paypal.com/v2/invoicing/invoices/:invoiceId/send', ({ params }) => {
+    return HttpResponse.json({
+      links: [{ rel: 'payer-action', href: `https://www.sandbox.paypal.com/invoice/p/#${params.invoiceId}` }],
+    });
+  }),
+  http.post('https://api-m.sandbox.paypal.com/v2/invoicing/invoices/:invoiceId/cancel', () => {
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.get('https://api-m.sandbox.paypal.com/v2/invoicing/invoices/:invoiceId', () => {
+    return HttpResponse.json({ status: 'SENT' });
   })
 ]

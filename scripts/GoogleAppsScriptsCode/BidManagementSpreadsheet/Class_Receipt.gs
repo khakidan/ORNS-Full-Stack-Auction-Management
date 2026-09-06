@@ -19,6 +19,8 @@ class Receipt {
         this.itemNames = [];   // Array of item names (parallel to itemsWon)
         this.itemPrices = [];   // Array of prices (parallel to itemsWon)
         this.totalCost = 0;
+        this.paymentUrl = null;      // PayPal checkout URL - resolved by Node (see fromData)
+        this.adjustedTotal = null;   // totalCost + PayPal's processing fee - resolved by Node (see fromData)
     }
 
     hasWinningItems () { return this.itemsWon.length > 0; }
@@ -40,9 +42,11 @@ class Receipt {
 
     /**
      * Reconstructs a Receipt from a plain { bidId, firstName, lastName,
-     * email, itemsWon, itemNames, itemPrices, totalCost } object - the
-     * shape server/services/receiptDataService.ts's buildBidderReceipt/
-     * buildAllBidderReceipts already computed, passed in here as an Apps
+     * email, itemsWon, itemNames, itemPrices, totalCost, paymentUrl,
+     * adjustedTotal } object - the shape
+     * server/services/receiptDataService.ts's buildBidderReceiptWithInvoice/
+     * buildAllBidderReceiptsWithInvoices already computed (winning items/
+     * total AND the resolved PayPal invoice), passed in here as an Apps
      * Script API parameter instead of this class looking any of it up
      * itself. See docs/agents/refactor-opportunities.md's Code Hardening
      * item #2 / CHANGELOG.md.
@@ -55,6 +59,8 @@ class Receipt {
         receipt.itemNames = data.itemNames || [];
         receipt.itemPrices = data.itemPrices || [];
         receipt.totalCost = data.totalCost || 0;
+        receipt.paymentUrl = data.paymentUrl || null;
+        receipt.adjustedTotal = data.adjustedTotal != null ? data.adjustedTotal : null;
         return receipt;
     }
 }

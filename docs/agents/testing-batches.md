@@ -8,7 +8,7 @@ This document details the exact execution parameters required to run the test su
 
 ## The Sandbox Constraint
 
-Running the full test suite (891 tests) as a single execution block will exceed memory limits and trigger a **command timeout** in AI Studio's sandbox. 
+Running the full test suite (911 tests) as a single execution block will exceed memory limits and trigger a **command timeout** in AI Studio's sandbox. 
 
 To prevent execution freezes and ensure continuous status verification, the test suite is strictly partitioned into two operational batches.
 
@@ -17,14 +17,14 @@ To prevent execution freezes and ensure continuous status verification, the test
 ## Execution Guide
 
 ### Batch 1: Backend Layer
-Contains 437 integration and unit tests validating route pathways, middleware hooks, crypto managers, Sheets mocking configurations; (via a Node `vm`-based harness loading the real source) the Google Apps Script reference copy's PayPal service, checkout bridge, background reconciliation sweeper, item data layer, and the Tickets spreadsheet's bidder-number lookup/label generation; and the Node-side `paypalService.ts` port of that same PayPal client (sandbox/production base-URL selection, invoice creation/cancellation, offline payment recording, live status lookup).
+Contains 455 integration and unit tests validating route pathways, middleware hooks, crypto managers, Sheets mocking configurations; (via a Node `vm`-based harness loading the real source) the Google Apps Script reference copy's PayPal service, checkout bridge, background reconciliation sweeper, item data layer, and the Tickets spreadsheet's bidder-number lookup/label generation; the Node-side `paypalService.ts` port of that same PayPal client (sandbox/production base-URL selection, invoice creation/cancellation, offline payment recording, live status lookup); and `receiptDataService.ts`'s PayPal invoice get-or-create logic (reuse/cancel-and-recreate/create-new, ported from `Class_ReceiptManager.gs`'s now-removed `getOrCreateInvoiceUrl`).
 
 ```bash
 npx vitest run server/test/
 ```
 
 ### Batch 2: Frontend Layer
-Contains 454 interactive components and state tests confirming layout flows, search inputs, modal triggers, dynamic calculations, and the Settings page's PayPal sandbox/production toggle.
+Contains 456 interactive components and state tests confirming layout flows, search inputs, modal triggers, dynamic calculations, and the Settings page's PayPal sandbox/production toggle (including its link to the PayPal sandbox/business dashboard).
 
 ```bash
 NODE_OPTIONS=--no-experimental-webstorage npx vitest run src/
@@ -40,8 +40,8 @@ Always execute both batches and confirm the final aggregates prior to declaring 
 
 | Batch Name | Path Parameter | Target Tests Count |
 |---|---|---|
-| **Batch 1 (Backend)** | `server/test/` | **437 passed** |
-| **Batch 2 (Frontend)** | `src/` | **454 passed** |
-| **Combined Aggregate** | *All Test Files* | **891 passed** |
+| **Batch 1 (Backend)** | `server/test/` | **455 passed** |
+| **Batch 2 (Frontend)** | `src/` | **456 passed** |
+| **Combined Aggregate** | *All Test Files* | **911 passed** |
 
 *Do not run a bare `npx vitest run` without specifying these directory boundaries.*

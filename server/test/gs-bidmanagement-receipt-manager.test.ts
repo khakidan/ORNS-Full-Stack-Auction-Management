@@ -66,6 +66,26 @@ describe("Receipt.fromData", () => {
     expect(receipt.itemNames).toEqual([]);
     expect(receipt.itemPrices).toEqual([]);
     expect(receipt.totalCost).toBe(0);
+    expect(receipt.paymentUrl).toBeNull();
+    expect(receipt.adjustedTotal).toBeNull();
+  });
+
+  it("carries paymentUrl/adjustedTotal through when Node already resolved the invoice (Code Hardening item #2, Step 2)", () => {
+    const receipt = Receipt.fromData({
+      bidId: "101",
+      firstName: "Alice",
+      lastName: "One",
+      email: "alice@example.com",
+      itemsWon: ["801"],
+      itemNames: ["Pizza Night"],
+      itemPrices: [50],
+      totalCost: 50,
+      paymentUrl: "https://www.sandbox.paypal.com/invoice/p/#INV2-TEST",
+      adjustedTotal: 51.75,
+    });
+
+    expect(receipt.paymentUrl).toBe("https://www.sandbox.paypal.com/invoice/p/#INV2-TEST");
+    expect(receipt.adjustedTotal).toBe(51.75);
   });
 });
 
@@ -104,6 +124,14 @@ describe("GoogleAIStudio.createIndividualReceipt - validation before ReceiptMana
       error: "No receipt data provided.",
     });
   });
+
+  it("returns a clean error when receiptData has no paymentUrl, before ReceiptManager.gs is ever touched (Code Hardening item #2, Step 2: Node must always resolve the invoice before calling this)", () => {
+    const studio = new GoogleAIStudio(fakeOverrides);
+    expect(studio.createIndividualReceipt("101", true, null, { bidId: "101", itemsWon: ["801"] })).toEqual({
+      success: false,
+      error: "No payment URL provided.",
+    });
+  });
 });
 
 describe("apiCreateIndividualReceipt / apiCreateAllReceipts bridge functions", () => {
@@ -136,5 +164,41 @@ describe("apiCreateIndividualReceipt / apiCreateAllReceipts bridge functions", (
     const result = apiCreateAllReceipts(null, []);
     expect(result.success).toBe(false);
     expect(typeof result.error).toBe("string");
+  });
+});
+
+describe("apiCreateIndividualReceipt / apiCreateAllReceipts declare every parameter Node sends (regression)", () => {
+  // These two bridge functions used to be declared with fewer parameters
+  // than server/services/receiptService.ts actually sends via the Apps
+  // Script Execution API (parameters: [bidderId, emailReceipt, folderID,
+  // receiptData] / [folderID, receipts]) - since JS silently drops extra
+  // call-site arguments that don't bind to a declared parameter, every
+  // real production call was resolving a receipt in Node and then
+  // throwing it away before it ever reached createIndividualReceipt/
+  // createAllReceipts. `new GoogleAIStudio()`'s construction always
+  // throws in this sandbox (no SpreadsheetApp override reaches a bare
+  // bridge call, see the describe block above), so the only way to pin
+  // the fix without also faking global Apps Script services is to assert
+  // on the function's own declared arity directly. See CHANGELOG.md.
+  it("apiCreateIndividualReceipt declares all 4 parameters (bidderId, emailReceipt, folderID, receiptData)", () => {
+    const { apiCreateIndividualReceipt } = loadGasClasses(
+      [
+        "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GlobalVariables.gs",
+        "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GoogleAIStudio.gs",
+      ],
+      ["apiCreateIndividualReceipt"]
+    );
+    expect(apiCreateIndividualReceipt.length).toBe(4);
+  });
+
+  it("apiCreateAllReceipts declares both parameters (folderID, receipts)", () => {
+    const { apiCreateAllReceipts } = loadGasClasses(
+      [
+        "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GlobalVariables.gs",
+        "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GoogleAIStudio.gs",
+      ],
+      ["apiCreateAllReceipts"]
+    );
+    expect(apiCreateAllReceipts.length).toBe(2);
   });
 });

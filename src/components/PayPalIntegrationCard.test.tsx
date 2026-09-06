@@ -61,4 +61,24 @@ describe("PayPalIntegrationCard", () => {
 
     expect(setConfig).toHaveBeenCalledWith({ ...productionConfig, paypalIsSandbox: true });
   });
+
+  it("links to the PayPal sandbox dashboard when in sandbox mode", () => {
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    render(<PayPalIntegrationCard config={BASE_CONFIG} setConfig={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /open paypal sandbox dashboard/i }));
+
+    expect(openSpy).toHaveBeenCalledWith("https://developer.paypal.com/dashboard/accounts", "_blank");
+    openSpy.mockRestore();
+  });
+
+  it("links to the PayPal live business dashboard when in production mode", () => {
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    render(<PayPalIntegrationCard config={{ ...BASE_CONFIG, paypalIsSandbox: false }} setConfig={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /open paypal business dashboard/i }));
+
+    expect(openSpy).toHaveBeenCalledWith("https://www.paypal.com/businessexp/summary", "_blank");
+    openSpy.mockRestore();
+  });
 });

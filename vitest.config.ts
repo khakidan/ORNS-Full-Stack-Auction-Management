@@ -28,6 +28,14 @@ export default defineConfig({
       TEMPLATE_DONATION_FORM_ID: "test-template-donation-form-id",
       TEMPLATE_PROJECT_MANAGEMENT_TEMPLATE_ID: "test-template-project-management-template-id",
       TEMPLATE_INITIAL_PLANNING_MEETING_ID: "test-template-initial-planning-meeting-id",
+      // Deterministic test credentials so server/services/paypalService.ts's
+      // env-var fallback never depends on (or hits) whatever real
+      // credentials happen to be in a developer's local .env - all PayPal
+      // network calls in tests go through msw's mocked handlers anyway
+      // (server/test/handlers.ts), never real PayPal, sandbox or otherwise.
+      PAYPAL_CLIENT_ID: "test-paypal-client-id",
+      PAYPAL_CLIENT_SECRET: "test-paypal-client-secret",
+      PAYPAL_IS_SANDBOX: "true",
       NODE_ENV: "test",
     },
     // @ts-ignore

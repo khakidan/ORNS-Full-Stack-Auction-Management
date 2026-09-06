@@ -6,6 +6,7 @@ interface UseCheckoutBatchActionsArgs {
   spreadsheetId: string;
   itemsSpreadsheetId: string;
   folderId: string;
+  paypalIsSandbox: boolean;
 }
 
 /**
@@ -15,7 +16,7 @@ interface UseCheckoutBatchActionsArgs {
  * useCheckoutState.ts (was 416 lines) so that container stays focused on
  * composing the split-out pieces.
  */
-export function useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, folderId }: UseCheckoutBatchActionsArgs) {
+export function useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, folderId, paypalIsSandbox }: UseCheckoutBatchActionsArgs) {
   const [isPrintingAll, setIsPrintingAll] = useState(false);
   const [isEmailingAll, setIsEmailingAll] = useState(false);
   const [showPrintConfirm, setShowPrintConfirm] = useState(false);
@@ -30,7 +31,7 @@ export function useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, fol
       const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/generate-all`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ spreadsheetId, itemsSpreadsheetId, receiptFolderId: folderId }),
+        body: JSON.stringify({ spreadsheetId, itemsSpreadsheetId, receiptFolderId: folderId, paypalIsSandbox }),
         credentials: "include"
       });
 

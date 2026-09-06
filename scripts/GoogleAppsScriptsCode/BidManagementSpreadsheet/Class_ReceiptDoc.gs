@@ -40,14 +40,17 @@ class ReceiptDoc extends DocService {
     // ── Body ─────────────────────────────────────────────────────────────────
     /**
      * Writes the full receipt body for one bidder into the current document.
-     * @param {Receipt}        receipt        The Receipt data model to render.
-     * @param {ReceiptManager} receiptManager Provides financial calculation methods.
+     * @param {Receipt}        receipt        The Receipt data model to render -
+     *   its `paymentUrl` was already resolved by Node (see
+     *   server/services/receiptDataService.ts's `resolveInvoiceUrl`) and
+     *   attached via `Receipt.fromData`.
+     * @param {ReceiptManager} receiptManager Provides `generatePaymentQRCodeBlob` -
+     *   the only genuinely GAS-native piece left (a `UrlFetchApp` call).
      */
     writeReceiptBody_ ( receipt, receiptManager ) {
         const body = this.getDoc_().getBody();
 
-        const adjustedTotal = receiptManager.calculateAdjustedTotalWithFees( receipt.totalCost );
-        const paymentUrl = receiptManager.getPaymentLink( adjustedTotal.toFixed( 2 ), receipt.bidId );
+        const paymentUrl = receipt.paymentUrl || 'https://www.paypal.com';
 
         // Title
         body.appendParagraph( `Receipt for [${ receipt.bidId }] ${ receipt.firstName } ${ receipt.lastName }` )

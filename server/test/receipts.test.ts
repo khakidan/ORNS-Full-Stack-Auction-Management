@@ -13,6 +13,7 @@ import { server } from "./setup";
 import { http, HttpResponse } from "msw";
 import { resetHandlersState, appsScriptCallCount,
          productionScriptCallLog } from "./handlers";
+import { calculatePayPalSurcharge } from "../utils/financeUtils";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -118,6 +119,7 @@ describe('Receipt Generate workflow', () => {
     // independent way - see refactor-opportunities.md's Code Hardening
     // item #2 / CHANGELOG.md. folderID (3rd position) is still never
     // wired through from Node.
+    const expectedTotal = calculatePayPalSurcharge(50).total;
     expect(requestBody.parameters).toEqual([
       "42",
       true,
@@ -130,7 +132,14 @@ describe('Receipt Generate workflow', () => {
         itemsWon: ["801"],
         itemNames: ["Pizza Night"],
         itemPrices: [50],
-        totalCost: 50
+        totalCost: 50,
+        // Node now also resolves the bidder's PayPal invoice itself
+        // (Code Hardening item #2, Step 2) - the mock Bidder-Numbers row's
+        // existing "https://paypal.me/test" invoice URL has no matching
+        // invoiced amount, so this hits the cancel-stale-and-recreate path
+        // against the default PayPal sandbox mocks in handlers.ts.
+        paymentUrl: "https://www.sandbox.paypal.com/invoice/p/#INV2-MOCK-0000-0000-0001",
+        adjustedTotal: expectedTotal
       }
     ]);
   });

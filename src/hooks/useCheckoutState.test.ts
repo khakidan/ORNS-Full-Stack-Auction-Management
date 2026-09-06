@@ -91,6 +91,7 @@ function renderWithTwoWinners(overrides: { spreadsheetId?: string; fetchAllData?
       bidManagementSheet: "Bid-Management",
       bidderNumbersSheet: "Bidder-Numbers",
       folderId: "folder-id",
+      paypalIsSandbox: true,
     })
   );
 }
@@ -215,6 +216,7 @@ describe("useCheckoutState.pendingFilteredWinners / completedFilteredWinners", (
         bidManagementSheet: "Bid-Management",
         bidderNumbersSheet: "Bidder-Numbers",
         folderId: "folder-id",
+        paypalIsSandbox: true,
       })
     );
     await waitFor(() => expect(result.current.winners).toHaveLength(2));
@@ -242,6 +244,7 @@ describe("useCheckoutState.pendingFilteredWinners / completedFilteredWinners", (
         bidManagementSheet: "Bid-Management",
         bidderNumbersSheet: "Bidder-Numbers",
         folderId: "folder-id",
+        paypalIsSandbox: true,
       })
     );
     await waitFor(() => expect(result.current.winners).toHaveLength(2));

@@ -24,6 +24,7 @@ interface UseCheckoutStateArgs {
   bidManagementSheet: string;
   bidderNumbersSheet: string;
   folderId: string;
+  paypalIsSandbox: boolean;
 }
 
 /**
@@ -54,10 +55,11 @@ export function useCheckoutState({
   bidManagementSheet,
   bidderNumbersSheet,
   folderId,
+  paypalIsSandbox,
 }: UseCheckoutStateArgs) {
   const winnersList = useWinnersList({ bidders, items, fetchAllData, spreadsheetId, bidManagementSheet });
-  const receiptActions = useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, folderId });
-  const batchActions = useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, folderId });
+  const receiptActions = useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, folderId, paypalIsSandbox });
+  const batchActions = useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, folderId, paypalIsSandbox });
   const paymentFlow = useCheckoutPaymentFlow({
     bidders,
     attendees,

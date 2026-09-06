@@ -1,4 +1,6 @@
 import { google } from "googleapis";
+import { PayPalService, PayPalBidderInfo, PayPalLineItem } from "./paypalService";
+import { calculatePayPalSurcharge } from "../utils/financeUtils";
 
 /**
  * Single shared implementation of "resolve a bidder's winning items and
@@ -9,10 +11,12 @@ import { google } from "googleapis";
  * and the PayPal invoice). See docs/agents/refactor-opportunities.md's
  * Code Hardening item #2 and CHANGELOG.md for the full history.
  *
- * `getOrCreateInvoiceUrl`/`getPaymentLink` (the PayPal-invoice-creating
- * methods) deliberately stay in Class_ReceiptManager.gs for now - that's
- * a separate backlog item (moving Class_PayPalService.gs's invoice CRUD
- * to Node), not this one.
+ * `getOrCreateInvoiceUrl`'s invoice get-or-create logic (Code Hardening
+ * item #2, Step 2) now also lives here - `resolveInvoiceUrl`/
+ * `buildBidderReceiptWithInvoice`/`buildAllBidderReceiptsWithInvoices`
+ * below - so `Class_ReceiptManager.gs` no longer calls PayPalService at
+ * all; it just consumes the `paymentUrl`/`adjustedTotal` Node attaches to
+ * each receipt.
  */
 
 export interface BidderReceiptItems {
@@ -27,6 +31,18 @@ export interface BidderReceiptData extends BidderReceiptItems {
   firstName: string;
   lastName: string;
   email: string;
+}
+
+export interface BidderReceiptWithInvoice extends BidderReceiptData {
+  paymentUrl: string;
+  adjustedTotal: number;
+}
+
+export interface ExistingInvoice {
+  /** 1-based sheet row, for a Bidder-Numbers `J{row}:K{row}` range. */
+  rowIndex: number;
+  url: string;
+  amount: number;
 }
 
 /**
@@ -202,4 +218,166 @@ export async function buildAllBidderReceipts(
   }
 
   return receipts;
+}
+
+/**
+ * Finds a bidder's existing invoice URL/amount (Bidder-Numbers columns
+ * J/K) from an already-fetched grid - mirrors
+ * Class_ReceiptManager.gs's (now-removed) `getOrCreateInvoiceUrl`'s
+ * bidder-row lookup. Returns null when the bidder isn't in the sheet at
+ * all (should not happen for a bidder `buildBidderReceipt`/
+ * `buildAllBidderReceipts` already resolved from the same sheet).
+ */
+export function findExistingInvoice(bidderNumbersRows: any[][], bidderId: string): ExistingInvoice | null {
+  for (let i = 1; i < bidderNumbersRows.length; i++) {
+    const row = bidderNumbersRows[i];
+    const cell = row[0];
+    if (cell === null || cell === undefined || String(cell).trim() === "") continue;
+    if (String(cell).trim() === String(bidderId).trim()) {
+      return {
+        rowIndex: i + 1,
+        url: String(row[9] || "").trim(),
+        amount: parseFloat(row[10]) || 0,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolves a bidder's PayPal invoice, mirroring
+ * Class_ReceiptManager.gs's (now-removed) `getOrCreateInvoiceUrl`
+ * precedence exactly:
+ *   1. An existing URL whose invoiced amount still matches the current
+ *      total-with-fees (within a $0.01 tolerance) -> reuse it, no PayPal
+ *      API call needed beyond the reuse check itself.
+ *   2. An existing URL whose amount no longer matches (new winning bids
+ *      since the last run) -> best-effort cancel the stale invoice, then
+ *      create a fresh one.
+ *   3. No existing URL -> create a fresh invoice.
+ */
+export async function resolveInvoiceUrl(
+  paypal: PayPalService,
+  receipt: BidderReceiptData,
+  bidderId: string,
+  existing: ExistingInvoice | null
+): Promise<{ paymentUrl: string; totalAmount: number; changed: boolean }> {
+  const expectedTotal = calculatePayPalSurcharge(receipt.totalCost).total;
+
+  if (existing && existing.url && existing.url.toLowerCase().startsWith("http")) {
+    if (Math.abs(existing.amount - expectedTotal) < 0.01) {
+      return { paymentUrl: existing.url, totalAmount: existing.amount, changed: false };
+    }
+
+    const oldInvoiceId = paypal.extractInvoiceIdFromUrl(existing.url);
+    if (oldInvoiceId) {
+      try {
+        await paypal.cancelInvoice(oldInvoiceId);
+      } catch (e: any) {
+        console.warn(`resolveInvoiceUrl: could not cancel stale invoice ${oldInvoiceId} for bidder ${bidderId}. Proceeding to create a new one. Reason: ${e.message || e}`);
+      }
+    }
+  }
+
+  const bidderInfo: PayPalBidderInfo = {
+    email: receipt.email || "no-reply@example.com",
+    firstName: receipt.firstName,
+    lastName: receipt.lastName,
+    id: bidderId,
+  };
+  const lineItems: PayPalLineItem[] = receipt.itemNames.map((name, i) => ({
+    name,
+    amount: Number(receipt.itemPrices[i]) || 0,
+  }));
+
+  const invoiceResult = await paypal.createAndSendInvoice(bidderInfo, lineItems);
+  return { paymentUrl: invoiceResult.checkoutUrl, totalAmount: invoiceResult.totalAmount, changed: true };
+}
+
+/**
+ * Builds one bidder's receipt AND resolves/writes their PayPal invoice in
+ * one call - the Node-side replacement for
+ * Class_ReceiptManager.gs's `getOrCreateInvoiceUrl` being called from
+ * GAS. Used by the `/generate` (single-receipt) route.
+ */
+export async function buildBidderReceiptWithInvoice(
+  client: any,
+  spreadsheetId: string,
+  itemsSpreadsheetId: string,
+  bidderId: string,
+  paypal: PayPalService
+): Promise<{ success: true; receipt: BidderReceiptWithInvoice } | { success: false; error: string }> {
+  const receiptResult = await buildBidderReceipt(client, spreadsheetId, itemsSpreadsheetId, bidderId);
+  if (receiptResult.success === false) return receiptResult;
+
+  const sheets = google.sheets({ version: "v4", auth: client });
+  const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });
+  const existing = findExistingInvoice(bNum.data.values || [], bidderId);
+  if (!existing) {
+    return { success: false, error: `Bidder ID ${bidderId} not found in the Bidder-Numbers sheet.` };
+  }
+
+  const { paymentUrl, totalAmount, changed } = await resolveInvoiceUrl(paypal, receiptResult.receipt, bidderId, existing);
+
+  if (changed) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'Bidder-Numbers'!J${existing.rowIndex}:K${existing.rowIndex}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[paymentUrl, totalAmount]] },
+    });
+  }
+
+  return { success: true, receipt: { ...receiptResult.receipt, paymentUrl, adjustedTotal: totalAmount } };
+}
+
+/**
+ * Builds every bidder's receipt AND resolves/writes their PayPal invoices
+ * for the batch print path - the Node-side replacement for
+ * `processBatch_` calling `getOrCreateInvoiceUrl` once per bidder from
+ * GAS. One bidder's invoice failure (e.g. a PayPal API error) is logged
+ * and skipped rather than aborting the whole batch, matching
+ * `processBatch_`'s own per-bidder try/catch resilience.
+ */
+export async function buildAllBidderReceiptsWithInvoices(
+  client: any,
+  spreadsheetId: string,
+  itemsSpreadsheetId: string,
+  paypal: PayPalService
+): Promise<BidderReceiptWithInvoice[]> {
+  const receipts = await buildAllBidderReceipts(client, spreadsheetId, itemsSpreadsheetId);
+
+  const sheets = google.sheets({ version: "v4", auth: client });
+  const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });
+  const bidderNumbersRows = bNum.data.values || [];
+
+  const sheetUpdates: { range: string; values: any[][] }[] = [];
+  const results: BidderReceiptWithInvoice[] = [];
+
+  for (const receipt of receipts) {
+    const existing = findExistingInvoice(bidderNumbersRows, receipt.bidId);
+    if (!existing) {
+      console.error(`buildAllBidderReceiptsWithInvoices: bidder ${receipt.bidId} unexpectedly missing from Bidder-Numbers during invoice resolution; skipping.`);
+      continue;
+    }
+
+    try {
+      const { paymentUrl, totalAmount, changed } = await resolveInvoiceUrl(paypal, receipt, receipt.bidId, existing);
+      if (changed) {
+        sheetUpdates.push({ range: `'Bidder-Numbers'!J${existing.rowIndex}:K${existing.rowIndex}`, values: [[paymentUrl, totalAmount]] });
+      }
+      results.push({ ...receipt, paymentUrl, adjustedTotal: totalAmount });
+    } catch (e: any) {
+      console.error(`buildAllBidderReceiptsWithInvoices: failed to resolve invoice for bidder ${receipt.bidId}. ${e.message || e}`);
+    }
+  }
+
+  if (sheetUpdates.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId,
+      requestBody: { valueInputOption: "RAW", data: sheetUpdates },
+    });
+  }
+
+  return results;
 }
