@@ -2,6 +2,7 @@ import { sheets_v4 } from "googleapis";
 import { getCategoryBase, resequenceCategoryIds } from "../utils/categoryHelpers";
 import { clearCacheForSpreadsheet } from "../utils/sheetCache";
 import { calculateMinRaiseAmount } from "../utils/minRaiseHelpers";
+import { withLock } from "../utils/asyncLock";
 
 export interface AddItemParams {
   spreadsheetId: string;
@@ -66,8 +67,23 @@ async function fetchCategoryBases(sheets: sheets_v4.Sheets, spreadsheetId: strin
 
 /**
  * Adds a new auction item and triggers re-sequencing.
+ *
+ * Wrapped in withLock, keyed per spreadsheet - this reads the full
+ * 'Auction-Items'!A:L range, mutates the in-memory 2D array, then
+ * overwrites the whole range. Two staff working item-entry/bundling
+ * concurrently (a realistic pre-event pattern) could otherwise read the
+ * same snapshot and the second write would silently discard the first's
+ * change. Found in a hardening audit - see
+ * docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+ * CHANGELOG.md. Shares a lock key with deleteItem/updateItem/
+ * bulkUpdateItems/processBundle/restoreBundle - all mutate the same
+ * 'Auction-Items' range.
  */
 export async function addItem(sheets: sheets_v4.Sheets, params: AddItemParams): Promise<AddItemResult> {
+  return withLock(`auction-items:${params.spreadsheetId}`, () => addItemLocked(sheets, params));
+}
+
+async function addItemLocked(sheets: sheets_v4.Sheets, params: AddItemParams): Promise<AddItemResult> {
   const { spreadsheetId, category, name, description, value, donor, itemType } = params;
 
   // Fetch Category Bases and Value Calculations in parallel
@@ -139,8 +155,14 @@ export async function addItem(sheets: sheets_v4.Sheets, params: AddItemParams): 
 
 /**
  * Soft-deletes an auction item and triggers re-sequencing.
+ *
+ * Wrapped in withLock - see addItem's docblock for why.
  */
 export async function deleteItem(sheets: sheets_v4.Sheets, params: DeleteItemParams): Promise<{ success: boolean }> {
+  return withLock(`auction-items:${params.spreadsheetId}`, () => deleteItemLocked(sheets, params));
+}
+
+async function deleteItemLocked(sheets: sheets_v4.Sheets, params: DeleteItemParams): Promise<{ success: boolean }> {
   const { spreadsheetId, rowIndex } = params;
 
   const baseNumbers = await fetchCategoryBases(sheets, spreadsheetId);
@@ -193,8 +215,14 @@ const ITEM_FIELD_MAPPING: Record<string, number> = {
 
 /**
  * Updates a specific field of an auction item and manages re-sequencing if necessary.
+ *
+ * Wrapped in withLock - see addItem's docblock for why.
  */
 export async function updateItem(sheets: sheets_v4.Sheets, params: UpdateItemParams): Promise<{ success: boolean; affected_categories: string[] }> {
+  return withLock(`auction-items:${params.spreadsheetId}`, () => updateItemLocked(sheets, params));
+}
+
+async function updateItemLocked(sheets: sheets_v4.Sheets, params: UpdateItemParams): Promise<{ success: boolean; affected_categories: string[] }> {
   const { spreadsheetId, rowIndex, field, value } = params;
 
   const baseNumbers = await fetchCategoryBases(sheets, spreadsheetId);
@@ -239,8 +267,14 @@ export async function updateItem(sheets: sheets_v4.Sheets, params: UpdateItemPar
 
 /**
  * Bulk updates a field for multiple auction items and manages re-sequencing.
+ *
+ * Wrapped in withLock - see addItem's docblock for why.
  */
 export async function bulkUpdateItems(sheets: sheets_v4.Sheets, params: BulkUpdateParams): Promise<{ success: boolean; affected_categories: string[] }> {
+  return withLock(`auction-items:${params.spreadsheetId}`, () => bulkUpdateItemsLocked(sheets, params));
+}
+
+async function bulkUpdateItemsLocked(sheets: sheets_v4.Sheets, params: BulkUpdateParams): Promise<{ success: boolean; affected_categories: string[] }> {
   const { spreadsheetId, rowIndices, field, value } = params;
 
   const baseNumbers = await fetchCategoryBases(sheets, spreadsheetId);

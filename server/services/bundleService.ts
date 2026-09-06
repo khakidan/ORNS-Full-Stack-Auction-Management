@@ -2,6 +2,7 @@ import { sheets_v4 } from "googleapis";
 import { genAI } from "../services/genai";
 import { getCategoryBase, resequenceCategoryIds } from "../utils/categoryHelpers";
 import { calculateMinRaiseAmount } from "../utils/minRaiseHelpers";
+import { withLock } from "../utils/asyncLock";
 
 export interface SuggestNamesParams {
   items: Array<{ name: string; description?: string }>;
@@ -104,8 +105,23 @@ function calculateMinRaise(value: number, tiers: { minRange: number; minRaise: n
 
 /**
  * Creates a bundle from existing items.
+ *
+ * Wrapped in withLock, keyed per spreadsheet - shares the same
+ * `auction-items:${spreadsheetId}` key as itemService.ts's
+ * addItem/deleteItem/updateItem/bulkUpdateItems, since this also reads the
+ * full 'Auction-Items'!A:L range, mutates it in memory, then overwrites
+ * the whole range. Found in a hardening audit - see
+ * docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+ * CHANGELOG.md.
  */
 export async function processBundle(
+  sheets: sheets_v4.Sheets,
+  params: ProcessBundleParams
+): Promise<BundleActionResult> {
+  return withLock(`auction-items:${params.spreadsheetId}`, () => processBundleLocked(sheets, params));
+}
+
+async function processBundleLocked(
   sheets: sheets_v4.Sheets,
   params: ProcessBundleParams
 ): Promise<BundleActionResult> {
@@ -221,8 +237,17 @@ export async function processBundle(
 
 /**
  * Restores a bundle to its constituent items.
+ *
+ * Wrapped in withLock - see processBundle's docblock for why.
  */
 export async function restoreBundle(
+  sheets: sheets_v4.Sheets,
+  params: RestoreBundleParams
+): Promise<RestoreActionResult> {
+  return withLock(`auction-items:${params.spreadsheetId}`, () => restoreBundleLocked(sheets, params));
+}
+
+async function restoreBundleLocked(
   sheets: sheets_v4.Sheets,
   params: RestoreBundleParams
 ): Promise<RestoreActionResult> {
