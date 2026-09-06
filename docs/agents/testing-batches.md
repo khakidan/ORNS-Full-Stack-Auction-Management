@@ -8,7 +8,7 @@ This document details the exact execution parameters required to run the test su
 
 ## The Sandbox Constraint
 
-Running the full test suite (921 tests) as a single execution block will exceed memory limits and trigger a **command timeout** in AI Studio's sandbox. 
+Running the full test suite (922 tests) as a single execution block will exceed memory limits and trigger a **command timeout** in AI Studio's sandbox. 
 
 To prevent execution freezes and ensure continuous status verification, the test suite is strictly partitioned into two operational batches.
 
@@ -24,7 +24,7 @@ npx vitest run server/test/
 ```
 
 ### Batch 2: Frontend Layer
-Contains 456 interactive components and state tests confirming layout flows, search inputs, modal triggers, dynamic calculations, and the Settings page's PayPal sandbox/production toggle (including its link to the PayPal sandbox/business dashboard).
+Contains 457 interactive components and state tests confirming layout flows, search inputs, modal triggers, dynamic calculations, the Settings page's PayPal sandbox/production toggle (including its link to the PayPal sandbox/business dashboard), and `ConfigContext.tsx`'s Firestore snapshot merge dropping any field no longer in `Config`.
 
 ```bash
 NODE_OPTIONS=--no-experimental-webstorage npx vitest run src/
@@ -41,7 +41,7 @@ Always execute both batches and confirm the final aggregates prior to declaring 
 | Batch Name | Path Parameter | Target Tests Count |
 |---|---|---|
 | **Batch 1 (Backend)** | `server/test/` | **465 passed** |
-| **Batch 2 (Frontend)** | `src/` | **456 passed** |
-| **Combined Aggregate** | *All Test Files* | **921 passed** |
+| **Batch 2 (Frontend)** | `src/` | **457 passed** |
+| **Combined Aggregate** | *All Test Files* | **922 passed** |
 
 *Do not run a bare `npx vitest run` without specifying these directory boundaries.*

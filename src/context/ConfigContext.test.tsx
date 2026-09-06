@@ -205,6 +205,35 @@ describe("ConfigProvider - auth state and config sync", () => {
     expect(result.current.config.auctionItemsSpreadsheetId).toBe("items-id");
   });
 
+  it("drops a stale field a Firestore doc still carries from before it was removed from Config (regression guard)", async () => {
+    // Real production bug: `settings/global` still had `auctionItemsSheet`
+    // (removed from Config well before paypalIsSandbox was added) from
+    // its last successful save. A blind `{...defaultConfig,
+    // ...docSnap.data()}` spread let that stray key ride along into local
+    // state, and every subsequent save wrote it right back out alongside
+    // the 15 real Config fields - 16 keys total (+ updatedAt/updatedBy =
+    // 18), tripping firestore.rules' strict `keys().size() == 17` check
+    // and silently blocking every Config save with "Missing or
+    // insufficient permissions." Only ever copying keys `defaultConfig`
+    // actually declares (see ConfigContext.tsx's snapshot handler) fixes
+    // this at the read side, since local `config` state is what every
+    // save round-trips from.
+    const staleShapeConfig = { ...FAKE_CONFIG, auctionItemsSheet: "Auction-Items" };
+    const fb = makeFirebaseMock();
+    mockedGetFirebase.mockResolvedValue(fb.services as any);
+
+    const { result } = renderConfigHook();
+    await waitFor(() => expect(fb.services.onAuthStateChanged).toHaveBeenCalled());
+    act(() => fb.fireAuthChange({ email: "staff@orns.org" }));
+    await waitFor(() => expect(fb.services.onSnapshot).toHaveBeenCalled());
+
+    act(() => fb.fireSnapshot({ exists: () => true, data: () => staleShapeConfig }));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.config).toEqual(FAKE_CONFIG);
+    expect((result.current.config as any).auctionItemsSheet).toBeUndefined();
+  });
+
   it("shows the @orns.org permission-denied toast and clears loading on a Firestore permission error", async () => {
     const fb = makeFirebaseMock();
     mockedGetFirebase.mockResolvedValue(fb.services as any);

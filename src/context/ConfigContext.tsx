@@ -63,13 +63,29 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
           // Subscribe to global config
           unsubConfig = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
             if (docSnap.exists()) {
-              // Merged over defaultConfig, not a blind cast - an existing
-              // Firestore doc written before a Config field was added
-              // (e.g. bugReportsSpreadsheetId/bugReportsFolderId) won't
-              // have that key at all, which would otherwise leave it
-              // `undefined` here instead of "" and trip Base UI's
-              // uncontrolled-to-controlled warning on that field's Input.
-              const data = { ...defaultConfig, ...(docSnap.data() as Partial<Config>) } as Config;
+              // Merged over defaultConfig field-by-field - not a blind
+              // `{...defaultConfig, ...docSnap.data()}` spread, and not a
+              // blind cast either. A Firestore doc written before a
+              // Config field was added (e.g. paypalIsSandbox) won't have
+              // that key at all, which would otherwise leave it
+              // `undefined` here instead of its default and trip Base
+              // UI's uncontrolled-to-controlled warning on that field's
+              // Input - defaultConfig covers that. The other direction
+              // matters just as much: a doc written before a field was
+              // REMOVED from Config (e.g. the old auctionItemsSheet) can
+              // still carry that stale key, and a blind spread would let
+              // it silently ride along into local state and back out on
+              // the next save - firestore.rules' strict key-count check
+              // on `settings/global` then rejects the write outright.
+              // Only ever copying keys `defaultConfig` actually declares
+              // drops anything stale automatically.
+              const rawData = docSnap.data() as Record<string, unknown>;
+              const data = { ...defaultConfig };
+              (Object.keys(defaultConfig) as (keyof Config)[]).forEach((key) => {
+                if (rawData[key] !== undefined) {
+                  (data as any)[key] = rawData[key];
+                }
+              });
               setConfig(data);
 
               // Mirror to localStorage for components yet to be migrated
