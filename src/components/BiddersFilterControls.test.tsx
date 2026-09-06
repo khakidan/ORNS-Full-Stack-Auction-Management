@@ -12,8 +12,9 @@ import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import { BiddersFilterControls } from "./BiddersFilterControls";
+import { BidderSortConfig } from "@/hooks/useBiddersState";
 
-function renderControls(overrides: Partial<{ statusFilter: string; paymentFilter: string; sourceFilter: string }> = {}) {
+function renderControls(overrides: Partial<{ statusFilter: string; paymentFilter: string; sourceFilter: string; sortConfig: BidderSortConfig | null }> = {}) {
   return render(
     <BiddersFilterControls
       statusFilter={overrides.statusFilter ?? "all"}
@@ -22,6 +23,8 @@ function renderControls(overrides: Partial<{ statusFilter: string; paymentFilter
       onPaymentFilterChange={() => {}}
       sourceFilter={overrides.sourceFilter ?? "all"}
       onSourceFilterChange={() => {}}
+      sortConfig={overrides.sortConfig ?? { key: "id", direction: "asc" }}
+      onSortConfigChange={() => {}}
     />
   );
 }
@@ -47,11 +50,19 @@ describe("BiddersFilterControls - display labels", () => {
     expect(screen.queryByText("sponsors")).not.toBeInTheDocument();
   });
 
+  it("shows the friendly sort label, not the raw encoded value", () => {
+    renderControls({ sortConfig: { key: "name", direction: "desc" } });
+
+    expect(screen.getByText("Name (Z to A)")).toBeInTheDocument();
+    expect(screen.queryByText("name-desc")).not.toBeInTheDocument();
+  });
+
   it("shows the default 'All ...' labels for the all-filters state", () => {
     renderControls();
 
     expect(screen.getByText("All Statuses")).toBeInTheDocument();
     expect(screen.getByText("All Payments")).toBeInTheDocument();
     expect(screen.getByText("All Sources")).toBeInTheDocument();
+    expect(screen.getByText("Bidder # (Low to High)")).toBeInTheDocument();
   });
 });

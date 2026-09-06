@@ -6,15 +6,20 @@ import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { Bidder, Attendee } from "@/types";
 
 // The only three keys sortedBidders' comparator below actually handles -
-// narrowing sortConfig/handleSort to this literal union (instead of a
-// bare `string`) is what lets valA/valB below be typed `string | number`
-// instead of `any`: any other key would previously fall through every
-// branch silently leaving valA/valB `undefined`, sorting nothing, with
-// no compiler signal that the key was never handled. Not reachable today
-// (BiddersTable.tsx's three SortableHead columns are the only callers,
-// and they only ever pass these three), but this makes that guarantee
-// checked at compile time instead of merely true by inspection.
-type BidderSortKey = "id" | "name" | "status";
+// narrowing sortConfig to this literal union (instead of a bare `string`)
+// is what lets valA/valB below be typed `string | number` instead of
+// `any`: any other key would previously fall through every branch
+// silently leaving valA/valB `undefined`, sorting nothing, with no
+// compiler signal that the key was never handled. Not reachable today
+// (BiddersFilterControls.tsx's "Sort by" select is the only caller, and
+// it only ever sets these three), but this makes that guarantee checked
+// at compile time instead of merely true by inspection.
+export type BidderSortKey = "id" | "name" | "status";
+
+export interface BidderSortConfig {
+  key: BidderSortKey;
+  direction: "asc" | "desc";
+}
 
 interface UseBiddersStateArgs {
   bidders: Bidder[];
@@ -64,20 +69,12 @@ export function useBiddersState({
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
 
-  const [sortConfig, setSortConfig] = useState<{ key: BidderSortKey; direction: "asc" | "desc" } | null>({
+  const [sortConfig, setSortConfig] = useState<BidderSortConfig | null>({
     key: "id",
     direction: "asc",
   });
 
   const getAttendeeInfo = (bidder: Bidder) => getBidderAttendeeInfo(bidder, attendees);
-
-  const handleSort = (key: BidderSortKey) => {
-    let direction: "asc" | "desc" = "asc";
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === "asc") {
-      direction = "desc";
-    }
-    setSortConfig({ key, direction });
-  };
 
   const sortedBidders = useMemo(() => {
     const filtered = bidders.filter(b => {
@@ -279,7 +276,7 @@ export function useBiddersState({
     sourceFilter,
     setSourceFilter,
     sortConfig,
-    handleSort,
+    setSortConfig,
     sortedBidders,
     hasActiveFilters,
     getAttendeeInfo,

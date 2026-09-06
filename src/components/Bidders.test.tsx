@@ -406,6 +406,31 @@ describe('Bidders - Sort and Filter', () => {
     expect(screen.getByText("Charlie Brown")).toBeInTheDocument();
     expect(screen.getByText("David Black")).toBeInTheDocument();
   });
+
+  // Regression guard for the "UI / Layout Tweaks" redesign: the old
+  // clickable-column-header sort UI (BiddersTable.tsx's SortableHead) was
+  // removed when the table became a flexible row list (BiddersList.tsx),
+  // and replaced with this "Sort by" select - this proves that control
+  // still actually re-sorts the visible rows, not just displays a label.
+  it('"Sort by" control re-sorts the visible bidder rows', async () => {
+    const { container } = render(<Bidders />);
+
+    const rowOrder = () =>
+      Array.from(container.querySelectorAll('[data-testid^="bidder-row-"]')).map(
+        (el) => el.getAttribute("data-testid")
+      );
+
+    // Default sort is id-asc: 101..108 in order.
+    expect(rowOrder()[0]).toBe("bidder-row-101");
+    expect(rowOrder()[rowOrder().length - 1]).toBe("bidder-row-108");
+
+    const selects = screen.getAllByTestId("mock-select");
+    const sortSelect = selects[3];
+    await user.selectOptions(sortSelect, "id-desc");
+
+    expect(rowOrder()[0]).toBe("bidder-row-108");
+    expect(rowOrder()[rowOrder().length - 1]).toBe("bidder-row-101");
+  });
 });
 
 describe('Bidders - Search', () => {
@@ -558,7 +583,7 @@ describe('Bidders - Event Ticket Status', () => {
     render(<Bidders />);
     
     // John Doe's attendee record has paymentStatus: "Paid"
-    const row = screen.getByText("John Doe").closest("tr");
+    const row = screen.getByTestId("bidder-row-101");
     expect(row).toBeInTheDocument();
     
     // Check that it contains "Ticket Paid"
@@ -571,7 +596,7 @@ describe('Bidders - Event Ticket Status', () => {
     render(<Bidders />);
     
     // Jane Smith's attendee record has paymentStatus: "Pending"
-    const row = screen.getByText("Jane Smith").closest("tr");
+    const row = screen.getByTestId("bidder-row-102");
     expect(row).toBeInTheDocument();
     
     // Check that it contains "Ticket Pending"
@@ -584,7 +609,7 @@ describe('Bidders - Event Ticket Status', () => {
     render(<Bidders />);
     
     // Alice Green has no matching attendee record
-    const row = screen.getByText("Alice Green").closest("tr");
+    const row = screen.getByTestId("bidder-row-103");
     expect(row).toBeInTheDocument();
     
     // It should defaults to "Ticket Pending"
@@ -598,7 +623,7 @@ describe('Bidders - Auction Status Indicators', () => {
   it('Not checked in: shows "Pending"', () => {
     render(<Bidders />);
     // Find a bidder that is not checked in, not checked out
-    const row = screen.getByText("Alice Green").closest("tr");
+    const row = screen.getByTestId("bidder-row-103");
     expect(row).toBeInTheDocument();
     expect(row?.textContent).toContain("Pending");
   });
@@ -606,21 +631,21 @@ describe('Bidders - Auction Status Indicators', () => {
   it('Checked in: shows "Checked-In"', () => {
     render(<Bidders />);
     // Find a bidder that is checked in
-    const row = screen.getByText("John Doe").closest("tr");
+    const row = screen.getByTestId("bidder-row-101");
     expect(row).toBeInTheDocument();
     expect(row?.textContent).toContain("Checked-In");
   });
 
   it('Checked out: shows "Full Checkout"', () => {
     render(<Bidders />);
-    const row = screen.getByText("Eve Taylor").closest("tr");
+    const row = screen.getByTestId("bidder-row-107");
     expect(row).toBeInTheDocument();
     expect(row?.textContent).toContain("Full Checkout");
   });
 
   it('Checked out and paid: shows "Full Checkout"', () => {
     render(<Bidders />);
-    const row = screen.getByText("Frank Miller").closest("tr");
+    const row = screen.getByTestId("bidder-row-108");
     expect(row).toBeInTheDocument();
     expect(row?.textContent).toContain("Full Checkout");
   });
@@ -630,21 +655,21 @@ describe('Bidders - Check-In Proxy Mutual Exclusion', () => {
   it('Checked-in bidder cannot be set as proxy: Assert proxy option is not present', () => {
     render(<Bidders />);
     // John Doe (checkedIn: true)
-    const row = screen.getByText("John Doe").closest("tr") as HTMLElement;
+    const row = screen.getByTestId("bidder-row-101");
     expect(within(row).queryByRole("button", { name: /proxy/i })).not.toBeInTheDocument();
   });
 
   it('Proxy bidder cannot be checked in: Assert check-in option is not present', () => {
     render(<Bidders />);
     // Charlie Brown (isProxy: true)
-    const row = screen.getByText("Charlie Brown").closest("tr") as HTMLElement;
+    const row = screen.getByTestId("bidder-row-105");
     expect(within(row).queryByRole("button", { name: /check in/i })).not.toBeInTheDocument();
   });
 
   it('Neither checked-in nor proxy — both options available: Assert both options are available/enabled', () => {
     render(<Bidders />);
     // Alice Green (checkedIn: false, isProxy: false)
-    const row = screen.getByText("Alice Green").closest("tr") as HTMLElement;
+    const row = screen.getByTestId("bidder-row-103");
     expect(within(row).getByRole("button", { name: /check in/i })).toBeInTheDocument();
     expect(within(row).getByRole("button", { name: /proxy/i })).toBeInTheDocument();
   });
@@ -714,7 +739,7 @@ describe('Bidders - Check-In', () => {
     // matching attendee record at all.
     render(<Bidders />);
 
-    const row = screen.getByText("Alice Green").closest("tr") as HTMLElement;
+    const row = screen.getByTestId("bidder-row-103");
     await user.click(within(row).getByRole("button", { name: /check in/i }));
 
     expect(mockCheckInBidder).toHaveBeenCalledTimes(1);
@@ -729,7 +754,7 @@ describe('Bidders - Check-In', () => {
     // Before the click, no dialog text naming Grace should be present.
     expect(screen.queryByText(/Grace Pending has not paid/i)).not.toBeInTheDocument();
 
-    const row = screen.getByText("Grace Pending").closest("tr") as HTMLElement;
+    const row = screen.getByTestId("bidder-row-109");
     await user.click(within(row).getByRole("button", { name: /check in/i }));
 
     // The confirmation dialog's real description text now renders with
@@ -744,7 +769,7 @@ describe('Bidders - Check-In', () => {
     usePendingBidderScenario();
     render(<Bidders />);
 
-    const row = screen.getByText("Grace Pending").closest("tr") as HTMLElement;
+    const row = screen.getByTestId("bidder-row-109");
     await user.click(within(row).getByRole("button", { name: /check in/i }));
     await user.click(screen.getByRole("button", { name: /no, do not add/i }));
 
@@ -762,7 +787,7 @@ describe('Bidders - Check-In', () => {
 
     render(<Bidders />);
 
-    const row = screen.getByText("Grace Pending").closest("tr") as HTMLElement;
+    const row = screen.getByTestId("bidder-row-109");
     await user.click(within(row).getByRole("button", { name: /check in/i }));
     await user.click(screen.getByRole("button", { name: /yes, add to receipt/i }));
 
@@ -794,7 +819,7 @@ describe('Bidders - Check-In', () => {
 
     render(<Bidders />);
 
-    const row = screen.getByText("Grace Pending").closest("tr") as HTMLElement;
+    const row = screen.getByTestId("bidder-row-109");
     await user.click(within(row).getByRole("button", { name: /check in/i }));
     await user.click(screen.getByRole("button", { name: /yes, add to receipt/i }));
 
@@ -812,7 +837,7 @@ describe('Bidders - Check-In', () => {
 
     render(<Bidders />);
 
-    const row = screen.getByText("Grace Pending").closest("tr") as HTMLElement;
+    const row = screen.getByTestId("bidder-row-109");
     await user.click(within(row).getByRole("button", { name: /check in/i }));
     await user.click(screen.getByRole("button", { name: /yes, add to receipt/i }));
 

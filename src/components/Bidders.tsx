@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { FilterToolbar } from "@/components/FilterToolbar";
 import { BiddersFilterControls } from "@/components/BiddersFilterControls";
-import { BiddersTable } from "@/components/BiddersTable";
+import { BiddersList } from "@/components/BiddersList";
 import { WalkInTicketDialog } from "@/components/WalkInTicketDialog";
 import { PendingPaymentDialog } from "@/components/PendingPaymentDialog";
 import { useBiddersState } from "@/hooks/useBiddersState";
@@ -49,6 +49,8 @@ export default function Bidders() {
             onPaymentFilterChange={state.setPaymentFilter}
             sourceFilter={state.sourceFilter}
             onSourceFilterChange={state.setSourceFilter}
+            sortConfig={state.sortConfig}
+            onSortConfigChange={state.setSortConfig}
           />
         }
         trailing={
@@ -80,11 +82,9 @@ export default function Bidders() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <BiddersTable
+          <BiddersList
             bidders={state.sortedBidders}
             loading={loading}
-            sortConfig={state.sortConfig}
-            onSort={state.handleSort}
             totalBiddersCount={bidders.length}
             hasActiveFilters={state.hasActiveFilters}
             getAttendeeInfo={state.getAttendeeInfo}

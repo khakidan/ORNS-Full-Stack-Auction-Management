@@ -65,6 +65,8 @@ findings) has been resolved. See `CHANGELOG.md` for the individual fixes.
 ### UI / Layout Tweaks
 
 1. We should look into making all of the pages have a more visually appealing and user-friendly design. We should use the newly created Attendee List table on the Auction Tickets page as inpiration — and keep that same visual feel to it.
+   - [x] ~~Bid Management's "Bidders" tab (Bidder Check-In)~~ **Done - see `CHANGELOG.md`.** Replaced the old `<table>`-based `BiddersTable.tsx`/`BidderRow.tsx` (two stacked status badges crammed into one narrow column) with a flexible row list (`BiddersList.tsx`/`BidderRow.tsx`, matching `AttendeesList.tsx`/`AttendeeRow.tsx`'s pattern exactly) - all the same information and actions, just laid out as one row per bidder instead of fixed table columns. The old clickable-column-header sort moved to a "Sort by" select in `BiddersFilterControls.tsx`, since there's no table header left to click.
+   - Still open: the rest of the app's pages (Dashboard, Items catalog, Checkout, Receipts, etc.) haven't been passed through this same visual treatment yet.
 
 ---
 
