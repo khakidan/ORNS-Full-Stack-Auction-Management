@@ -1,11 +1,47 @@
-import { Package, Trophy, User } from "lucide-react";
+import { Box, Gift, Heart, Layers, Package, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AuctionItem } from "@/types";
+import { cn } from "@/lib/utils";
 
 interface ItemRowProps {
   item: AuctionItem;
   winnerName?: string;
 }
+
+// A fixed palette, hashed by category name so the same category always
+// gets the same color across every row and every render (no state, no
+// lookup table to maintain as new categories get added in the
+// spreadsheet - categories are free-text, unlike itemType below).
+const CATEGORY_PALETTE = [
+  "bg-blue-50 text-blue-700 border-blue-200",
+  "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "bg-amber-50 text-amber-700 border-amber-200",
+  "bg-rose-50 text-rose-700 border-rose-200",
+  "bg-cyan-50 text-cyan-700 border-cyan-200",
+  "bg-orange-50 text-orange-700 border-orange-200",
+  "bg-indigo-50 text-indigo-700 border-indigo-200",
+  "bg-lime-50 text-lime-700 border-lime-200",
+  "bg-pink-50 text-pink-700 border-pink-200",
+  "bg-teal-50 text-teal-700 border-teal-200",
+];
+
+function categoryBadgeClass(category: string): string {
+  let hash = 0;
+  for (let i = 0; i < category.length; i++) {
+    hash = (hash * 31 + category.charCodeAt(i)) | 0;
+  }
+  return CATEGORY_PALETTE[Math.abs(hash) % CATEGORY_PALETTE.length];
+}
+
+// itemType is a fixed 3-value enum (see AuctionItemRow.tsx's own
+// "Physical Item"/"Certificate"/"Both" <select> options), so it gets an
+// explicit color/icon map instead of the hash above - and deliberately
+// none of these overlap with the Bundle badge's purple below.
+const ITEM_TYPE_STYLES: Record<string, { className: string; icon: typeof Box }> = {
+  "Physical Item": { className: "bg-sky-50 text-sky-700 border-sky-200", icon: Box },
+  "Certificate": { className: "bg-amber-50 text-amber-700 border-amber-200", icon: Gift },
+  "Both": { className: "bg-teal-50 text-teal-700 border-teal-200", icon: Layers },
+};
 
 /**
  * Redesigned to match AttendeeRow.tsx/BidderRow.tsx's row-based visual
@@ -15,16 +51,24 @@ interface ItemRowProps {
  * description, value/opening bid/min raise, donor, item type, and bundle
  * status. All of that was previously invisible in this read-only catalog
  * view - now shown, degrading cleanly (a field's line simply doesn't
- * render) when a given item doesn't have it. Purely a display page - no
- * per-row actions, so there's no hover-reveal button block like
- * BidderRow.tsx has, and no enter/exit animation either - matches
- * AttendeeRow.tsx's plain-div convention, since (unlike BidderRow.tsx,
- * which preserved its pre-existing motion.tr) the old table row this
- * replaces never animated either.
+ * render) when a given item doesn't have it. Category/itemType/Bundle are
+ * all Badges on one line (category color-hashed per name since it's
+ * free-text; itemType from a fixed color/icon map since it's a 3-value
+ * enum; Bundle always purple, matching AuctionItemRow.tsx's convention on
+ * the separate editable Auction Items workflow) - refined per user
+ * feedback after the first pass put itemType as plain text and donor on
+ * its own line instead of inline with Value/Opening/Raise. Purely a
+ * display page - no per-row actions, so there's no hover-reveal button
+ * block like BidderRow.tsx has, and no enter/exit animation either -
+ * matches AttendeeRow.tsx's plain-div convention, since (unlike
+ * BidderRow.tsx, which preserved its pre-existing motion.tr) the old
+ * table row this replaces never animated either.
  */
 export function ItemRow({ item, winnerName }: ItemRowProps) {
-  const hasFinancials = !!(item.value || item.openingBid || item.minRaise);
+  const hasFinancials = !!(item.value || item.openingBid || item.minRaise || item.donor);
   const isBundled = !!item.bundleId && item.status === "Active";
+  const typeStyle = item.itemType ? ITEM_TYPE_STYLES[item.itemType] : undefined;
+  const TypeIcon = typeStyle?.icon;
 
   return (
     <div
@@ -42,8 +86,13 @@ export function ItemRow({ item, winnerName }: ItemRowProps) {
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-semibold text-[15px]">{item.name}</span>
           {item.category && (
-            <Badge variant="outline" className="text-xs font-normal">
+            <Badge variant="outline" className={cn("text-xs font-normal", categoryBadgeClass(item.category))}>
               {item.category}
+            </Badge>
+          )}
+          {typeStyle && TypeIcon && (
+            <Badge variant="outline" className={cn("text-xs font-normal", typeStyle.className)}>
+              <TypeIcon className="w-3 h-3 mr-1" /> {item.itemType}
             </Badge>
           )}
           {isBundled && (
@@ -62,14 +111,12 @@ export function ItemRow({ item, winnerName }: ItemRowProps) {
             {item.value && <span>Value: <span className="font-medium text-foreground">{item.value}</span></span>}
             {item.openingBid && <span>Opening: <span className="font-medium text-foreground">{item.openingBid}</span></span>}
             {item.minRaise && <span>Raise: <span className="font-medium text-foreground">{item.minRaise}</span></span>}
-            {item.itemType && <span>{item.itemType}</span>}
-          </div>
-        )}
-
-        {item.donor && (
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <User className="w-3.5 h-3.5 shrink-0" />
-            {item.donor}
+            {item.donor && (
+              <span className="flex items-center gap-1">
+                <Heart className="w-3.5 h-3.5 shrink-0" />
+                {item.donor}
+              </span>
+            )}
           </div>
         )}
       </div>
