@@ -136,7 +136,7 @@ describe("runPaypalSweep - resolving/escalating pending rows", () => {
     expect(result).toEqual({ pending: 1, resolved: 1, escalated: 0 });
   });
 
-  it("escalates to Follow-Up once the row has been pending longer than 10 minutes", async () => {
+  it("escalates to PayPal-Follow-Up (not the client-facing 3-column Follow-Up sheet) once the row has been pending longer than 10 minutes", async () => {
     const elevenMinutesAgo = new Date(Date.now() - 11 * 60 * 1000).toISOString();
     mockBidderNumbers([pendingRow({ 11: elevenMinutesAgo })]);
     mockExtractInvoiceIdFromUrl.mockReturnValue("INV2-X");
@@ -144,13 +144,15 @@ describe("runPaypalSweep - resolving/escalating pending rows", () => {
 
     let capturedUpdates: { range: string; values: any[][] }[] = [];
     let capturedAppend: any = null;
+    let capturedAppendRange: string | null = null;
     server.use(
       http.put("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", async ({ params, request }) => {
         const body = await request.clone().json() as any;
         capturedUpdates.push({ range: decodeURIComponent(String(params.range)), values: body.values });
         return HttpResponse.json({ updatedRows: 1 });
       }),
-      http.post("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range\\:append", async ({ request }) => {
+      http.post("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range\\:append", async ({ params, request }) => {
+        capturedAppendRange = decodeURIComponent(String(params.range));
         capturedAppend = await request.clone().json();
         return HttpResponse.json({ updates: { updatedRows: 1 } });
       })
@@ -159,6 +161,14 @@ describe("runPaypalSweep - resolving/escalating pending rows", () => {
     const result = await runPaypalSweep();
 
     expect(result).toEqual({ pending: 1, resolved: 0, escalated: 1 });
+    // Real-bug regression guard: this must land on the sweeper's own
+    // "PayPal-Follow-Up" sheet, never the client-facing "Follow-Up" sheet
+    // (auctionService.ts's recordWinningBidLocked / Dashboard's
+    // Post-Checkout Item Wins panel) - the two used to collide on the same
+    // sheet name with incompatible schemas. See
+    // docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+    // CHANGELOG.md.
+    expect(capturedAppendRange).toBe("PayPal-Follow-Up!A:F");
     const [, appendedBidderId, appendedName, appendedAmount, appendedUrl] = capturedAppend.values[0];
     expect(appendedBidderId).toBe("101");
     expect(appendedName).toBe("Jane Doe");

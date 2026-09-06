@@ -1,7 +1,14 @@
 /**
  * Background Cron Loop bound to Time-Driven Trigger.
  * Scans for provisional checkouts, reconciles statuses via PayPal,
- * or escalates failures to the Follow-Up destination.
+ * or escalates failures to the PayPal-Follow-Up destination.
+ *
+ * Deliberately not the client-facing "Follow-Up" sheet (Class_GoogleAIStudio.gs's
+ * recordWinningBid path / the Dashboard's Post-Checkout Item Wins panel),
+ * which owns a different, incompatible 3-column schema
+ * (["Bidder ID","Item ID","Amount"]). The two used to collide on the same
+ * sheet name with different headers - whichever wrote first "won" the
+ * header, and the other's appends landed under the wrong columns.
  *
  * @param {Object} [overrides] Optional dependency injection, used by unit
  *   tests. The real trigger always calls this with zero args.
@@ -87,11 +94,11 @@ function checkPendingPayPalInvoices ( overrides = {} ) {
 
                     if ( now - initTime > TEN_MINUTES_MS ) {
                         // EXPIRED: Escalation routing path triggered
-                        console.warn( `Bidder #${ bidderId } verification processing exceeded timeout limits. Shunting record to Follow-Up.` );
+                        console.warn( `Bidder #${ bidderId } verification processing exceeded timeout limits. Shunting record to PayPal-Follow-Up.` );
 
-                        let followUpSheet = ss.getSheetByName( 'Follow-Up' );
+                        let followUpSheet = ss.getSheetByName( 'PayPal-Follow-Up' );
                         if ( !followUpSheet ) {
-                            followUpSheet = ss.insertSheet( 'Follow-Up' );
+                            followUpSheet = ss.insertSheet( 'PayPal-Follow-Up' );
                             followUpSheet.appendRow( [ "Timestamp", "Bidder Number", "Name", "Amount Flagged", "Invoice URL", "System Notes" ] );
                             followUpSheet.getRange( "A1:F1" ).setFontWeight( "bold" ).setBackground( "#f4cbcb" );
                         }

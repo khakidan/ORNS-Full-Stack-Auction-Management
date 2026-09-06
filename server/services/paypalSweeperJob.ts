@@ -56,18 +56,31 @@ export interface PaypalSweepResult {
 
 export type PaypalSweepOutcome = PaypalSweepResult | { skipped: string };
 
+/**
+ * Escalation destination for stuck PayPal verifications - deliberately
+ * NOT the client-facing "Follow-Up" sheet (Dashboard's Post-Checkout Item
+ * Wins panel / recordWinningBidLocked in auctionService.ts), which owns a
+ * different, incompatible 3-column schema (`["Bidder ID","Item ID",
+ * "Amount"]`). The two used to collide on the same sheet name with
+ * different headers - whichever wrote first "won" the header, and the
+ * other's appends landed under the wrong columns. Found in a hardening
+ * audit - see docs/agents/refactor-opportunities.md's Code Hardening item
+ * #1 / CHANGELOG.md.
+ */
+const PAYPAL_FOLLOW_UP_SHEET = "PayPal-Follow-Up";
+
 async function ensureFollowUpSheet(sheets: ReturnType<typeof google.sheets>, spreadsheetId: string): Promise<void> {
   const metadata = await sheets.spreadsheets.get({ spreadsheetId });
-  const exists = metadata.data.sheets?.some((s) => s.properties?.title === "Follow-Up");
+  const exists = metadata.data.sheets?.some((s) => s.properties?.title === PAYPAL_FOLLOW_UP_SHEET);
   if (exists) return;
 
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
-    requestBody: { requests: [{ addSheet: { properties: { title: "Follow-Up" } } }] },
+    requestBody: { requests: [{ addSheet: { properties: { title: PAYPAL_FOLLOW_UP_SHEET } } }] },
   });
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: "Follow-Up!A1:F1",
+    range: `${PAYPAL_FOLLOW_UP_SHEET}!A1:F1`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [["Timestamp", "Bidder Number", "Name", "Amount Flagged", "Invoice URL", "System Notes"]] },
   });
@@ -77,7 +90,7 @@ async function ensureFollowUpSheet(sheets: ReturnType<typeof google.sheets>, spr
  * Scans `Bidder-Numbers` for the `"PayPal Verification Pending"` marker
  * (Code Hardening item #2, Step 3's deferred credit-card path) and either
  * resolves it (PayPal now shows the invoice paid) or escalates it to
- * `Follow-Up` once it's been pending longer than 10 minutes - mirrors
+ * `PayPal-Follow-Up` once it's been pending longer than 10 minutes - mirrors
  * `PayPalSweeper.gs`'s `checkPendingPayPalInvoices` exactly, evaluating
  * rows bottom-up. One row's failure is logged and skipped rather than
  * aborting the whole sweep.
@@ -164,11 +177,11 @@ export async function runPaypalSweep(): Promise<PaypalSweepOutcome> {
       }
 
       if (now - initTime > TEN_MINUTES_MS) {
-        console.warn(`[PayPalSweeper] Bidder #${bidderId} verification exceeded the timeout. Escalating to Follow-Up.`);
+        console.warn(`[PayPalSweeper] Bidder #${bidderId} verification exceeded the timeout. Escalating to ${PAYPAL_FOLLOW_UP_SHEET}.`);
         await ensureFollowUpSheet(sheets, spreadsheetId);
         await sheets.spreadsheets.values.append({
           spreadsheetId,
-          range: "Follow-Up!A:F",
+          range: `${PAYPAL_FOLLOW_UP_SHEET}!A:F`,
           valueInputOption: "USER_ENTERED",
           requestBody: {
             values: [[

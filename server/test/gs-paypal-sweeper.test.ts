@@ -85,7 +85,7 @@ describe("checkPendingPayPalInvoices - reconciliation", () => {
     expect(sheet.data[1][7]).toBe(false);
   });
 
-  it("escalates to Follow-Up once the row has been pending past the 10-minute threshold", () => {
+  it("escalates to PayPal-Follow-Up once the row has been pending past the 10-minute threshold", () => {
     const oldTimestamp = new Date(NOW - 11 * 60 * 1000).toISOString(); // 11 minutes ago
     const { ss, sheet } = run([pendingRow({ 11: oldTimestamp, 10: 104.12 })], {
       extractInvoiceIdFromUrl: () => "INV2-X",
@@ -98,8 +98,8 @@ describe("checkPendingPayPalInvoices - reconciliation", () => {
     expect(sheet.data[1][8]).toBe("Failed Verification - Follow Up Required");
     expect(sheet.data[1][11]).toBe(""); // timestamp cleared
 
-    // Follow-Up sheet created with a header row and the escalation logged
-    const followUp = ss.getSheetByName("Follow-Up")!;
+    // PayPal-Follow-Up sheet created with a header row and the escalation logged
+    const followUp = ss.getSheetByName("PayPal-Follow-Up")!;
     expect(followUp).not.toBeNull();
     expect(followUp.data[0]).toEqual(["Timestamp", "Bidder Number", "Name", "Amount Flagged", "Invoice URL", "System Notes"]);
     expect(followUp.data[1][1]).toBe("101"); // Bidder Number
@@ -108,10 +108,10 @@ describe("checkPendingPayPalInvoices - reconciliation", () => {
     expect(String(followUp.data[1][5])).toContain("SENT");
   });
 
-  it("appends to an existing Follow-Up sheet instead of recreating it", () => {
+  it("appends to an existing PayPal-Follow-Up sheet instead of recreating it", () => {
     const ss = new FakeSpreadsheet();
     ss.addSheet("Bidder-Numbers", [HEADER, pendingRow({ 11: new Date(NOW - 20 * 60 * 1000).toISOString() })]);
-    const existingFollowUp = ss.addSheet("Follow-Up", [["Timestamp", "Bidder Number", "Name", "Amount Flagged", "Invoice URL", "System Notes"], ["2025-01-01", "999", "Old Row", 10, "url", "note"]]);
+    const existingFollowUp = ss.addSheet("PayPal-Follow-Up", [["Timestamp", "Bidder Number", "Name", "Amount Flagged", "Invoice URL", "System Notes"], ["2025-01-01", "999", "Old Row", 10, "url", "note"]]);
 
     checkPendingPayPalInvoices({
       activeSpreadSheet: ss,

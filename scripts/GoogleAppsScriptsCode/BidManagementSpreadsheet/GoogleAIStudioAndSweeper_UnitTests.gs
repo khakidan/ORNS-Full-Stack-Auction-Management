@@ -1,9 +1,13 @@
 /**
- * REAL unit tests for GoogleAIStudio.recordPayment (the function
- * apiRecordPayment/this app's checkout calls) and PayPalSweeper.gs's
- * checkPendingPayPalInvoices (the live time-driven trigger). Run
- * `runGoogleAIStudioAndSweeperUnitTests` from the Apps Script editor's
- * function dropdown.
+ * REAL unit tests for PayPalSweeper.gs's checkPendingPayPalInvoices (the
+ * live time-driven trigger). Run `runGoogleAIStudioAndSweeperUnitTests`
+ * from the Apps Script editor's function dropdown.
+ *
+ * (This file used to also cover GoogleAIStudio.recordPayment, before that
+ * function was ported to Node and removed from Class_GoogleAIStudio.gs -
+ * see docs/agents/refactor-opportunities.md's Code Hardening item #2, Step
+ * 3 / CHANGELOG.md. Its dead tests were removed here rather than left
+ * permanently failing.)
  *
  * Reuses the assert helpers (paypalTests_assertEqual_/assertThrows_) from
  * PayPalService_UnitTests.gs - both files must exist in the project.
@@ -209,9 +213,9 @@ function gasTests_sweeper_escalatesAfterTimeout_ () {
     } );
 
     paypalTests_assertEqual_( sheet.data[ 1 ][ 8 ], 'Failed Verification - Follow Up Required', 'row pending past 10 minutes should escalate' );
-    const followUp = ss.getSheetByName( 'Follow-Up' );
-    if ( !followUp ) throw new Error( 'Expected a Follow-Up sheet to be created' );
-    paypalTests_assertEqual_( followUp.data[ 0 ], [ 'Timestamp', 'Bidder Number', 'Name', 'Amount Flagged', 'Invoice URL', 'System Notes' ], 'Follow-Up sheet should get the standard header' );
+    const followUp = ss.getSheetByName( 'PayPal-Follow-Up' );
+    if ( !followUp ) throw new Error( 'Expected a PayPal-Follow-Up sheet to be created' );
+    paypalTests_assertEqual_( followUp.data[ 0 ], [ 'Timestamp', 'Bidder Number', 'Name', 'Amount Flagged', 'Invoice URL', 'System Notes' ], 'PayPal-Follow-Up sheet should get the standard header' );
     paypalTests_assertEqual_( followUp.data[ 1 ][ 1 ], '101', 'escalation row should log the bidder number' );
 }
 
