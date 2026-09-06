@@ -8,7 +8,7 @@ This document details the exact execution parameters required to run the test su
 
 ## The Sandbox Constraint
 
-Running the full test suite (955 tests) as a single execution block will exceed memory limits and trigger a **command timeout** in AI Studio's sandbox. 
+Running the full test suite (956 tests) as a single execution block will exceed memory limits and trigger a **command timeout** in AI Studio's sandbox. 
 
 To prevent execution freezes and ensure continuous status verification, the test suite is strictly partitioned into two operational batches.
 
@@ -24,7 +24,7 @@ NODE_OPTIONS=--no-experimental-webstorage npx vitest run server/test/
 ```
 
 ### Batch 2: Frontend Layer
-Contains 471 interactive components and state tests confirming layout flows, search inputs, modal triggers, dynamic calculations, the Settings page's PayPal sandbox/production toggle (including its link to the PayPal sandbox/business dashboard), `ConfigContext.tsx`'s Firestore snapshot merge dropping any field no longer in `Config`, `ErrorBoundary.tsx`'s top-level render-error catch (rendering the fallback UI, recording into `errorBuffer.ts`'s ring buffer, and reloading on demand), and `usePaypalSweeperStatus.ts`/`PayPalSweeperStatusCard.tsx`'s PayPal sweeper status card (credential/last-run reporting, polling, and the manual "Run Sweep Now" trigger).
+Contains 472 interactive components and state tests confirming layout flows, search inputs, modal triggers, dynamic calculations, the Settings page's PayPal sandbox/production toggle (including its link to the PayPal sandbox/business dashboard), `ConfigContext.tsx`'s Firestore snapshot merge dropping any field no longer in `Config`, `ErrorBoundary.tsx`'s top-level render-error catch (rendering the fallback UI, recording into `errorBuffer.ts`'s ring buffer, and reloading on demand), `usePaypalSweeperStatus.ts`/`PayPalSweeperStatusCard.tsx`'s PayPal sweeper status card (credential/last-run reporting, polling, and the manual "Run Sweep Now" trigger), and `BugReportsAdmin.tsx`'s fixed-width, wrapping table columns (a long Title/Route can no longer push the Actions column's buttons out of view).
 
 ```bash
 NODE_OPTIONS=--no-experimental-webstorage npx vitest run src/
@@ -41,7 +41,7 @@ Always execute both batches and confirm the final aggregates prior to declaring 
 | Batch Name | Path Parameter | Target Tests Count |
 |---|---|---|
 | **Batch 1 (Backend)** | `server/test/` | **484 passed** |
-| **Batch 2 (Frontend)** | `src/` | **471 passed** |
-| **Combined Aggregate** | *All Test Files* | **955 passed** |
+| **Batch 2 (Frontend)** | `src/` | **472 passed** |
+| **Combined Aggregate** | *All Test Files* | **956 passed** |
 
 *Do not run a bare `npx vitest run` without specifying these directory boundaries.*

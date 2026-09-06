@@ -178,4 +178,36 @@ describe("BugReportsAdmin", () => {
     expect(await screen.findByText("No Bug Reports Spreadsheet Configured")).toBeTruthy();
     expect(fetchWithRetry).not.toHaveBeenCalled();
   });
+
+  // Regression guard for a user-reported bug: a long Title (or Route) cell
+  // used to push the table wider than its container, shoving the Actions
+  // column's Resolve button off the visible/scrolled area. The table now
+  // uses a fixed layout with per-column widths, and the Title/Route cells
+  // wrap instead of truncating or forcing a single line - both together
+  // keep every column, including Actions, within its assigned width no
+  // matter how long the content is.
+  it("wraps a long title instead of truncating it, and keeps the table on a fixed column layout", async () => {
+    const longTitle = "A".repeat(200);
+    vi.mocked(fetchWithRetry).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ reports: [{ ...mockReports[0], title: longTitle }] }),
+    } as Response);
+
+    render(<BugReportsAdmin />);
+
+    const titleCell = await screen.findByText(longTitle);
+    expect(titleCell.className).not.toContain("truncate");
+    expect(titleCell.className).toContain("whitespace-normal");
+    expect(titleCell.className).toContain("break-words");
+
+    const table = document.querySelector("table");
+    expect(table?.className).toContain("table-fixed");
+
+    // The Resolve button must still be present and reachable in the DOM -
+    // not just scrolled out of view, which the fixed layout guarantees is
+    // the only way it can go off-screen (a real overflow test needs an
+    // actual browser layout engine, which jsdom doesn't provide).
+    expect(screen.getByText("Resolve")).toBeInTheDocument();
+  });
 });

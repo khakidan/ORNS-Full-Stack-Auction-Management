@@ -120,13 +120,14 @@ export default function BugReportsAdmin() {
           items={reports}
           loading={loading}
           columnCount={5}
+          tableClassName="table-fixed"
           header={
             <TableRow>
-              <TableHead className="w-25">Type</TableHead>
-              <TableHead>Title</TableHead>
-              <TableHead>Route</TableHead>
-              <TableHead>Reported</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="w-24">Type</TableHead>
+              <TableHead className="w-64">Title</TableHead>
+              <TableHead className="w-48">Route</TableHead>
+              <TableHead className="w-40">Reported</TableHead>
+              <TableHead className="w-76 text-right">Actions</TableHead>
             </TableRow>
           }
           emptyMessage={
@@ -142,13 +143,11 @@ export default function BugReportsAdmin() {
                   {report.type}
                 </Badge>
               </TableCell>
-              <TableCell className="font-medium">
-                <span className="truncate max-w-75 block" title={report.description}>
-                  {report.title}
-                </span>
+              <TableCell className="font-medium whitespace-normal break-words" title={report.description}>
+                {report.title}
               </TableCell>
-              <TableCell className="text-slate-500 text-sm">{report.route}</TableCell>
-              <TableCell className="text-slate-500 text-sm">
+              <TableCell className="text-slate-500 text-sm whitespace-normal break-words">{report.route}</TableCell>
+              <TableCell className="text-slate-500 text-sm whitespace-normal">
                 {report.timestamp ? format(new Date(report.timestamp), "MMM d, yyyy h:mm a") : ""}
               </TableCell>
               <TableCell className="text-right">
