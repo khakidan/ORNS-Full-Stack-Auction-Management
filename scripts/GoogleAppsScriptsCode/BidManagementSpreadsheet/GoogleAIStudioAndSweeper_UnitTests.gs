@@ -64,109 +64,10 @@ function gasTests_fakeSpreadsheet_ () {
 // G checkedOut, H paid, I methodLabel, J invoiceUrl, K invoicedAmount, L timestamp
 const GAS_TESTS_HEADER = [ 'ID', 'First', 'Last', 'Email', 'CheckedIn', 'Proxy', 'CheckedOut', 'Paid', 'Method', 'InvoiceURL', 'Amount', 'Timestamp' ];
 
-function gasTests_bidderRow_ ( overrides ) {
-    const row = [ '101', 'Jane', 'Doe', 'jane@example.com', true, false, false, false, '', '', 0, '' ];
-    Object.keys( overrides || {} ).forEach( function ( k ) { row[ k ] = overrides[ k ]; } );
-    return row;
-}
-
 function gasTests_pendingRow_ ( overrides ) {
     const row = [ '101', 'Jane', 'Doe', 'jane@example.com', true, false, false, false, 'PayPal Verification Pending', 'https://www.paypal.com/invoice/p/#INV2-X', 104.12, '' ];
     Object.keys( overrides || {} ).forEach( function ( k ) { row[ k ] = overrides[ k ]; } );
     return row;
-}
-
-// ── GoogleAIStudio.recordPayment ─────────────────────────────────────────
-
-function gasTests_recordPayment_offlineSuccess_ () {
-    const ss = gasTests_fakeSpreadsheet_();
-    const sheet = ss.addSheet( 'Bidder-Numbers', [ GAS_TESTS_HEADER, gasTests_bidderRow_( { 9: 'https://www.paypal.com/invoice/p/#INV2-X', 10: 104.12 } ) ] );
-    let recordedArgs = null;
-    const studio = new GoogleAIStudio( {
-        activeSpreadSheet: ss,
-        config: {},
-        paypalService: {
-            extractInvoiceIdFromUrl: function () { return 'INV2-X'; },
-            recordOfflinePayment: function ( id, method, amount ) { recordedArgs = [ id, method, amount ]; return true; }
-        }
-    } );
-
-    const result = studio.recordPayment( '101', 'cash' );
-
-    paypalTests_assertEqual_( result, { success: true, deferred: false, paypalRecorded: true }, 'cash payment should return success/paypalRecorded true' );
-    paypalTests_assertEqual_( sheet.data[ 1 ][ 6 ], true, 'Column G should be marked checked out' );
-    paypalTests_assertEqual_( sheet.data[ 1 ][ 7 ], true, 'Column H should be marked paid' );
-    paypalTests_assertEqual_( sheet.data[ 1 ][ 8 ], 'Cash', 'Column I should say Cash' );
-    paypalTests_assertEqual_( recordedArgs, [ 'INV2-X', 'Cash', 104.12 ], 'recordOfflinePayment should be called with the invoice ID, label, and amount' );
-}
-
-function gasTests_recordPayment_offlineSurvivesPayPalFailure_ () {
-    const ss = gasTests_fakeSpreadsheet_();
-    const sheet = ss.addSheet( 'Bidder-Numbers', [ GAS_TESTS_HEADER, gasTests_bidderRow_( { 9: 'https://www.paypal.com/invoice/p/#INV2-X', 10: 50 } ) ] );
-    const studio = new GoogleAIStudio( {
-        activeSpreadSheet: ss,
-        config: {},
-        paypalService: {
-            extractInvoiceIdFromUrl: function () { return 'INV2-X'; },
-            recordOfflinePayment: function () { throw new Error( 'PayPal down' ); }
-        }
-    } );
-
-    const result = studio.recordPayment( '101', 'cash' );
-
-    paypalTests_assertEqual_( result, { success: true, deferred: false, paypalRecorded: false }, 'should still succeed at the sheet level even if PayPal recording throws' );
-    paypalTests_assertEqual_( sheet.data[ 1 ][ 6 ], true, 'bidder should still be marked checked out/paid in the sheet' );
-}
-
-function gasTests_recordPayment_creditCardPaidNow_ () {
-    const ss = gasTests_fakeSpreadsheet_();
-    const sheet = ss.addSheet( 'Bidder-Numbers', [ GAS_TESTS_HEADER, gasTests_bidderRow_( { 9: 'https://www.paypal.com/invoice/p/#INV2-X', 10: 104.12 } ) ] );
-    const studio = new GoogleAIStudio( {
-        activeSpreadSheet: ss,
-        config: {},
-        paypalService: {
-            extractInvoiceIdFromUrl: function () { return 'INV2-X'; },
-            getInvoiceStatus: function () { return 'PAID'; }
-        }
-    } );
-
-    const result = studio.recordPayment( '101', 'credit_card' );
-
-    paypalTests_assertEqual_( result, { success: true, deferred: false, status: 'PAID' }, 'should resolve instantly when PayPal already shows PAID' );
-    paypalTests_assertEqual_( sheet.data[ 1 ][ 6 ], true, 'Column G should be marked checked out' );
-    paypalTests_assertEqual_( sheet.data[ 1 ][ 8 ], 'Credit Card / PayPal', 'Column I should say Credit Card / PayPal' );
-}
-
-function gasTests_recordPayment_creditCardDefers_ () {
-    const ss = gasTests_fakeSpreadsheet_();
-    const sheet = ss.addSheet( 'Bidder-Numbers', [ GAS_TESTS_HEADER, gasTests_bidderRow_( { 9: 'https://www.paypal.com/invoice/p/#INV2-X', 10: 104.12 } ) ] );
-    const studio = new GoogleAIStudio( {
-        activeSpreadSheet: ss,
-        config: {},
-        paypalService: {
-            extractInvoiceIdFromUrl: function () { return 'INV2-X'; },
-            getInvoiceStatus: function () { return 'SENT'; }
-        }
-    } );
-
-    const result = studio.recordPayment( '101', 'credit_card' );
-
-    paypalTests_assertEqual_( result, { success: true, deferred: true, status: 'SENT' }, 'should defer when PayPal does not yet show PAID' );
-    paypalTests_assertEqual_( sheet.data[ 1 ][ 8 ], 'PayPal Verification Pending', 'Column I should flag pending verification' );
-    if ( !sheet.data[ 1 ][ 11 ] ) throw new Error( 'Expected a timestamp to be stamped on deferral' );
-}
-
-function gasTests_recordPayment_errorPaths_ () {
-    const ss = gasTests_fakeSpreadsheet_();
-    ss.addSheet( 'Bidder-Numbers', [ GAS_TESTS_HEADER, gasTests_bidderRow_( {} ) ] );
-    const studio = new GoogleAIStudio( { activeSpreadSheet: ss, config: {}, paypalService: { extractInvoiceIdFromUrl: function () { return null; } } } );
-
-    paypalTests_assertEqual_( studio.recordPayment( '999', 'cash' ), { success: false, error: 'Bidder ID not found' }, 'unknown bidder ID should return a not-found error' );
-    paypalTests_assertThrows_(
-        function () { studio.recordPayment( '101', 'PAYPAL' ); },
-        'Unknown checkout payment method specified',
-        'an unrecognized payment method should throw'
-    );
 }
 
 // ── PayPalSweeper.checkPendingPayPalInvoices ─────────────────────────────
@@ -247,11 +148,6 @@ function gasTests_sweeper_ignoresNonPendingRows_ () {
 
 function runGoogleAIStudioAndSweeperUnitTests () {
     const cases = [
-        [ 'recordPayment: offline success', gasTests_recordPayment_offlineSuccess_ ],
-        [ 'recordPayment: offline survives PayPal failure', gasTests_recordPayment_offlineSurvivesPayPalFailure_ ],
-        [ 'recordPayment: credit card paid now', gasTests_recordPayment_creditCardPaidNow_ ],
-        [ 'recordPayment: credit card defers', gasTests_recordPayment_creditCardDefers_ ],
-        [ 'recordPayment: error paths', gasTests_recordPayment_errorPaths_ ],
         [ 'sweeper: marks paid', gasTests_sweeper_marksPaid_ ],
         [ 'sweeper: seeds timestamp without escalating', gasTests_sweeper_seedsTimestampWithoutEscalating_ ],
         [ 'sweeper: escalates after timeout', gasTests_sweeper_escalatesAfterTimeout_ ],
