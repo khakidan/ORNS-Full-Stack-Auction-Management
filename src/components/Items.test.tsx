@@ -3,7 +3,7 @@
  */
 import React from "react";
 import "@testing-library/jest-dom";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import Items from "./Items";
@@ -134,5 +134,63 @@ describe("Items - Ordering", () => {
 
     const idCells = screen.getAllByText(/^(101|102|201|401)$/);
     expect(idCells.map((el) => el.textContent)).toEqual(["101", "102", "201", "401"]);
+  });
+});
+
+// Regression guards for the "UI / Layout Tweaks" redesign - see
+// docs/agents/refactor-opportunities.md and CHANGELOG.md. The new
+// row-based catalog surfaces fields (description, value/opening bid/min
+// raise, donor, bundle status) that the old 4-column <table> never
+// showed at all.
+describe("Items - Layout (newly-surfaced fields)", () => {
+  function itemRow(id: string) {
+    return screen.getByTestId(`item-row-${id}`);
+  }
+
+  it("shows the Bundle badge only for an Active item with a bundleId", () => {
+    const items: AuctionItem[] = [
+      { id: "301", name: "Spa Basket", category: "Wellness", description: "", value: "", openingBid: "", minRaise: "", donor: "", itemType: "", status: "Active", bundleId: "BND-1", bundledDateTime: "2026-01-01", rowIndex: 2 },
+      { id: "302", name: "Coffee Mug", category: "Kitchen", description: "", value: "", openingBid: "", minRaise: "", donor: "", itemType: "", status: "Active", bundleId: "", bundledDateTime: "", rowIndex: 3 },
+    ];
+    vi.mocked(useAuction).mockReturnValue({ items, winners: {}, loading: false } as any);
+
+    render(<Items />);
+
+    expect(within(itemRow("301")).getByText("Bundle")).toBeInTheDocument();
+    expect(within(itemRow("302")).queryByText("Bundle")).not.toBeInTheDocument();
+  });
+
+  it("shows donor and financial fields when present, and omits them cleanly when absent", () => {
+    const items: AuctionItem[] = [
+      { id: "401", name: "Wine Basket", category: "Food & Drink", description: "A curated selection of local wines.", value: "$150.00", openingBid: "$65.00", minRaise: "$10.00", donor: "Hillside Vineyard", itemType: "Physical Item", status: "Active", bundleId: "", bundledDateTime: "", rowIndex: 2 },
+      { id: "402", name: "Mystery Box", category: "Misc", description: "", value: "", openingBid: "", minRaise: "", donor: "", itemType: "", status: "Active", bundleId: "", bundledDateTime: "", rowIndex: 3 },
+    ];
+    vi.mocked(useAuction).mockReturnValue({ items, winners: {}, loading: false } as any);
+
+    render(<Items />);
+
+    const fullRow = within(itemRow("401"));
+    expect(fullRow.getByText(/A curated selection of local wines\./)).toBeInTheDocument();
+    expect(fullRow.getByText("$150.00")).toBeInTheDocument();
+    expect(fullRow.getByText("$65.00")).toBeInTheDocument();
+    expect(fullRow.getByText("$10.00")).toBeInTheDocument();
+    expect(fullRow.getByText("Hillside Vineyard")).toBeInTheDocument();
+
+    const emptyRow = within(itemRow("402"));
+    expect(emptyRow.queryByText(/Value:/)).not.toBeInTheDocument();
+    expect(emptyRow.queryByText("Hillside Vineyard")).not.toBeInTheDocument();
+  });
+
+  it("shows the winning bidder as a trophy badge when won, and a muted placeholder when not", () => {
+    const items: AuctionItem[] = [
+      { id: "501", name: "Won Item", category: "Misc", description: "", value: "", openingBid: "", minRaise: "", donor: "", itemType: "", status: "Active", bundleId: "", bundledDateTime: "", rowIndex: 2 },
+      { id: "502", name: "Unwon Item", category: "Misc", description: "", value: "", openingBid: "", minRaise: "", donor: "", itemType: "", status: "Active", bundleId: "", bundledDateTime: "", rowIndex: 3 },
+    ];
+    vi.mocked(useAuction).mockReturnValue({ items, winners: { "501": "Daniel Sage" }, loading: false } as any);
+
+    render(<Items />);
+
+    expect(within(itemRow("501")).getByText("Daniel Sage")).toBeInTheDocument();
+    expect(within(itemRow("502")).getByText("Not yet won")).toBeInTheDocument();
   });
 });
