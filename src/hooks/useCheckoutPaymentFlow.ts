@@ -14,6 +14,7 @@ interface UseCheckoutPaymentFlowArgs {
   spreadsheetId: string;
   ticketsSpreadsheetId: string;
   bidderNumbersSheet: string;
+  paypalIsSandbox: boolean;
 }
 
 /**
@@ -35,6 +36,7 @@ export function useCheckoutPaymentFlow({
   spreadsheetId,
   ticketsSpreadsheetId,
   bidderNumbersSheet,
+  paypalIsSandbox,
 }: UseCheckoutPaymentFlowArgs) {
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [winnerToPay, setWinnerToPay] = useState<WinnerRecord | null>(null);
@@ -128,6 +130,7 @@ export function useCheckoutPaymentFlow({
         bidderNumbersSheet,
         attendeeInfo: attendee && attendee.sheet === 'tickets' ? { sheet: attendee.sheet, rowIndex: attendee.rowIndex } : null,
         paymentMethod: mappedMethod,
+        paypalIsSandbox,
         amount: winner.total,
         idempotencyKey
       }),

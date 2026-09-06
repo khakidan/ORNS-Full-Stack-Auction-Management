@@ -9,8 +9,8 @@ import { app } from "../app";
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
 import { resetHandlersState, lastBulkWritePayload, updateCallCount,
-         appendCallCount, appsScriptCallCount, lastAppendedRow,
-         lastAppsScriptParams, valuesBatchUpdateRequests } from "./handlers";
+         appendCallCount, lastAppendedRow,
+         valuesBatchUpdateRequests } from "./handlers";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -144,40 +144,6 @@ describe("bidRoutes - /api/auction/record-winning-bid", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error).toContain("Bidder 1001 not found");
-  });
-});
-
-describe("bidRoutes - /api/auction/checkout-mark-paid", () => {
-  it("calls Apps Script with correct parameters", async () => {
-    let capturedBody: any = null;
-    
-    const scriptId = "mock-script-id";
-    process.env.SCRIPT_ID_BID_MANAGEMENT = scriptId;
-
-    server.use(
-      http.post(`https://script.googleapis.com/v1/scripts/${scriptId}\\:run`, async ({ request }) => {
-        capturedBody = await request.json();
-        return HttpResponse.json({
-          response: { result: { success: true } }
-        });
-      })
-    );
-
-    const response = await request(app)
-      .post("/api/auction/checkout-mark-paid")
-      .set(authHeader)
-      .send({
-        bidderId: "1001",
-        spreadsheetId: "ss-id",
-        bidderNumbersSheet: "Bidder-Numbers",
-        paymentMethod: "CREDIT_CARD",
-        amount: 105.50,
-        idempotencyKey: "checkout-key-1"
-      });
-
-    expect(response.status).toBe(200);
-    expect(capturedBody.function).toBe("apiRecordPayment");
-    expect(capturedBody.parameters).toEqual(["1001", "CREDIT_CARD"]);
   });
 });
 
@@ -365,8 +331,6 @@ describe('Checkout workflow', () => {
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.deferred).toBeFalsy();
-    expect(lastAppsScriptParams[0]).toBe("42");
-    expect(lastAppsScriptParams[1]).toBe("cash");
   });
 
   it('Credit card payment — deferred 202 path', async () => {
@@ -411,7 +375,11 @@ describe('Checkout workflow', () => {
 
     expect(res2.status).toBe(200);
     expect(res2.body.duplicated).toBe(true);
-    expect(appsScriptCallCount).toBe(1);
+    // The underlying checkout logic (2 Bidder-Numbers writes: the G:I
+    // checkbox/label range and the L timestamp cell) must only have run
+    // once - the second, duplicate submission is served entirely from
+    // the idempotency cache without re-executing checkoutMarkPaid.
+    expect(updateCallCount).toBe(2);
   });
 
   it('Auth failure', async () => {
@@ -428,10 +396,13 @@ describe('Checkout workflow', () => {
     expect(response.status).toBe(401);
   });
 
-  it('Apps Script failure', async () => {
+  it('Sheets API failure', async () => {
     server.use(
-      http.post('https://script.googleapis.com/v1/scripts/:scriptId\\:run', () => {
-        return new HttpResponse(null, { status: 500 });
+      http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', () => {
+        return new HttpResponse(
+          JSON.stringify({ error: { message: "Internal error", status: "INTERNAL" } }),
+          { status: 500 }
+        );
       })
     );
 
@@ -518,8 +489,6 @@ describe('Full bid-to-checkout lifecycle', () => {
 
     expect(checkoutRes.status).toBe(200);
     expect(checkoutRes.body.success).toBe(true);
-    expect(lastAppsScriptParams[0]).toBe("42");
-    expect(lastAppsScriptParams[1]).toBe("cash");
   });
 
   it('Happy path — bid recorded then credit card checkout', async () => {
@@ -553,8 +522,6 @@ describe('Full bid-to-checkout lifecycle', () => {
 
     expect(checkoutRes.status).toBe(202);
     expect(checkoutRes.body.message).toBe("Verification deferred");
-    expect(lastAppsScriptParams[0]).toBe("42");
-    expect(lastAppsScriptParams[1]).toBe("credit_card");
   });
 
   it('Lifecycle — checked-out bidder winning bid goes to follow-up', async () => {

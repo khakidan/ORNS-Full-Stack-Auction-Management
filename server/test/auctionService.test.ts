@@ -117,35 +117,57 @@ describe("recordWinningBid - concurrency", () => {
 });
 
 describe("checkoutMarkPaid - concurrency (defense-in-depth)", () => {
-  // checkoutMarkPaid is already safe on its own (Class_GoogleAIStudio.gs's
-  // recordPayment finds its target row by scanning for the bidder's own
-  // ID, not a computed "next open slot", and every payment-method branch
-  // writes a specific final value) - it's wrapped in the same withLock as
-  // registerWalkInBidder/recordWinningBid purely as cheap insurance, so
-  // every bidder-mutating write path in this app is protected by the same
-  // rule. This proves that wrapping is real: bidder 42's Apps Script call
-  // is held open, and bidder 99's checkout (same spreadsheet) must not
-  // even start its own Apps Script call until 42's has fully completed.
-  beforeEach(() => {
-    process.env.SCRIPT_ID_BID_MANAGEMENT = "dummy-script-id";
-  });
-
-  it("does not start a second concurrent checkout's Apps Script call until the first one (same spreadsheet) has fully finished", async () => {
+  // checkoutMarkPaid is already safe on its own (Code Hardening item #2,
+  // Step 3: `checkoutMarkPaidLocked` finds its target row by scanning for
+  // the bidder's own ID, not a computed "next open slot", and every
+  // payment-method branch writes a specific final value) - it's wrapped
+  // in the same withLock as registerWalkInBidder/recordWinningBid purely
+  // as cheap insurance, so every bidder-mutating write path in this app
+  // is protected by the same rule. This proves that wrapping is real:
+  // bidder 42's Bidder-Numbers lookup is held open, and bidder 99's
+  // checkout (same spreadsheet) must not even start its own lookup until
+  // 42's has fully completed.
+  it("does not start a second concurrent checkout's Bidder-Numbers lookup until the first one (same spreadsheet) has fully finished", async () => {
     const callOrder: string[] = [];
     let releaseBidder42: () => void;
     const bidder42Gate = new Promise<void>((resolve) => { releaseBidder42 = resolve; });
 
-    vi.mocked(google.script).mockReturnValue({
-      scripts: {
-        run: vi.fn(async ({ requestBody }: any) => {
-          const bidderId = requestBody.parameters[0];
-          callOrder.push(`${bidderId}-start`);
-          if (bidderId === "42") {
-            await bidder42Gate;
-          }
-          callOrder.push(`${bidderId}-end`);
-          return { data: { response: { result: { success: true, deferred: false, bidderId } } } };
-        }),
+    // Both bidders have no invoice URL (columns J/K blank), so the "cash"
+    // branch never calls out to PayPalService at all - keeps this test
+    // scoped to proving lock ordering, not PayPal request mocking.
+    const bidderNumbersRows = [
+      ["ID", "First", "Last", "Email", "CheckedIn", "Proxy", "CheckedOut", "Paid", "Method", "InvoiceURL", "Amount", "Timestamp"],
+      ["42", "Jane", "Doe", "jane@example.com", true, false, false, false, "", "", 0, ""],
+      ["99", "Sam", "Roe", "sam@example.com", true, false, false, false, "", "", 0, ""],
+    ];
+
+    // Rows land on sheet rows 2 (bidder 42) and 3 (bidder 99), so the
+    // write ranges (G2:I2 vs G3:I3) unambiguously identify which bidder's
+    // flow reached its final write - markers are pushed from inside these
+    // mocked calls themselves (not from a `.then()` on the outer
+    // checkoutMarkPaid promise), since that extra promise-chain hop
+    // resolves one microtask later than the lock's own release and would
+    // otherwise make bidder 99's already-correctly-gated continuation
+    // look like it started before bidder 42 "ended".
+    let wideReadCount = 0;
+    vi.mocked(google.sheets).mockReturnValue({
+      spreadsheets: {
+        values: {
+          get: vi.fn(async ({ range }: any) => {
+            if (range.includes("!A:L")) {
+              wideReadCount++;
+              const isFirst = wideReadCount === 1;
+              callOrder.push(isFirst ? "42-start" : "99-start");
+              if (isFirst) await bidder42Gate;
+            }
+            return { data: { values: bidderNumbersRows.map((r) => [...r]) } };
+          }),
+          update: vi.fn(async ({ range }: any) => {
+            if (range.includes("G2")) callOrder.push("42-end");
+            else if (range.includes("G3")) callOrder.push("99-end");
+            return { data: {} };
+          }),
+        },
       },
     } as any);
 
@@ -160,7 +182,7 @@ describe("checkoutMarkPaid - concurrency (defense-in-depth)", () => {
     // Fired both without awaiting either yet. Without the lock, bidder 99
     // (never gated) would race ahead and finish well before bidder 42's
     // gate is released below. Give both a moment to actually reach the
-    // mocked Apps Script call, then release 42.
+    // mocked Bidder-Numbers read, then release 42.
     await new Promise((resolve) => setTimeout(resolve, 50));
     releaseBidder42!();
 
@@ -168,8 +190,9 @@ describe("checkoutMarkPaid - concurrency (defense-in-depth)", () => {
 
     expect(result42.success).toBe(true);
     expect(result99.success).toBe(true);
-    // With the lock: 99 can't even start until 42 fully finishes. Without
-    // it: 99 (ungated) would complete before 42's gate is ever released.
+    // With the lock: 99 can't even start its own lookup until 42 fully
+    // finishes. Without it: 99 (ungated) would complete before 42's gate
+    // is ever released.
     expect(callOrder).toEqual(["42-start", "42-end", "99-start", "99-end"]);
   });
 });

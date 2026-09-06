@@ -3,6 +3,7 @@ import { OAuth2Client } from "google-auth-library";
 import { getColumnLetter } from "../utils/columnUtils";
 import { executeGoogleSheetsTransaction, SheetOp } from "../services/sheetsService";
 import { withLock } from "../utils/asyncLock";
+import { PayPalService } from "./paypalService";
 
 export interface RecordWinningBidParams {
   bidderId: string;
@@ -24,6 +25,7 @@ export interface CheckoutParams {
   ticketsSpreadsheetId?: string;
   bidderNumbersSheet: string;
   paymentMethod: string;
+  paypalIsSandbox?: boolean;
   attendeeInfo?: {
     sheet: string;
     rowIndex: number;
@@ -214,47 +216,85 @@ async function checkoutMarkPaidLocked(
     ticketsSpreadsheetId,
     bidderNumbersSheet,
     paymentMethod,
+    paypalIsSandbox,
     attendeeInfo
   } = params;
 
-  const scriptId = process.env.SCRIPT_ID_BID_MANAGEMENT;
-  if (!scriptId) {
-    throw new Error("SCRIPT_ID_BID_MANAGEMENT is not configured.");
-  }
+  const sheets = google.sheets({ version: "v4", auth });
 
-  // 1. Call Apps Script bridge function apiRecordPayment
-  const script = google.script({ version: "v1", auth });
-  
-  const scriptResponse = await script.scripts.run({
-    scriptId: scriptId,
-    requestBody: {
-      function: "apiRecordPayment",
-      parameters: [String(bidderId), paymentMethod || "cash"],
-      devMode: true,
-    },
+  // 1. Record the payment - ported from
+  // Class_GoogleAIStudio.gs's (now-removed) `recordPayment`/
+  // `apiRecordPayment` bridge. See docs/agents/refactor-opportunities.md's
+  // Code Hardening item #2, Step 3 / CHANGELOG.md.
+  const method = (paymentMethod || "cash").toString();
+  const bidderSearch = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'${bidderNumbersSheet}'!A:L`,
   });
-  
-  if (scriptResponse.data.error) {
-    const eData = scriptResponse.data.error.details?.[0] as any;
-    throw new Error(eData?.errorMessage || "Unknown Apps Script execution error");
+  const bidderRows = bidderSearch.data.values || [];
+  let targetRowIndex = -1;
+  for (let i = 1; i < bidderRows.length; i++) {
+    if (bidderRows[i][0]?.toString().trim() === String(bidderId).trim()) {
+      targetRowIndex = i;
+      break;
+    }
   }
 
-  const { response } = scriptResponse.data;
-  let deferred = false;
-  if (response?.result && typeof response.result === 'object') {
-    const resultObj = response.result as any;
-    if (resultObj.success === false) {
-      throw new Error(resultObj.error || "Failed to record payment in Google Apps Script");
-    }
-    if (resultObj.deferred === true) {
-      deferred = true;
-    }
+  if (targetRowIndex === -1) {
+    throw new Error("Bidder ID not found");
   }
+
+  const sheetRow = targetRowIndex + 1; // 1-based sheet row
+  const invoiceUrlCell = bidderRows[targetRowIndex][9];
+  const invoicedAmountCell = bidderRows[targetRowIndex][10] || 0;
+
+  const paypal = new PayPalService({ isSandbox: paypalIsSandbox !== false });
+  const invoiceId = paypal.extractInvoiceIdFromUrl(invoiceUrlCell);
+
+  let deferred = false;
+  const paymentOps: SheetOp[] = [];
+
+  if (method === "cash" || method === "check") {
+    const label = method === "cash" ? "Cash" : "Check";
+    paymentOps.push(
+      { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!G${sheetRow}:I${sheetRow}`, newValues: [[true, true, label]] },
+      { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!L${sheetRow}`, newValues: [[""]] }
+    );
+
+    try {
+      if (invoiceId) await paypal.recordOfflinePayment(invoiceId, label, parseFloat(invoicedAmountCell) || 0);
+    } catch (e: any) {
+      console.warn("PayPal physical payment recording bypassed/failed: " + e.message);
+    }
+  } else if (method === "credit_card") {
+    let liveStatus = "UNPAID";
+    try {
+      if (invoiceId) liveStatus = await paypal.getInvoiceStatus(invoiceId);
+    } catch (err: any) {
+      throw new Error("Credit Card validation processing error: " + err.message);
+    }
+
+    if (liveStatus === "PAID") {
+      paymentOps.push(
+        { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!G${sheetRow}:I${sheetRow}`, newValues: [[true, true, "Credit Card / PayPal"]] },
+        { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!L${sheetRow}`, newValues: [[""]] }
+      );
+    } else {
+      deferred = true;
+      paymentOps.push(
+        { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!G${sheetRow}:I${sheetRow}`, newValues: [[false, false, "PayPal Verification Pending"]] },
+        { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!L${sheetRow}`, newValues: [[new Date().toISOString()]] }
+      );
+    }
+  } else {
+    throw new Error("Unknown checkout payment method specified: " + method);
+  }
+
+  await executeGoogleSheetsTransaction(sheets, paymentOps);
 
   // 2. Optional: Update Tickets Spreadsheet
   let attendeeUpdated = false;
   if (ticketsSpreadsheetId && attendeeInfo?.sheet && attendeeInfo.rowIndex) {
-    const sheets = google.sheets({ version: "v4", auth });
     const operations: SheetOp[] = [
       {
         type: 'UPDATE',

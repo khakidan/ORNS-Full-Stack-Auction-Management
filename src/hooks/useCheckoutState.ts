@@ -69,6 +69,7 @@ export function useCheckoutState({
     spreadsheetId,
     ticketsSpreadsheetId,
     bidderNumbersSheet,
+    paypalIsSandbox,
   });
 
   return {

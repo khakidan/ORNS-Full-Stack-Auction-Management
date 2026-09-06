@@ -120,11 +120,16 @@ describe("Ticket Payment Status workflow", () => {
   });
 
   it("Checkout without tickets spreadsheet — attendeeUpdated is false", async () => {
+    // Uses bidder "42" (the default global Bidder-Numbers mock's bidder,
+    // see handlers.ts) rather than "1001" - this test doesn't register
+    // its own Bidder-Numbers handler, and checkoutMarkPaid now looks the
+    // bidder up directly (Code Hardening item #2, Step 3) rather than
+    // delegating to a generically-mocked Apps Script bridge call.
     const response = await request(app)
       .post("/api/auction/checkout-mark-paid")
       .set(authHeader)
       .send({
-        bidderId: "1001",
+        bidderId: "42",
         spreadsheetId: "test-spread-id",
         bidderNumbersSheet: "Bidder-Numbers",
         paymentMethod: "cash",

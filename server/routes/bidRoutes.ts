@@ -67,7 +67,8 @@ export default function createBidRouter() {
       bidderNumbersSheet, 
       attendeeInfo,
       paymentMethod,
-      idempotencyKey 
+      paypalIsSandbox,
+      idempotencyKey
     } = req.body;
 
     if (!spreadsheetId || !bidderId || !bidderNumbersSheet) {
@@ -86,6 +87,7 @@ export default function createBidRouter() {
         ticketsSpreadsheetId,
         bidderNumbersSheet,
         paymentMethod: paymentMethod || "cash",
+        paypalIsSandbox,
         attendeeInfo
       });
 
