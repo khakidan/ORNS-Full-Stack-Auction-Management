@@ -1,8 +1,19 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
-import { app } from "../app";
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
+
+// Prevents the OAuth callback's best-effort PayPal-sweeper credential
+// persist (authRoutes.ts -> paypalSweeperJob.ts -> firebaseAdmin.ts) from
+// attempting a real Application Default Credentials network call during
+// these tests - see paypalSweeperJob.test.ts for that logic's own
+// coverage, fully mocked there instead.
+const mockPersistSweeperCredential = vi.fn().mockResolvedValue(undefined);
+vi.mock("../services/paypalSweeperJob", () => ({
+  persistSweeperCredential: (...args: unknown[]) => mockPersistSweeperCredential(...args),
+}));
+
+import { app } from "../app";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -15,6 +26,7 @@ const authHeader = { "x-google-tokens": JSON.stringify(mockTokens) };
 describe('Auth Routes workflow', () => {
   beforeEach(() => {
     server.resetHandlers();
+    mockPersistSweeperCredential.mockClear();
   });
 
   afterEach(() => {
@@ -54,6 +66,11 @@ describe('Auth Routes workflow', () => {
       expect(response.status).toBe(302);
       expect(response.headers.location).toBe('/');
       expect(response.headers['set-cookie']).toBeDefined();
+      // Best-effort background-sync credential persist (Code Hardening
+      // item #2, Step 4) - fires for any login that returns a
+      // refresh_token, which this mock response always does.
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(mockPersistSweeperCredential).toHaveBeenCalledWith("workflow-mock-refresh", "test@orns.org");
     });
 
     it('Rejected domain — non-org email', async () => {

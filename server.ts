@@ -5,6 +5,8 @@ dotenv.config(); // Must run before app/validateEnv imports read process.env
 import { app } from "./server/app";
 import { validateEnv } from "./server/utils/validateEnv";
 import { startServer } from "./server/boot";
+import { startPaypalSweeperSchedule } from "./server/services/paypalSweeperJob";
 
 validateEnv();
 startServer(app, Number(process.env.PORT) || 3000);
+startPaypalSweeperSchedule();

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { google } from 'googleapis';
 import { getOAuthClient, SCOPES } from '../services/oauth';
+import { persistSweeperCredential } from '../services/paypalSweeperJob';
 
 const router = Router();
 
@@ -47,7 +48,17 @@ router.get("/auth/callback", async (req, res, next) => {
     delete slimTokens.id_token;
     delete slimTokens.scope;
     req.session.tokens = slimTokens;
-    
+
+    // Best-effort: persist this login's refresh token as the credential
+    // the PayPal sweeper background job (Code Hardening item #2, Step 4)
+    // authenticates with, since that job runs on a timer with no session
+    // of its own. Never blocks or fails the actual login.
+    if (tokens.refresh_token) {
+      persistSweeperCredential(tokens.refresh_token, email).catch((e) => {
+        console.error("[Sweeper] Failed to persist background-sync credential:", e);
+      });
+    }
+
     res.redirect('/');
   } catch (error) {
     next(error);

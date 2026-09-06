@@ -36,7 +36,7 @@ service cloud.firestore {
         'auctionTicketsSpreadsheetId',
         'bidManagementSpreadsheetId',
         'bidderNumbersSheet',
-        'auctionItemsSheet',
+        'paypalIsSandbox',
         'bidManagementSheet',
         'receiptFolderId',
         'forPrintFolderId',
@@ -59,8 +59,7 @@ service cloud.firestore {
       data.bidManagementSpreadsheetId.size() <= 256 &&
       data.bidderNumbersSheet is string &&
       data.bidderNumbersSheet.size() <= 128 &&
-      data.auctionItemsSheet is string &&
-      data.auctionItemsSheet.size() <= 128 &&
+      data.paypalIsSandbox is bool &&
       data.bidManagementSheet is string &&
       data.bidManagementSheet.size() <= 128 &&
       data.receiptFolderId is string &&
@@ -95,7 +94,7 @@ service cloud.firestore {
           'auctionTicketsSpreadsheetId',
           'bidManagementSpreadsheetId',
           'bidderNumbersSheet',
-          'auctionItemsSheet',
+          'paypalIsSandbox',
           'bidManagementSheet',
           'receiptFolderId',
           'forPrintFolderId',
