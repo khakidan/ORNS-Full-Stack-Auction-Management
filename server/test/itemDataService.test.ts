@@ -99,4 +99,37 @@ describe("getValidSortedItems", () => {
     expect(item.name).toBe("Gift Card");
     expect(item.donor).toBe("Acme Co.");
   });
+
+  it("requests UNFORMATTED_VALUE, not the API's FORMATTED_VALUE default (regression)", async () => {
+    // Real bug: without this, currency-formatted Value/Opening Bid/Min
+    // Raise cells came back as pre-formatted display strings (e.g.
+    // "$1,000.00") instead of the raw number GAS's native
+    // SpreadsheetApp.getValues() always returned - every Doc generator's
+    // own hardcoded "$" prefix (Class_BidSheetDoc.gs's valueLabel,
+    // Class_CatalogDoc.gs's `Value: $${item.value}`, etc.) then produced
+    // a doubled "$" and mismatched formatting on every generated
+    // document. See CHANGELOG.md.
+    let capturedRenderOption: string | null = null;
+    server.use(
+      http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ request }) => {
+        capturedRenderOption = new URL(request.url).searchParams.get("valueRenderOption");
+        return HttpResponse.json({ values: [HEADER, itemRow("101")] });
+      })
+    );
+
+    await getValidSortedItems(sheets, "items-ss-id");
+    expect(capturedRenderOption).toBe("UNFORMATTED_VALUE");
+  });
+
+  it("carries a currency cell's raw number through with no '$' prefix or thousands separator", async () => {
+    // UNFORMATTED_VALUE returns a genuine JSON number for a
+    // currency-formatted cell, not a string - confirms parseItemRows'
+    // `.toString()` handles that correctly.
+    mockAuctionItems([itemRow("401", { 4: 1000, 5: 500.5, 6: 25 })]);
+    const [item] = await getValidSortedItems(sheets, "items-ss-id");
+
+    expect(item.value).toBe("1000");
+    expect(item.openingBid).toBe("500.5");
+    expect(item.minRaise).toBe("25");
+  });
 });
