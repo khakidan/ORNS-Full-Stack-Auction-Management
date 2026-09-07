@@ -149,7 +149,7 @@ export default function createDataRouter() {
 
   // Add Auction Item and resequence
   router.post("/auction/add-item", async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, category, name, description, value, donor, itemType, idempotencyKey } = req.body;
+    const { spreadsheetId, category, name, description, value, donor, itemType, allowMultipleWinners, idempotencyKey } = req.body;
     if (!spreadsheetId || !category || !name) {
       return res.status(400).json({ error: "Missing required parameters for adding item" });
     }
@@ -168,7 +168,8 @@ export default function createDataRouter() {
         description,
         value,
         donor,
-        itemType
+        itemType,
+        allowMultipleWinners: !!allowMultipleWinners
       });
 
       saveIdempotency(idempotencyKey, result);

@@ -47,7 +47,11 @@ describe("itemService/bundleService Auction-Items lock (defense-in-depth)", () =
             return { data: { values: [] } };
           },
           update: async ({ range, requestBody }: any) => {
-            if (range.includes("Auction-Items")) {
+            // addItem now also issues a single-cell write to column M
+            // ("Allow Multiple Winners") ahead of the main row write -
+            // excluded here so callOrder still tracks just the
+            // full-row write this test cares about.
+            if (range.includes("Auction-Items") && !range.includes("!M")) {
               auctionItemsRows = requestBody.values;
               callOrder.push(readCount === 1 ? "A-end" : "B-end");
             }

@@ -12,6 +12,7 @@ import { LoadingButton } from "@/components/ui/LoadingButton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -24,13 +25,15 @@ import { AuctionItem } from "@/types";
 export interface AuctionItemEditChange {
   field: keyof AuctionItem;
   colLetter: string;
-  value: string;
+  value: string | boolean;
 }
 
 // The column each editable field lives in on the 'Auction-Items' sheet -
 // previously scattered across AuctionItemRow.tsx's 9 separate per-field
 // EditableCell onSave calls, now centralized here since this dialog is
-// the one place that needs the full map.
+// the one place that needs the full map. "M" (allowMultipleWinners) was
+// added for the Bid Entry redesign's repeatable-item support - see
+// docs/agents/refactor-opportunities.md/CHANGELOG.md.
 const FIELD_COLUMNS: Partial<Record<keyof AuctionItem, string>> = {
   id: "A",
   category: "B",
@@ -41,9 +44,12 @@ const FIELD_COLUMNS: Partial<Record<keyof AuctionItem, string>> = {
   minRaise: "G",
   donor: "H",
   itemType: "I",
+  allowMultipleWinners: "M",
 };
 
-type EditableFields = Pick<AuctionItem, "id" | "category" | "name" | "description" | "value" | "openingBid" | "minRaise" | "donor" | "itemType">;
+type EditableFields = Pick<AuctionItem, "id" | "category" | "name" | "description" | "value" | "openingBid" | "minRaise" | "donor" | "itemType"> & {
+  allowMultipleWinners: boolean;
+};
 
 function toDraft(item: AuctionItem): EditableFields {
   return {
@@ -56,6 +62,7 @@ function toDraft(item: AuctionItem): EditableFields {
     minRaise: item.minRaise,
     donor: item.donor,
     itemType: item.itemType,
+    allowMultipleWinners: !!item.allowMultipleWinners,
   };
 }
 
@@ -78,6 +85,7 @@ const EMPTY_DRAFT: EditableFields = {
   minRaise: "",
   donor: "",
   itemType: "",
+  allowMultipleWinners: false,
 };
 
 /**
@@ -102,6 +110,12 @@ export function EditAuctionItemDialog({ item, open, onOpenChange, categories, on
 
     const changes: AuctionItemEditChange[] = [];
     (Object.keys(FIELD_COLUMNS) as (keyof EditableFields)[]).forEach((field) => {
+      if (field === "allowMultipleWinners") {
+        if (draft.allowMultipleWinners !== !!item.allowMultipleWinners) {
+          changes.push({ field, colLetter: FIELD_COLUMNS[field]!, value: draft.allowMultipleWinners });
+        }
+        return;
+      }
       if (draft[field] !== item[field]) {
         changes.push({ field, colLetter: FIELD_COLUMNS[field]!, value: draft[field] });
       }
@@ -193,6 +207,16 @@ export function EditAuctionItemDialog({ item, open, onOpenChange, categories, on
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <Checkbox
+                id="allowMultipleWinners"
+                checked={draft.allowMultipleWinners}
+                onCheckedChange={(checked) => setDraft({ ...draft, allowMultipleWinners: checked === true })}
+              />
+              <Label htmlFor="allowMultipleWinners" className="text-sm font-normal cursor-pointer">
+                Allow Multiple Winners
+              </Label>
             </div>
           </div>
         </div>

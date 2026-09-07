@@ -11,6 +11,7 @@ import { LoadingButton } from "@/components/ui/LoadingButton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -141,6 +142,21 @@ export function AddAuctionItemDialog({
                   <SelectItem value="Both">Both</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="allowMultipleWinners" className="text-right">
+              Allow Multiple Winners
+            </Label>
+            <div className="col-span-3 flex items-center gap-2">
+              <Checkbox
+                id="allowMultipleWinners"
+                checked={!!newItem.allowMultipleWinners}
+                onCheckedChange={(checked) => onNewItemChange({ ...newItem, allowMultipleWinners: checked === true })}
+              />
+              <span className="text-xs text-muted-foreground">
+                For repeatable pledge/ticket-style items (raffle tickets, Open Appeal) - almost every real lot should stay unchecked.
+              </span>
             </div>
           </div>
         </div>

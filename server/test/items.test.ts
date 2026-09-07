@@ -74,6 +74,52 @@ describe("Add Auction Item workflow", () => {
     expect(lastAppendedRow.length).toBe(12);
   });
 
+  it("writes the new item's Allow Multiple Winners flag to its own column M cell", async () => {
+    let mColumnWrite: any = null;
+    server.use(
+      http.put('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', async ({ request }) => {
+        const url = new URL(request.url);
+        const range = decodeURIComponent(url.pathname.split('/').pop() || "");
+        if (range.includes("!M")) {
+          mColumnWrite = { range, body: await request.clone().json() };
+        }
+        return HttpResponse.json({ updatedRows: 1 });
+      })
+    );
+
+    const response = await request(app)
+      .post("/api/auction/add-item")
+      .set(authHeader)
+      .send({ ...validItemBody, allowMultipleWinners: true, idempotencyKey: crypto.randomUUID() });
+
+    expect(response.status).toBe(200);
+    expect(mColumnWrite).not.toBeNull();
+    expect(mColumnWrite.range).toContain("Auction-Items");
+    expect(mColumnWrite.body.values).toEqual([[true]]);
+  });
+
+  it("defaults Allow Multiple Winners to false when not provided", async () => {
+    let mColumnWrite: any = null;
+    server.use(
+      http.put('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', async ({ request }) => {
+        const url = new URL(request.url);
+        const range = decodeURIComponent(url.pathname.split('/').pop() || "");
+        if (range.includes("!M")) {
+          mColumnWrite = { range, body: await request.clone().json() };
+        }
+        return HttpResponse.json({ updatedRows: 1 });
+      })
+    );
+
+    const response = await request(app)
+      .post("/api/auction/add-item")
+      .set(authHeader)
+      .send({ ...validItemBody, idempotencyKey: crypto.randomUUID() });
+
+    expect(response.status).toBe(200);
+    expect(mColumnWrite.body.values).toEqual([[false]]);
+  });
+
   it("falls back to the same tiered min-raise ladder bundleService.ts uses when no Value Calculations tab is configured", async () => {
     // Previously itemService.ts fell back to a flat $5 here while
     // bundleService.ts fell back to a 7-tier ladder - adding a $500 item
@@ -124,7 +170,10 @@ describe("Add Auction Item workflow", () => {
 
     expect(res2.status).toBe(200);
     expect(res2.body.duplicated).toBe(true);
-    expect(updateCallCount).toBe(1);
+    // addItem now issues 2 writes per real add (the main A:L row write plus
+    // a single-cell M/"Allow Multiple Winners" write) - the duplicate
+    // request must still never re-hit the Sheets API at all.
+    expect(updateCallCount).toBe(2);
   });
 
   it("returns 401 when unauthenticated", async () => {

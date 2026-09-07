@@ -12,6 +12,7 @@ export interface AddItemParams {
   value?: string;
   donor?: string;
   itemType?: string;
+  allowMultipleWinners?: boolean;
 }
 
 export function calculateBidAmounts(value: string, valueCalculations: {minRange: number, minRaise: number}[]): { openingBid: string, minRaise: string } {
@@ -84,7 +85,7 @@ export async function addItem(sheets: sheets_v4.Sheets, params: AddItemParams): 
 }
 
 async function addItemLocked(sheets: sheets_v4.Sheets, params: AddItemParams): Promise<AddItemResult> {
-  const { spreadsheetId, category, name, description, value, donor, itemType } = params;
+  const { spreadsheetId, category, name, description, value, donor, itemType, allowMultipleWinners } = params;
 
   // Fetch Category Bases and Value Calculations in parallel
   const [baseNumbers, settingsRes, dataRes] = await Promise.all([
@@ -137,6 +138,22 @@ async function addItemLocked(sheets: sheets_v4.Sheets, params: AddItemParams): P
 
   resequenceCategoryIds(values, new Set([category]), baseNumbers);
 
+  const rowIndex = values.length;
+
+  // Column M ("Allow Multiple Winners") lives outside the A:L range this
+  // function otherwise reads/writes/resequences - written as its own
+  // single-cell update (mirrors useAuctionItemUpdate.ts's handleUpdate
+  // convention) so it never risks touching any other row's M value.
+  // Issued before the main A1:L write below so callers that inspect "the
+  // last sheet write" (e.g. this repo's test mocks) still see the real
+  // new row, not this one-cell write.
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'Auction-Items'!M${rowIndex}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [[!!allowMultipleWinners]] }
+  });
+
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: "'Auction-Items'!A1:L",
@@ -149,7 +166,7 @@ async function addItemLocked(sheets: sheets_v4.Sheets, params: AddItemParams): P
   return {
     success: true,
     assigned_id: newRow[0],
-    rowIndex: values.length
+    rowIndex
   };
 }
 

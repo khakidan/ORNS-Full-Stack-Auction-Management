@@ -18,7 +18,7 @@ export function useAuctionItemUpdate(
   valueCalculations: ValueCalculationTier[],
   fetchData: () => Promise<void> | void
 ) {
-  const handleUpdate = async (rowIndex: number, field: keyof AuctionItem, colLetter: string, value: string) => {
+  const handleUpdate = async (rowIndex: number, field: keyof AuctionItem, colLetter: string, value: string | boolean) => {
     if (!spreadsheetId) return;
 
     const targetItem = items.find(i => i.rowIndex === rowIndex);
@@ -44,7 +44,7 @@ export function useAuctionItemUpdate(
     };
 
     let finalValueToSave = value;
-    if (field === 'value' && value) {
+    if (field === 'value' && typeof value === 'string' && value) {
       const parsedNum = parseDollar(value);
       if (parsedNum > 0) {
         finalValueToSave = `$${parsedNum.toFixed(2)}`;
@@ -63,7 +63,7 @@ export function useAuctionItemUpdate(
     let opening = "";
     let raise = "";
 
-    if (field === 'value') {
+    if (field === 'value' && typeof finalValueToSave === 'string') {
       const calculated = calculateAutoBids(finalValueToSave, valueCalculations);
       opening = calculated.opening;
       raise = calculated.raise;

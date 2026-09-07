@@ -26,7 +26,8 @@ export function useAddAuctionItem(
     openingBid: "",
     minRaise: "",
     donor: "",
-    itemType: ""
+    itemType: "",
+    allowMultipleWinners: false
   });
 
   const openAddItemDialog = () => {
@@ -57,6 +58,7 @@ export function useAddAuctionItem(
           value: newItem.value || "",
           donor: newItem.donor || "",
           itemType: newItem.itemType || "",
+          allowMultipleWinners: !!newItem.allowMultipleWinners,
           idempotencyKey: addItemIdempotencyKey
         })
       });
@@ -79,7 +81,8 @@ export function useAddAuctionItem(
         itemType: "",
         status: "",
         bundleId: "",
-        bundledDateTime: ""
+        bundledDateTime: "",
+        allowMultipleWinners: false
       });
       setIsAddingItem(false);
     } catch (e: any) {

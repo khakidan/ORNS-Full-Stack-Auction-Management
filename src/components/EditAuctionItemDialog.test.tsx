@@ -44,6 +44,7 @@ function makeItem(overrides: Partial<AuctionItem> = {}): AuctionItem {
     status: "Active",
     bundleId: "",
     bundledDateTime: "",
+    allowMultipleWinners: false,
     rowIndex: 2,
     ...overrides,
   };
@@ -162,5 +163,54 @@ describe("EditAuctionItemDialog - saving", () => {
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(onSave).not.toHaveBeenCalled();
+  });
+});
+
+describe("EditAuctionItemDialog - Allow Multiple Winners", () => {
+  it("prefills the checkbox unchecked for a normal (non-repeatable) item", () => {
+    renderDialog(makeItem({ allowMultipleWinners: false }));
+    expect(screen.getByRole("checkbox")).not.toBeChecked();
+  });
+
+  it("prefills the checkbox checked for a repeatable item", () => {
+    renderDialog(makeItem({ allowMultipleWinners: true }));
+    expect(screen.getByRole("checkbox")).toBeChecked();
+  });
+
+  it("checking the box sends allowMultipleWinners=true on column M", async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderDialog(makeItem({ rowIndex: 5, allowMultipleWinners: false }));
+
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+
+    expect(onSave).toHaveBeenCalledWith(5, [
+      { field: "allowMultipleWinners", colLetter: "M", value: true },
+    ]);
+  });
+
+  it("unchecking an already-repeatable item sends allowMultipleWinners=false", async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderDialog(makeItem({ rowIndex: 5, allowMultipleWinners: true }));
+
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+
+    expect(onSave).toHaveBeenCalledWith(5, [
+      { field: "allowMultipleWinners", colLetter: "M", value: false },
+    ]);
+  });
+
+  it("leaving the checkbox untouched does not include it among the saved changes", async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderDialog(makeItem({ rowIndex: 5 }));
+
+    const nameInput = screen.getByDisplayValue("Vintage Camera");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Antique Camera");
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+
+    const changes = onSave.mock.calls[0][1];
+    expect(changes.some((c: any) => c.field === "allowMultipleWinners")).toBe(false);
   });
 });

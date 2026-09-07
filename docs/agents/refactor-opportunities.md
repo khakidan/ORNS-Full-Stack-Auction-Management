@@ -38,8 +38,8 @@ deep audit's "Redundant/duplicated logic" section has been closed. See
 
 ### Code quality
 
-Nothing outstanding right now - every item flagged in this section has
-been closed. See `CHANGELOG.md` for the individual fixes.
+Nothing outstanding right now - the "No UI anywhere to set an item's Allow
+Multiple Winners flag" item has been closed. See `CHANGELOG.md` for the fix.
 
 ### Test coverage gaps (`testing-philosophy.md`)
 
