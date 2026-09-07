@@ -55,8 +55,10 @@ as was the `useWinnersData.ts` toast-rule violation and
 
 ### Test coverage gaps (`testing-philosophy.md`)
 
-1. **`AttendeeGuestsEditor.tsx`'s 3-guest cap (`MAX_GUESTS`) is never exercised at the boundary** - `AddAttendeeDialog.test.tsx`/`EditAttendeeDialog.test.tsx` (real, unmocked editor) only ever test 0-2 guests; nothing asserts the "Add Guest" button disappears once all 3 slots are filled, or that a 4th can't be added.
-2. **`src/lib/itemBadgeColors.ts` has zero test coverage** - no dedicated test file, and neither `AuctionItemRow.test.tsx` nor `ItemRow.test.tsx` asserts on the badge classes it produces, despite the file's own docblock stating its whole purpose is keeping colors consistent between those two components. Low severity (cosmetic, deterministic, no auction-state risk) - a real test would assert `categoryBadgeClass()` is stable for the same input and that `ITEM_TYPE_STYLES`' three entries resolve to distinct, non-overlapping classes.
+Nothing outstanding right now - both gaps flagged in the 2026-09-07 audit
+have been closed (`AttendeeGuestsEditor.test.tsx`/`itemBadgeColors.test.ts`,
+new files). Neither turned up a real bug - both were genuinely correct,
+just untested. See `CHANGELOG.md` for the individual fixes.
 
 ### Code Hardening
 
