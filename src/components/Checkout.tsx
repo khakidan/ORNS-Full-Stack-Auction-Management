@@ -1,13 +1,26 @@
 import { useAuction } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LoadingButton } from "@/components/ui/LoadingButton";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
-import { Handshake, Receipt, Mail } from "lucide-react";
+import { Filter, Handshake, Receipt, Mail } from "lucide-react";
 import { FilterToolbar } from "@/components/FilterToolbar";
+import { CheckoutStatsRow } from "@/components/CheckoutStatsRow";
 import { WinnerGrid } from "@/components/WinnerGrid";
 import { PaymentMethodDialog } from "@/components/PaymentMethodDialog";
+import { CheckoutStatusFilter } from "@/hooks/useCheckoutState";
 import { useCheckoutState } from "@/hooks/useCheckoutState";
+
+// SelectValue with no children renders the raw stored value, not the
+// matching SelectItem's label - see component-standards.md's documented
+// SelectValue failure mode.
+const STATUS_LABELS: Record<CheckoutStatusFilter, string> = {
+  all: "All Statuses",
+  awaiting: "Awaiting Checkout",
+  review: "Pending Verification",
+  paid: "Paid",
+};
 
 export default function Checkout() {
   const { bidders, items, loading, fetchAllData, attendees } = useAuction();
@@ -36,42 +49,59 @@ export default function Checkout() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between bg-slate-50 p-4 rounded-lg border border-slate-200">
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          <LoadingButton
-            onClick={() => state.setShowPrintConfirm(true)}
-            loading={state.isPrintingAll}
-            loadingText="Printing Batch..."
-            icon={<Receipt className="w-4 h-4" />}
-            className="bg-orns-red text-white hover:bg-orns-red/90 font-medium w-full sm:w-auto"
-          >
-            Print All Receipts
-          </LoadingButton>
-          <LoadingButton
-            variant="outline"
-            onClick={() => state.setShowEmailConfirm(true)}
-            loading={state.isEmailingAll}
-            loadingText="Sending Emails..."
-            icon={<Mail className="w-4 h-4" />}
-            className="w-full sm:w-auto"
-          >
-            Email All Winners
-          </LoadingButton>
-        </div>
-        <div className="text-sm font-medium text-muted-foreground bg-white px-3 py-1.5 rounded border border-slate-200 shadow-sm w-full sm:w-auto text-center">
-          Total Winners: <span className="text-orns-red font-bold">{state.winners.length}</span>
-        </div>
-      </div>
+      <CheckoutStatsRow
+        totalWinners={state.stats.totalWinners}
+        awaitingCount={state.stats.awaitingCount}
+        checkedOutCount={state.stats.checkedOutCount}
+        totalCollected={state.stats.totalCollected}
+        totalWon={state.stats.totalWon}
+      />
 
       <FilterToolbar
-        className="mb-6"
         searchValue={state.searchTerm}
         onSearchChange={state.setSearchTerm}
         searchPlaceholder="Search winners..."
+        searchClassName="md:max-w-xs"
+        searchInputClassName="h-10"
+        filtersWrap={false}
+        filters={
+          <Select value={state.statusFilter} onValueChange={(v: CheckoutStatusFilter) => state.setStatusFilter(v)}>
+            <SelectTrigger className="h-10 w-50 shrink-0">
+              <Filter className="w-3.5 h-3.5 mr-2 opacity-70" />
+              <SelectValue placeholder="Status">{(value: CheckoutStatusFilter) => STATUS_LABELS[value] ?? value}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="awaiting">Awaiting Checkout</SelectItem>
+              <SelectItem value="review">Pending Verification</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
+            </SelectContent>
+          </Select>
+        }
         trailing={
-          <LoadingButton variant="outline" onClick={state.handleRefresh} loading={state.fetchingWinners} icon={<Handshake className="w-4 h-4" />}>
-            Refresh Results
-          </LoadingButton>
+          <>
+            <LoadingButton variant="outline" onClick={state.handleRefresh} loading={state.fetchingWinners} icon={<Handshake className="w-4 h-4" />}>
+              Refresh
+            </LoadingButton>
+            <LoadingButton
+              variant="outline"
+              onClick={() => state.setShowPrintConfirm(true)}
+              loading={state.isPrintingAll}
+              loadingText="Printing Batch..."
+              icon={<Receipt className="w-4 h-4" />}
+            >
+              Print All Receipts
+            </LoadingButton>
+            <LoadingButton
+              onClick={() => state.setShowEmailConfirm(true)}
+              loading={state.isEmailingAll}
+              loadingText="Sending Emails..."
+              icon={<Mail className="w-4 h-4" />}
+              className="bg-orns-red text-white hover:bg-orns-red/90 font-medium"
+            >
+              Email All Winners
+            </LoadingButton>
+          </>
         }
       />
 

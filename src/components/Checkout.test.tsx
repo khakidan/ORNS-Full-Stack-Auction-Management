@@ -282,7 +282,10 @@ describe("Checkout", () => {
       await userEvent.click(screen.getByText("Confirm Payment"));
 
       await waitFor(() => {
-        expect(screen.getByText("Paid")).toBeTruthy();
+        // WinnerCard now renders "Paid" twice (a status chip plus the
+        // footer state) - assert both are present instead of a single
+        // ambiguous match.
+        expect(screen.getAllByText("Paid").length).toBe(2);
       });
     });
 

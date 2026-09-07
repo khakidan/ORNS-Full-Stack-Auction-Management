@@ -11,7 +11,10 @@ export interface WinnerRecord {
   items: { id: string; name: string; price: number }[];
   paid: boolean;
   paymentPending?: boolean;
+  paymentMethod?: string;
 }
+
+export type CheckoutStatusFilter = "all" | "awaiting" | "review" | "paid";
 
 interface UseCheckoutStateArgs {
   bidders: Bidder[];
@@ -80,10 +83,13 @@ export function useCheckoutState({
     setSearchTerm: winnersList.setSearchTerm,
     activeTab: winnersList.activeTab,
     setActiveTab: winnersList.setActiveTab,
+    statusFilter: winnersList.statusFilter,
+    setStatusFilter: winnersList.setStatusFilter,
     pendingWinners: winnersList.pendingWinners,
     completedWinners: winnersList.completedWinners,
     pendingFilteredWinners: winnersList.pendingFilteredWinners,
     completedFilteredWinners: winnersList.completedFilteredWinners,
+    stats: winnersList.stats,
 
     handleRefresh: winnersList.handleRefresh,
     handleEmailReceipt: receiptActions.handleEmailReceipt,

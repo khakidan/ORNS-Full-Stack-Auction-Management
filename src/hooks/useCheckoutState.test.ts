@@ -258,6 +258,117 @@ describe("useCheckoutState.pendingFilteredWinners / completedFilteredWinners", (
   });
 });
 
+describe("useCheckoutState.statusFilter", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLoadWinnersData();
+  });
+
+  function renderThreeStatuses() {
+    const bidders = [
+      makeBidder({ id: "101", firstName: "Alice", lastName: "One", checkedOut: false }),
+      makeBidder({ id: "102", firstName: "Bob", lastName: "Two", checkedOut: true, paid: false, checkoutTimestamp: "2026-01-01T00:00:00Z" }),
+    ];
+    return renderHook(() =>
+      useCheckoutState({
+        bidders,
+        items: ITEMS,
+        attendees: [],
+        fetchAllData: vi.fn(),
+        spreadsheetId: "ss-id",
+        itemsSpreadsheetId: "items-ss-id",
+        ticketsSpreadsheetId: "",
+        bidManagementSheet: "Bid-Management",
+        bidderNumbersSheet: "Bidder-Numbers",
+        folderId: "folder-id",
+        paypalIsSandbox: true,
+      })
+    );
+  }
+
+  it("defaults to 'all', showing every winner in their own tab-scoped list unfiltered by status", async () => {
+    const { result } = renderThreeStatuses();
+    await waitFor(() => expect(result.current.winners).toHaveLength(2));
+
+    expect(result.current.statusFilter).toBe("all");
+    expect(result.current.pendingFilteredWinners.map(w => w.bidderId)).toEqual(["101"]);
+    expect(result.current.completedFilteredWinners.map(w => w.bidderId)).toEqual(["102"]);
+  });
+
+  it("narrows the Completed tab to just 'review' (pending verification) winners", async () => {
+    const { result } = renderThreeStatuses();
+    await waitFor(() => expect(result.current.winners).toHaveLength(2));
+
+    act(() => {
+      result.current.setStatusFilter("review");
+    });
+
+    expect(result.current.completedFilteredWinners.map(w => w.bidderId)).toEqual(["102"]);
+    // Nothing in the Pending tab is ever "review" - that status only ever
+    // occurs once a bidder has checked out, so this is an intentionally
+    // empty (not broken) combination.
+    expect(result.current.pendingFilteredWinners).toEqual([]);
+  });
+
+  it("narrows the Pending tab to just 'awaiting' winners, yielding an empty Completed tab", async () => {
+    const { result } = renderThreeStatuses();
+    await waitFor(() => expect(result.current.winners).toHaveLength(2));
+
+    act(() => {
+      result.current.setStatusFilter("awaiting");
+    });
+
+    expect(result.current.pendingFilteredWinners.map(w => w.bidderId)).toEqual(["101"]);
+    expect(result.current.completedFilteredWinners).toEqual([]);
+  });
+});
+
+describe("useCheckoutState.stats", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLoadWinnersData();
+  });
+
+  it("computes totals against the full winners list, ignoring search/status/tab filtering", async () => {
+    const bidders = [
+      makeBidder({ id: "101", firstName: "Alice", lastName: "One", checkedOut: false }),
+      makeBidder({ id: "102", firstName: "Bob", lastName: "Two", checkedOut: true, paid: true }),
+    ];
+    const { result } = renderHook(() =>
+      useCheckoutState({
+        bidders,
+        items: ITEMS,
+        attendees: [],
+        fetchAllData: vi.fn(),
+        spreadsheetId: "ss-id",
+        itemsSpreadsheetId: "items-ss-id",
+        ticketsSpreadsheetId: "",
+        bidManagementSheet: "Bid-Management",
+        bidderNumbersSheet: "Bidder-Numbers",
+        folderId: "folder-id",
+        paypalIsSandbox: true,
+      })
+    );
+    await waitFor(() => expect(result.current.winners).toHaveLength(2));
+
+    // Alice (unpaid, $50) + Bob (paid, $75) - narrowing search/status/tab
+    // should never move these numbers, since they're meant as a stable
+    // whole-auction snapshot.
+    act(() => {
+      result.current.setSearchTerm("Alice");
+      result.current.setStatusFilter("paid");
+    });
+
+    expect(result.current.stats).toEqual({
+      totalWinners: 2,
+      awaitingCount: 1,
+      checkedOutCount: 1,
+      totalCollected: 75,
+      totalWon: 125,
+    });
+  });
+});
+
 describe("useCheckoutState.handleRefresh", () => {
   beforeEach(() => {
     vi.clearAllMocks();

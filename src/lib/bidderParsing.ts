@@ -12,6 +12,7 @@ export function parseBidderRows(rows: string[][]): Bidder[] {
       isProxy: row[5] === "TRUE" || row[5] === "true",
       checkedOut: row[6] === "TRUE" || row[6] === "true",
       paid: row[7] === "TRUE" || row[7] === "true",
+      paymentMethod: row[8]?.toString() || "",
       checkoutTimestamp: row[11]?.toString() || "",
       rowIndex: idx + 2,
     }))

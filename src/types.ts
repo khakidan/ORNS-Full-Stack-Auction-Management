@@ -7,6 +7,7 @@ export interface Bidder {
   isProxy: boolean;
   checkedOut: boolean;
   paid: boolean;
+  paymentMethod?: string;
   checkoutTimestamp?: string;
   rowIndex: number;
 }

@@ -71,4 +71,36 @@ describe("WinnerCard", () => {
     expect(screen.getByRole("button", { name: "Checkout" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Processing..." })).not.toBeInTheDocument();
   });
+
+  it("shows the 'Awaiting checkout' status chip for a winner who hasn't started checkout", () => {
+    renderCard();
+    expect(screen.getByText("Awaiting checkout")).toBeInTheDocument();
+  });
+
+  it("shows the 'Pending verification' status chip for a winner mid-PayPal-verification", () => {
+    renderCard({ winner: { ...WINNER, paymentPending: true } });
+    expect(screen.getByText("Pending verification")).toBeInTheDocument();
+  });
+
+  it("shows the 'Paid' status chip, plus the payment method line when one is on file", () => {
+    renderCard({ winner: { ...WINNER, paid: true, paymentMethod: "Cash" } });
+    // The chip and the footer both render the word "Paid" - assert there are two, and the method line separately.
+    expect(screen.getAllByText("Paid").length).toBe(2);
+    expect(screen.getByText("via Cash")).toBeInTheDocument();
+  });
+
+  it("does not show a payment method line when a paid winner has no method on file", () => {
+    renderCard({ winner: { ...WINNER, paid: true, paymentMethod: "" } });
+    expect(screen.queryByText(/^via /)).not.toBeInTheDocument();
+  });
+
+  it("labels the disabled Email button 'No Email' instead of only relying on a hover title", () => {
+    renderCard({ hasEmail: false });
+    expect(screen.getByRole("button", { name: "No Email" })).toBeInTheDocument();
+  });
+
+  it("shows initials derived from the winner's full name in the avatar", () => {
+    renderCard({ winner: { ...WINNER, name: "Alice One" } });
+    expect(screen.getByText("AO")).toBeInTheDocument();
+  });
 });

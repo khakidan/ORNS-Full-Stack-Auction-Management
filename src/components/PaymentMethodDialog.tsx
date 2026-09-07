@@ -1,10 +1,15 @@
+import { Banknote, Check, CreditCard, NotebookPen } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/LoadingButton";
 import { cn } from "@/lib/utils";
 import { WinnerRecord } from "@/hooks/useCheckoutState";
 
-const PAYMENT_METHODS = ["Cash", "Check", "Credit Card/PayPal"] as const;
+const PAYMENT_METHODS = [
+  { value: "Cash", icon: Banknote },
+  { value: "Check", icon: NotebookPen },
+  { value: "Credit Card/PayPal", icon: CreditCard },
+] as const;
 
 interface PaymentMethodDialogProps {
   open: boolean;
@@ -35,17 +40,34 @@ export function PaymentMethodDialog({
             Total: <span className="font-bold text-orns-red">${winnerToPay?.total.toFixed(2)}</span>
           </DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-1 gap-3 py-4">
-          {PAYMENT_METHODS.map((method) => (
-            <Button
-              key={method}
-              variant={paymentMethod === method ? "default" : "outline"}
-              className={cn(paymentMethod === method && "bg-emerald-600 hover:bg-emerald-700")}
-              onClick={() => onPaymentMethodChange(method)}
-            >
-              {method === "Credit Card/PayPal" ? "Credit Card / PayPal" : method}
-            </Button>
-          ))}
+        <div className="grid grid-cols-1 gap-2 py-4">
+          {PAYMENT_METHODS.map(({ value, icon: Icon }) => {
+            const isSelected = paymentMethod === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onPaymentMethodChange(value)}
+                className={cn(
+                  "flex items-center gap-3 w-full px-4 py-3 rounded-lg border text-sm font-medium transition-colors",
+                  isSelected
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-900"
+                    : "border-input bg-transparent hover:bg-accent"
+                )}
+              >
+                <Icon className={cn("w-4.5 h-4.5", isSelected ? "text-emerald-600" : "text-muted-foreground")} />
+                <span className="flex-1 text-left">{value === "Credit Card/PayPal" ? "Credit Card / PayPal" : value}</span>
+                <span
+                  className={cn(
+                    "w-4.5 h-4.5 rounded-full border flex items-center justify-center shrink-0",
+                    isSelected ? "bg-emerald-500 border-emerald-500" : "border-input"
+                  )}
+                >
+                  {isSelected && <Check className="w-3 h-3 text-white" />}
+                </span>
+              </button>
+            );
+          })}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
