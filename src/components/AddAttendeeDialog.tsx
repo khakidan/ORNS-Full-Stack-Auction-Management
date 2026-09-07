@@ -19,6 +19,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FormSection } from "@/components/FormSection";
+import { AttendeeGuestsEditor, GuestDraft } from "@/components/AttendeeGuestsEditor";
+import { hasMoreGuestsThanTicketsPurchased } from "@/lib/attendeeValidation";
 
 // SelectValue with no children renders the raw stored value, not the
 // matching SelectItem's label - see component-standards.md's documented
@@ -30,13 +33,14 @@ const SOURCE_LABELS: Record<string, string> = {
   "staff tickets": "Staff",
 };
 
-interface NewAttendeeEntry {
+export interface NewAttendeeEntry {
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
   source: string;
   tickets: string;
+  guests: GuestDraft[];
 }
 
 interface AddAttendeeDialogProps {
@@ -48,6 +52,15 @@ interface AddAttendeeDialogProps {
   isSubmitting: boolean;
 }
 
+/**
+ * Mirrors EditAttendeeDialog.tsx's sectioned layout (via the shared
+ * FormSection) and reuses the same AttendeeGuestsEditor for guest
+ * collection at creation time - per the "Attendee Tickets workflow
+ * challenges" bug report ("no way to indicate...that the bidder wishes
+ * to have guests - and if that guest wants to have their own bidder
+ * number"). "Own bidder number" only shows for General Tickets, since
+ * Staff/Sponsor sheets have no column for it (attendeeSheetColumns.ts).
+ */
 export function AddAttendeeDialog({
   open,
   onOpenChange,
@@ -56,6 +69,8 @@ export function AddAttendeeDialog({
   onSubmit,
   isSubmitting,
 }: AddAttendeeDialogProps) {
+  const guestsExceedTickets = hasMoreGuestsThanTicketsPurchased({ guestsInfo: newEntry.guests, ticketsPurchased: newEntry.tickets });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger
@@ -66,48 +81,73 @@ export function AddAttendeeDialog({
           </Button>
         }
       />
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Add New Entry</DialogTitle>
           <DialogDescription>Manually add a sponsor, staff member, or offline ticket buyer.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Name</Label>
-            <div className="col-span-3 flex gap-2">
-              <Input placeholder="First" value={newEntry.firstName} onChange={e => onNewEntryChange({ ...newEntry, firstName: e.target.value })} />
-              <Input placeholder="Last" value={newEntry.lastName} onChange={e => onNewEntryChange({ ...newEntry, lastName: e.target.value })} />
+
+        <div className="flex flex-col gap-5 max-h-[65vh] overflow-y-auto pr-1">
+          <FormSection title="Contact">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1.5 block">First name</Label>
+                <Input placeholder="First" value={newEntry.firstName} onChange={e => onNewEntryChange({ ...newEntry, firstName: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1.5 block">Last name</Label>
+                <Input placeholder="Last" value={newEntry.lastName} onChange={e => onNewEntryChange({ ...newEntry, lastName: e.target.value })} />
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Email</Label>
-            <Input className="col-span-3" value={newEntry.email} onChange={e => onNewEntryChange({ ...newEntry, email: e.target.value })} />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Phone</Label>
-            <Input className="col-span-3" value={newEntry.phone} onChange={e => onNewEntryChange({ ...newEntry, phone: e.target.value })} />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Source</Label>
-            <Select value={newEntry.source} onValueChange={v => onNewEntryChange({ ...newEntry, source: v })}>
-              <SelectTrigger className="col-span-3">
-                <SelectValue>{(value: string) => SOURCE_LABELS[value] ?? value}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="tickets">General Tickets</SelectItem>
-                <SelectItem value="sponsor tickets">Sponsor</SelectItem>
-                <SelectItem value="staff tickets">Staff</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">Tickets</Label>
-            <Input type="number" className="col-span-3" value={newEntry.tickets} onChange={e => onNewEntryChange({ ...newEntry, tickets: e.target.value })} />
-          </div>
+            <div className="mt-3">
+              <Label className="text-xs text-muted-foreground mb-1.5 block">Email</Label>
+              <Input value={newEntry.email} onChange={e => onNewEntryChange({ ...newEntry, email: e.target.value })} />
+            </div>
+            <div className="mt-3">
+              <Label className="text-xs text-muted-foreground mb-1.5 block">Phone</Label>
+              <Input value={newEntry.phone} onChange={e => onNewEntryChange({ ...newEntry, phone: e.target.value })} />
+            </div>
+          </FormSection>
+
+          <FormSection title="Tickets">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1.5 block">Source</Label>
+                <Select value={newEntry.source} onValueChange={v => onNewEntryChange({ ...newEntry, source: v })}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue>{(value: string) => SOURCE_LABELS[value] ?? value}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tickets">General Tickets</SelectItem>
+                    <SelectItem value="sponsor tickets">Sponsor</SelectItem>
+                    <SelectItem value="staff tickets">Staff</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1.5 block">Tickets Purchased</Label>
+                <Input type="number" min="0" value={newEntry.tickets} onChange={e => onNewEntryChange({ ...newEntry, tickets: e.target.value })} />
+              </div>
+            </div>
+          </FormSection>
+
+          <FormSection title="Guests">
+            <AttendeeGuestsEditor
+              guests={newEntry.guests}
+              onChange={(guests) => onNewEntryChange({ ...newEntry, guests })}
+              allowOwnBidderNumber={newEntry.source === "tickets"}
+            />
+            {guestsExceedTickets && (
+              <p className="text-xs text-red-600 mt-2">
+                {newEntry.guests.length} guests listed but only {newEntry.tickets || 0} ticket(s) purchased - increase Tickets Purchased or remove a guest before saving.
+              </p>
+            )}
+          </FormSection>
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <LoadingButton onClick={onSubmit} loading={isSubmitting}>Save Entry</LoadingButton>
+          <LoadingButton onClick={onSubmit} loading={isSubmitting} disabled={guestsExceedTickets}>Save Entry</LoadingButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

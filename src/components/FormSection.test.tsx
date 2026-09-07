@@ -4,14 +4,14 @@
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
-import { AuctionItemFormSection } from "./AuctionItemFormSection";
+import { FormSection } from "./FormSection";
 
-describe("AuctionItemFormSection", () => {
+describe("FormSection", () => {
   it("renders the uppercase title and its children", () => {
     render(
-      <AuctionItemFormSection title="Pricing">
+      <FormSection title="Pricing">
         <div>Value field</div>
-      </AuctionItemFormSection>
+      </FormSection>
     );
 
     expect(screen.getByText("Pricing")).toBeInTheDocument();

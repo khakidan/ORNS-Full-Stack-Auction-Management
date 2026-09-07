@@ -2,32 +2,12 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { updateSheetData } from "@/services/google-api";
 import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
-import { Attendee } from "@/types";
-
-interface EditGuestDraft {
-  guestIndex: number;
-  firstName: string;
-  lastName: string;
-  email: string;
-}
-
-interface AttendeeEditDraft {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  paymentStatus: string;
-  guests: EditGuestDraft[];
-}
-
-interface NewAttendeeEntry {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  source: string;
-  tickets: string;
-}
+import { hasMoreGuestsThanTicketsPurchased } from "@/lib/attendeeValidation";
+import { guestColumnsForSheet, guestRowIndicesForSheet, paymentColumnsForSheet, GuestSlotIndex } from "@/lib/attendeeSheetColumns";
+import { NewAttendeeEntry } from "@/components/AddAttendeeDialog";
+import { AttendeeEditDraft } from "@/components/EditAttendeeDialog";
+import { GuestDraft } from "@/components/AttendeeGuestsEditor";
+import { Attendee, Guest } from "@/types";
 
 const EMPTY_NEW_ENTRY: NewAttendeeEntry = {
   firstName: "",
@@ -35,7 +15,8 @@ const EMPTY_NEW_ENTRY: NewAttendeeEntry = {
   email: "",
   phone: "",
   source: "tickets",
-  tickets: "1"
+  tickets: "1",
+  guests: [],
 };
 
 interface UseTicketAttendeeStateArgs {
@@ -83,27 +64,21 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
     if (field === 'lastName') col = 'B';
     if (field === 'email') col = 'C';
     if (field === 'phone') col = 'D';
+    if (field === 'ticketsPurchased') col = 'E';
+    if (field === 'hasGuests') col = 'F';
+    if (field === 'paymentMethod' || field === 'totalPaid') {
+      col = paymentColumnsForSheet(attendee.sheet)[field];
+    }
 
-    if (guestIndex !== undefined && (field === 'firstName' || field === 'lastName' || field === 'email')) {
+    if (guestIndex !== undefined && (field === 'firstName' || field === 'lastName' || field === 'email' || field === 'ownBidderNumber')) {
       // Guest column triples shift after guest 1 on the general "tickets"
       // sheet (an "own bidder number" flag inserted after guest 1 pushes
       // everything past it over by one column) but not on staff/sponsor
       // sheets - the exact same shift attendeeParsing.ts's parser and
       // syncService.ts's collectGuestInfo already account for.
-      const GUEST_COLUMNS: Record<string, Record<number, { firstName: string; lastName: string; email: string }>> = {
-        tickets: {
-          1: { firstName: 'H', lastName: 'I', email: 'J' },
-          2: { firstName: 'L', lastName: 'M', email: 'N' },
-          3: { firstName: 'P', lastName: 'Q', email: 'R' },
-        },
-        default: {
-          1: { firstName: 'H', lastName: 'I', email: 'J' },
-          2: { firstName: 'K', lastName: 'L', email: 'M' },
-          3: { firstName: 'N', lastName: 'O', email: 'P' },
-        },
-      };
-      const columnsForGuest = (GUEST_COLUMNS[attendee.sheet] || GUEST_COLUMNS.default)[guestIndex];
-      if (columnsForGuest) col = columnsForGuest[field];
+      const columnsForGuest = guestColumnsForSheet(attendee.sheet)[guestIndex as GuestSlotIndex];
+      const resolvedCol = columnsForGuest?.[field as 'firstName' | 'lastName' | 'email' | 'ownBidderNumber'];
+      if (resolvedCol) col = resolvedCol;
     }
 
     // Just this attendee's previous state, not a whole captured array
@@ -156,7 +131,7 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
     setAttendees(prev => prev.map(a => a.id === attendee.id ? { ...a, paymentStatus: newStatus } : a));
 
     // Background sync
-    const col = attendee.sheet === 'tickets' ? 'U' : 'R'; // Just an estimate, might differ per sheet
+    const col = paymentColumnsForSheet(attendee.sheet).paymentStatus;
     updateSheetData(spreadsheetId, `${attendee.sheet}!${col}${attendee.rowIndex}`, [[newStatus]])
       .then(() => toast.success("Payment status updated"))
       .catch(e => {
@@ -167,9 +142,73 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
       });
   };
 
+  /**
+   * Adds a brand-new guest slot - writes the whole 3-4 column range for
+   * that slot in one call (rather than per-field, like an existing
+   * guest's edits reuse updateField for) since there's no prior guest
+   * object for the optimistic update to find/merge into.
+   */
+  const addGuestSlot = async (attendee: Attendee, guest: GuestDraft) => {
+    if (!spreadsheetId) return;
+    const cols = guestColumnsForSheet(attendee.sheet)[guest.guestIndex];
+
+    const previousAttendeeState = attendee;
+    const newGuest: Guest = {
+      name: `${guest.firstName} ${guest.lastName}`.trim(),
+      firstName: guest.firstName,
+      lastName: guest.lastName,
+      email: guest.email,
+      guestIndex: guest.guestIndex,
+      ownBidderNumber: cols.ownBidderNumber ? guest.ownBidderNumber : "",
+    };
+
+    setAttendees(prev => prev.map(a => a.id === attendee.id
+      ? { ...a, guestsInfo: [...a.guestsInfo, newGuest].sort((x, y) => x.guestIndex - y.guestIndex) }
+      : a));
+
+    const values = [guest.firstName, guest.lastName, guest.email];
+    const lastCol = cols.ownBidderNumber || cols.email;
+    if (cols.ownBidderNumber) values.push(guest.ownBidderNumber);
+
+    updateSheetData(spreadsheetId, `${attendee.sheet}!${cols.firstName}${attendee.rowIndex}:${lastCol}${attendee.rowIndex}`, [values])
+      .then(() => toast.success("Guest added successfully"))
+      .catch(e => {
+        console.error(e);
+        setAttendees(prev => prev.map(a => a.id === attendee.id ? previousAttendeeState : a));
+        toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
+      });
+  };
+
+  /** Clears a removed guest's whole column range in one call - the mirror of addGuestSlot. */
+  const removeGuestSlot = async (attendee: Attendee, guest: Guest) => {
+    if (!spreadsheetId) return;
+    const cols = guestColumnsForSheet(attendee.sheet)[guest.guestIndex as GuestSlotIndex];
+
+    const previousAttendeeState = attendee;
+    setAttendees(prev => prev.map(a => a.id === attendee.id
+      ? { ...a, guestsInfo: a.guestsInfo.filter(g => g.guestIndex !== guest.guestIndex) }
+      : a));
+
+    const values = ["", "", ""];
+    const lastCol = cols.ownBidderNumber || cols.email;
+    if (cols.ownBidderNumber) values.push("");
+
+    updateSheetData(spreadsheetId, `${attendee.sheet}!${cols.firstName}${attendee.rowIndex}:${lastCol}${attendee.rowIndex}`, [values])
+      .then(() => toast.success("Guest removed"))
+      .catch(e => {
+        console.error(e);
+        setAttendees(prev => prev.map(a => a.id === attendee.id ? previousAttendeeState : a));
+        toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
+      });
+  };
+
   const handleAddSubmit = async () => {
     if (!newEntry.firstName || !newEntry.lastName) {
       toast.error("Name is required");
+      return;
+    }
+    if (hasMoreGuestsThanTicketsPurchased({ guestsInfo: newEntry.guests, ticketsPurchased: newEntry.tickets })) {
+      toast.error("Guests exceed tickets purchased - adjust before saving.");
       return;
     }
 
@@ -181,6 +220,16 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
       row[2] = newEntry.email;
       row[3] = newEntry.phone;
       row[4] = newEntry.tickets;
+      row[5] = newEntry.guests.length > 0 ? "yes" : "";
+
+      const rowIndices = guestRowIndicesForSheet(newEntry.source);
+      newEntry.guests.forEach((g) => {
+        const idx = rowIndices[g.guestIndex];
+        row[idx.firstName] = g.firstName;
+        row[idx.lastName] = g.lastName;
+        row[idx.email] = g.email;
+        if (idx.ownBidderNumber !== null) row[idx.ownBidderNumber] = g.ownBidderNumber;
+      });
 
       if (newEntry.source !== 'tickets') {
         // Column order here matches parseAttendeeRows' own unshifted
@@ -215,27 +264,51 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
    * sync + rollback for each field that actually changed - only a diff
    * against the attendee being edited, not a full rewrite, keeps this
    * from re-syncing (and re-rollback-racing) fields the user never
-   * touched.
+   * touched. Guest slots are reconciled against all 3 fixed positions
+   * (not just what's in the draft) so a removed guest is actually
+   * cleared on the sheet, not merely skipped.
    */
   const handleEditSave = async (draft: AttendeeEditDraft) => {
     if (!attendeeToEdit) return;
     const attendee = attendeeToEdit;
 
     const fieldUpdates: Promise<void>[] = [];
-    (["firstName", "lastName", "email", "phone"] as const).forEach((field) => {
+    (["firstName", "lastName", "email", "phone", "ticketsPurchased", "paymentMethod", "totalPaid"] as const).forEach((field) => {
       if (draft[field] !== attendee[field]) {
         fieldUpdates.push(updateField(attendee, field, draft[field]));
       }
     });
-    draft.guests.forEach((guestDraft) => {
-      const original = attendee.guestsInfo.find((g) => g.guestIndex === guestDraft.guestIndex);
-      if (!original) return;
-      (["firstName", "lastName", "email"] as const).forEach((field) => {
-        if (guestDraft[field] !== original[field]) {
-          fieldUpdates.push(updateField(attendee, field, guestDraft[field], guestDraft.guestIndex));
-        }
-      });
-    });
+
+    for (const guestIndex of [1, 2, 3] as const) {
+      const original = attendee.guestsInfo.find((g) => g.guestIndex === guestIndex) || null;
+      const current = draft.guests.find((g) => g.guestIndex === guestIndex) || null;
+
+      if (!original && current) {
+        fieldUpdates.push(addGuestSlot(attendee, current));
+        continue;
+      }
+      if (original && !current) {
+        fieldUpdates.push(removeGuestSlot(attendee, original));
+        continue;
+      }
+      if (original && current) {
+        (["firstName", "lastName", "email", "ownBidderNumber"] as const).forEach((field) => {
+          if (field === "ownBidderNumber" && attendee.sheet !== "tickets") return;
+          if (current[field] !== original[field]) {
+            fieldUpdates.push(updateField(attendee, field, current[field], guestIndex));
+          }
+        });
+      }
+    }
+
+    // Only re-derive hasGuests when this save actually changes the guest
+    // count (added/removed a slot above) - comparing against the stored
+    // hasGuests flag directly could otherwise "fix" a pre-existing,
+    // unrelated mismatch as a side effect of an unrelated field edit.
+    if (draft.guests.length !== attendee.guestsInfo.length) {
+      fieldUpdates.push(updateField(attendee, "hasGuests", draft.guests.length > 0 ? "yes" : ""));
+    }
+
     if (draft.paymentStatus !== attendee.paymentStatus) {
       fieldUpdates.push(updatePaymentStatus(attendee, draft.paymentStatus));
     }

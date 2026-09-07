@@ -419,7 +419,7 @@ describe("useTicketAttendeeState", () => {
       const { result } = setup([makeAttendee()]);
 
       await act(async () => {
-        await result.current.handleEditSave({ firstName: "X", lastName: "Y", email: "z@e.com", phone: "1", paymentStatus: "Paid", guests: [] });
+        await result.current.handleEditSave({ firstName: "X", lastName: "Y", email: "z@e.com", phone: "1", ticketsPurchased: "1", paymentStatus: "Paid", paymentMethod: "Manual", totalPaid: "$0", guests: [] });
       });
 
       expect(mockedUpdateSheetData).not.toHaveBeenCalled();
@@ -438,7 +438,10 @@ describe("useTicketAttendeeState", () => {
           lastName: "One",     // unchanged
           email: "alice@example.com", // unchanged
           phone: "555-0100",   // unchanged
+          ticketsPurchased: attendee.ticketsPurchased, // unchanged
           paymentStatus: attendee.paymentStatus, // unchanged
+          paymentMethod: attendee.paymentMethod, // unchanged
+          totalPaid: attendee.totalPaid, // unchanged
           guests: [],
         });
       });
@@ -461,8 +464,11 @@ describe("useTicketAttendeeState", () => {
           lastName: attendee.lastName,
           email: attendee.email,
           phone: attendee.phone,
+          ticketsPurchased: attendee.ticketsPurchased,
           paymentStatus: attendee.paymentStatus,
-          guests: [{ guestIndex: 1, firstName: "Robert", lastName: "Guest", email: "bob@example.com" }],
+          paymentMethod: attendee.paymentMethod,
+          totalPaid: attendee.totalPaid,
+          guests: [{ guestIndex: 1, name: "Robert Guest", firstName: "Robert", lastName: "Guest", email: "bob@example.com", ownBidderNumber: "" }],
         });
       });
 
@@ -483,7 +489,10 @@ describe("useTicketAttendeeState", () => {
           lastName: attendee.lastName,
           email: attendee.email,
           phone: attendee.phone,
+          ticketsPurchased: attendee.ticketsPurchased,
           paymentStatus: "Paid",
+          paymentMethod: attendee.paymentMethod,
+          totalPaid: attendee.totalPaid,
           guests: [],
         });
       });
@@ -506,7 +515,10 @@ describe("useTicketAttendeeState", () => {
           lastName: attendee.lastName,
           email: attendee.email,
           phone: attendee.phone,
+          ticketsPurchased: attendee.ticketsPurchased,
           paymentStatus: attendee.paymentStatus,
+          paymentMethod: attendee.paymentMethod,
+          totalPaid: attendee.totalPaid,
           guests: [],
         });
       });
@@ -528,12 +540,248 @@ describe("useTicketAttendeeState", () => {
           lastName: attendee.lastName,
           email: attendee.email,
           phone: attendee.phone,
+          ticketsPurchased: attendee.ticketsPurchased,
           paymentStatus: attendee.paymentStatus,
+          paymentMethod: attendee.paymentMethod,
+          totalPaid: attendee.totalPaid,
           guests: [],
         });
       });
 
       expect(result.current.attendeeToEdit).toBeNull();
+    });
+
+    it("syncs a changed ticketsPurchased to column E", async () => {
+      mockedUpdateSheetData.mockResolvedValue(undefined);
+      const attendee = makeAttendee({ rowIndex: 5, ticketsPurchased: "1" });
+      const { result } = setup([attendee]);
+
+      act(() => { result.current.setAttendeeToEdit(attendee); });
+
+      await act(async () => {
+        await result.current.handleEditSave({
+          firstName: attendee.firstName,
+          lastName: attendee.lastName,
+          email: attendee.email,
+          phone: attendee.phone,
+          ticketsPurchased: "3",
+          paymentStatus: attendee.paymentStatus,
+          paymentMethod: attendee.paymentMethod,
+          totalPaid: attendee.totalPaid,
+          guests: [],
+        });
+      });
+
+      expect(mockedUpdateSheetData).toHaveBeenCalledTimes(1);
+      expect(mockedUpdateSheetData).toHaveBeenCalledWith("ss-id", "tickets!E5", [["3"]]);
+    });
+
+    it("syncs changed paymentMethod/totalPaid to the general tickets sheet's T/V columns", async () => {
+      mockedUpdateSheetData.mockResolvedValue(undefined);
+      const attendee = makeAttendee({ rowIndex: 5, sheet: "tickets", paymentMethod: "Manual", totalPaid: "$0" });
+      const { result } = setup([attendee]);
+
+      act(() => { result.current.setAttendeeToEdit(attendee); });
+
+      await act(async () => {
+        await result.current.handleEditSave({
+          firstName: attendee.firstName,
+          lastName: attendee.lastName,
+          email: attendee.email,
+          phone: attendee.phone,
+          ticketsPurchased: attendee.ticketsPurchased,
+          paymentStatus: attendee.paymentStatus,
+          paymentMethod: "Credit Card",
+          totalPaid: "$150",
+          guests: [],
+        });
+      });
+
+      expect(mockedUpdateSheetData).toHaveBeenCalledTimes(2);
+      expect(mockedUpdateSheetData).toHaveBeenCalledWith("ss-id", "tickets!T5", [["Credit Card"]]);
+      expect(mockedUpdateSheetData).toHaveBeenCalledWith("ss-id", "tickets!V5", [["$150"]]);
+    });
+
+    it("adds a new guest slot with a single whole-range write, including the tickets sheet's own-bidder-number column", async () => {
+      mockedUpdateSheetData.mockResolvedValue(undefined);
+      const attendee = makeAttendee({ rowIndex: 7, sheet: "tickets", guestsInfo: [] });
+      const { result, getAttendees } = setup([attendee]);
+
+      act(() => { result.current.setAttendeeToEdit(attendee); });
+
+      await act(async () => {
+        await result.current.handleEditSave({
+          firstName: attendee.firstName,
+          lastName: attendee.lastName,
+          email: attendee.email,
+          phone: attendee.phone,
+          ticketsPurchased: attendee.ticketsPurchased,
+          paymentStatus: attendee.paymentStatus,
+          paymentMethod: attendee.paymentMethod,
+          totalPaid: attendee.totalPaid,
+          guests: [{ guestIndex: 1, name: "New Guest", firstName: "New", lastName: "Guest", email: "new@example.com", ownBidderNumber: "yes" }],
+        });
+      });
+
+      // Guest count changed (0 -> 1), so hasGuests also syncs.
+      expect(mockedUpdateSheetData).toHaveBeenCalledTimes(2);
+      expect(mockedUpdateSheetData).toHaveBeenCalledWith("ss-id", "tickets!H7:K7", [["New", "Guest", "new@example.com", "yes"]]);
+      expect(mockedUpdateSheetData).toHaveBeenCalledWith("ss-id", "tickets!F7", [["yes"]]);
+
+      expect(getAttendees()[0].guestsInfo).toEqual([
+        { name: "New Guest", firstName: "New", lastName: "Guest", email: "new@example.com", guestIndex: 1, ownBidderNumber: "yes" },
+      ]);
+    });
+
+    it("adds a new guest slot on a staff/sponsor sheet without an own-bidder-number column", async () => {
+      mockedUpdateSheetData.mockResolvedValue(undefined);
+      const attendee = makeAttendee({ rowIndex: 9, sheet: "sponsor tickets", guestsInfo: [] });
+      const { result } = setup([attendee]);
+
+      act(() => { result.current.setAttendeeToEdit(attendee); });
+
+      await act(async () => {
+        await result.current.handleEditSave({
+          firstName: attendee.firstName,
+          lastName: attendee.lastName,
+          email: attendee.email,
+          phone: attendee.phone,
+          ticketsPurchased: attendee.ticketsPurchased,
+          paymentStatus: attendee.paymentStatus,
+          paymentMethod: attendee.paymentMethod,
+          totalPaid: attendee.totalPaid,
+          guests: [{ guestIndex: 1, name: "New Guest", firstName: "New", lastName: "Guest", email: "new@example.com", ownBidderNumber: "" }],
+        });
+      });
+
+      expect(mockedUpdateSheetData).toHaveBeenCalledWith("ss-id", "sponsor tickets!H9:J9", [["New", "Guest", "new@example.com"]]);
+    });
+
+    it("removing a guest clears its whole column range and updates hasGuests", async () => {
+      mockedUpdateSheetData.mockResolvedValue(undefined);
+      const guest = makeGuest({ guestIndex: 1, firstName: "Bob", lastName: "Guest", email: "bob@example.com" });
+      const attendee = makeAttendee({ rowIndex: 7, sheet: "tickets", guestsInfo: [guest], hasGuests: "yes" });
+      const { result, getAttendees } = setup([attendee]);
+
+      act(() => { result.current.setAttendeeToEdit(attendee); });
+
+      await act(async () => {
+        await result.current.handleEditSave({
+          firstName: attendee.firstName,
+          lastName: attendee.lastName,
+          email: attendee.email,
+          phone: attendee.phone,
+          ticketsPurchased: attendee.ticketsPurchased,
+          paymentStatus: attendee.paymentStatus,
+          paymentMethod: attendee.paymentMethod,
+          totalPaid: attendee.totalPaid,
+          guests: [],
+        });
+      });
+
+      expect(mockedUpdateSheetData).toHaveBeenCalledWith("ss-id", "tickets!H7:K7", [["", "", "", ""]]);
+      expect(mockedUpdateSheetData).toHaveBeenCalledWith("ss-id", "tickets!F7", [[""]]);
+      expect(getAttendees()[0].guestsInfo).toEqual([]);
+    });
+
+    it("does not sync ownBidderNumber for an edited existing guest on a staff/sponsor sheet", async () => {
+      mockedUpdateSheetData.mockResolvedValue(undefined);
+      const guest = makeGuest({ guestIndex: 1, firstName: "Bob", lastName: "Guest", email: "bob@example.com", ownBidderNumber: "" });
+      const attendee = makeAttendee({ rowIndex: 9, sheet: "staff tickets", guestsInfo: [guest] });
+      const { result } = setup([attendee]);
+
+      act(() => { result.current.setAttendeeToEdit(attendee); });
+
+      await act(async () => {
+        await result.current.handleEditSave({
+          firstName: attendee.firstName,
+          lastName: attendee.lastName,
+          email: attendee.email,
+          phone: attendee.phone,
+          ticketsPurchased: attendee.ticketsPurchased,
+          paymentStatus: attendee.paymentStatus,
+          paymentMethod: attendee.paymentMethod,
+          totalPaid: attendee.totalPaid,
+          // "yes" here should be ignored entirely for a staff/sponsor sheet -
+          // there's no column to write it to.
+          guests: [{ guestIndex: 1, name: "Bob Guest", firstName: "Bob", lastName: "Guest", email: "bob@example.com", ownBidderNumber: "yes" }],
+        });
+      });
+
+      expect(mockedUpdateSheetData).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("handleAddSubmit - guest row building", () => {
+    function setup() {
+      const setAttendees = vi.fn();
+      const addAttendee = vi.fn().mockResolvedValue(undefined);
+      const hook = renderHook(() =>
+        useTicketAttendeeState({
+          attendees: [],
+          setAttendees,
+          addAttendee,
+          removeAttendee: vi.fn(),
+          spreadsheetId: "ss-id",
+        })
+      );
+      return { ...hook, addAttendee };
+    }
+
+    it("places a General Tickets guest (with own-bidder-number) into the shifted H-K columns", async () => {
+      const { result, addAttendee } = setup();
+
+      act(() => {
+        result.current.setNewEntry({
+          firstName: "Maria", lastName: "Garcia", email: "", phone: "", source: "tickets", tickets: "2",
+          guests: [{ guestIndex: 1, name: "", firstName: "Guest", lastName: "One", email: "g1@example.com", ownBidderNumber: "yes" }],
+        });
+      });
+
+      await act(async () => { await result.current.handleAddSubmit(); });
+
+      expect(addAttendee).toHaveBeenCalledOnce();
+      const [, row] = addAttendee.mock.calls[0];
+      expect(row[5]).toBe("yes"); // hasGuests
+      expect(row[7]).toBe("Guest");
+      expect(row[8]).toBe("One");
+      expect(row[9]).toBe("g1@example.com");
+      expect(row[10]).toBe("yes"); // own bidder number
+    });
+
+    it("places a Staff/Sponsor guest into the unshifted H-J columns, with no own-bidder-number column", async () => {
+      const { result, addAttendee } = setup();
+
+      act(() => {
+        result.current.setNewEntry({
+          firstName: "John", lastName: "Staff", email: "", phone: "", source: "staff tickets", tickets: "1",
+          guests: [{ guestIndex: 1, name: "", firstName: "Guest", lastName: "One", email: "g1@example.com", ownBidderNumber: "yes" }],
+        });
+      });
+
+      await act(async () => { await result.current.handleAddSubmit(); });
+
+      const [, row] = addAttendee.mock.calls[0];
+      expect(row[7]).toBe("Guest");
+      expect(row[8]).toBe("One");
+      expect(row[9]).toBe("g1@example.com");
+      // Column 10 is guest 2's firstName on this layout, not an own-bidder flag - confirms nothing spilled over.
+      expect(row[10]).toBe("");
+    });
+
+    it("blocks submission (no addAttendee call) when guests exceed tickets purchased", async () => {
+      const { result, addAttendee } = setup();
+
+      act(() => {
+        result.current.setNewEntry({
+          firstName: "Maria", lastName: "Garcia", email: "", phone: "", source: "tickets", tickets: "0",
+          guests: [{ guestIndex: 1, name: "", firstName: "Guest", lastName: "One", email: "", ownBidderNumber: "" }],
+        });
+      });
+
+      await act(async () => { await result.current.handleAddSubmit(); });
+
+      expect(addAttendee).not.toHaveBeenCalled();
     });
   });
 });

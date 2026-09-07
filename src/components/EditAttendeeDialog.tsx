@@ -11,25 +11,22 @@ import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/LoadingButton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { FormSection } from "@/components/FormSection";
+import { AttendeeGuestsEditor, GuestDraft } from "@/components/AttendeeGuestsEditor";
+import { hasMoreGuestsThanTicketsPurchased } from "@/lib/attendeeValidation";
 import { Attendee } from "@/types";
-
-export interface EditGuestDraft {
-  guestIndex: number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  ownBidderNumber: string;
-}
 
 export interface AttendeeEditDraft {
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
+  ticketsPurchased: string;
   paymentStatus: string;
-  guests: EditGuestDraft[];
+  paymentMethod: string;
+  totalPaid: string;
+  guests: GuestDraft[];
 }
 
 const EMPTY_DRAFT: AttendeeEditDraft = {
@@ -37,7 +34,10 @@ const EMPTY_DRAFT: AttendeeEditDraft = {
   lastName: "",
   email: "",
   phone: "",
+  ticketsPurchased: "0",
   paymentStatus: "Pending",
+  paymentMethod: "",
+  totalPaid: "",
   guests: [],
 };
 
@@ -47,9 +47,13 @@ function toDraft(attendee: Attendee): AttendeeEditDraft {
     lastName: attendee.lastName,
     email: attendee.email,
     phone: attendee.phone,
+    ticketsPurchased: attendee.ticketsPurchased,
     paymentStatus: attendee.paymentStatus,
+    paymentMethod: attendee.paymentMethod,
+    totalPaid: attendee.totalPaid,
     guests: attendee.guestsInfo.map(g => ({
-      guestIndex: g.guestIndex,
+      guestIndex: g.guestIndex as GuestDraft["guestIndex"],
+      name: g.name,
       firstName: g.firstName,
       lastName: g.lastName,
       email: g.email,
@@ -67,10 +71,16 @@ interface EditAttendeeDialogProps {
 }
 
 /**
- * Replaces the per-field inline editors that used to live in
- * AttendeeRow.tsx (see the "Attendee List UI Layout Issues" bug report)
- * with a single dialog covering contact info, every guest, and payment
- * status at once.
+ * Covers every editable aspect of an attendee's ticket-sheet row in one
+ * dialog - contact info, tickets purchased, up to 3 guests (add/remove/
+ * edit, plus each guest's own-bidder-number opt-in), and payment - per
+ * the "Attendee Tickets workflow challenges" bug report ("no way to edit
+ * the number of tickets", "no way to add guests"). Mirrors
+ * AddAttendeeDialog.tsx's layout via the shared FormSection/
+ * AttendeeGuestsEditor components. Payment Method/Total Paid and "own
+ * bidder number" only apply to the general "tickets" sheet - see
+ * attendeeSheetColumns.ts's docblock for why staff/sponsor rows can't
+ * meaningfully support them.
  */
 export function EditAttendeeDialog({ attendee, open, onOpenChange, onSave, isSaving }: EditAttendeeDialogProps) {
   const [draft, setDraft] = useState<AttendeeEditDraft>(EMPTY_DRAFT);
@@ -79,24 +89,19 @@ export function EditAttendeeDialog({ attendee, open, onOpenChange, onSave, isSav
     if (attendee) setDraft(toDraft(attendee));
   }, [attendee]);
 
-  const updateGuest = (index: number, field: "firstName" | "lastName" | "email", value: string) => {
-    setDraft(prev => ({
-      ...prev,
-      guests: prev.guests.map((g, i) => (i === index ? { ...g, [field]: value } : g)),
-    }));
-  };
+  const isGeneralTickets = attendee?.sheet === "tickets";
+  const guestsExceedTickets = hasMoreGuestsThanTicketsPurchased({ guestsInfo: draft.guests, ticketsPurchased: draft.ticketsPurchased });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Edit Attendee</DialogTitle>
-          <DialogDescription>Update contact details, guests, and whether they've paid.</DialogDescription>
+          <DialogDescription>Update contact details, tickets, guests, and payment.</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-5 max-h-[65vh] overflow-y-auto pr-1">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2.5">Contact</div>
+          <FormSection title="Contact">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs text-muted-foreground mb-1.5 block">First name</Label>
@@ -115,37 +120,29 @@ export function EditAttendeeDialog({ attendee, open, onOpenChange, onSave, isSav
               <Label className="text-xs text-muted-foreground mb-1.5 block">Phone</Label>
               <Input value={draft.phone} onChange={e => setDraft({ ...draft, phone: e.target.value })} />
             </div>
-          </div>
+          </FormSection>
 
-          {draft.guests.length > 0 ? (
+          <FormSection title="Tickets">
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2.5">Guests</div>
-              <div className="flex flex-col gap-2">
-                {draft.guests.map((g, idx) => (
-                  <div key={g.guestIndex} className="border rounded-lg p-3 flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-muted-foreground">Guest {idx + 1}</span>
-                      {g.ownBidderNumber?.toLowerCase() === "yes" && (
-                        <Badge variant="secondary" className="text-xxs h-4 px-1.5 font-normal bg-indigo-50 text-indigo-700 border-indigo-200">
-                          Own bidder #
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input placeholder="First" value={g.firstName} onChange={e => updateGuest(idx, "firstName", e.target.value)} />
-                      <Input placeholder="Last" value={g.lastName} onChange={e => updateGuest(idx, "lastName", e.target.value)} />
-                    </div>
-                    <Input placeholder="Guest email" value={g.email} onChange={e => updateGuest(idx, "email", e.target.value)} />
-                  </div>
-                ))}
-              </div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">Tickets Purchased</Label>
+              <Input type="number" min="0" value={draft.ticketsPurchased} onChange={e => setDraft({ ...draft, ticketsPurchased: e.target.value })} />
             </div>
-          ) : (
-            <span className="text-sm text-muted-foreground italic">No guests on this entry.</span>
-          )}
+          </FormSection>
 
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2.5">Payment</div>
+          <FormSection title="Guests">
+            <AttendeeGuestsEditor
+              guests={draft.guests}
+              onChange={(guests) => setDraft({ ...draft, guests })}
+              allowOwnBidderNumber={isGeneralTickets}
+            />
+            {guestsExceedTickets && (
+              <p className="text-xs text-red-600 mt-2">
+                {draft.guests.length} guests listed but only {draft.ticketsPurchased || 0} ticket(s) purchased - increase Tickets Purchased or remove a guest before saving.
+              </p>
+            )}
+          </FormSection>
+
+          <FormSection title="Payment">
             <div className="inline-flex rounded-lg border p-0.5 gap-0.5">
               <Button
                 type="button"
@@ -166,12 +163,26 @@ export function EditAttendeeDialog({ attendee, open, onOpenChange, onSave, isSav
                 Pending
               </Button>
             </div>
-          </div>
+            {isGeneralTickets ? (
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1.5 block">Payment Method</Label>
+                  <Input value={draft.paymentMethod} onChange={e => setDraft({ ...draft, paymentMethod: e.target.value })} placeholder="Manual, Credit Card, ..." />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1.5 block">Total Paid</Label>
+                  <Input value={draft.totalPaid} onChange={e => setDraft({ ...draft, totalPaid: e.target.value })} placeholder="$0" />
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-3">Staff and Sponsor tickets are always marked Comp / Paid.</p>
+            )}
+          </FormSection>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <LoadingButton onClick={() => onSave(draft)} loading={isSaving}>Save Changes</LoadingButton>
+          <LoadingButton onClick={() => onSave(draft)} loading={isSaving} disabled={guestsExceedTickets}>Save Changes</LoadingButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

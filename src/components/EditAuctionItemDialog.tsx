@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AuctionItemFormSection } from "@/components/AuctionItemFormSection";
+import { FormSection } from "@/components/FormSection";
 import { AuctionItem } from "@/types";
 
 export interface AuctionItemEditChange {
@@ -139,7 +139,7 @@ export function EditAuctionItemDialog({ item, open, onOpenChange, categories, on
         </DialogHeader>
 
         <div className="flex flex-col gap-5 max-h-[65vh] overflow-y-auto pr-1">
-          <AuctionItemFormSection title="Details">
+          <FormSection title="Details">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs text-muted-foreground mb-1.5 block">Item #</Label>
@@ -167,9 +167,9 @@ export function EditAuctionItemDialog({ item, open, onOpenChange, categories, on
               <Label className="text-xs text-muted-foreground mb-1.5 block">Description</Label>
               <Textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
             </div>
-          </AuctionItemFormSection>
+          </FormSection>
 
-          <AuctionItemFormSection title="Pricing">
+          <FormSection title="Pricing">
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs text-muted-foreground mb-1.5 block">Value</Label>
@@ -184,9 +184,9 @@ export function EditAuctionItemDialog({ item, open, onOpenChange, categories, on
                 <Input value={draft.minRaise} onChange={(e) => setDraft({ ...draft, minRaise: e.target.value })} />
               </div>
             </div>
-          </AuctionItemFormSection>
+          </FormSection>
 
-          <AuctionItemFormSection title="Donor & Type">
+          <FormSection title="Donor & Type">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs text-muted-foreground mb-1.5 block">Donor</Label>
@@ -216,7 +216,7 @@ export function EditAuctionItemDialog({ item, open, onOpenChange, categories, on
                 Allow Multiple Winners
               </Label>
             </div>
-          </AuctionItemFormSection>
+          </FormSection>
         </div>
 
         <DialogFooter>

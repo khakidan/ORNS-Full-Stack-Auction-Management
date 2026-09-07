@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AuctionItemFormSection } from "@/components/AuctionItemFormSection";
+import { FormSection } from "@/components/FormSection";
 import { AuctionItem } from "@/types";
 
 interface AddAuctionItemDialogProps {
@@ -34,7 +34,7 @@ interface AddAuctionItemDialogProps {
 
 /**
  * Mirrors EditAuctionItemDialog.tsx's sectioned layout (via the shared
- * AuctionItemFormSection) so Add and Edit read as one visual workflow,
+ * FormSection) so Add and Edit read as one visual workflow,
  * per the user's explicit ask - same dialog width, section grouping, and
  * label/input styling. Deliberately keeps a different field set though:
  * no Item # (server-assigned on save) and no editable Opening Bid/Min
@@ -62,7 +62,7 @@ export function AddAuctionItemDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-5 max-h-[65vh] overflow-y-auto pr-1">
-          <AuctionItemFormSection title="Details">
+          <FormSection title="Details">
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5 block">Category *</Label>
               <Select
@@ -97,9 +97,9 @@ export function AddAuctionItemDialog({
                 placeholder="Item Description"
               />
             </div>
-          </AuctionItemFormSection>
+          </FormSection>
 
-          <AuctionItemFormSection title="Pricing">
+          <FormSection title="Pricing">
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5 block">Value</Label>
               <Input
@@ -111,9 +111,9 @@ export function AddAuctionItemDialog({
                 Opening bid and minimum raise are calculated automatically from this value once saved.
               </p>
             </div>
-          </AuctionItemFormSection>
+          </FormSection>
 
-          <AuctionItemFormSection title="Donor & Type">
+          <FormSection title="Donor & Type">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs text-muted-foreground mb-1.5 block">Donor</Label>
@@ -150,7 +150,7 @@ export function AddAuctionItemDialog({
                 Allow Multiple Winners
               </Label>
             </div>
-          </AuctionItemFormSection>
+          </FormSection>
         </div>
 
         <DialogFooter>
