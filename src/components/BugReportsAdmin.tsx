@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { useConfig } from "@/context/ConfigContext";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { TableCell, TableHead, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/LoadingButton";
 import { Badge } from "@/components/ui/badge";
-import { Bug, CheckCircle2, ExternalLink, Eye, RefreshCw } from "lucide-react";
+import { Bug, CheckCircle2, ExternalLink, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { DataTableWrapper } from "@/components/DataTableWrapper";
 import { ConfigErrorCard } from "@/components/ConfigErrorCard";
+import { RefreshableListCard } from "@/components/RefreshableListCard";
 import { BugReportDetailDialog } from "@/components/BugReportDetailDialog";
 import { BugReportListItem } from "@/types";
 
@@ -95,23 +95,14 @@ export default function BugReportsAdmin() {
   }
 
   return (
-    <Card className="border-slate-200 shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <div>
-          <CardTitle className="text-xl flex items-center gap-2">
-            <Bug className="w-5 h-5 text-primary" />
-            Open Bug Reports
-          </CardTitle>
-          <CardDescription>
-            Reports submitted via the in-app bug tool (Ctrl/Cmd+Shift+B) that are still marked Open.
-          </CardDescription>
-        </div>
-        <Button variant="outline" size="sm" onClick={fetchReports} disabled={loading} className="gap-2">
-          <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-          Refresh
-        </Button>
-      </CardHeader>
-      <CardContent>
+    <>
+      <RefreshableListCard
+        icon={<Bug className="w-5 h-5 text-primary" />}
+        title="Open Bug Reports"
+        description="Reports submitted via the in-app bug tool (Ctrl/Cmd+Shift+B) that are still marked Open."
+        loading={loading}
+        onRefresh={fetchReports}
+      >
         <DataTableWrapper<BugReportListItem>
           items={reports}
           loading={loading}
@@ -183,11 +174,11 @@ export default function BugReportsAdmin() {
             </TableRow>
           )}
         />
-      </CardContent>
+      </RefreshableListCard>
       <BugReportDetailDialog
         report={viewingReport}
         onOpenChange={(open) => { if (!open) setViewingReport(null); }}
       />
-    </Card>
+    </>
   );
 }

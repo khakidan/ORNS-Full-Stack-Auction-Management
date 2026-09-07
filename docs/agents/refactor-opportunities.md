@@ -42,9 +42,9 @@ centering classes its two siblings have was confirmed by direct read,
 as was the `useWinnersData.ts` toast-rule violation and
 `Checkout.test.tsx`'s missing `auctionItemsSpreadsheetId` mock field.
 
-### Redundant/duplicated logic
-
-1. **`Receipts.tsx` and `BugReportsAdmin.tsx` duplicate almost their entire outer page shell** - the same `Card`/`CardHeader` (icon + title + description on the left, a `RefreshCw`-icon refresh `Button` on the right) `/CardContent` skeleton, each hand-rolled rather than using `ListPageCard.tsx` (built specifically to consolidate this shape for the four search-and-list pages, per its own docblock, but never extended to these two). Proposal: either add an optional `headerRight?` slot to `ListPageCard` so these two can adopt it directly, or a sibling `RefreshableListCard` for the "Card + title/description/icon + right-aligned refresh button + `DataTableWrapper` body" shape they share.
+Nothing outstanding right now - every item flagged in the 2026-09-07
+audit's "Redundant/duplicated logic" section has been closed. See
+`CHANGELOG.md` for the individual fixes.
 
 ### Code quality
 
