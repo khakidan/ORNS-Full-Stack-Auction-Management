@@ -74,3 +74,23 @@ describe("AuctionItemsFilterControls - Reset", () => {
     expect(onReset).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("AuctionItemsFilterControls - Sort by trigger width", () => {
+  // Regression guard for the same clipped-Sort-by-trigger bug reported on
+  // Bidders.tsx (BiddersFilterControls.tsx uses the identical w-50
+  // pattern) - fixed here too for consistency, since this component's
+  // own longest label ("Item # (Low to High)"/"Item # (High to Low)",
+  // 21 characters) plus its icon hits the same width shortfall. Sized to
+  // w-60 rather than a larger jump, per the Bidders.tsx fix's lesson:
+  // widening the trigger more than the longest label actually needs
+  // pushes the whole filter row's total width past what fits without
+  // horizontal scrolling.
+  it("is wide enough to fit the sort option labels without clipping", () => {
+    renderControls();
+
+    const sortValue = screen.getByText("Item # (Low to High)");
+    const trigger = sortValue.closest('[data-slot="select-trigger"]');
+    expect(trigger?.className).toContain("w-60");
+    expect(trigger?.className).not.toContain("w-50");
+  });
+});

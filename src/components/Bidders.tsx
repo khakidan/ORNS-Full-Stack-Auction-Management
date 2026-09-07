@@ -39,7 +39,7 @@ export default function Bidders() {
         searchValue={state.searchTerm}
         onSearchChange={state.setSearchTerm}
         searchPlaceholder="Search bidders..."
-        searchClassName="md:max-w-xs"
+        searchClassName="md:max-w-52"
         searchInputClassName="h-10"
         filtersWrap={false}
         filters={

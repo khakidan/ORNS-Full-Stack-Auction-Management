@@ -42,8 +42,12 @@ const SORT_OPTIONS: { value: string; label: string; config: BidderSortConfig }[]
   { value: "id-desc", label: "Bidder # (High to Low)", config: { key: "id", direction: "desc" } },
   { value: "name-asc", label: "Name (A to Z)", config: { key: "name", direction: "asc" } },
   { value: "name-desc", label: "Name (Z to A)", config: { key: "name", direction: "desc" } },
-  { value: "status-desc", label: "Status (Checked-In First)", config: { key: "status", direction: "desc" } },
-  { value: "status-asc", label: "Status (Not Present First)", config: { key: "status", direction: "asc" } },
+  // "Status" prefix deliberately dropped from these two labels' text (vs.
+  // e.g. "Status (Checked-In First)") - it's redundant once shortened,
+  // and the shorter strings keep the Sort by trigger's width (and the
+  // whole filter row's total width) in check. See the width fix below.
+  { value: "status-desc", label: "Checked-In First", config: { key: "status", direction: "desc" } },
+  { value: "status-asc", label: "Not Present First", config: { key: "status", direction: "asc" } },
 ];
 
 const SORT_LABELS: Record<string, string> = Object.fromEntries(SORT_OPTIONS.map((o) => [o.value, o.label]));
@@ -119,7 +123,7 @@ export function BiddersFilterControls({
           if (option) onSortConfigChange(option.config);
         }}
       >
-        <SelectTrigger className="h-10 w-50 shrink-0">
+        <SelectTrigger className="h-10 w-64 shrink-0">
           <ArrowUpDown className="w-3.5 h-3.5 mr-2 opacity-70" />
           <SelectValue placeholder="Sort by">{(value: string) => SORT_LABELS[value] ?? value}</SelectValue>
         </SelectTrigger>

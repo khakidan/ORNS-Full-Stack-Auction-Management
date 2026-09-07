@@ -66,3 +66,34 @@ describe("BiddersFilterControls - display labels", () => {
     expect(screen.getByText("Bidder # (Low to High)")).toBeInTheDocument();
   });
 });
+
+describe("BiddersFilterControls - Sort by trigger width", () => {
+  // Regression guard for a user-reported bug: the Sort by trigger was
+  // fixed at w-50 (200px), too narrow for its own longest label, so the
+  // currently-selected label got clipped instead of fitting. A first fix
+  // just widened the trigger (to w-72) without changing anything else -
+  // that made the trigger's own text fit, but pushed the whole 4-filter
+  // row's total width over what fits in the toolbar without horizontal
+  // scrolling, the opposite of what was asked for ("show all options
+  // without scrolling"). Fixed properly by shortening the two longest
+  // labels (dropping the redundant "Status " prefix - "Status
+  // (Checked-In First)"/"Status (Not Present First)" -> "Checked-In
+  // First"/"Not Present First") so a smaller width increase (w-50 -> w-64)
+  // suffices, and by narrowing the search input (Bidders.tsx's
+  // searchClassName) to free up the rest of the room the wider trigger
+  // needs - see Bidders.tsx.
+  it("is wide enough to fit the longest sort option label without clipping", () => {
+    renderControls();
+
+    const sortValue = screen.getByText("Bidder # (Low to High)");
+    const trigger = sortValue.closest('[data-slot="select-trigger"]');
+    expect(trigger?.className).toContain("w-64");
+    expect(trigger?.className).not.toContain("w-50");
+  });
+
+  it("shortens the two Status sort labels so the trigger doesn't need to be as wide as the full 'Status (...)' phrasing would require", () => {
+    renderControls({ sortConfig: { key: "status", direction: "desc" } });
+    expect(screen.getByText("Checked-In First")).toBeInTheDocument();
+    expect(screen.queryByText("Status (Checked-In First)")).not.toBeInTheDocument();
+  });
+});
