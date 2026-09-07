@@ -13,6 +13,10 @@ export function getCategoryBase(categoryName: string): number {
   if (clean.includes("service")) return 901;
   if (clean.includes("classroom baskets") || clean.includes("classroom basket")) return 1001;
   if (clean.includes("travel")) return 1101;
+  // Checked before the generic "ticket" match below, which would
+  // otherwise misroute "Auction Tickets" to the Sports/Tickets base
+  // (1201) since it also contains the substring "ticket".
+  if (clean.includes("auction ticket")) return AUCTION_TICKETS_CATEGORY_BASE;
   if (clean.includes("sports") || clean.includes("sports memorabilia") || clean.includes("ticket")) {
     if (clean.includes("raffle")) return 1501;
     return 1201;
@@ -43,10 +47,26 @@ export function getCategoryBase(categoryName: string): number {
     "live": 1301,
     "movie night": 1401,
     "raffle tickets": 1501,
-    "open appeal": 1601
+    "open appeal": 1601,
+    "auction tickets": AUCTION_TICKETS_CATEGORY_BASE
   };
   return exactMatches[clean] || 1;
 }
+
+/**
+ * The fixed, well-known item ID for the "Auction Tickets" standard item -
+ * used to record a walk-in bidder's ticket purchase as a bid-grid entry
+ * (registerWalkInBidder/checkInBidderWithBid in bidderService.ts), and to
+ * seed that same standard item's row in auctionSetupService.ts's annual
+ * rollover. Previously hardcoded as 1606 in both call sites - moved to
+ * 1701 (its own category base, one hundred-block past Open Appeal's 1601)
+ * once "Auction Tickets" became a real category of its own rather than
+ * living inside the 1601-1605 Open Appeal range. Kept as a shared
+ * constant, not a magic number, so the item ID recorded in the bid grid
+ * can never drift from the ID the standard item is actually seeded with.
+ */
+export const AUCTION_TICKETS_CATEGORY_BASE = 1701;
+export const AUCTION_TICKETS_ITEM_ID = "1701";
 
 /**
  * Re-sequences IDs for specific categories in the values array to ensure no gaps.

@@ -13,6 +13,10 @@ export function getCategoryBase(categoryName: string): number {
   if (clean.includes("service")) return 901;
   if (clean.includes("classroom baskets") || clean.includes("classroom basket")) return 1001;
   if (clean.includes("travel")) return 1101;
+  // Checked before the generic "ticket" match below, which would
+  // otherwise misroute "Auction Tickets" to the Sports/Tickets base
+  // (1201) since it also contains the substring "ticket".
+  if (clean.includes("auction ticket")) return AUCTION_TICKETS_CATEGORY_BASE;
   if (clean.includes("sports") || clean.includes("sports memorabilia") || clean.includes("ticket")) {
     if (clean.includes("raffle")) return 1501;
     return 1201;
@@ -43,7 +47,11 @@ export function getCategoryBase(categoryName: string): number {
     "live": 1301,
     "movie night": 1401,
     "raffle tickets": 1501,
-    "open appeal": 1601
+    "open appeal": 1601,
+    "auction tickets": AUCTION_TICKETS_CATEGORY_BASE
   };
   return exactMatches[clean] || 1;
 }
+
+/** See server/utils/categoryHelpers.ts's copy of this constant for the full rationale. */
+export const AUCTION_TICKETS_CATEGORY_BASE = 1701;

@@ -8,7 +8,8 @@ import request from "supertest";
 import { app } from "../app";
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
-import { resetHandlersState, clearedRanges, sheetBatchUpdateRequests, lastBulkWritePayload } from "./handlers";
+import { resetHandlersState, clearedRanges, sheetBatchUpdateRequests, lastBulkWritePayload, bundleWritePayload } from "./handlers";
+import { AUCTION_TICKETS_ITEM_ID } from "../utils/categoryHelpers";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -153,6 +154,46 @@ describe("setupRoutes - /api/auction/setup-new", () => {
       expect(clearedRanges).toContainEqual({ spreadsheetId: "items-id", range: "Auction-Items!A2:Z" });
       expect(clearedRanges).toContainEqual({ spreadsheetId: "tickets-id", range: "'tickets'!A2:Z" });
       expect(clearedRanges).toContainEqual({ spreadsheetId: "tickets-id", range: "'sponsor tickets'!A2:Z" });
+    });
+
+    it("re-seeds the 11 standard items (raffle tickets, open appeal, auction tickets) right after clearing Auction-Items, so they can't disappear like they used to", async () => {
+      // These items used to be synthesized only into Bid Management's now-
+      // deleted local Items snapshot, never real rows in the master
+      // Auction-Items spreadsheet - once that snapshot mechanism was
+      // removed, nothing created them anywhere. Re-seeding them here, as
+      // part of the same annual reset that clears Auction-Items!A2:Z,
+      // means they can't silently vanish again next year the way a
+      // manually-added row would.
+      server.use(bidManagementSheetsMetadata());
+
+      const response = await request(app)
+        .post("/api/auction/setup-new")
+        .set(authHeader)
+        .send({
+          ticketsSpreadsheetId: "tickets-id",
+          itemEntrySpreadsheetId: "items-id",
+          bidManagementSpreadsheetId: "bidmgmt-id"
+        });
+
+      expect(response.status).toBe(200);
+
+      expect(bundleWritePayload).toHaveLength(11);
+      const ids = bundleWritePayload.map((row: any[]) => row[0]);
+      expect(ids).toEqual(["1401", "1501", "1502", "1503", "1504", "1601", "1602", "1603", "1604", "1605", AUCTION_TICKETS_ITEM_ID]);
+
+      // Every row: real category/name, blank price fields, Active status
+      // (Items.tsx's Auction Catalog only shows Active items), and Allow
+      // Multiple Winners (column M, index 12) set to true.
+      for (const row of bundleWritePayload) {
+        expect(row[9]).toBe("Active");
+        expect(row[12]).toBe(true);
+      }
+      const raffleRow = bundleWritePayload.find((row: any[]) => row[0] === "1502");
+      expect(raffleRow[1]).toBe("Raffle Tickets");
+      expect(raffleRow[2]).toBe("Five Raffle Tickets for a $500 Amazon Gift Card");
+
+      const ticketsRow = bundleWritePayload.find((row: any[]) => row[0] === AUCTION_TICKETS_ITEM_ID);
+      expect(ticketsRow[1]).toBe("Auction Tickets");
     });
 
     it("surfaces a Bid-Management reset failure to the operator via the streamed log, instead of only the server console, and still finishes", async () => {

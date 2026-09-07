@@ -25,6 +25,7 @@ export interface AuctionItem {
   status: string;
   bundleId: string;
   bundledDateTime: string;
+  allowMultipleWinners: boolean;
   rowIndex: number;
 }
 

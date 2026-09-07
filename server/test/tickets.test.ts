@@ -9,6 +9,7 @@ import { app } from "../app";
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
 import { resetHandlersState, lastBulkWritePayload } from "./handlers";
+import { AUCTION_TICKETS_ITEM_ID } from "../utils/categoryHelpers";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -89,8 +90,8 @@ describe("Ticket Payment Status workflow", () => {
     expect(step1Response.body.bidAdded).toBe(true);
     
     // Assert the MSW write payload shows the ticket price was written to correct location
-    const hasTicketBid = putPayloads.some(values => 
-      values.some(row => row.includes("1606") && (row.includes(35) || row.includes("35")))
+    const hasTicketBid = putPayloads.some(values =>
+      values.some(row => row.includes(AUCTION_TICKETS_ITEM_ID) && (row.includes(35) || row.includes("35")))
     );
     expect(hasTicketBid).toBe(true);
 

@@ -1,4 +1,5 @@
 import { drive_v3, sheets_v4 } from "googleapis";
+import { AUCTION_TICKETS_ITEM_ID } from "../utils/categoryHelpers";
 
 export interface SetupAuctionParams {
   ticketsSpreadsheetId: string;
@@ -12,6 +13,50 @@ export interface SetupAuctionResult {
   forPrintFolderId: string;
   bidderReceiptsFolderId: string;
 }
+
+/**
+ * The 11 "standard" items that exist every auction to track things that
+ * aren't really auction items - raffle tickets, open-appeal pledge tiers,
+ * and general auction ticket sales. These used to be synthesized at
+ * "Set Up Bid Management App" time into Bid Management's own (now-deleted)
+ * local Items snapshot - never real rows in the master Auction-Items
+ * spreadsheet at all. Once that snapshot mechanism was removed (see
+ * CHANGELOG.md's "Eliminated Bid Management's separate, drifting Items
+ * snapshot"), nothing created them anywhere, and they silently
+ * disappeared. Seeding them for real, here, into the one spreadsheet
+ * that's actually read everywhere (Items tab, Bid Entry, Checkout)
+ * fixes that - and doing it as part of the same annual rollover this
+ * function already runs means they can't silently vanish again next
+ * year the way a manually-added row would when this same function
+ * clears `Auction-Items!A2:Z` below.
+ *
+ * Category names match the id-range convention `categoryHelpers.ts`
+ * already encodes (1401->Movie Night, 1501->Raffle Tickets,
+ * 1601->Open Appeal, 1701->Auction Tickets - its own hundred-block base
+ * now that it's a real category rather than living inside 1601-1605's
+ * Open Appeal range); Value/Opening Bid/Min Raise are deliberately left
+ * blank (matching the old removed seeding, which never set a price
+ * either) so the organizer sets the real dollar amounts once and they
+ * carry forward with the spreadsheet. `status: "Active"` is required,
+ * not optional - Items.tsx's Auction Catalog only shows Active items.
+ * The Auction Tickets row's ID is the shared `AUCTION_TICKETS_ITEM_ID`
+ * constant, not a literal - `bidderService.ts` records every ticket
+ * purchase as a bid-grid win of this exact item ID, so the two can never
+ * drift apart.
+ */
+const STANDARD_ITEM_ROWS: (string | boolean)[][] = [
+  ["1401", "Movie Night", "A Night with the ORNS Staff", "", "", "", "", "", "", "Active", "", "", true],
+  ["1501", "Raffle Tickets", "One Raffle Ticket for a $500 Amazon Gift Card", "", "", "", "", "", "", "Active", "", "", true],
+  ["1502", "Raffle Tickets", "Five Raffle Tickets for a $500 Amazon Gift Card", "", "", "", "", "", "", "Active", "", "", true],
+  ["1503", "Raffle Tickets", "Ten Raffle Tickets for a $500 Amazon Gift Card", "", "", "", "", "", "", "Active", "", "", true],
+  ["1504", "Raffle Tickets", "One 50/50 Raffle Ticket $20", "", "", "", "", "", "", "Active", "", "", true],
+  ["1601", "Open Appeal", "Open Appeal for $500", "", "", "", "", "", "", "Active", "", "", true],
+  ["1602", "Open Appeal", "Open Appeal for $250", "", "", "", "", "", "", "Active", "", "", true],
+  ["1603", "Open Appeal", "Open Appeal for $100", "", "", "", "", "", "", "Active", "", "", true],
+  ["1604", "Open Appeal", "Open Appeal for $50", "", "", "", "", "", "", "Active", "", "", true],
+  ["1605", "Open Appeal", "Open Appeal for $25", "", "", "", "", "", "", "Active", "", "", true],
+  [AUCTION_TICKETS_ITEM_ID, "Auction Tickets", "Auction Tickets", "", "", "", "", "", "", "Active", "", "", true],
+];
 
 /**
  * Orchestrates the full setup for a new auction year.
@@ -179,6 +224,14 @@ export async function setupNewAuction(
         spreadsheetId: itemEntrySpreadsheetId,
         range: "Auction-Items!A2:Z"
       }).catch(err => onLog(`Failed to clear Item Entry sheets: ${err.message}`));
+
+      onLog(`Re-seeding the ${STANDARD_ITEM_ROWS.length} standard items (raffle tickets, open appeal, auction tickets)...`);
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: itemEntrySpreadsheetId,
+        range: "Auction-Items!A2",
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: STANDARD_ITEM_ROWS }
+      }).catch(err => onLog(`Failed to re-seed standard items: ${err.message}`));
     }
 
     if (ticketsSpreadsheetId) {

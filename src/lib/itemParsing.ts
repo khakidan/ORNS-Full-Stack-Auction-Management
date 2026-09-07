@@ -26,6 +26,7 @@ export function parseItemRows(values: string[][]): AuctionItem[] {
   const statusIdx = getCol(["status"], 9);
   const bundleIdIdx = getCol(["bundle id", "bundled with"], 10);
   const bundledIdx = getCol(["bundled datetime", "bundled"], 11);
+  const allowMultipleWinnersIdx = getCol(["allow multiple winners", "multiple winners"], 12);
 
   return values
     .slice(1)
@@ -42,6 +43,12 @@ export function parseItemRows(values: string[][]): AuctionItem[] {
       status: row[statusIdx]?.toString() || "Active",
       bundleId: row[bundleIdIdx]?.toString() || "",
       bundledDateTime: row[bundledIdx]?.toString() || "",
+      // Sheets' default FORMATTED_VALUE read returns a checkbox cell as
+      // the literal boolean `true`/`false` (not a "TRUE" string) - unlike
+      // this app's other boolean columns (e.g. bidderParsing.ts's
+      // checkedIn), which are plain-text "TRUE"/"FALSE". Checked for both
+      // shapes defensively.
+      allowMultipleWinners: row[allowMultipleWinnersIdx] === true || row[allowMultipleWinnersIdx]?.toString().toUpperCase() === "TRUE",
       rowIndex: i + 2
     }))
     .filter((item) => item.id || item.name);

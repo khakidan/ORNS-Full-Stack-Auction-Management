@@ -2,6 +2,7 @@ import { sheets_v4 } from "googleapis";
 import { getColumnLetter } from "../utils/columnUtils";
 import { executeGoogleSheetsTransaction, SheetOp } from "../services/sheetsService";
 import { withLock } from "../utils/asyncLock";
+import { AUCTION_TICKETS_ITEM_ID } from "../utils/categoryHelpers";
 
 export interface WalkInParams {
   firstName: string;
@@ -166,7 +167,7 @@ async function registerWalkInBidderLocked(
         [newId, ""],
         [formattedFirst, formattedLast],
         ['Item #:', 'Price:'],
-        [1606, ticketPrice || 35]
+        [AUCTION_TICKETS_ITEM_ID, ticketPrice || 35]
       ]
     }
   ];
@@ -332,7 +333,7 @@ async function checkInBidderWithBidLocked(
       type: 'UPDATE',
       spreadsheetId,
       range: `'${bidManagementSheet}'!${colLetter}${rowIndex}:${nextColLetter}${rowIndex}`,
-      newValues: [["1606", bidValue]]
+      newValues: [[AUCTION_TICKETS_ITEM_ID, bidValue]]
     }
   ];
 
