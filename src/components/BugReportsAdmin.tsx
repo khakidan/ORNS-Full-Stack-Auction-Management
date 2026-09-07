@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { DataTableWrapper } from "@/components/DataTableWrapper";
-import { StatusStatePlaceholder } from "@/components/ui/StatusStatePlaceholder";
+import { ConfigErrorCard } from "@/components/ConfigErrorCard";
 import { BugReportDetailDialog } from "@/components/BugReportDetailDialog";
 import { BugReportListItem } from "@/types";
 
@@ -86,15 +86,11 @@ export default function BugReportsAdmin() {
 
   if (isInvalidId) {
     return (
-      <Card>
-        <CardContent className="h-100 flex items-center justify-center">
-          <StatusStatePlaceholder
-            icon={<Bug />}
-            title="No Bug Reports Spreadsheet Configured"
-            description="Please configure the Bug Reports Spreadsheet ID in the Settings tab to view open reports."
-          />
-        </CardContent>
-      </Card>
+      <ConfigErrorCard
+        icon={<Bug />}
+        title="No Bug Reports Spreadsheet Configured"
+        description="Please configure the Bug Reports Spreadsheet ID in the Settings tab to view open reports."
+      />
     );
   }
 

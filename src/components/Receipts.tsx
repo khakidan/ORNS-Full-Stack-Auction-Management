@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { DataTableWrapper } from "@/components/DataTableWrapper";
-import { StatusStatePlaceholder } from "@/components/ui/StatusStatePlaceholder";
+import { ConfigErrorCard } from "@/components/ConfigErrorCard";
 
 interface DriveFile {
   id: string;
@@ -65,15 +65,11 @@ export default function Receipts() {
 
   if (isInvalidId) {
     return (
-      <Card>
-        <CardContent className="h-100 flex items-center justify-center">
-          <StatusStatePlaceholder
-            icon={<FileText />}
-            title="No Folder Configured"
-            description="Please correctly configure the Receipt Folder ID in the Settings tab to view generated receipts."
-          />
-        </CardContent>
-      </Card>
+      <ConfigErrorCard
+        icon={<FileText />}
+        title="No Folder Configured"
+        description="Please correctly configure the Receipt Folder ID in the Settings tab to view generated receipts."
+      />
     );
   }
 

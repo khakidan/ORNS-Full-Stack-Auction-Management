@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { useConfig } from "@/context/ConfigContext";
 import { useAuction } from "@/context/AuctionContext";
-import { Card, CardContent } from "@/components/ui/card";
 import { ListPageCard } from "@/components/ui/ListPageCard";
 import { Button } from "@/components/ui/button";
 import { Package, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
-import { StatusStatePlaceholder } from "@/components/ui/StatusStatePlaceholder";
+import { ConfigErrorCard } from "@/components/ConfigErrorCard";
 import { FilterToolbar } from "@/components/FilterToolbar";
 
 import { useAuctionItems } from "@/hooks/useAuctionItems";
@@ -84,15 +83,11 @@ export default function AuctionItemsTab() {
 
   if (!spreadsheetId) {
     return (
-      <Card>
-        <CardContent>
-          <StatusStatePlaceholder
-            icon={<Package />}
-            title="Not Configured"
-            description="Please set the Auction Items Spreadsheet ID in Config Settings."
-          />
-        </CardContent>
-      </Card>
+      <ConfigErrorCard
+        icon={<Package />}
+        title="Not Configured"
+        description="Please set the Auction Items Spreadsheet ID in Config Settings."
+      />
     );
   }
 
