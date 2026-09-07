@@ -94,6 +94,15 @@ describe("Checkout", () => {
     expect(screen.getAllByText("$75.00").length).toBeGreaterThan(0);
   });
 
+  it("does not stretch the Pending/Checked-Out tab list to the page's full width", async () => {
+    render(<Checkout />);
+    await screen.findByText("Jane Doe");
+
+    const tabsList = screen.getByText(/Pending Checkout/).parentElement;
+    expect(tabsList?.className).not.toContain("w-full");
+    expect(tabsList?.className).not.toContain("grid-cols-2");
+  });
+
   it("Print All Receipts button calls the correct endpoint", async () => {
     vi.mocked(fetchWithRetry).mockResolvedValueOnce({
       ok: true,

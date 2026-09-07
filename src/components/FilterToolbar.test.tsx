@@ -44,3 +44,20 @@ describe("FilterToolbar - filtersWrap", () => {
     expect(filterText.parentElement?.className).not.toContain("flex-wrap");
   });
 });
+
+describe("FilterToolbar - Card wrapper", () => {
+  it("renders its root as the shared Card component (data-slot=card), not a bare div, for every caller", () => {
+    render(
+      <FilterToolbar
+        searchValue=""
+        onSearchChange={() => {}}
+        searchPlaceholder="Search..."
+      />
+    );
+
+    const input = screen.getByPlaceholderText("Search...");
+    // input -> its relative wrapper div -> the flex-1 row div -> the Card root
+    const root = input.parentElement?.parentElement?.parentElement;
+    expect(root?.getAttribute("data-slot")).toBe("card");
+  });
+});

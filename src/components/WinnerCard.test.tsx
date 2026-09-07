@@ -99,8 +99,10 @@ describe("WinnerCard", () => {
     expect(screen.getByRole("button", { name: "No Email" })).toBeInTheDocument();
   });
 
-  it("shows initials derived from the winner's full name in the avatar", () => {
+  it("does not render an initials avatar next to the winner's name", () => {
     renderCard({ winner: { ...WINNER, name: "Alice One" } });
-    expect(screen.getByText("AO")).toBeInTheDocument();
+    // A prior draft of this redesign rendered a 2-letter initials circle
+    // ("AO") next to the name - removed per explicit feedback.
+    expect(screen.queryByText("AO")).not.toBeInTheDocument();
   });
 });

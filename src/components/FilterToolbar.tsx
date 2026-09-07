@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Search } from "lucide-react";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +34,11 @@ interface FilterToolbarProps {
  * Items.tsx, Checkout.tsx, Bidders.tsx, and (since it moved off its own
  * bespoke Card-child bar - see CHANGELOG.md's "Search & Filter Actions
  * inside the main content area" fix) AuctionItemsTab.tsx too, via
- * AuctionItemsFilterControls.tsx in the `filters` slot.
+ * AuctionItemsFilterControls.tsx in the `filters` slot. Wrapped in the
+ * app's real `Card` (not a hand-rolled bg/border box) so every consumer
+ * gets the same white-card treatment as the rest of the app - added per
+ * the Checkout redesign, applied here at the shared-component level so
+ * every existing caller picks it up at once instead of drifting.
  */
 export function FilterToolbar({
   searchValue,
@@ -47,7 +52,7 @@ export function FilterToolbar({
   className,
 }: FilterToolbarProps) {
   return (
-    <div className={cn("flex flex-col md:flex-row gap-4 items-center justify-between", className)}>
+    <Card className={cn("flex flex-col md:flex-row gap-4 items-center justify-between p-4", className)}>
       <div className="flex flex-col md:flex-row gap-4 w-full md:flex-1 items-center">
         <div className={cn("relative w-full md:max-w-sm", searchClassName)}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -65,6 +70,6 @@ export function FilterToolbar({
         )}
       </div>
       {trailing && <div className="flex gap-2 w-full md:w-auto items-center justify-center md:justify-end">{trailing}</div>}
-    </div>
+    </Card>
   );
 }

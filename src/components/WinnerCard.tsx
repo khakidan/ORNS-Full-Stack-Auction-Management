@@ -15,13 +15,6 @@ interface WinnerCardProps {
   onMarkPaid: (winner: WinnerRecord) => void;
 }
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
 export function WinnerCard({
   winner,
   hasEmail,
@@ -55,14 +48,9 @@ export function WinnerCard({
     >
       <CardHeader className="pt-4 pb-3 gap-0">
         <div className="flex justify-between items-start gap-3">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-secondary text-secondary-foreground flex items-center justify-center font-bold text-sm shrink-0">
-              {initials(winner.name)}
-            </div>
-            <div className="min-w-0">
-              <div className="font-semibold text-[15px] truncate">{winner.name}</div>
-              <div className="text-xs text-muted-foreground">Bidder #{winner.bidderId}</div>
-            </div>
+          <div className="min-w-0">
+            <div className="font-semibold text-[15px] truncate">{winner.name}</div>
+            <div className="text-xs text-muted-foreground">Bidder #{winner.bidderId}</div>
           </div>
           <div className="text-right shrink-0">
             <div className="text-lg font-bold text-primary">${winner.total.toFixed(2)}</div>

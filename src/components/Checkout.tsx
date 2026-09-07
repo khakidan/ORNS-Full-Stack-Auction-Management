@@ -106,7 +106,7 @@ export default function Checkout() {
       />
 
       <Tabs value={state.activeTab} onValueChange={(v: any) => state.setActiveTab(v)}>
-        <TabsList className="grid w-full grid-cols-2 mb-6">
+        <TabsList className="mb-6">
           <TabsTrigger value="pending">
             Pending Checkout ({state.pendingWinners.length})
           </TabsTrigger>
