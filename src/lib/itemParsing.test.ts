@@ -136,3 +136,30 @@ describe("parseItemRows - row inclusion/exclusion and indexing", () => {
     expect(items).toHaveLength(2);
   });
 });
+
+describe("parseItemRows - allowMultipleWinners (column M)", () => {
+  const HEADER_WITH_FLAG = [...FIXTURE_HEADER, "Allow Multiple Winners"];
+
+  it("parses a literal boolean true (Sheets' checkbox-cell shape) as true", () => {
+    const row = [...SAMPLE_ROW, true];
+    const [item] = parseItemRows([HEADER_WITH_FLAG, row as any]);
+    expect(item.allowMultipleWinners).toBe(true);
+  });
+
+  it("parses the string 'TRUE' (this app's other boolean-column convention) as true", () => {
+    const row = [...SAMPLE_ROW, "TRUE"];
+    const [item] = parseItemRows([HEADER_WITH_FLAG, row]);
+    expect(item.allowMultipleWinners).toBe(true);
+  });
+
+  it("defaults to false when the column is blank or the row is too short to include it", () => {
+    const [item] = parseItemRows([HEADER_WITH_FLAG, SAMPLE_ROW]);
+    expect(item.allowMultipleWinners).toBe(false);
+  });
+
+  it("defaults to false for a real auction item with no such flag set", () => {
+    const row = [...SAMPLE_ROW, "FALSE"];
+    const [item] = parseItemRows([HEADER_WITH_FLAG, row]);
+    expect(item.allowMultipleWinners).toBe(false);
+  });
+});

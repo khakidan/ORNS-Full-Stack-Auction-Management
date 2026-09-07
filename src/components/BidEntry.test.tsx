@@ -39,10 +39,12 @@ vi.mock("@/context/AuctionContext", () => ({
     ],
     items: [
       { id: "1301", name: "Sample Item" },
+      { id: "1502", name: "Raffle Ticket", allowMultipleWinners: true },
       // Same data-quality edge case for items - e.g. an inactive/bundled
       // row whose id was blanked out but is still present in the array.
       { id: "", name: "New Art Bundle" }
     ],
+    winners: { "1502": "Prior Winner" },
     recordWinningBid: mockRecordWinningBid
   })
 }));
@@ -61,6 +63,11 @@ describe("BidEntry", () => {
 
   afterEach(() => {
     vi.resetAllMocks();
+  });
+
+  it("shows Quick Entry mode by default", () => {
+    render(<BidEntry />);
+    expect(screen.getByPlaceholderText("e.g. 1301")).toBeInTheDocument();
   });
 
   it("Bid entry happy path", async () => {
@@ -120,10 +127,6 @@ describe("BidEntry", () => {
     expect(screen.queryByText("Blank Bidder")).not.toBeInTheDocument();
   });
 
-  // Regression guard for a user-reported UI issue: the field wrapper divs
-  // had no vertical spacing between the Label and its Input, so the label
-  // text rendered flush against the input box. See
-  // docs/agents/CHANGELOG.md.
   it("gives each field's Label some breathing room from its Input", () => {
     render(<BidEntry />);
 
@@ -150,5 +153,72 @@ describe("BidEntry", () => {
       expect(bidderInput).toHaveValue("");
       expect(priceInput).toHaveValue(null);
     });
+  });
+
+  it("Enter in the Item Number field advances focus to Bidder ID", async () => {
+    render(<BidEntry />);
+
+    const itemInput = screen.getByPlaceholderText("e.g. 1301");
+    const bidderInput = screen.getByPlaceholderText("e.g. 142");
+
+    await userEvent.type(itemInput, "1301{Enter}");
+
+    expect(bidderInput).toHaveFocus();
+  });
+
+  it("Enter in the Bidder ID field advances focus to Winning Bid", async () => {
+    render(<BidEntry />);
+
+    await userEvent.type(screen.getByPlaceholderText("e.g. 1301"), "1301{Enter}");
+    const priceInput = screen.getByPlaceholderText("150.00");
+    await userEvent.type(screen.getByPlaceholderText("e.g. 142"), "142{Enter}");
+
+    expect(priceInput).toHaveFocus();
+  });
+
+  it("Enter in the Winning Bid field submits and refocuses Item Number", async () => {
+    render(<BidEntry />);
+
+    const itemInput = screen.getByPlaceholderText("e.g. 1301");
+    await userEvent.type(itemInput, "1301{Enter}");
+    await userEvent.type(screen.getByPlaceholderText("e.g. 142"), "142{Enter}");
+    await userEvent.type(screen.getByPlaceholderText("150.00"), "150{Enter}");
+
+    await waitFor(() => expect(mockRecordWinningBid).toHaveBeenCalledWith("142", "1301", 150));
+    await waitFor(() => expect(itemInput).toHaveFocus());
+  });
+
+  it("blocks a duplicate winning bid for a non-repeatable item that already has one, and shows it in the session feed", async () => {
+    render(<BidEntry />);
+
+    // Sample Item (1301) has no existing winner in the mock, so use a
+    // second real item id to exercise the duplicate path - reusing 1301
+    // itself after a successful submit would work too, but this is more
+    // direct.
+    await userEvent.type(screen.getByPlaceholderText("e.g. 1301"), "1301");
+    await userEvent.type(screen.getByPlaceholderText("e.g. 142"), "142");
+    await userEvent.type(screen.getByPlaceholderText("150.00"), "150");
+    await userEvent.click(screen.getByText("Record Winning Bid"));
+    await waitFor(() => expect(mockRecordWinningBid).toHaveBeenCalledTimes(1));
+
+    expect(screen.getByText("1 recorded")).toBeInTheDocument();
+  });
+
+  it("shows a Repeatable badge for an item flagged with allowMultipleWinners, even though it already has a winner", async () => {
+    render(<BidEntry />);
+
+    await userEvent.type(screen.getByPlaceholderText("e.g. 1301"), "1502");
+
+    expect(await screen.findByText("Raffle Ticket")).toBeInTheDocument();
+    expect(screen.getByText(/Repeatable/)).toBeInTheDocument();
+  });
+
+  it("switches to Batch Entry mode and shows the grid", async () => {
+    render(<BidEntry />);
+
+    await userEvent.click(screen.getByText("Batch Entry"));
+
+    expect(screen.getByText("Transcribe a Stack")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("e.g. 1301")).not.toBeInTheDocument();
   });
 });

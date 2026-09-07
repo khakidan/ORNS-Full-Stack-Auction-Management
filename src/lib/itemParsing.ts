@@ -48,7 +48,7 @@ export function parseItemRows(values: string[][]): AuctionItem[] {
       // this app's other boolean columns (e.g. bidderParsing.ts's
       // checkedIn), which are plain-text "TRUE"/"FALSE". Checked for both
       // shapes defensively.
-      allowMultipleWinners: row[allowMultipleWinnersIdx] === true || row[allowMultipleWinnersIdx]?.toString().toUpperCase() === "TRUE",
+      allowMultipleWinners: (row[allowMultipleWinnersIdx] as unknown) === true || row[allowMultipleWinnersIdx]?.toString().toUpperCase() === "TRUE",
       rowIndex: i + 2
     }))
     .filter((item) => item.id || item.name);

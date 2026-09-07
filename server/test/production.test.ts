@@ -27,17 +27,22 @@ const authHeader = { "x-google-tokens": JSON.stringify(mockTokens) };
 // docs/agents/refactor-opportunities.md's Code Hardening item #3) and
 // forwards it as a parameter to every item-entry Apps Script call. This is
 // exactly what parsing handlers.ts's default Auction-Items fixture (both
-// rows "Active", already ID-ascending) resolves to.
+// rows "Active", already ID-ascending) resolves to. itemDataService.ts
+// shares src/lib/itemParsing.ts's parseItemRows with the client, so its
+// output (including allowMultipleWinners, added for the Bid Entry
+// redesign's repeatable-item support) reaches this Apps Script parameter
+// too - the default fixture has no "Allow Multiple Winners" column, so
+// both items resolve to false.
 const EXPECTED_DEFAULT_ITEMS = [
   {
     id: "801", category: "Food", name: "Pizza Night", description: "A pizza dinner",
     value: "$50.00", openingBid: "$22.50", minRaise: "$5.00", donor: "Joe's Pizza",
-    itemType: "Certificate", status: "Active", bundleId: "", bundledDateTime: "", rowIndex: 2,
+    itemType: "Certificate", status: "Active", bundleId: "", bundledDateTime: "", allowMultipleWinners: false, rowIndex: 2,
   },
   {
     id: "803", category: "Food", name: "Sushi Dinner", description: "A sushi dinner",
     value: "$150.00", openingBid: "$67.50", minRaise: "$10.00", donor: "Sushi Place",
-    itemType: "Certificate", status: "Active", bundleId: "", bundledDateTime: "", rowIndex: 3,
+    itemType: "Certificate", status: "Active", bundleId: "", bundledDateTime: "", allowMultipleWinners: false, rowIndex: 3,
   },
 ];
 
