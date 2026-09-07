@@ -42,13 +42,17 @@ centering classes its two siblings have was confirmed by direct read,
 as was the `useWinnersData.ts` toast-rule violation and
 `Checkout.test.tsx`'s missing `auctionItemsSpreadsheetId` mock field.
 
+### Redundant/duplicated logic
+
 Nothing outstanding right now - every item flagged in the 2026-09-07
 audit's "Redundant/duplicated logic" section has been closed. See
 `CHANGELOG.md` for the individual fixes.
 
 ### Code quality
 
-1. **`FormSection.tsx`'s section-header label uses a hardcoded `text-[11px]` arbitrary value** (`src/components/FormSection.tsx:20`) instead of this app's own `text-xxs` (10px) token - `tailwind-style-guide.md`'s Type Scale section names this exact case ("there is no sanctioned 11px step... use `text-xxs`, not invent a new in-between arbitrary value"). Shared by all 4 sectioned dialogs (`AddAttendeeDialog.tsx`, `EditAttendeeDialog.tsx`, `AddAuctionItemDialog.tsx`, `EditAuctionItemDialog.tsx`), so the fix is one line with a 4-call-site blast radius. Low severity (cosmetic, 1px), easy fix.
+Nothing outstanding right now - the `FormSection.tsx` hardcoded
+`text-[11px]` finding from the 2026-09-07 audit has been closed. See
+`CHANGELOG.md` for the fix.
 
 ### Test coverage gaps (`testing-philosophy.md`)
 

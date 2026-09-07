@@ -17,7 +17,7 @@ interface FormSectionProps {
 export function FormSection({ title, children }: FormSectionProps) {
   return (
     <div>
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2.5">{title}</div>
+      <div className="text-xxs font-semibold uppercase tracking-wide text-muted-foreground mb-2.5">{title}</div>
       {children}
     </div>
   );
