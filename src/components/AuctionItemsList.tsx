@@ -1,6 +1,6 @@
-import { AnimatePresence } from "motion/react";
 import { Package } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RowListShell } from "@/components/RowListShell";
 import { AuctionItemRow } from "@/components/AuctionItemRow";
 import { AuctionItem } from "@/types";
 
@@ -54,29 +54,26 @@ export function AuctionItemsList({
         </span>
       </div>
 
-      {items.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-14 text-muted-foreground">
-          <Package className="w-7 h-7" />
-          <span className="text-sm">No items found.</span>
-        </div>
-      ) : (
-        <AnimatePresence mode="popLayout">
-          {items.map((item) => (
-            <AuctionItemRow
-              key={item.rowIndex}
-              item={item}
-              isSelected={!!selectedRows[item.rowIndex]}
-              onToggleSelect={onToggleRow}
-              onEditRequest={onEditRequest}
-              isAuctionClosed={isAuctionClosed}
-              isExecutingRestore={isExecutingRestore}
-              restoreBundleId={restoreBundleId}
-              onRestoreBundle={onRestoreBundle}
-              onDeleteRequest={onDeleteRequest}
-            />
-          ))}
-        </AnimatePresence>
-      )}
+      <RowListShell
+        items={items}
+        animated
+        emptyIcon={<Package className="w-7 h-7" />}
+        emptyMessage="No items found."
+        renderRow={(item) => (
+          <AuctionItemRow
+            key={item.rowIndex}
+            item={item}
+            isSelected={!!selectedRows[item.rowIndex]}
+            onToggleSelect={onToggleRow}
+            onEditRequest={onEditRequest}
+            isAuctionClosed={isAuctionClosed}
+            isExecutingRestore={isExecutingRestore}
+            restoreBundleId={restoreBundleId}
+            onRestoreBundle={onRestoreBundle}
+            onDeleteRequest={onDeleteRequest}
+          />
+        )}
+      />
     </div>
   );
 }

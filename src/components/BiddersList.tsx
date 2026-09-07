@@ -1,5 +1,5 @@
-import { AnimatePresence } from "motion/react";
 import { UserCheck } from "lucide-react";
+import { RowListShell } from "@/components/RowListShell";
 import { BidderRow } from "@/components/BidderRow";
 import { Bidder } from "@/types";
 import { BidderAttendeeInfo } from "@/lib/bidderAttendeeInfo";
@@ -38,47 +38,31 @@ export function BiddersList({
   onCheckInAttempt,
   onMarkAsProxy,
 }: BiddersListProps) {
-  if (loading) {
-    return (
-      <div className="flex flex-col">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-20 border-b last:border-0 animate-pulse bg-muted/40" />
-        ))}
-      </div>
-    );
-  }
-
-  if (bidders.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-14 text-muted-foreground">
-        <UserCheck className="w-7 h-7" />
-        <span className="text-sm">
-          {totalBiddersCount === 0
-            ? 'No bidders loaded yet. Run "Set Up Bid Management App" or add a walk-in ticket to get started.'
-            : hasActiveFilters
-              ? "No bidders match your search or filters."
-              : "No bidders found."}
-        </span>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col">
-      <AnimatePresence mode="popLayout">
-        {bidders.map((bidder) => (
-          <BidderRow
-            key={bidder.id}
-            bidder={bidder}
-            attendeeInfo={getAttendeeInfo(bidder)}
-            isAuctionClosed={isAuctionClosed}
-            processingId={processingId}
-            isAddingTicketToReceipt={isAddingTicketToReceipt}
-            onCheckInAttempt={onCheckInAttempt}
-            onMarkAsProxy={onMarkAsProxy}
-          />
-        ))}
-      </AnimatePresence>
-    </div>
+    <RowListShell
+      items={bidders}
+      loading={loading}
+      animated
+      emptyIcon={<UserCheck className="w-7 h-7" />}
+      emptyMessage={
+        totalBiddersCount === 0
+          ? 'No bidders loaded yet. Run "Set Up Bid Management App" or add a walk-in ticket to get started.'
+          : hasActiveFilters
+            ? "No bidders match your search or filters."
+            : "No bidders found."
+      }
+      renderRow={(bidder) => (
+        <BidderRow
+          key={bidder.id}
+          bidder={bidder}
+          attendeeInfo={getAttendeeInfo(bidder)}
+          isAuctionClosed={isAuctionClosed}
+          processingId={processingId}
+          isAddingTicketToReceipt={isAddingTicketToReceipt}
+          onCheckInAttempt={onCheckInAttempt}
+          onMarkAsProxy={onMarkAsProxy}
+        />
+      )}
+    />
   );
 }

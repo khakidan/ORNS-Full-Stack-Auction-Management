@@ -1,4 +1,5 @@
 import { Users } from "lucide-react";
+import { RowListShell } from "@/components/RowListShell";
 import { AttendeeRow } from "@/components/AttendeeRow";
 import { Attendee } from "@/types";
 
@@ -26,28 +27,13 @@ export function AttendeesList({
   onUpdatePaymentStatus,
   onDeleteRequest,
 }: AttendeesListProps) {
-  if (loading) {
-    return (
-      <div className="flex flex-col">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-20 border-b last:border-0 animate-pulse bg-muted/40" />
-        ))}
-      </div>
-    );
-  }
-
-  if (attendees.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-14 text-muted-foreground">
-        <Users className="w-7 h-7" />
-        <span className="text-sm">No results match your filters.</span>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col">
-      {attendees.map((attendee) => (
+    <RowListShell
+      items={attendees}
+      loading={loading}
+      emptyIcon={<Users className="w-7 h-7" />}
+      emptyMessage="No results match your filters."
+      renderRow={(attendee) => (
         <AttendeeRow
           key={attendee.id}
           attendee={attendee}
@@ -56,7 +42,7 @@ export function AttendeesList({
           onUpdatePaymentStatus={onUpdatePaymentStatus}
           onDeleteRequest={onDeleteRequest}
         />
-      ))}
-    </div>
+      )}
+    />
   );
 }
