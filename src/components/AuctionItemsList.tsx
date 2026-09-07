@@ -6,6 +6,7 @@ import { AuctionItem } from "@/types";
 
 interface AuctionItemsListProps {
   items: AuctionItem[];
+  loading?: boolean;
   selectedRows: Record<number, boolean>;
   selectedItemsCount: number;
   onToggleRow: (rowIndex: number) => void;
@@ -31,6 +32,7 @@ interface AuctionItemsListProps {
  */
 export function AuctionItemsList({
   items,
+  loading = false,
   selectedRows,
   selectedItemsCount,
   onToggleRow,
@@ -56,6 +58,7 @@ export function AuctionItemsList({
 
       <RowListShell
         items={items}
+        loading={loading}
         animated
         emptyIcon={<Package className="w-7 h-7" />}
         emptyMessage="No items found."

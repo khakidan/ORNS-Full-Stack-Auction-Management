@@ -4,7 +4,7 @@ import { useAuction } from "@/context/AuctionContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { ListPageCard } from "@/components/ui/ListPageCard";
 import { Button } from "@/components/ui/button";
-import { Loader2, Package, Plus, Trash2 } from "lucide-react";
+import { Package, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { StatusStatePlaceholder } from "@/components/ui/StatusStatePlaceholder";
@@ -96,14 +96,6 @@ export default function AuctionItemsTab() {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center p-12">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <FilterToolbar
@@ -147,6 +139,7 @@ export default function AuctionItemsTab() {
       >
         <AuctionItemsList
           items={table.sortedItems}
+          loading={loading}
           selectedRows={table.selectedRows}
           selectedItemsCount={table.selectedItemsCount}
           onToggleRow={table.toggleRow}

@@ -7,6 +7,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AuctionItemsTab from "./AuctionItemsTab";
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import { useAuctionItems } from "@/hooks/useAuctionItems";
 
 vi.mock('motion/react', () => ({
   motion: new Proxy({}, {
@@ -58,20 +59,23 @@ vi.mock("@/context/AuctionContext", () => ({
   })
 }));
 
+const defaultAuctionItemsReturn = {
+  items: [
+    { id: "101", rowIndex: 2, name: "Food 1", description: "Desc 1", category: "Food", value: "$100", donor: "Donor A", itemType: "Certificate", status: "Active" },
+    { id: "102", rowIndex: 3, name: "Food 2", description: "Desc 2", category: "Food", value: "$200", donor: "Donor B", itemType: "Physical Item", status: "Active" },
+    { id: "201", rowIndex: 4, name: "Health 1", description: "Desc 3", category: "Health & Beauty", value: "$50", donor: "Donor C", itemType: "Certificate", status: "Active" },
+    { id: "202", rowIndex: 5, name: "Health 2", description: "Desc 4", category: "Health & Beauty", value: "$150", donor: "Donor D", itemType: "Physical Item", status: "Active" },
+  ],
+  setItems: vi.fn(),
+  categories: ["Food", "Health & Beauty", "Travel"],
+  categoriesWithBase: [],
+  valueCalculations: [],
+  loading: false,
+  refresh: vi.fn()
+};
+
 vi.mock("@/hooks/useAuctionItems", () => ({
-  useAuctionItems: () => ({
-    items: [
-      { id: "101", rowIndex: 2, name: "Food 1", description: "Desc 1", category: "Food", value: "$100", donor: "Donor A", itemType: "Certificate", status: "Active" },
-      { id: "102", rowIndex: 3, name: "Food 2", description: "Desc 2", category: "Food", value: "$200", donor: "Donor B", itemType: "Physical Item", status: "Active" },
-      { id: "201", rowIndex: 4, name: "Health 1", description: "Desc 3", category: "Health & Beauty", value: "$50", donor: "Donor C", itemType: "Certificate", status: "Active" },
-      { id: "202", rowIndex: 5, name: "Health 2", description: "Desc 4", category: "Health & Beauty", value: "$150", donor: "Donor D", itemType: "Physical Item", status: "Active" },
-    ],
-    setItems: vi.fn(),
-    categories: ["Food", "Health & Beauty", "Travel"],
-    valueCalculations: [],
-    loading: false,
-    refresh: vi.fn()
-  })
+  useAuctionItems: vi.fn(() => defaultAuctionItemsReturn)
 }));
 
 vi.mock("@/hooks/useBundling", () => ({
@@ -113,6 +117,25 @@ describe("AuctionItemsTab - Layout", () => {
     // inside the main content area" fix.
     const cardHeader = heading.parentElement;
     expect(cardHeader?.className).not.toContain("flex-row");
+  });
+});
+
+describe("AuctionItemsTab - Loading", () => {
+  // While items are loading, the page now shows the filter bar and
+  // RowListShell's skeleton rows inline (matching Items.tsx/Bidders.tsx's
+  // convention) instead of replacing the whole page with a full-page
+  // spinner - see refactor-opportunities.md/CHANGELOG.md.
+  it("keeps the filter bar visible and shows skeleton rows instead of blanking the whole page", () => {
+    vi.mocked(useAuctionItems).mockReturnValueOnce({
+      ...defaultAuctionItemsReturn,
+      items: [],
+      loading: true,
+    });
+
+    const { container } = render(<AuctionItemsTab />);
+
+    expect(screen.getByPlaceholderText("Search by name, description, donor...")).toBeInTheDocument();
+    expect(container.querySelectorAll(".animate-pulse").length).toBeGreaterThan(0);
   });
 });
 
