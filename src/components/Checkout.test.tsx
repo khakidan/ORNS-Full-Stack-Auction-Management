@@ -14,8 +14,9 @@ vi.mock("@/services/google-api", () => ({
 
 vi.mock("@/context/ConfigContext", () => ({
   useConfig: () => ({
-    config: { 
+    config: {
       bidManagementSpreadsheetId: "mock-spreadsheet-id",
+      auctionItemsSpreadsheetId: "mock-items-spreadsheet-id",
       receiptFolderId: "mock-folder-id",
       bidManagementSheet: "Bid-Management"
     }
@@ -139,7 +140,7 @@ describe("Checkout", () => {
       })
     );
     const printBody = JSON.parse(vi.mocked(fetchWithRetry).mock.calls[0][1]!.body as string);
-    expect(printBody).toEqual({ spreadsheetId: "mock-spreadsheet-id", receiptFolderId: "mock-folder-id" });
+    expect(printBody).toEqual({ spreadsheetId: "mock-spreadsheet-id", receiptFolderId: "mock-folder-id", itemsSpreadsheetId: "mock-items-spreadsheet-id" });
   });
 
   it("Email All Winners button calls the correct endpoint", async () => {
@@ -167,7 +168,7 @@ describe("Checkout", () => {
       })
     );
     const emailBody = JSON.parse(vi.mocked(fetchWithRetry).mock.calls[0][1]!.body as string);
-    expect(emailBody).toEqual({ spreadsheetId: "mock-spreadsheet-id" });
+    expect(emailBody).toEqual({ spreadsheetId: "mock-spreadsheet-id", itemsSpreadsheetId: "mock-items-spreadsheet-id" });
   });
 
   it("Per-bidder receipt buttons", async () => {
@@ -282,6 +283,38 @@ describe("Checkout", () => {
           expect.objectContaining({
             method: "POST",
             body: expect.stringContaining(`"paymentMethod":"${expected}"`),
+          })
+        );
+      });
+    });
+
+    // Regression guard for the PayPal-invoice-on-checkout fix
+    // (checkoutMarkPaid's credit_card branch needs itemsSpreadsheetId to
+    // create an invoice when one doesn't already exist - see
+    // useCheckoutPaymentFlow.ts/auctionService.ts and CHANGELOG.md). A
+    // future refactor that drops or renames this field anywhere in the
+    // Checkout.tsx -> useCheckoutState.ts -> useCheckoutPaymentFlow.ts
+    // chain would previously have passed every existing test here.
+    it("includes itemsSpreadsheetId in the credit-card checkout request body", async () => {
+      vi.mocked(fetchWithRetry).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true }),
+      } as Response);
+
+      render(<Checkout />);
+      await screen.findByText("Jane Doe");
+      await userEvent.click(screen.getAllByText("Checkout")[0]);
+      await screen.findByText("Select Payment Method");
+      await userEvent.click(screen.getByText("Credit Card / PayPal"));
+      await userEvent.click(screen.getByText("Confirm Payment"));
+
+      await waitFor(() => {
+        expect(fetchWithRetry).toHaveBeenCalledWith(
+          expect.stringContaining("/api/auction/checkout-mark-paid"),
+          expect.objectContaining({
+            method: "POST",
+            body: expect.stringContaining('"itemsSpreadsheetId":"mock-items-spreadsheet-id"'),
           })
         );
       });

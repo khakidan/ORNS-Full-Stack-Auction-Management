@@ -30,22 +30,34 @@ components) that had already been closed by feature work since those
 docs were last verified - corrected directly in both docs rather than
 logged here, since the fix was the doc text itself, not a backlog item.
 
+**2026-09-07 standards + testing audit**: run once feature/UI work was
+believed complete, per the user's explicit request. Same three-parallel-
+pass convention as 2026-09-04 (`component-standards.md`/`patterns.md`/
+`performance.md`/`react-patterns.md`/`style_guide.md`/
+`tailwind-style-guide.md`/`testing-philosophy.md`, plus an explicit
+"shell component" focus this time), findings spot-verified against real
+code before being logged below - one pass's claim that
+`AuctionItemsTab.tsx`'s config-error `CardContent` is missing the
+centering classes its two siblings have was confirmed by direct read,
+as was the `useWinnersData.ts` toast-rule violation and
+`Checkout.test.tsx`'s missing `auctionItemsSpreadsheetId` mock field.
+
 ### Redundant/duplicated logic
 
-Nothing outstanding right now - every item flagged in the 2026-09-02
-deep audit's "Redundant/duplicated logic" section has been closed. See
-`CHANGELOG.md` for the individual fixes.
+1. **Row-list loading-skeleton and empty-state markup is hand-duplicated across all 4 flexible-row lists** (`ItemsList.tsx`, `BiddersList.tsx`, `AttendeesList.tsx`, `AuctionItemsList.tsx`) - each repeats the same `animate-pulse` skeleton block (`<div className="h-20 border-b last:border-0 animate-pulse bg-muted/40" />` × N) and the same empty-state shape (`icon + <span className="text-sm">`). `AuctionItemsList.tsx` is missing the loading-skeleton state entirely (its loading is instead handled one level up in `AuctionItemsTab.tsx` via a full-page spinner) - a real inconsistency this duplication let drift in. This is the div-row analogue of what `DataTableWrapper.tsx` already solved for `<table>`-based lists (per its own docblock) - no equivalent shell exists for the newer row-list shape. Proposal: a `RowListShell`/`RowList` component (`loading`, `items`, `skeletonRowCount?`, `renderRow`, `emptyIcon`, `emptyMessage`, plus an optional row-wrapper hook mirroring `DataTableWrapper`'s `wrapItemRows` since `BiddersList`/`AuctionItemsList` wrap rows in `AnimatePresence` and the other two don't).
+2. **KPI stat-tile Card markup is duplicated between `DashboardStatsRow.tsx` and `CheckoutStatsRow.tsx`** (8 tile instances total) - `CheckoutStatsRow.tsx`'s own docblock says it was written to match `DashboardStatsRow.tsx`'s "exact pattern," i.e. duplicated on purpose rather than extracted. Proposal: a shared `StatTile` component (`label`, `icon`, `iconClassName?`, `value`, `valueClassName?`, `subtext?`) so both rows become a thin grid of `<StatTile />` calls, and any future KPI row doesn't become a third hand-rolled copy.
+3. **`AuctionItemsWorkflow.tsx` and `AuctionTicketsWorkflow.tsx` hand-roll a near byte-identical ~25-line header+tabs shell** (title/description block, the closed-auction amber badge, the "Open Spreadsheet" button, the horizontally-scrollable `TabsList` wrapper) - only title text, description, `spreadsheetId` config key, and the tab list/content differ. One inconsistency already visible between the two (`sm:items-end` vs `sm:items-center` on the header row) looks like copy-paste drift, not a deliberate difference. Proposal: extract a `WorkflowHeader`/`WorkflowTabsShell` component; lower priority than #1/#2 (only 2 call sites today), but a plausible future third workflow page would otherwise triple it.
+4. **The "spreadsheet/folder not configured" placeholder Card is duplicated 3 times** (`AuctionItemsTab.tsx`, `Receipts.tsx`, `BugReportsAdmin.tsx`) - `<Card><CardContent>...<StatusStatePlaceholder .../></CardContent></Card>`. `Receipts.tsx`/`BugReportsAdmin.tsx` match exactly (`CardContent` carries `h-100 flex items-center justify-center`); `AuctionItemsTab.tsx`'s `CardContent` (confirmed via direct read, `src/components/AuctionItemsTab.tsx:88-89`) is missing those centering classes, so its placeholder isn't vertically centered like the other two - a real, visible drift bug, and exactly the class of bug `ListPageCard.tsx`'s own docblock says it exists to prevent. Proposal: a small `ConfigErrorCard` (or a `StatusStatePlaceholder`-wrapping variant) taking `icon`/`title`/`description`, fixing the centering consistently and removing 3 near-identical wrappers.
+5. **`Receipts.tsx` and `BugReportsAdmin.tsx` duplicate almost their entire outer page shell** beyond finding #4's shared error state - the same `Card`/`CardHeader` (icon + title + description on the left, a `RefreshCw`-icon refresh `Button` on the right) `/CardContent` skeleton, each hand-rolled rather than using `ListPageCard.tsx` (built specifically to consolidate this shape for the four search-and-list pages, per its own docblock, but never extended to these two). Proposal: either add an optional `headerRight?` slot to `ListPageCard` so these two can adopt it directly, or a sibling `RefreshableListCard` for the "Card + title/description/icon + right-aligned refresh button + `DataTableWrapper` body" shape they share.
 
 ### Code quality
 
-Nothing outstanding right now - the "No UI anywhere to set an item's Allow
-Multiple Winners flag" item has been closed. See `CHANGELOG.md` for the fix.
+1. **`FormSection.tsx`'s section-header label uses a hardcoded `text-[11px]` arbitrary value** (`src/components/FormSection.tsx:20`) instead of this app's own `text-xxs` (10px) token - `tailwind-style-guide.md`'s Type Scale section names this exact case ("there is no sanctioned 11px step... use `text-xxs`, not invent a new in-between arbitrary value"). Shared by all 4 sectioned dialogs (`AddAttendeeDialog.tsx`, `EditAttendeeDialog.tsx`, `AddAuctionItemDialog.tsx`, `EditAuctionItemDialog.tsx`), so the fix is one line with a 4-call-site blast radius. Low severity (cosmetic, 1px), easy fix.
 
 ### Test coverage gaps (`testing-philosophy.md`)
 
-Nothing outstanding right now - every gap and SHALLOW/CIRCULAR/SMOKE-rated
-test flagged in this section has been closed. See `CHANGELOG.md` for the
-individual fixes.
+1. **`AttendeeGuestsEditor.tsx`'s 3-guest cap (`MAX_GUESTS`) is never exercised at the boundary** - `AddAttendeeDialog.test.tsx`/`EditAttendeeDialog.test.tsx` (real, unmocked editor) only ever test 0-2 guests; nothing asserts the "Add Guest" button disappears once all 3 slots are filled, or that a 4th can't be added.
+2. **`src/lib/itemBadgeColors.ts` has zero test coverage** - no dedicated test file, and neither `AuctionItemRow.test.tsx` nor `ItemRow.test.tsx` asserts on the badge classes it produces, despite the file's own docblock stating its whole purpose is keeping colors consistent between those two components. Low severity (cosmetic, deterministic, no auction-state risk) - a real test would assert `categoryBadgeClass()` is stable for the same input and that `ITEM_TYPE_STYLES`' three entries resolve to distinct, non-overlapping classes.
 
 ### Code Hardening
 
@@ -85,11 +97,13 @@ listed so future audits don't have to re-derive this, and so nobody
 
 - **No native `<select>`** outside test-mock files (`component-standards.md`) -
   every real dropdown goes through `src/components/ui/select.tsx`.
-- **Winner-notification toast rule implemented correctly**
+- **Winner-notification toast rule implemented correctly everywhere**
   (`patterns.md`) - the `duration: Infinity` + `"I have confirmed"`
   action pattern is present in `Bidders.tsx`, `Checkout.tsx`,
-  `Dashboard.tsx` (×2), and `ConfigSettings.tsx`'s analogous manual-copy
-  confirmation.
+  `Dashboard.tsx` (×2), `ConfigSettings.tsx`'s analogous manual-copy
+  confirmation, and (since the 2026-09-07 audit found and fixed the gap)
+  `useWinnersData.ts` - the hook both Bid Entry modes actually record
+  winning bids through.
 - **Bundle restoration and category re-sequencing are server-side and
   correct** (`patterns.md`) - `server/services/bundleService.ts` sets a
   restored bundle to `"Inactive"`, clears its sequential ID, and calls

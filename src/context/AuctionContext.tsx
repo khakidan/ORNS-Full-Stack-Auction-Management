@@ -47,7 +47,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   // AuctionItem[] shape the old useItemsData did.
   const itemsData = useAuctionItems(config.auctionItemsSpreadsheetId);
   const attendeesData = useAttendeesData(ticketsSpreadsheetId);
-  const winnersData = useWinnersData(spreadsheetId, biddersData.bidders, config.bidManagementSheet, config.bidderNumbersSheet);
+  const winnersData = useWinnersData(spreadsheetId, biddersData.bidders, itemsData.items, config.bidManagementSheet, config.bidderNumbersSheet);
   const auctionStatusData = useAuctionStatusData(spreadsheetId, config.bidManagementSheet, config.bidderNumbersSheet);
 
   const { fetchBidders, setLoading } = biddersData;

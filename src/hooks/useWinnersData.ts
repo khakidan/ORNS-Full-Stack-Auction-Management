@@ -3,9 +3,9 @@ import { toast } from "sonner";
 import { fetchWithRetry, getBaseUrl, getSheetData } from "@/services/google-api";
 import { parseBidGrid } from "@/lib/bidGridParsing";
 import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
-import { Bidder } from "@/types";
+import { AuctionItem, Bidder } from "@/types";
 
-export function useWinnersData(spreadsheetId: string, bidders: Bidder[], bidManagementSheet: string, bidderNumbersSheet: string) {
+export function useWinnersData(spreadsheetId: string, bidders: Bidder[], items: AuctionItem[], bidManagementSheet: string, bidderNumbersSheet: string) {
   const [winners, setWinners] = useState<Record<string, string>>({});
   const [totalRaised, setTotalRaised] = useState(0);
 
@@ -79,7 +79,20 @@ export function useWinnersData(spreadsheetId: string, bidders: Bidder[], bidMana
       .then((data) => {
         toast.success(`Synced bid: ${bidderName} — ${itemId} — $${price}`);
         if (data.followUpAdded) {
-          toast.info("Bidder was already checked out. Added to Follow-Up sheet.", { duration: 5000 });
+          // Matches useDashboardState.ts's special-winners warning exactly -
+          // patterns.md requires duration: Infinity and an "I have
+          // confirmed" action for a bidder who already checked out winning
+          // something, with the item explicitly named in the message.
+          const item = items.find(i => i.id === itemId);
+          const itemName = item ? item.name : `Item ${itemId}`;
+          toast.warning("Checked Out Warning", {
+            description: `Warning: ${bidderName} won "${itemName}" but has already checked out.`,
+            duration: Infinity,
+            action: {
+              label: "I have confirmed",
+              onClick: () => console.log("Confirmed checkout warning for winning bid"),
+            },
+          });
         }
       })
       .catch(e => {
