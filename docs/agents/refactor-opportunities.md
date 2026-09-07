@@ -58,18 +58,22 @@ Auction-Items concurrency-race fixes, the colliding "Follow-Up" sheet
 schemas, the missing client-side error boundary, and the two "Minor"
 findings) has been resolved. See `CHANGELOG.md` for the individual fixes.
 
-1. **Bid Management's PayPal sweeper cutover - two manual steps still outstanding.** `server/services/paypalSweeperJob.ts`'s `runPaypalSweep` now fully replaces `PayPalSweeper.gs`'s `checkPendingPayPalInvoices` (see `CHANGELOG.md`), but two things can only happen outside an agent session:
-   - An admin must sign in to the app at least once so the sweeper has a background-sync credential to authenticate with (`persistSweeperCredential` only ever runs on a real login) - until then, sweep runs log `"No background-sync credential stored yet"` and no-op.
-   - Once the Node job is confirmed running reliably in production (watch server logs for `[PayPalSweeper]` lines across a few real sweep cycles), delete `PayPalSweeper.gs` and its GAS time-driven trigger from the live Apps Script project, and `Class_PayPalService.gs`'s now-redundant copy of `calculatePayPalSurcharge` if nothing else GAS-side still needs it.
 
 ### UI / Layout Tweaks
 
-1. We should look into making all of the pages have a more visually appealing and user-friendly design. We should use the newly created Attendee List table on the Auction Tickets page as inpiration — and keep that same visual feel to it.
-   - [x] ~~Bid Management's "Bidders" tab (Bidder Check-In)~~ **Done - see `CHANGELOG.md`.** Replaced the old `<table>`-based `BiddersTable.tsx`/`BidderRow.tsx` (two stacked status badges crammed into one narrow column) with a flexible row list (`BiddersList.tsx`/`BidderRow.tsx`, matching `AttendeesList.tsx`/`AttendeeRow.tsx`'s pattern exactly) - all the same information and actions, just laid out as one row per bidder instead of fixed table columns. The old clickable-column-header sort moved to a "Sort by" select in `BiddersFilterControls.tsx`, since there's no table header left to click.
-   - [x] ~~Bid Management's "Items" tab (the read-only Auction Catalog)~~ **Done - see `CHANGELOG.md`.** Replaced the old bare 4-column `<table>` (built on `DataTableWrapper`) with a flexible row list (`ItemsList.tsx`/`ItemRow.tsx`, matching the same pattern) - and, unlike the Bidders redesign, genuinely enriched the view: description, value/opening bid/min raise, donor, item type, and bundle status were all already on every item but invisible in this table before. Search/filter/sort/empty-states unchanged.
-   - [x] ~~The Auction Items Management page's "Auction Items Database" (the editable counterpart to the read-only Items tab above)~~ **Done - see `CHANGELOG.md`.** Same flexible-row pattern (`AuctionItemsList.tsx`/`AuctionItemRow.tsx`), plus the single-item-edit-as-dialog pattern the user specifically asked for (`EditAuctionItemDialog.tsx`, mirroring `EditAttendeeDialog.tsx` - replaces 9 separate per-field inline editors with one form/one Save). Editing, deleting, batch category/type-set, and bundling all still work exactly as before - only the row layout and the single-item-edit UI changed. `EditableCell.tsx` (now unused anywhere) was deleted as a result.
-   - [x] ~~Bid Management's "Checkout" tab~~ **Done - see `CHANGELOG.md`.** Pitched as an Artifact mockup first, approved, then implemented: a new `CheckoutStatsRow.tsx` KPI row (Total Winners/Awaiting Checkout/Checked Out/Total Collected), the two previously-stacked action bars merged into one `FilterToolbar.tsx` (search + a new Status quick-filter + Refresh/Print All/Email All), and `WinnerCard.tsx` redesigned with a color-coded status chip/left border, initials avatar, a capped scrollable item list, and an inline "No Email" label instead of a hover-only tooltip. `PaymentMethodDialog.tsx` got an icon + explicit checkmark per method instead of a plain color swap. All existing actions (batch print/email, per-winner email/print/checkout, the Pending/Checked-Out tab split, Cash/Check/Card payment) are unchanged in behavior.
-   - Still open: the rest of the app's pages (Dashboard, Receipts, etc.) haven't been passed through this same visual treatment yet.
+Nothing outstanding right now - Bidders, Items, Auction Items Database,
+and Checkout were all redesigned to the Attendee List's flexible-row
+visual language (see `CHANGELOG.md` for the individual fixes). The
+Dashboard was evaluated for the same treatment - an Artifact mockup was
+built, iterated on, and reviewed - but the user explicitly decided
+against it: a pure visual reshuffle (matching Bidders/Items/Checkout's
+before-state) didn't apply here, since Dashboard was never table-based
+and already used Cards/badges/reasonable spacing, and the real new
+content found in that pass (ticket-sales revenue, a payment-method
+breakdown, an unsold-items count) wasn't judged to be worth the
+development cost on its own. Not revisiting unless new information
+changes that calculus. Receipts was never separately evaluated and
+isn't currently flagged as needing this treatment.
 
 ---
 
