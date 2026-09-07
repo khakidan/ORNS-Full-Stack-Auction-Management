@@ -352,6 +352,42 @@ describe('Checkout workflow', () => {
     server.resetHandlers();
   });
 
+  // Since checkoutMarkPaid's credit_card branch now creates a PayPal
+  // invoice on the fly when none exists yet (see
+  // docs/agents/CHANGELOG.md's "PayPal Integration Issue" fix), any
+  // credit_card test needs a Bid-Management grid that actually resolves
+  // to a won item for bidder 42 - the shared default handler's
+  // Bid-Management fallback (generic ["Header1","Header2"] rows) has no
+  // "42" column and would make buildBidderReceipt fail with "Bidder ID
+  // not found in matrix."
+  const mockWonItemForBidder42 = () => {
+    server.use(
+      http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+        const url = new URL(request.url);
+        const range = decodeURIComponent(url.pathname.split('/').pop() || "");
+        if (range.includes("Bid-Management")) {
+          return HttpResponse.json({
+            values: [
+              ["42", "Price"],
+              ["Total", ""],
+              ["", ""],
+              ["801", "150.00"]
+            ]
+          });
+        }
+        if (range.includes("Bidder-Numbers")) {
+          return HttpResponse.json({
+            values: [
+              ["ID", "First Name", "Last Name", "Email", "Phone", "Checked In", "Checked Out", "Is Paid", "Invoice URL", "Invoice Total Amount", "PayPal Fee Status", "Checkout Timestamp"],
+              ["42", "John", "Doe", "john@example.com", "555-0199", "TRUE", "FALSE", "FALSE", "", "", "", ""]
+            ]
+          });
+        }
+        return HttpResponse.json({ values: [] });
+      })
+    );
+  };
+
   it('Cash/Check payment — standard 200 path', async () => {
     const response = await request(app)
       .post("/api/auction/checkout-mark-paid")
@@ -370,12 +406,15 @@ describe('Checkout workflow', () => {
   });
 
   it('Credit card payment — deferred 202 path', async () => {
+    mockWonItemForBidder42();
+
     const response = await request(app)
       .post("/api/auction/checkout-mark-paid")
       .set(authHeader)
       .send({
         bidderId: "42",
         spreadsheetId: "test-spreadsheet-id",
+        itemsSpreadsheetId: "test-items-spreadsheet-id",
         bidderNumbersSheet: "Bidder-Numbers",
         paymentMethod: "credit_card",
         idempotencyKey: crypto.randomUUID()
@@ -389,10 +428,12 @@ describe('Checkout workflow', () => {
   });
 
   it('Idempotency — duplicate checkout submission', async () => {
+    mockWonItemForBidder42();
     const key = crypto.randomUUID();
     const payload = {
       bidderId: "42",
       spreadsheetId: "test-spreadsheet-id",
+      itemsSpreadsheetId: "test-items-spreadsheet-id",
       bidderNumbersSheet: "Bidder-Numbers",
       paymentMethod: "credit_card",
       idempotencyKey: key
@@ -411,11 +452,13 @@ describe('Checkout workflow', () => {
 
     expect(res2.status).toBe(200);
     expect(res2.body.duplicated).toBe(true);
-    // The underlying checkout logic (2 Bidder-Numbers writes: the G:I
-    // checkbox/label range and the L timestamp cell) must only have run
-    // once - the second, duplicate submission is served entirely from
-    // the idempotency cache without re-executing checkoutMarkPaid.
-    expect(updateCallCount).toBe(2);
+    // 3 Bidder-Numbers writes must only have run once - the second,
+    // duplicate submission is served entirely from the idempotency cache
+    // without re-executing checkoutMarkPaid: the G:I checkbox/label
+    // range, the L timestamp cell, and (new, since no invoice existed
+    // for bidder 42 yet) the J:K invoice-URL/amount write that creating
+    // a fresh PayPal invoice now makes.
+    expect(updateCallCount).toBe(3);
   });
 
   it('Auth failure', async () => {
@@ -479,7 +522,13 @@ describe('Full bid-to-checkout lifecycle', () => {
               ["42", "Price"],
               ["Total", ""],
               ["", ""],
-              ["", ""]
+              // Item 801/$150 - matches the record-winning-bid call each
+              // test in this describe block makes before checking out.
+              // A real win here is required since checkoutMarkPaid's
+              // credit_card branch now creates a PayPal invoice on the
+              // fly when none exists, which needs buildBidderReceipt to
+              // actually resolve a won item for bidder 42.
+              ["801", "150.00"]
             ]
           });
         }
@@ -551,6 +600,7 @@ describe('Full bid-to-checkout lifecycle', () => {
       .send({
         bidderId: "42",
         spreadsheetId: "test-spreadsheet-id",
+        itemsSpreadsheetId: "test-items-spreadsheet-id",
         bidderNumbersSheet: "Bidder-Numbers",
         paymentMethod: "credit_card",
         idempotencyKey: crypto.randomUUID()

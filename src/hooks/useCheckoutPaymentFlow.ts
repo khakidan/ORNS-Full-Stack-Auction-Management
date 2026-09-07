@@ -12,6 +12,7 @@ interface UseCheckoutPaymentFlowArgs {
   specialWinners: { name: string; bidderId: string }[];
   fetchAllData: () => Promise<void>;
   spreadsheetId: string;
+  itemsSpreadsheetId: string;
   ticketsSpreadsheetId: string;
   bidderNumbersSheet: string;
   paypalIsSandbox: boolean;
@@ -34,6 +35,7 @@ export function useCheckoutPaymentFlow({
   specialWinners,
   fetchAllData,
   spreadsheetId,
+  itemsSpreadsheetId,
   ticketsSpreadsheetId,
   bidderNumbersSheet,
   paypalIsSandbox,
@@ -126,6 +128,7 @@ export function useCheckoutPaymentFlow({
       body: JSON.stringify({
         bidderId: winner.bidderId,
         spreadsheetId,
+        itemsSpreadsheetId,
         ticketsSpreadsheetId,
         bidderNumbersSheet,
         attendeeInfo: attendee && attendee.sheet === 'tickets' ? { sheet: attendee.sheet, rowIndex: attendee.rowIndex } : null,

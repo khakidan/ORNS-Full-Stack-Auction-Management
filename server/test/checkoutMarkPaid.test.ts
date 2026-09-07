@@ -35,6 +35,16 @@ vi.mock("../services/paypalService", () => ({
   }),
 }));
 
+// Mocked wholesale, matching the PayPalService mock above - this test
+// suite is only responsible for checkoutMarkPaid's own orchestration
+// (does it call this when there's no existing invoice, does it surface
+// a failure correctly), not receiptDataService's own invoice-creation
+// logic, which has its own coverage.
+const mockBuildBidderReceiptWithInvoice = vi.fn();
+vi.mock("../services/receiptDataService", () => ({
+  buildBidderReceiptWithInvoice: (...args: any[]) => mockBuildBidderReceiptWithInvoice(...args),
+}));
+
 import { checkoutMarkPaid } from "../services/auctionService";
 
 const mockTokens = {
@@ -76,6 +86,7 @@ function baseParams(overrides: Record<string, any> = {}) {
   return {
     bidderId: "101",
     spreadsheetId: "bm-id",
+    itemsSpreadsheetId: "items-id",
     bidderNumbersSheet: "Bidder-Numbers",
     paymentMethod: "cash",
     ...overrides,
@@ -179,17 +190,54 @@ describe("checkoutMarkPaid - credit_card (live PayPal gate)", () => {
     expect(lUpdate?.values[0][0]).not.toBe("");
   });
 
-  it("defers without calling getInvoiceStatus when there's no invoice ID to check", async () => {
+  it("creates a fresh PayPal invoice (instead of just deferring) when there's no invoice ID to check - the real user-reported bug", async () => {
+    // Before this fix, a bidder who never had their receipt generated/
+    // printed (the only path that previously created a PayPal invoice)
+    // would check out via Credit Card/PayPal straight into "PayPal
+    // Verification Pending" with no invoice ever created anywhere - the
+    // customer had nothing to pay, and paypalSweeperJob.ts had nothing
+    // to resolve. See docs/agents/CHANGELOG.md's "PayPal Integration
+    // Issue" fix.
     const row = makeBidderRow(); // no invoice URL
     const { getUpdates } = mockBidderNumbers(row);
     mockExtractInvoiceIdFromUrl.mockReturnValue(null);
+    mockBuildBidderReceiptWithInvoice.mockResolvedValue({
+      success: true,
+      receipt: { paymentUrl: "https://www.paypal.com/invoice/p/#INV2-NEW", adjustedTotal: 104.12 },
+    });
 
     const result = await checkoutMarkPaid(fakeClient, baseParams({ paymentMethod: "credit_card" }));
 
     expect(mockGetInvoiceStatus).not.toHaveBeenCalled();
+    expect(mockBuildBidderReceiptWithInvoice).toHaveBeenCalledWith(fakeClient, "bm-id", "items-id", "101", expect.anything());
     expect(result.deferred).toBe(true);
     const giUpdate = getUpdates().find((u) => u.range.includes("G2:I2"));
     expect(giUpdate?.values).toEqual([[false, false, "PayPal Verification Pending"]]);
+  });
+
+  it("surfaces a clear error instead of checking out when there's no itemsSpreadsheetId to create an invoice with", async () => {
+    const row = makeBidderRow(); // no invoice URL
+    mockBidderNumbers(row);
+    mockExtractInvoiceIdFromUrl.mockReturnValue(null);
+
+    await expect(
+      checkoutMarkPaid(fakeClient, baseParams({ paymentMethod: "credit_card", itemsSpreadsheetId: undefined }))
+    ).rejects.toThrow(/Auction Items Spreadsheet ID is required/);
+    expect(mockBuildBidderReceiptWithInvoice).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the underlying error when invoice creation itself fails", async () => {
+    const row = makeBidderRow(); // no invoice URL
+    mockBidderNumbers(row);
+    mockExtractInvoiceIdFromUrl.mockReturnValue(null);
+    mockBuildBidderReceiptWithInvoice.mockResolvedValue({
+      success: false,
+      error: "Bidder ID 101 not found in the Auction-Items bid grid.",
+    });
+
+    await expect(
+      checkoutMarkPaid(fakeClient, baseParams({ paymentMethod: "credit_card" }))
+    ).rejects.toThrow(/Bidder ID 101 not found in the Auction-Items bid grid/);
   });
 
   it("wraps a getInvoiceStatus failure into a 'Credit Card validation processing error'", async () => {

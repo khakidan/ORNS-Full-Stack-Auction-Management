@@ -70,6 +70,7 @@ export function useCheckoutState({
     specialWinners: winnersList.specialWinners,
     fetchAllData,
     spreadsheetId,
+    itemsSpreadsheetId,
     ticketsSpreadsheetId,
     bidderNumbersSheet,
     paypalIsSandbox,

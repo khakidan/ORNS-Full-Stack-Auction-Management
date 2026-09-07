@@ -4,6 +4,7 @@ import { getColumnLetter } from "../utils/columnUtils";
 import { executeGoogleSheetsTransaction, SheetOp } from "../services/sheetsService";
 import { withLock } from "../utils/asyncLock";
 import { PayPalService } from "./paypalService";
+import { buildBidderReceiptWithInvoice } from "./receiptDataService";
 
 export interface RecordWinningBidParams {
   bidderId: string;
@@ -22,6 +23,7 @@ export interface WinningBidResult {
 export interface CheckoutParams {
   bidderId: string;
   spreadsheetId: string;
+  itemsSpreadsheetId?: string;
   ticketsSpreadsheetId?: string;
   bidderNumbersSheet: string;
   paymentMethod: string;
@@ -213,6 +215,7 @@ async function checkoutMarkPaidLocked(
   const {
     bidderId,
     spreadsheetId,
+    itemsSpreadsheetId,
     ticketsSpreadsheetId,
     bidderNumbersSheet,
     paymentMethod,
@@ -269,7 +272,28 @@ async function checkoutMarkPaidLocked(
   } else if (method === "credit_card") {
     let liveStatus = "UNPAID";
     try {
-      if (invoiceId) liveStatus = await paypal.getInvoiceStatus(invoiceId);
+      if (invoiceId) {
+        liveStatus = await paypal.getInvoiceStatus(invoiceId);
+      } else {
+        // No invoice has ever been created for this bidder - e.g. staff
+        // never generated/printed their receipt before clicking Checkout
+        // (the only other path that calls getOrCreateInvoiceUrl-style
+        // logic; see receiptDataService.ts). Without this, checkout used
+        // to silently mark "PayPal Verification Pending" with nothing
+        // for the customer to actually pay and nothing for
+        // paypalSweeperJob.ts to ever resolve - a real user-reported bug.
+        // Create the invoice now via the same get-or-create logic the
+        // receipt routes use, which also writes the URL/amount into
+        // columns J/K itself. A freshly created invoice can't already be
+        // paid, so liveStatus correctly stays "UNPAID" here.
+        if (!itemsSpreadsheetId) {
+          throw new Error("Auction Items Spreadsheet ID is required to create a PayPal invoice.");
+        }
+        const invoiceResult = await buildBidderReceiptWithInvoice(auth, spreadsheetId, itemsSpreadsheetId, bidderId, paypal);
+        if (invoiceResult.success === false) {
+          throw new Error(invoiceResult.error);
+        }
+      }
     } catch (err: any) {
       throw new Error("Credit Card validation processing error: " + err.message);
     }

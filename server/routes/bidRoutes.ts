@@ -73,10 +73,11 @@ export default function createBidRouter() {
   // transactional checkout
   router.post("/auction/checkout-mark-paid", async (req: Request, res: Response, next: NextFunction) => {
     const {
-      bidderId, 
-      spreadsheetId, 
-      ticketsSpreadsheetId, 
-      bidderNumbersSheet, 
+      bidderId,
+      spreadsheetId,
+      itemsSpreadsheetId,
+      ticketsSpreadsheetId,
+      bidderNumbersSheet,
       attendeeInfo,
       paymentMethod,
       paypalIsSandbox,
@@ -96,6 +97,7 @@ export default function createBidRouter() {
       const result = await checkoutMarkPaid(client, {
         bidderId: String(bidderId),
         spreadsheetId,
+        itemsSpreadsheetId,
         ticketsSpreadsheetId,
         bidderNumbersSheet,
         paymentMethod: paymentMethod || "cash",
