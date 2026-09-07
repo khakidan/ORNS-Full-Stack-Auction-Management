@@ -187,19 +187,13 @@ describe("useCheckoutState.confirmMarkPaid", () => {
   });
 });
 
-describe("useCheckoutState.pendingFilteredWinners / completedFilteredWinners", () => {
+describe("useCheckoutState.filteredWinners", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLoadWinnersData();
   });
 
-  it("keeps both tab-scoped lists independently populated at the same time - not gated by activeTab", async () => {
-    // refactor-opportunities.md flagged that both TabsContent panels used
-    // to bind the same `filteredWinners` (tab-scoped only via activeTab),
-    // which only rendered correctly because Tabs unmounts the inactive
-    // panel - a forceMount, or any other simultaneous read of both
-    // panels' data, would show the wrong list for whichever tab wasn't
-    // "active". Alice hasn't checked out (pending); Bob has (completed).
+  it("scopes the search term across every winner regardless of checkout status", async () => {
     const bidders = [
       makeBidder({ id: "101", firstName: "Alice", lastName: "One", checkedOut: false }),
       makeBidder({ id: "102", firstName: "Bob", lastName: "Two", checkedOut: true }),
@@ -221,40 +215,13 @@ describe("useCheckoutState.pendingFilteredWinners / completedFilteredWinners", (
     );
     await waitFor(() => expect(result.current.winners).toHaveLength(2));
 
-    // Both lists must be correct simultaneously, regardless of which tab
-    // is "active" - activeTab is never even touched here.
-    expect(result.current.pendingFilteredWinners.map(w => w.bidderId)).toEqual(["101"]);
-    expect(result.current.completedFilteredWinners.map(w => w.bidderId)).toEqual(["102"]);
-  });
-
-  it("scopes the search term to each tab-scoped list independently", async () => {
-    const bidders = [
-      makeBidder({ id: "101", firstName: "Alice", lastName: "One", checkedOut: false }),
-      makeBidder({ id: "102", firstName: "Bob", lastName: "Two", checkedOut: true }),
-    ];
-    const { result } = renderHook(() =>
-      useCheckoutState({
-        bidders,
-        items: ITEMS,
-        attendees: [],
-        fetchAllData: vi.fn(),
-        spreadsheetId: "ss-id",
-        itemsSpreadsheetId: "items-ss-id",
-        ticketsSpreadsheetId: "",
-        bidManagementSheet: "Bid-Management",
-        bidderNumbersSheet: "Bidder-Numbers",
-        folderId: "folder-id",
-        paypalIsSandbox: true,
-      })
-    );
-    await waitFor(() => expect(result.current.winners).toHaveLength(2));
+    expect(result.current.filteredWinners.map(w => w.bidderId)).toEqual(["101", "102"]);
 
     act(() => {
       result.current.setSearchTerm("Bob");
     });
 
-    expect(result.current.pendingFilteredWinners).toEqual([]);
-    expect(result.current.completedFilteredWinners.map(w => w.bidderId)).toEqual(["102"]);
+    expect(result.current.filteredWinners.map(w => w.bidderId)).toEqual(["102"]);
   });
 });
 
@@ -286,16 +253,15 @@ describe("useCheckoutState.statusFilter", () => {
     );
   }
 
-  it("defaults to 'all', showing every winner in their own tab-scoped list unfiltered by status", async () => {
+  it("defaults to 'all', showing every winner regardless of status", async () => {
     const { result } = renderThreeStatuses();
     await waitFor(() => expect(result.current.winners).toHaveLength(2));
 
     expect(result.current.statusFilter).toBe("all");
-    expect(result.current.pendingFilteredWinners.map(w => w.bidderId)).toEqual(["101"]);
-    expect(result.current.completedFilteredWinners.map(w => w.bidderId)).toEqual(["102"]);
+    expect(result.current.filteredWinners.map(w => w.bidderId)).toEqual(["101", "102"]);
   });
 
-  it("narrows the Completed tab to just 'review' (pending verification) winners", async () => {
+  it("narrows to just 'review' (pending verification) winners", async () => {
     const { result } = renderThreeStatuses();
     await waitFor(() => expect(result.current.winners).toHaveLength(2));
 
@@ -303,14 +269,10 @@ describe("useCheckoutState.statusFilter", () => {
       result.current.setStatusFilter("review");
     });
 
-    expect(result.current.completedFilteredWinners.map(w => w.bidderId)).toEqual(["102"]);
-    // Nothing in the Pending tab is ever "review" - that status only ever
-    // occurs once a bidder has checked out, so this is an intentionally
-    // empty (not broken) combination.
-    expect(result.current.pendingFilteredWinners).toEqual([]);
+    expect(result.current.filteredWinners.map(w => w.bidderId)).toEqual(["102"]);
   });
 
-  it("narrows the Pending tab to just 'awaiting' winners, yielding an empty Completed tab", async () => {
+  it("narrows to just 'awaiting' winners", async () => {
     const { result } = renderThreeStatuses();
     await waitFor(() => expect(result.current.winners).toHaveLength(2));
 
@@ -318,8 +280,7 @@ describe("useCheckoutState.statusFilter", () => {
       result.current.setStatusFilter("awaiting");
     });
 
-    expect(result.current.pendingFilteredWinners.map(w => w.bidderId)).toEqual(["101"]);
-    expect(result.current.completedFilteredWinners).toEqual([]);
+    expect(result.current.filteredWinners.map(w => w.bidderId)).toEqual(["101"]);
   });
 });
 

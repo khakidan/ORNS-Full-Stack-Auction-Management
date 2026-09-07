@@ -94,13 +94,24 @@ describe("Checkout", () => {
     expect(screen.getAllByText("$75.00").length).toBeGreaterThan(0);
   });
 
-  it("does not stretch the Pending/Checked-Out tab list to the page's full width", async () => {
-    render(<Checkout />);
-    await screen.findByText("Jane Doe");
+  it("shows winners of every checkout status together in one list, with no Pending/Checked-Out tabs to switch between", async () => {
+    // The Pending Checkout / Already Checked Out tabs were removed as
+    // redundant with the Status quick-filter (which already isolates
+    // "awaiting"/"review"/"paid" individually - the tabs only offered a
+    // coarser 2-way version of the same split). Jane hasn't checked out;
+    // John has - both should render in the same view with no tab click
+    // required. See CHANGELOG.md.
+    mockBidders[1].checkedOut = true;
+    try {
+      render(<Checkout />);
 
-    const tabsList = screen.getByText(/Pending Checkout/).parentElement;
-    expect(tabsList?.className).not.toContain("w-full");
-    expect(tabsList?.className).not.toContain("grid-cols-2");
+      expect(await screen.findByText("Jane Doe")).toBeTruthy();
+      expect(await screen.findByText("John Smith")).toBeTruthy();
+      expect(screen.queryByText("Pending Checkout")).toBeFalsy();
+      expect(screen.queryByText("Already Checked Out")).toBeFalsy();
+    } finally {
+      mockBidders[1].checkedOut = false;
+    }
   });
 
   it("Print All Receipts button calls the correct endpoint", async () => {

@@ -16,7 +16,7 @@ interface UseWinnersListArgs {
 /**
  * Loads and filters the checkout screen's per-bidder winners list: the
  * Bid-Management bid-grid parse, the Special-Winners high-value-alert
- * lookup, search/tab filtering, and the refresh flow. Split out of
+ * lookup, search/status filtering, and the refresh flow. Split out of
  * useCheckoutState.ts (was 416 lines) so that container stays focused on
  * composing the split-out pieces.
  */
@@ -24,7 +24,6 @@ export function useWinnersList({ bidders, items, fetchAllData, spreadsheetId, bi
   const [winners, setWinners] = useState<WinnerRecord[]>([]);
   const [fetchingWinners, setFetchingWinners] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState<"pending" | "completed">("pending");
   const [statusFilter, setStatusFilter] = useState<CheckoutStatusFilter>("all");
   const [specialWinners, setSpecialWinners] = useState<{ name: string; bidderId: string }[]>([]);
 
@@ -104,12 +103,14 @@ export function useWinnersList({ bidders, items, fetchAllData, spreadsheetId, bi
     }
   }, [bidders, items, loadWinners]);
 
-  // Winner-level status, independent of which tab it's shown under -
-  // "awaiting" only ever appears in the Pending tab and "review"/"paid"
-  // only ever appear in the Completed tab, so statusFilter is a pure
-  // refinement within whichever tab is active (picking "Paid" while on
-  // the Pending tab intentionally yields an empty list, same as any
-  // other filter combination with no matches).
+  // Winner-level status - was previously also used to compute a
+  // Pending/Completed tab split, but that split was strictly redundant
+  // with this same classification (the "Pending Checkout" tab was
+  // exactly `status === "awaiting"`, "Already Checked Out" was exactly
+  // `status === "review" || "paid"`) - a Status filter that can already
+  // isolate all three individually makes a coarser 2-way tab split
+  // pure duplicated effort, per explicit user feedback. Removed the
+  // tabs entirely in favor of this one filter. See CHANGELOG.md.
   const winnerStatus = useCallback((w: WinnerRecord): CheckoutStatusFilter => {
     const bidder = bidders.find(b => b.id === w.bidderId);
     if (!bidder?.checkedOut) return "awaiting";
@@ -125,26 +126,11 @@ export function useWinnersList({ bidders, items, fetchAllData, spreadsheetId, bi
     };
     const matchesStatus = (w: WinnerRecord) => statusFilter === "all" || winnerStatus(w) === statusFilter;
 
-    const pendingWinners = winners.filter(w => {
-      const bidder = bidders.find(b => b.id === w.bidderId);
-      return !bidder?.checkedOut;
-    });
-
-    const completedWinners = winners.filter(w => {
-      const bidder = bidders.find(b => b.id === w.bidderId);
-      return bidder?.checkedOut === true;
-    });
-
-    return {
-      pendingWinners,
-      completedWinners,
-      pendingFiltered: pendingWinners.filter(matchesSearch).filter(matchesStatus),
-      completedFiltered: completedWinners.filter(matchesSearch).filter(matchesStatus),
-    };
-  }, [winners, bidders, searchTerm, statusFilter, winnerStatus]);
+    return winners.filter(matchesSearch).filter(matchesStatus);
+  }, [winners, searchTerm, statusFilter, winnerStatus]);
 
   // Overview stats for the top-of-page KPI row - always computed against
-  // the full, unfiltered winners list (not search/status/tab-scoped), so
+  // the full, unfiltered winners list (not search/status-scoped), so
   // the row stays a stable snapshot of the whole auction's checkout
   // progress regardless of what's currently being searched/filtered.
   const stats = useMemo(() => {
@@ -181,14 +167,9 @@ export function useWinnersList({ bidders, items, fetchAllData, spreadsheetId, bi
     specialWinners,
     searchTerm,
     setSearchTerm,
-    activeTab,
-    setActiveTab,
     statusFilter,
     setStatusFilter,
-    pendingWinners: filteredWinners.pendingWinners,
-    completedWinners: filteredWinners.completedWinners,
-    pendingFilteredWinners: filteredWinners.pendingFiltered,
-    completedFilteredWinners: filteredWinners.completedFiltered,
+    filteredWinners,
     stats,
     handleRefresh,
   };

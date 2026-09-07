@@ -1,6 +1,5 @@
 import { useAuction } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LoadingButton } from "@/components/ui/LoadingButton";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
@@ -105,42 +104,16 @@ export default function Checkout() {
         }
       />
 
-      <Tabs value={state.activeTab} onValueChange={(v: any) => state.setActiveTab(v)}>
-        <TabsList className="mb-6">
-          <TabsTrigger value="pending">
-            Pending Checkout ({state.pendingWinners.length})
-          </TabsTrigger>
-          <TabsTrigger value="completed">
-            Already Checked Out ({state.completedWinners.length})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="pending" className="m-0">
-          <WinnerGrid
-            winners={state.pendingFilteredWinners}
-            loading={state.fetchingWinners}
-            bidders={bidders}
-            processingId={state.processingId}
-            payingBidderId={state.isSubmittingPayment ? state.winnerToPay?.bidderId ?? null : null}
-            onEmailReceipt={state.handleEmailReceipt}
-            onPrintReceipt={state.handlePrintReceipt}
-            onMarkPaid={state.handleMarkPaid}
-          />
-        </TabsContent>
-
-        <TabsContent value="completed" className="m-0">
-          <WinnerGrid
-            winners={state.completedFilteredWinners}
-            loading={state.fetchingWinners}
-            bidders={bidders}
-            processingId={state.processingId}
-            payingBidderId={state.isSubmittingPayment ? state.winnerToPay?.bidderId ?? null : null}
-            onEmailReceipt={state.handleEmailReceipt}
-            onPrintReceipt={state.handlePrintReceipt}
-            onMarkPaid={state.handleMarkPaid}
-          />
-        </TabsContent>
-      </Tabs>
+      <WinnerGrid
+        winners={state.filteredWinners}
+        loading={state.fetchingWinners}
+        bidders={bidders}
+        processingId={state.processingId}
+        payingBidderId={state.isSubmittingPayment ? state.winnerToPay?.bidderId ?? null : null}
+        onEmailReceipt={state.handleEmailReceipt}
+        onPrintReceipt={state.handlePrintReceipt}
+        onMarkPaid={state.handleMarkPaid}
+      />
 
       <ConfirmationDialog
         open={state.showPrintConfirm}
