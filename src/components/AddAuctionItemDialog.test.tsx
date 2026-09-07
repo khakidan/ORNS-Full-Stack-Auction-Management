@@ -64,3 +64,19 @@ describe("AddAuctionItemDialog - Allow Multiple Winners", () => {
     );
   });
 });
+
+describe("AddAuctionItemDialog - shared layout with EditAuctionItemDialog", () => {
+  it("groups fields into the same section headers Edit uses (Details / Pricing / Donor & Type)", () => {
+    renderDialog({});
+    expect(screen.getByText("Details")).toBeInTheDocument();
+    expect(screen.getByText("Pricing")).toBeInTheDocument();
+    expect(screen.getByText("Donor & Type")).toBeInTheDocument();
+  });
+
+  it("keeps only the Add-specific fields - no Item #, Opening Bid, or Min Raise inputs (those are server-calculated on save)", () => {
+    renderDialog({});
+    expect(screen.queryByText("Item #")).not.toBeInTheDocument();
+    expect(screen.queryByText("Opening Bid")).not.toBeInTheDocument();
+    expect(screen.queryByText("Min Raise")).not.toBeInTheDocument();
+  });
+});
