@@ -44,7 +44,6 @@ export default function BidEntry() {
           )}
         >
           <LayoutGrid className="w-4 h-4" /> Batch Entry
-          <span className="text-xs font-normal opacity-70">for the big wave</span>
         </button>
       </div>
 
