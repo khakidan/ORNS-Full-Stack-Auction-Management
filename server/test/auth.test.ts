@@ -63,14 +63,46 @@ describe('Auth Routes workflow', () => {
       );
 
       const response = await request(app).get('/auth/callback?code=valid-code-123');
-      expect(response.status).toBe(302);
-      expect(response.headers.location).toBe('/');
+      // No longer a redirect: the response is an HTML bridge page whose
+      // inline script either postMessages the tokens back to
+      // window.opener (the OAuth popup path - see authRoutes.ts) or
+      // redirects the top-level tab itself, neither of which this
+      // server-side request simulates. Assert on the page's actual
+      // contract instead: 200 + html, the real session cookie set, and
+      // the same tokens embedded for the postMessage bridge to send.
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toContain('text/html');
       expect(response.headers['set-cookie']).toBeDefined();
+      expect(response.text).toContain("OAUTH_AUTH_SUCCESS");
+      expect(response.text).toContain('"access_token":"workflow-mock-token"');
+      expect(response.text).toContain("window.opener.postMessage");
+      expect(response.text).not.toContain("id_token");
       // Best-effort background-sync credential persist (Code Hardening
       // item #2, Step 4) - fires for any login that returns a
       // refresh_token, which this mock response always does.
       await new Promise((resolve) => setImmediate(resolve));
       expect(mockPersistSweeperCredential).toHaveBeenCalledWith("workflow-mock-refresh", "test@orns.org");
+    });
+
+    it('Happy path — the postMessage bridge targets window.location.origin, not "*", so a malicious window.opener cannot harvest another user\'s tokens via this page', async () => {
+      server.use(
+        http.post('https://oauth2.googleapis.com/token', () => {
+          return HttpResponse.json({
+            access_token: "workflow-mock-token",
+            refresh_token: "workflow-mock-refresh",
+            expiry_date: Date.now() + 3600000,
+            token_type: "Bearer"
+          });
+        }),
+        http.get('https://www.googleapis.com/oauth2/v2/userinfo', () => {
+          return HttpResponse.json({ email: "test@orns.org", name: "Test User" });
+        })
+      );
+
+      const response = await request(app).get('/auth/callback?code=valid-code-123');
+
+      expect(response.text).toContain("window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', tokens: tokens }, window.location.origin)");
+      expect(response.text).not.toMatch(/postMessage\([^)]*,\s*['"]\*['"]\)/);
     });
 
     it('Rejected domain — non-org email', async () => {

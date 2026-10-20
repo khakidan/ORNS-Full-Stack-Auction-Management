@@ -6,13 +6,16 @@
  * check event.origin" bug was real - and, per investigation, the
  * feature that would have legitimately sent this message (a server-side
  * HTML page at /auth/callback) was accidentally deleted in a past
- * server.ts refactor, so the listener is currently dead code with no
- * real sender - but still a live injection surface, since without an
+ * server.ts refactor, so the listener was dead code with no real sender
+ * at the time - but still a live injection surface, since without an
  * origin check ANY page holding a reference to this window could inject
  * fake tokens for the app to trust. Fixed by rejecting any postMessage
  * whose origin isn't this app's own before reading event.data at all.
  * The "ignores a postMessage from a different origin" test below is the
- * regression guard for that fix.
+ * regression guard for that fix. The sender has since been restored
+ * (server/routes/authRoutes.ts's /auth/callback, see
+ * server/test/auth.test.ts), with the same origin-lockdown applied on
+ * its side too (an explicit targetOrigin instead of the original's '*').
  */
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
