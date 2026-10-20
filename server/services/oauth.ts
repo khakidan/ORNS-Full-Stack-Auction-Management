@@ -13,7 +13,18 @@ export const SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email"
 ];
 
-export const getOAuthClient = (req?: express.Request) => {
+/**
+ * `req` is accepted for backward compatibility with callers but is never
+ * used to build the redirect URI: the Host/X-Forwarded-Host/
+ * X-Forwarded-Proto headers it carries are client-supplied and, on Cloud
+ * Run in particular, forwarded to the container largely as the client
+ * sent them - trusting them here would let a request forge the
+ * redirect_uri embedded in the Google consent URL. APP_URL is the one
+ * value an operator sets to match the OAuth client's registered
+ * Authorized redirect URI (see docs/agents/README.md), so it's the only
+ * source of truth for this, in every environment.
+ */
+export const getOAuthClient = (_req?: express.Request) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
@@ -21,21 +32,9 @@ export const getOAuthClient = (req?: express.Request) => {
     throw new Error("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing from environment. Please check the Secrets panel in AI Studio.");
   }
 
-  let baseUrl = "";
-  if (req) {
-    let protocol = req.get("x-forwarded-proto") || req.protocol;
-    const host = req.get("x-forwarded-host") || req.get("host");
-
-    if (host && (host.includes("run.app") || host.includes("ais-") || host.includes("aistudio") || host.includes("orns.org"))) {
-      protocol = "https";
-    }
-
-    baseUrl = `${protocol}://${host}`;
-  } else {
-    baseUrl = process.env.APP_URL || "http://localhost:3000";
-    if ((baseUrl.includes("run.app") || baseUrl.includes("ais-") || baseUrl.includes("orns.org")) && baseUrl.startsWith("http:")) {
-      baseUrl = baseUrl.replace("http:", "https:");
-    }
+  let baseUrl = process.env.APP_URL || "http://localhost:3000";
+  if ((baseUrl.includes("run.app") || baseUrl.includes("ais-") || baseUrl.includes("orns.org")) && baseUrl.startsWith("http:")) {
+    baseUrl = baseUrl.replace("http:", "https:");
   }
 
   const cleanBaseUrl = baseUrl.replace(/\/+$/, "");
