@@ -16,6 +16,21 @@ export default defineConfig(({ mode }) => {
         devOptions: {
           enabled: true,
         },
+        workbox: {
+          // Workbox's generateSW default treats every full-page navigation
+          // (Sec-Fetch-Mode: navigate) that isn't a precached asset as an
+          // SPA deep link and serves the cached index.html for it - correct
+          // for client-side routes like /AuctionItemsWorkflow, but it also
+          // silently hijacks server-handled navigations like Google's
+          // redirect to /auth/callback?code=..., which never reaches
+          // authRoutes.ts at all as a result: the browser gets the cached
+          // app shell instead of the real response, no session cookie is
+          // ever set, and the app just reloads "logged out" - the exact
+          // symptom behind the AI Studio login loop. Excluding /auth/ and
+          // /api/ from the fallback lets those navigations hit the network
+          // (and the real server) instead.
+          navigateFallbackDenylist: [/^\/auth\//, /^\/api\//],
+        },
         manifest: {
           name: 'ORNS Charity Auction Manager',
           short_name: 'ORNS Auction',
