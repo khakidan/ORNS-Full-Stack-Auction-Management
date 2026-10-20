@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { http, HttpResponse } from "msw";
+import { server } from "./setup";
 import { cacheControl } from "../middleware/cacheControl";
 import { cookiePolicy } from "../middleware/cookiePolicy";
 import { tokenRestorer } from "../middleware/tokenRestorer";
@@ -178,80 +180,120 @@ describe("middleware - cookiePolicy", () => {
 });
 
 describe("middleware - tokenRestorer", () => {
-  it("restores tokens from x-google-tokens header", () => {
+  it("restores tokens from x-google-tokens header when the account is an @orns.org account", async () => {
     const { req, res, next } = createMocks();
     const tokens = { access_token: "abc" };
     req.headers["x-google-tokens"] = JSON.stringify(tokens);
-    
-    tokenRestorer(req, res, next);
+
+    await tokenRestorer(req, res, next);
 
     expect(req.session).toBeDefined();
     expect(req.session.tokens).toEqual(tokens);
     expect(next).toHaveBeenCalled();
   });
 
-  it("initializes null session before writing", () => {
+  it("initializes null session before writing", async () => {
     const { req, res, next } = createMocks();
     req.session = null as any;
-    req.headers["x-google-tokens"] = JSON.stringify({ test: 1 });
+    req.headers["x-google-tokens"] = JSON.stringify({ access_token: "abc" });
 
-    tokenRestorer(req, res, next);
+    await tokenRestorer(req, res, next);
 
     expect(req.session).not.toBeNull();
-    expect(req.session.tokens).toEqual({ test: 1 });
+    expect(req.session.tokens).toEqual({ access_token: "abc" });
     expect(next).toHaveBeenCalled();
   });
 
-  it("does not throw on malformed JSON and calls next()", () => {
+  it("rejects a token blob with no access_token — can't be validated, so it's never trusted", async () => {
+    const { req, res, next } = createMocks();
+    req.headers["x-google-tokens"] = JSON.stringify({ test: 1 });
+
+    await tokenRestorer(req, res, next);
+
+    expect(req.session?.tokens).toBeUndefined();
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("rejects a token whose Google account is outside @orns.org", async () => {
+    const { req, res, next } = createMocks();
+    req.headers["x-google-tokens"] = JSON.stringify({ access_token: "outsider-token" });
+    server.use(
+      http.get('https://www.googleapis.com/oauth2/v2/userinfo', () => {
+        return HttpResponse.json({ email: 'attacker@gmail.com', name: 'Attacker' });
+      })
+    );
+
+    await tokenRestorer(req, res, next);
+
+    expect(req.session?.tokens).toBeUndefined();
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("rejects a token Google itself reports as invalid", async () => {
+    const { req, res, next } = createMocks();
+    req.headers["x-google-tokens"] = JSON.stringify({ access_token: "revoked-token" });
+    server.use(
+      http.get('https://www.googleapis.com/oauth2/v2/userinfo', () => {
+        return new HttpResponse(null, { status: 401 });
+      })
+    );
+
+    await tokenRestorer(req, res, next);
+
+    expect(req.session?.tokens).toBeUndefined();
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("does not throw on malformed JSON and calls next()", async () => {
     const { req, res, next } = createMocks();
     req.headers["x-google-tokens"] = "{ malformed }";
-    
+
     // Silence error log for test
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    
-    tokenRestorer(req, res, next);
+
+    await tokenRestorer(req, res, next);
 
     expect(next).toHaveBeenCalled();
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
 
-  it("passes through if x-google-tokens header is missing", () => {
+  it("passes through if x-google-tokens header is missing", async () => {
     const { req, res, next } = createMocks();
-    tokenRestorer(req, res, next);
+    await tokenRestorer(req, res, next);
     expect(req.session).toBeUndefined();
     expect(next).toHaveBeenCalled();
   });
 
-  it("A header containing valid JSON where the parsed value is null — tokens not written", () => {
+  it("A header containing valid JSON where the parsed value is null — tokens not written", async () => {
     const { req, res, next } = createMocks();
     req.headers["x-google-tokens"] = "null";
-    tokenRestorer(req, res, next);
+    await tokenRestorer(req, res, next);
     expect(req.session).toBeUndefined();
     expect(next).toHaveBeenCalled();
   });
 
-  it("A header containing valid JSON that is an array (e.g. []) rather than an object — asserts that req.session.tokens is NOT set when the header contains an array, and that next() is still called", () => {
+  it("A header containing valid JSON that is an array (e.g. []) rather than an object — asserts that req.session.tokens is NOT set when the header contains an array, and that next() is still called", async () => {
     const { req, res, next } = createMocks();
     req.headers["x-google-tokens"] = "[]";
-    tokenRestorer(req, res, next);
+    await tokenRestorer(req, res, next);
     expect(req.session?.tokens).toBeUndefined();
     expect(next).toHaveBeenCalled();
   });
 
-  it("A header containing valid JSON false — tokens not written", () => {
+  it("A header containing valid JSON false — tokens not written", async () => {
     const { req, res, next } = createMocks();
     req.headers["x-google-tokens"] = "false";
-    tokenRestorer(req, res, next);
+    await tokenRestorer(req, res, next);
     expect(req.session).toBeUndefined();
     expect(next).toHaveBeenCalled();
   });
 
-  it("Tokens are written correctly with the exact value that was in the header", () => {
+  it("Tokens are written correctly with the exact value that was in the header", async () => {
     const { req, res, next } = createMocks();
     const tokenObj = { access_token: "secret_123", expiry_date: 456 };
     req.headers["x-google-tokens"] = JSON.stringify(tokenObj);
-    tokenRestorer(req, res, next);
+    await tokenRestorer(req, res, next);
     expect(req.session).toBeDefined();
     expect(req.session!.tokens).toEqual(tokenObj);
     expect(next).toHaveBeenCalled();

@@ -34,6 +34,20 @@ function formatConsoleActivityForFile(entries: BugReportPayload["consoleActivity
   return entries.map((e) => `- [${e.timestamp}] **${e.level.toUpperCase()}**: ${e.message}`).join("\n");
 }
 
+/**
+ * Neutralizes spreadsheet formula injection for a value about to be
+ * written with valueInputOption: "USER_ENTERED" - this endpoint accepts
+ * unauthenticated, unsanitized free text (POST /api/bug-reports/ is
+ * deliberately open so a broken session can still be reported), and
+ * Sheets interprets a leading =, +, -, or @ as a formula once a staff
+ * member opens the Bug-Reports sheet. Prefixing with a plain quote keeps
+ * Sheets treating the cell as literal text while leaving the visible
+ * value unchanged.
+ */
+function sanitizeForSheetFormula(value: string): string {
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+}
+
 export function buildReportMarkdown(report: BugReportPayload, screenshotFilename: string | null): string {
   const screenshotSection = screenshotFilename ? `\n![Screenshot](./${screenshotFilename})\n` : "";
   return `# ${report.title}
@@ -108,12 +122,12 @@ export async function appendBugReportToSheet(sheets: sheets_v4.Sheets, spreadshe
         report.timestamp,
         "Open",
         report.type,
-        report.title,
-        report.description,
-        report.route,
-        report.appState,
-        report.browserInfo,
-        formatConsoleActivityForFile(report.consoleActivity),
+        sanitizeForSheetFormula(report.title),
+        sanitizeForSheetFormula(report.description),
+        sanitizeForSheetFormula(report.route),
+        sanitizeForSheetFormula(report.appState),
+        sanitizeForSheetFormula(report.browserInfo),
+        sanitizeForSheetFormula(formatConsoleActivityForFile(report.consoleActivity)),
         screenshotLink,
       ]],
     },

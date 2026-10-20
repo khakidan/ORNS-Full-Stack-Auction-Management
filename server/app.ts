@@ -27,6 +27,15 @@ declare global {
   }
 }
 
+// No fallback secret: validateEnv() aborts boot before this module is
+// reached in every real entry point, but this module's own import must
+// not silently sign cookies with a public, well-known string if that
+// guard is ever skipped (a new entry point, a reused test harness) -
+// that would let anyone forge a valid orns_session cookie.
+if (!process.env.SESSION_SECRET) {
+  throw new Error("SESSION_SECRET environment variable is required.");
+}
+
 const app = express();
 
 // This tool runs as a local application (browser + Tauri desktop shell).
@@ -60,7 +69,7 @@ app.set("trust proxy", 1);
 app.use(
   cookieSession({
     name: "orns_session",
-    keys: [process.env.SESSION_SECRET || "auction-pro-secret"],
+    keys: [process.env.SESSION_SECRET],
     secure: process.env.NODE_ENV === "production" && !process.env.APP_URL?.includes("localhost"),
     sameSite: (process.env.NODE_ENV === "production" && !process.env.APP_URL?.includes("localhost")) ? "none" : "lax",
     httpOnly: true,

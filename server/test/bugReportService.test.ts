@@ -288,7 +288,12 @@ describe("appendBugReportToSheet", () => {
             "/BidManagement (workflow: bids, tab: checkout)",
             "Bidders: 42\nItems: 10",
             "User-Agent: test-agent",
-            "- [2026-09-03T14:32:00.000Z] **ERROR**: TypeError: x is undefined",
+            // Leading "'" neutralizes spreadsheet formula injection (Sheets
+            // treats a leading -, like this list's own "- [" bullet
+            // prefix, as a formula trigger under valueInputOption:
+            // USER_ENTERED) - Sheets hides the quote itself in the
+            // rendered cell, so this is invisible to anyone viewing the row.
+            "'- [2026-09-03T14:32:00.000Z] **ERROR**: TypeError: x is undefined",
             "https://drive.google.com/file/d/x/view",
           ]],
         },

