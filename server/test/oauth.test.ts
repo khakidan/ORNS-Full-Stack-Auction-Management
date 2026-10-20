@@ -59,6 +59,40 @@ describe("getOAuthClient", () => {
     expect((client as any).redirectUri).toBe("https://my-service-abc123.run.app/auth/callback");
   });
 
+  it("upgrades an ai.studio APP_URL to https and sets the callback path", () => {
+    process.env.APP_URL = "https://orns-auction-manager.ai.studio";
+
+    const client = getOAuthClient();
+
+    expect((client as any).redirectUri).toBe("https://orns-auction-manager.ai.studio/auth/callback");
+  });
+
+
+  it("adds https protocol to an APP_URL configured without scheme", () => {
+    process.env.APP_URL = "orns-auction-manager-37624994705.us-east1.run.app";
+
+    const client = getOAuthClient();
+
+    expect((client as any).redirectUri).toBe("https://orns-auction-manager-37624994705.us-east1.run.app/auth/callback");
+  });
+
+  it("trims whitespace around GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET", () => {
+    const origId = process.env.GOOGLE_CLIENT_ID;
+    const origSecret = process.env.GOOGLE_CLIENT_SECRET;
+    try {
+      process.env.GOOGLE_CLIENT_ID = "  test-client-id  ";
+      process.env.GOOGLE_CLIENT_SECRET = "  test-client-secret\n";
+
+      const client = getOAuthClient();
+
+      expect((client as any)._clientId).toBe("test-client-id");
+      expect((client as any)._clientSecret).toBe("test-client-secret");
+    } finally {
+      process.env.GOOGLE_CLIENT_ID = origId;
+      process.env.GOOGLE_CLIENT_SECRET = origSecret;
+    }
+  });
+
   it("falls back to localhost when APP_URL is unset", () => {
     delete process.env.APP_URL;
 
@@ -67,3 +101,4 @@ describe("getOAuthClient", () => {
     expect((client as any).redirectUri).toBe("http://localhost:3000/auth/callback");
   });
 });
+

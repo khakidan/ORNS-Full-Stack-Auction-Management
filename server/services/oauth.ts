@@ -25,15 +25,18 @@ export const SCOPES = [
  * source of truth for this, in every environment.
  */
 export const getOAuthClient = (_req?: express.Request) => {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
 
   if (!clientId || !clientSecret) {
     throw new Error("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing from environment. Please check the Secrets panel in AI Studio.");
   }
 
-  let baseUrl = process.env.APP_URL || "http://localhost:3000";
-  if ((baseUrl.includes("run.app") || baseUrl.includes("ais-") || baseUrl.includes("orns.org")) && baseUrl.startsWith("http:")) {
+  let baseUrl = process.env.APP_URL?.trim() || "http://localhost:3000";
+  if (!/^https?:\/\//i.test(baseUrl)) {
+    baseUrl = `https://${baseUrl}`;
+  }
+  if ((baseUrl.includes("run.app") || baseUrl.includes("ais-") || baseUrl.includes("orns.org") || baseUrl.includes("ai.studio")) && baseUrl.startsWith("http:")) {
     baseUrl = baseUrl.replace("http:", "https:");
   }
 

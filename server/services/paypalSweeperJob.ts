@@ -38,14 +38,19 @@ export async function persistSweeperCredential(refreshToken: string, updatedBy: 
 }
 
 async function getSweeperAuthClient(): Promise<OAuth2Client | null> {
-  const db = getAdminFirestore();
-  const snap = await db.collection(SWEEPER_CREDENTIAL_COLLECTION).doc(SWEEPER_CREDENTIAL_DOC).get();
-  const refreshToken = snap.data()?.refreshToken;
-  if (!refreshToken) return null;
+  try {
+    const db = getAdminFirestore();
+    const snap = await db.collection(SWEEPER_CREDENTIAL_COLLECTION).doc(SWEEPER_CREDENTIAL_DOC).get();
+    const refreshToken = snap.data()?.refreshToken;
+    if (!refreshToken) return null;
 
-  const client = getOAuthClient();
-  client.setCredentials({ refresh_token: refreshToken });
-  return client;
+    const client = getOAuthClient();
+    client.setCredentials({ refresh_token: refreshToken });
+    return client;
+  } catch (err: any) {
+    console.warn("[Sweeper] Unable to access background-sync credentials in Firestore:", err?.message || err);
+    return null;
+  }
 }
 
 export interface PaypalSweepResult {
@@ -91,9 +96,14 @@ export interface SweeperStatus {
  * guarantee, since a slow sweep or a process restart can shift it.
  */
 export async function getSweeperStatus(): Promise<SweeperStatus> {
-  const db = getAdminFirestore();
-  const snap = await db.collection(SWEEPER_CREDENTIAL_COLLECTION).doc(SWEEPER_CREDENTIAL_DOC).get();
-  const data = snap.data();
+  let data: any = null;
+  try {
+    const db = getAdminFirestore();
+    const snap = await db.collection(SWEEPER_CREDENTIAL_COLLECTION).doc(SWEEPER_CREDENTIAL_DOC).get();
+    data = snap.data();
+  } catch (err: any) {
+    console.warn("[Sweeper] getSweeperStatus failed to query Firestore:", err?.message || err);
+  }
 
   const intervalMs = configuredIntervalMinutes * 60 * 1000;
   const anchor = lastRun ? new Date(lastRun.at).getTime() : scheduleStartedAt;

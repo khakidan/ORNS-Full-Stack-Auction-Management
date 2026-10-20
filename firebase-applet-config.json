@@ -6,5 +6,7 @@
   "firestoreDatabaseId": "ai-studio-8ae64d57-94f3-4e97-b086-1f1495b79131",
   "storageBucket": "orns-auction-bid-management.firebasestorage.app",
   "messagingSenderId": "37624994705",
-  "measurementId": ""
+  "measurementId": "",
+  "oAuthClientId": "37624994705-h1hpr3lvk7qabtc75bb9vik2sjb3cdcg.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
 }
