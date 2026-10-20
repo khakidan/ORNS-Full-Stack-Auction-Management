@@ -18,11 +18,6 @@ class GlobalVariables {
         this.activeSpreadSheet = overrides.activeSpreadSheet || SpreadsheetApp.getActiveSpreadsheet();
         this.currentYear = new Date().getFullYear();
 
-        // Sheet name constants
-        this.staffTicketsString = 'staff tickets';
-        this.ticketsString = 'tickets';
-        this.sponsorString = 'sponsor tickets';
-
         if ( overrides.config !== undefined ) {
             this.config = overrides.config;
         } else {
