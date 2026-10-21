@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
-import { checkIdempotency, saveIdempotency } from '../utils/idempotency';
+import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import {
   suggestBundleNames,
@@ -68,31 +68,30 @@ export default function createBundleRouter() {
       return res.status(400).json({ error: "Missing required parameters" });
     }
 
-    const cached = checkIdempotency(req, res, idempotencyKey);
-    if (cached) return;
-
     try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
+      const outcome = await withIdempotency("bundle/process", idempotencyKey, async () => {
+        const client = getAuthenticatedClient(req.session.tokens);
+        const sheets = google.sheets({ version: "v4", auth: client });
 
-      const result = await processBundle(sheets, {
-        spreadsheetId,
-        targetIds,
-        newName,
-        newDescription,
-        targetCategory,
-        value,
-        openingBid,
-        minRaise,
-        donor,
-        itemType,
-        bundleEventToken,
-        timestamp
+        const result = await processBundle(sheets, {
+          spreadsheetId,
+          targetIds,
+          newName,
+          newDescription,
+          targetCategory,
+          value,
+          openingBid,
+          minRaise,
+          donor,
+          itemType,
+          bundleEventToken,
+          timestamp
+        });
+
+        clearCacheForSpreadsheet(spreadsheetId);
+        return result;
       });
-
-      clearCacheForSpreadsheet(spreadsheetId);
-      saveIdempotency(idempotencyKey, result);
-      res.json(result);
+      res.json(idempotentBody(outcome));
     } catch (error: any) {
       next(error);
     }
@@ -105,21 +104,20 @@ export default function createBundleRouter() {
       return res.status(400).json({ error: "Missing required parameters" });
     }
 
-    const cached = checkIdempotency(req, res, idempotencyKey);
-    if (cached) return;
-
     try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
+      const outcome = await withIdempotency("bundle/restore", idempotencyKey, async () => {
+        const client = getAuthenticatedClient(req.session.tokens);
+        const sheets = google.sheets({ version: "v4", auth: client });
 
-      const result = await restoreBundle(sheets, {
-        spreadsheetId,
-        targetBundleToken
+        const result = await restoreBundle(sheets, {
+          spreadsheetId,
+          targetBundleToken
+        });
+
+        clearCacheForSpreadsheet(spreadsheetId);
+        return result;
       });
-
-      clearCacheForSpreadsheet(spreadsheetId);
-      saveIdempotency(idempotencyKey, result);
-      res.json(result);
+      res.json(idempotentBody(outcome));
     } catch (error: any) {
       if (error.message.includes("Active bundle not found")) {
         return res.status(404).json({ error: error.message });

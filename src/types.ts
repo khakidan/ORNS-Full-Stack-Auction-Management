@@ -154,9 +154,11 @@ export interface SweeperStatus {
   credentialConfigured: boolean;
   credentialUpdatedBy: string | null;
   credentialUpdatedAt: string | null;
+  /** The Cloud Scheduler job's expected interval. */
   intervalMinutes: number;
-  scheduleRunning: boolean;
+  /** Cloud Scheduler triggered a sweep recently. False = the job is paused (off-season) or not set up. */
+  scheduleActive: boolean;
+  lastScheduledRunAt: string | null;
   lastRunAt: string | null;
   lastResult: PaypalSweepOutcome | null;
-  nextRunAt: string | null;
 }

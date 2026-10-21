@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { appsScriptDevMode } from '../utils/appsScriptMode';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
 import { requireAuth } from '../middleware/requireAuth';
@@ -30,7 +31,7 @@ export default function createProductionRouter() {
         requestBody: {
           function: functionName,
           parameters,
-          devMode: true,
+          devMode: appsScriptDevMode(),
         },
       });
 

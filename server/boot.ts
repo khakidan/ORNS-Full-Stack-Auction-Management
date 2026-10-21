@@ -15,9 +15,9 @@ export async function startServer(app: express.Application, port: number): Promi
     });
     app.use(vite.middlewares);
   } else {
-    // In production, the dist folder should be next to the executable or in a known location.
-    // For Tauri apps, the frontend is served by Tauri itself, so this is mainly a fallback.
-    // Use __dirname for CJS bundles
+    // In production (`npm start` on Cloud Run), serve the Vite build from
+    // dist/, next to the compiled dist/server.cjs. Use __dirname for the
+    // CJS bundle.
     let currentDir: string;
     try {
       currentDir = typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));

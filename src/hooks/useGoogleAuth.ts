@@ -4,12 +4,12 @@ import { toast } from "sonner";
 import { useApiAuthStatus } from "@/hooks/useApiAuthStatus";
 
 /**
- * Adds the login/logout flow and a low-frequency fallback poll on top of
- * useApiAuthStatus.ts's shared auth-status-check + postMessage-listener
- * logic, rather than duplicating that flow - both hooks used to mount
- * their own independent copy (from AuctionContext.tsx and App.tsx
- * respectively), doubling every OAuth completion's /auth/status requests
- * and localStorage writes.
+ * Adds the login/logout flow and a low-frequency fallback poll (which
+ * also picks up a sign-in completed in another tab) on top of
+ * useApiAuthStatus.ts's shared auth-status check, rather than
+ * duplicating it - both hooks used to mount their own independent copy
+ * (from AuctionContext.tsx and App.tsx respectively), doubling every
+ * /auth/status request.
  */
 export function useGoogleAuth() {
   const { isApiAuthenticated: authenticated, checkProviderAuth } = useApiAuthStatus();
@@ -38,48 +38,27 @@ export function useGoogleAuth() {
   }, [checkProviderAuth]);
 
   const handleLogin = async () => {
-    // Check if we are inside an iframe (like the AI Studio preview environment)
-    const isIframe = window.self !== window.top;
-
-    if (!isIframe) {
-      try {
-        sessionStorage.setItem('post_auth_redirect_path', window.location.pathname);
-      } catch (e) {
-        console.warn("sessionStorage failed:", e);
-      }
-    }
-
-    let popup: Window | null = null;
-    if (isIframe) {
-      // Open popup immediately so standard browser doesn't block it as a non-user action (losing click context in awaits)
-      popup = window.open("about:blank", "oauth_popup", "width=600,height=700");
-      if (!popup) {
-        toast.error("Popup blocked! Please allow popups for this site in your browser settings.");
-        return;
-      }
+    // /auth/callback's page reads this back to return the user to the
+    // page they signed in from (see authRoutes.ts).
+    try {
+      sessionStorage.setItem('post_auth_redirect_path', window.location.pathname);
+    } catch (e) {
+      console.warn("sessionStorage failed:", e);
     }
 
     try {
-      console.log("Handle login clicked, fetching auth URL...");
       const response = await getAuthUrl();
 
       if (response.error || !response.url) {
         console.error("Server returned auth error:", response?.error || "Unknown error");
         toast.error("Auth server did not return a valid login URL.");
-        if (popup) popup.close();
         return;
       }
 
-      console.log("Redirecting to:", response.url.substring(0, 50) + "...");
-      if (isIframe && popup) {
-        popup.location.href = response.url;
-      } else {
-        window.location.href = response.url;
-      }
+      window.location.href = response.url;
     } catch (error) {
       console.error("Login failed with fetch error:", error);
       toast.error("Could not reach auth server.");
-      if (popup) popup.close();
     }
   };
 

@@ -393,23 +393,89 @@ describe("buildAllBidderReceiptsWithInvoices", () => {
     resetHandlersState();
   });
 
-  it("resolves every bidder's invoice and batch-writes the changed ones", async () => {
-    mockSheets();
-    const paypal = newSandboxPaypal();
-
-    let capturedBatch: any = null;
+  /**
+   * Bidder-Numbers backed by mutable state, so a J/K write is visible to
+   * the next read - needed to reproduce ROADMAP.md H1 (a re-run after an
+   * interrupted batch must reuse what the first run saved). `failPutForRows`
+   * makes the J/K write for those sheet rows fail with a non-retried 400.
+   */
+  function mockStatefulSheets(log: string[], failPutForRows: Set<number> = new Set()) {
+    const bidderNumbers = BIDDER_NUMBERS_ROWS.map((row) => [...row, "", "", "", "", "", "", ""]);
     server.use(
-      http.post("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values:batchUpdate", async ({ request }) => {
-        capturedBatch = await request.clone().json();
-        return HttpResponse.json({ totalUpdatedRows: 2 });
+      http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ request }) => {
+        const url = new URL(request.url);
+        if (url.pathname.includes("Bid-Management")) return HttpResponse.json({ values: BID_MANAGEMENT_ROWS });
+        if (url.pathname.includes("Bidder-Numbers")) return HttpResponse.json({ values: bidderNumbers });
+        if (url.pathname.includes("Auction-Items")) return HttpResponse.json({ values: AUCTION_ITEMS_ROWS });
+        return HttpResponse.json({ values: [] });
+      }),
+      http.put("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", async ({ params, request }) => {
+        const range = decodeURIComponent(String(params.range));
+        const sheetRow = Number(range.match(/J(\d+):K/)![1]);
+        if (failPutForRows.has(sheetRow)) {
+          log.push(`persist-failed:${sheetRow}`);
+          return HttpResponse.json({ error: { code: 400, message: "write rejected" } }, { status: 400 });
+        }
+        const body: any = await request.clone().json();
+        bidderNumbers[sheetRow - 1][9] = body.values[0][0];
+        bidderNumbers[sheetRow - 1][10] = body.values[0][1];
+        log.push(`persist:${sheetRow}`);
+        return HttpResponse.json({ updatedRows: 1 });
       })
     );
+    return bidderNumbers;
+  }
+
+  /** Real (MSW-backed) fetch that also logs each invoice creation. */
+  function loggingFetcher(log: string[]): typeof fetch {
+    return ((url: any, init?: RequestInit) => {
+      if (String(url).endsWith("/v2/invoicing/invoices") && init?.method === "POST") log.push("create");
+      return fetch(url, init);
+    }) as typeof fetch;
+  }
+
+  it("writes each new invoice to J/K immediately, before creating the next bidder's invoice", async () => {
+    const log: string[] = [];
+    mockStatefulSheets(log);
+    const paypal = newSandboxPaypal({ fetcher: loggingFetcher(log) });
 
     const receipts = await buildAllBidderReceiptsWithInvoices(fakeClient, "bm-id", "items-id", paypal);
 
     expect(receipts).toHaveLength(2);
     expect(receipts.every(r => r.paymentUrl.startsWith("https://www.sandbox.paypal.com/invoice/p/#"))).toBe(true);
-    expect(capturedBatch.data).toHaveLength(2);
+    // Sorted by last name: Zed Last (row 3) first, then Alice One (row 2).
+    expect(log).toEqual(["create", "persist:3", "create", "persist:2"]);
+  });
+
+  it("stops the batch when a J/K write fails, so no further invoices are sent unrecorded", async () => {
+    const log: string[] = [];
+    mockStatefulSheets(log, new Set([3]));
+    const paypal = newSandboxPaypal({ fetcher: loggingFetcher(log) });
+
+    await expect(buildAllBidderReceiptsWithInvoices(fakeClient, "bm-id", "items-id", paypal))
+      .rejects.toThrow(/sent to bidder 102 but could not be saved to Bidder-Numbers row 3/);
+    expect(log).toEqual(["create", "persist-failed:3"]);
+  });
+
+  it("re-running after an interrupted batch reuses the invoices already saved instead of duplicating them", async () => {
+    const log: string[] = [];
+    const failRows = new Set([2]);
+    const bidderNumbers = mockStatefulSheets(log, failRows);
+    const paypal = newSandboxPaypal({ fetcher: loggingFetcher(log) });
+
+    // First run: Zed's invoice is created and saved, then Alice's save fails.
+    await expect(buildAllBidderReceiptsWithInvoices(fakeClient, "bm-id", "items-id", paypal)).rejects.toThrow();
+    // Staff enter Alice's invoice by hand, as the error message instructs.
+    bidderNumbers[1][9] = "https://www.sandbox.paypal.com/invoice/p/#INV2-MOCK-0000-0000-0001";
+    bidderNumbers[1][10] = String(calculatePayPalSurcharge(50).total);
+    failRows.clear();
+
+    const receipts = await buildAllBidderReceiptsWithInvoices(fakeClient, "bm-id", "items-id", paypal);
+
+    expect(receipts).toHaveLength(2);
+    // Exactly one invoice per bidder across both runs - the second run created none.
+    expect(log.filter((e) => e === "create")).toHaveLength(2);
+    expect(log).toEqual(["create", "persist:3", "create", "persist-failed:2"]);
   });
 
   it("skips a bidder whose invoice resolution throws, without aborting the batch", async () => {

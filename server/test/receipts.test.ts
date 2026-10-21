@@ -6,7 +6,8 @@
  * Bidder-Numbers, Bid-Management, and Auction-Items data structures so that the 
  * `email-all` and `email-only` handlers operate with successfully built receipt data.
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { getPaypalIsSandbox } from "../services/sharedConfig";
 import request from "supertest";
 import { app } from "../app";
 import { server } from "./setup";
@@ -14,13 +15,14 @@ import { http, HttpResponse } from "msw";
 import { resetHandlersState, appsScriptCallCount,
          productionScriptCallLog } from "./handlers";
 import { calculatePayPalSurcharge } from "../utils/financeUtils";
+import { authCookieHeader } from "./helpers/session";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
   refresh_token: "workflow-mock-refresh",
   expiry_date: Date.now() + 3600000
 };
-const authHeader = { "x-google-tokens": JSON.stringify(mockTokens) };
+const authHeader = authCookieHeader(mockTokens);
 
 // Shared GET handler override for email tests — provides realistic sheet data
 // that processEmail needs to build and send a receipt
@@ -87,6 +89,51 @@ describe('Receipt Generate workflow', () => {
     expect(response.body.success).toBe(true);
     expect(appsScriptCallCount).toBe(1);
     expect(productionScriptCallLog).toContain('apiCreateIndividualReceipt');
+  });
+
+  it('Concurrent requests for the same bidder create only one PayPal invoice (ROADMAP.md H1)', async () => {
+    // Bidder-Numbers with no invoice yet, backed by state so the first
+    // request's J/K write is visible to the second request's read.
+    const bidderRow = ['42', 'John', 'Doe', 'john@example.com', 'TRUE', '', '', '', '', '', ''];
+    let invoicesCreated = 0;
+    server.use(
+      http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+        const range = decodeURIComponent(new URL(request.url).pathname.split('/').pop() || '');
+        if (range.includes('Bid-Management')) {
+          return HttpResponse.json({ values: [['42', 'Price'], ['', ''], ['', ''], ['801', '50']] });
+        }
+        if (range.includes('Bidder-Numbers')) {
+          return HttpResponse.json({ values: [['ID', 'First Name', 'Last Name', 'Email'], bidderRow] });
+        }
+        if (range.includes('Auction-Items')) {
+          return HttpResponse.json({ values: [['Item Number', 'Category', 'Item Name'], ['801', 'Food', 'Pizza Night']] });
+        }
+        return HttpResponse.json({ values: [] });
+      }),
+      http.put('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', async ({ request }) => {
+        const body: any = await request.clone().json();
+        bidderRow[9] = body.values[0][0];
+        bidderRow[10] = String(body.values[0][1]);
+        return HttpResponse.json({ updatedRows: 1 });
+      }),
+      http.post('https://api-m.sandbox.paypal.com/v2/invoicing/invoices', async () => {
+        invoicesCreated++;
+        // Widen the race window - without the lock, both requests read
+        // "no invoice yet" while this one is still in flight.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return HttpResponse.json({ id: 'INV2-MOCK-0000-0000-0001' }, { status: 201 });
+      })
+    );
+
+    const send = () => request(app)
+      .post('/api/receipts/generate')
+      .set(authHeader)
+      .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
+    const [first, second] = await Promise.all([send(), send()]);
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(invoicesCreated).toBe(1);
   });
 
   it('Happy path — Node-resolved receipt data is forwarded to Apps Script', async () => {
@@ -301,6 +348,24 @@ describe('Receipt Email-Only workflow', () => {
     expect(response.body.success).toBe(true);
   });
 
+  it('Uses the PayPal environment from Firestore, not the request body (ROADMAP.md M3)', async () => {
+    vi.mocked(getPaypalIsSandbox).mockResolvedValueOnce(false);
+    let liveHits = 0;
+    let sandboxHits = 0;
+    server.use(
+      http.post('https://api-m.paypal.com/v1/oauth2/token', () => { liveHits++; return HttpResponse.json({ error: 'invalid_client' }, { status: 401 }); }),
+      http.post('https://api-m.sandbox.paypal.com/v1/oauth2/token', () => { sandboxHits++; return HttpResponse.json({ access_token: 'x', expires_in: 3600 }); })
+    );
+
+    await request(app)
+      .post('/api/receipts/email-only')
+      .set(authHeader)
+      .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id', paypalIsSandbox: true });
+
+    expect(liveHits).toBeGreaterThan(0);
+    expect(sandboxHits).toBe(0);
+  });
+
   it('Bidder not found in Bidder-Numbers — returns 400', async () => {
     const response = await request(app)
       .post('/api/receipts/email-only')
@@ -308,7 +373,7 @@ describe('Receipt Email-Only workflow', () => {
       .send({ bidderId: '999', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toContain('No email address found');
+    expect(response.body.error).toBe('Bidder ID 999 not found in the Bidder-Numbers sheet.');
   });
 
   it('Auth failure', async () => {

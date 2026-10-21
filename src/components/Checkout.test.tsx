@@ -18,7 +18,8 @@ vi.mock("@/context/ConfigContext", () => ({
       bidManagementSpreadsheetId: "mock-spreadsheet-id",
       auctionItemsSpreadsheetId: "mock-items-spreadsheet-id",
       receiptFolderId: "mock-folder-id",
-      bidManagementSheet: "Bid-Management"
+      bidManagementSheet: "Bid-Management",
+      paypalIsSandbox: false
     }
   })
 }));
@@ -168,7 +169,13 @@ describe("Checkout", () => {
       })
     );
     const emailBody = JSON.parse(vi.mocked(fetchWithRetry).mock.calls[0][1]!.body as string);
-    expect(emailBody).toEqual({ spreadsheetId: "mock-spreadsheet-id", itemsSpreadsheetId: "mock-items-spreadsheet-id" });
+    // No paypalIsSandbox: the server reads sandbox/live from Firestore
+    // itself (ROADMAP.md M3).
+    expect(emailBody).toEqual({
+      spreadsheetId: "mock-spreadsheet-id",
+      itemsSpreadsheetId: "mock-items-spreadsheet-id",
+      idempotencyKey: expect.any(String)
+    });
   });
 
   it("Per-bidder receipt buttons", async () => {
@@ -214,6 +221,8 @@ describe("Checkout", () => {
         body: expect.stringContaining('"bidderId":"101"')
       })
     );
+    const emailOnlyCall = vi.mocked(fetchWithRetry).mock.calls.find(([url]) => String(url).includes("/receipts/email-only"))!;
+    expect(JSON.parse(emailOnlyCall[1]!.body as string)).not.toHaveProperty("paypalIsSandbox");
   });
 
   it("Empty state — no winners yet", async () => {

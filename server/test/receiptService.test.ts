@@ -1,61 +1,56 @@
 /**
- * Tests server/services/receiptService.ts's processAllEmails - previously
- * had zero test coverage of any kind. Written alongside financeUtils.ts's
- * new negative-bid-amount guard (calculatePayPalSurcharge now throws
- * instead of silently returning a nonsensical negative invoice total):
- * before that guard existed, ANY thrown error from processEmail (a Sheets
- * API error, a malformed row, etc.) would already abort this whole batch
- * loop uncaught, silently skipping every remaining bidder's receipt email -
- * making the new guard's throw easier to hit in practice. Fixed by wrapping
- * the per-bidder call in its own try/catch. These tests pin that resilience
- * directly, with processEmail itself mocked away (its own Sheets/Gmail/OAuth
- * logic is a separate, larger concern - out of scope here).
+ * server/services/receiptService.ts's processAllEmails (the "Email All
+ * Winners" batch), run against stateful Sheets/Gmail/PayPal mocks.
+ *
+ * ROADMAP.md H3: the batch used to have no record of who had already been
+ * emailed, so a retried or re-clicked batch emailed every bidder again,
+ * and it re-read three full sheets per bidder. It now records each send
+ * in Bidder-Numbers M/N and skips a bidder already emailed this same
+ * invoice. ROADMAP.md H2: every email links the bidder's current invoice.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { server } from "./setup";
-import { http, HttpResponse } from "msw";
 import { resetHandlersState } from "./handlers";
-
-vi.mock("../services/emailService", () => ({
-  processEmail: vi.fn(),
-}));
-
 import { processAllEmails } from "../services/receiptService";
-import { processEmail } from "../services/emailService";
 import { getAuthenticatedClient } from "../services/oauth";
+import { PayPalService } from "../services/paypalService";
+import { mockReceiptSheets } from "./helpers/receiptSheets";
 
-const mockedProcessEmail = vi.mocked(processEmail);
+const HEADER = ["ID", "First Name", "Last Name", "Email", "Checked In", "Proxy Bidder", "Checked Out", "Paid", "Payment Method", "Invoice URL", "Invoiced Amount"];
 
-const BIDDER_NUMBERS_ROWS = [
-  ["ID", "First Name", "Last Name", "Email"],
-  ["101", "Alice", "One", "alice@example.com"],
-  ["102", "Bob", "Two", "bob@example.com"],
-  ["103", "Carol", "Three", "carol@example.com"],
+const BID_MANAGEMENT_ROWS = [
+  ["101", "", "102", "", "103", "", "104", ""],
+  ["f", "f", "f", "f", "f", "f", "f", "f"],
+  ["f", "f", "f", "f", "f", "f", "f", "f"],
+  ["801", "50", "802", "30", "803", "20", "804", "10"],
 ];
 
-function mockBidderNumbers(rows: string[][] = BIDDER_NUMBERS_ROWS) {
-  server.use(
-    http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ request }) => {
-      const url = new URL(request.url);
-      const range = decodeURIComponent(url.pathname.split("/").pop() || "");
-      if (range.includes("Bidder-Numbers")) {
-        return HttpResponse.json({ values: rows });
-      }
-      return HttpResponse.json({ values: [] });
-    })
-  );
+const AUCTION_ITEMS_ROWS = [
+  ["Item Number", "Category", "Item Name"],
+  ["801", "Food", "Pizza Night"],
+  ["802", "Art", "Painting Class"],
+  ["803", "Kids", "Pony Ride"],
+  ["804", "Food", "Cookies"],
+];
+
+function bidderNumbers() {
+  return [
+    HEADER,
+    ["101", "Alice", "One", "alice@example.com"],
+    ["102", "Bob", "Two", "bob@example.com"],
+    ["103", "Carol", "Three", "carol@example.com"],
+  ];
 }
 
-const mockTokens = {
+const fakeClient = getAuthenticatedClient({
   access_token: "workflow-mock-token",
   refresh_token: "workflow-mock-refresh",
   expiry_date: Date.now() + 3600000,
-};
-const fakeClient = getAuthenticatedClient(mockTokens);
+});
+const paypal = () => new PayPalService({ isSandbox: true, clientId: "id", clientSecret: "secret" });
 
-describe("processAllEmails - per-bidder resilience", () => {
+describe("processAllEmails", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     resetHandlersState();
   });
 
@@ -63,60 +58,78 @@ describe("processAllEmails - per-bidder resilience", () => {
     server.resetHandlers();
   });
 
-  it("emails every bidder and counts each success", async () => {
-    mockBidderNumbers();
-    mockedProcessEmail.mockResolvedValue({ success: true });
+  it("emails every bidder with winning items their current invoice, and records each send in M/N", async () => {
+    const mock = mockReceiptSheets({ bidderNumbers: bidderNumbers(), bidManagement: BID_MANAGEMENT_ROWS, auctionItems: AUCTION_ITEMS_ROWS });
 
-    const sentCount = await processAllEmails(fakeClient, "ss-id", "items-ss-id");
+    const result = await processAllEmails(fakeClient, "ss-id", "items-ss-id", paypal());
 
-    expect(sentCount).toBe(3);
-    expect(processEmail).toHaveBeenCalledTimes(3);
+    expect(result).toEqual({ sentCount: 3, alreadySentCount: 0, failedCount: 0 });
+    expect(mock.sentEmails.map((e) => e.to).sort()).toEqual(["alice@example.com", "bob@example.com", "carol@example.com"]);
+    for (const row of mock.bidderNumbers.slice(1)) {
+      expect(row[13]).toBe(row[9]); // emailed exactly the invoice now in Column J
+      expect(row[12]).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    }
+    expect(mock.bidderNumbers[0].slice(11, 14)).toEqual(["PayPal Pending Since", "Receipt Emailed At", "Receipt Emailed Invoice"]);
   });
 
-  it("does not abort the batch when one bidder's processEmail throws - the rest still get emailed", async () => {
-    mockBidderNumbers();
-    mockedProcessEmail.mockImplementation(async (_client, _spreadsheetId, id) => {
-      if (id === "102") {
-        // Simulates calculatePayPalSurcharge throwing for a corrupted
-        // negative price on this one bidder's won items.
-        throw new Error("calculatePayPalSurcharge: bidAmount must not be negative (got -5).");
-      }
-      return { success: true };
-    });
+  it("running the batch again sends nothing, creates no new invoices, and reports the skips (ROADMAP.md H3)", async () => {
+    const mock = mockReceiptSheets({ bidderNumbers: bidderNumbers(), bidManagement: BID_MANAGEMENT_ROWS, auctionItems: AUCTION_ITEMS_ROWS });
 
-    const sentCount = await processAllEmails(fakeClient, "ss-id", "items-ss-id");
-    expect(sentCount).toBe(2);
+    await processAllEmails(fakeClient, "ss-id", "items-ss-id", paypal());
+    const second = await processAllEmails(fakeClient, "ss-id", "items-ss-id", paypal());
 
-    // Every bidder was still attempted, not just the ones before the failure.
-    expect(processEmail).toHaveBeenCalledTimes(3);
-    expect(processEmail).toHaveBeenCalledWith(fakeClient, "ss-id", "103", "items-ss-id");
+    expect(second).toEqual({ sentCount: 0, alreadySentCount: 3, failedCount: 0 });
+    expect(mock.sentEmails).toHaveLength(3);
+    expect(mock.invoicesCreated()).toBe(3);
   });
 
-  it("does not count a bidder whose processEmail call returns success: false", async () => {
-    mockBidderNumbers();
-    mockedProcessEmail.mockImplementation(async (_client, _spreadsheetId, id) => {
-      if (id === "102") return { success: false, error: "No items won for this bidder." };
-      return { success: true };
-    });
+  it("re-sends to a bidder whose total changed since their last email (new invoice), and only to them", async () => {
+    const mock = mockReceiptSheets({ bidderNumbers: bidderNumbers(), bidManagement: BID_MANAGEMENT_ROWS, auctionItems: AUCTION_ITEMS_ROWS });
+    await processAllEmails(fakeClient, "ss-id", "items-ss-id", paypal());
 
-    const sentCount = await processAllEmails(fakeClient, "ss-id", "items-ss-id");
+    // Bob wins another item after the first batch.
+    BID_MANAGEMENT_ROWS.push(["", "", "804", "15", "", "", "", ""]);
+    try {
+      const second = await processAllEmails(fakeClient, "ss-id", "items-ss-id", paypal());
 
-    expect(sentCount).toBe(2);
+      expect(second).toEqual({ sentCount: 1, alreadySentCount: 2, failedCount: 0 });
+      expect(mock.sentEmails.slice(3).map((e) => e.to)).toEqual(["bob@example.com"]);
+      expect(mock.bidderNumbers[2][13]).toBe(mock.bidderNumbers[2][9]);
+    } finally {
+      BID_MANAGEMENT_ROWS.pop();
+    }
   });
 
-  it("skips rows with no bidder id or no email without calling processEmail", async () => {
-    mockBidderNumbers([
-      ["ID", "First Name", "Last Name", "Email"],
-      ["101", "Alice", "One", "alice@example.com"],
-      ["", "No", "Id", "noid@example.com"],
-      ["104", "No", "Email", ""],
-    ]);
-    mockedProcessEmail.mockResolvedValue({ success: true });
+  it("skips bidders with no or an invalid email address, without creating invoices for them", async () => {
+    const rows = bidderNumbers();
+    rows[2][3] = "";
+    rows[3][3] = "carol@example.com\r\nBcc: attacker@evil.example";
+    const mock = mockReceiptSheets({ bidderNumbers: rows, bidManagement: BID_MANAGEMENT_ROWS, auctionItems: AUCTION_ITEMS_ROWS });
 
-    const sentCount = await processAllEmails(fakeClient, "ss-id", "items-ss-id");
+    const result = await processAllEmails(fakeClient, "ss-id", "items-ss-id", paypal());
 
-    expect(sentCount).toBe(1);
-    expect(processEmail).toHaveBeenCalledTimes(1);
-    expect(processEmail).toHaveBeenCalledWith(fakeClient, "ss-id", "101", "items-ss-id");
+    expect(result.sentCount).toBe(1);
+    expect(mock.sentEmails.map((e) => e.to)).toEqual(["alice@example.com"]);
+    expect(mock.invoicesCreated()).toBe(1);
+  });
+
+  it("does not abort the batch when one bidder's email fails - the rest still go out", async () => {
+    const mock = mockReceiptSheets({ bidderNumbers: bidderNumbers(), bidManagement: BID_MANAGEMENT_ROWS, auctionItems: AUCTION_ITEMS_ROWS });
+    mock.failEmailsTo.add("bob@example.com");
+
+    const result = await processAllEmails(fakeClient, "ss-id", "items-ss-id", paypal());
+
+    expect(result).toEqual({ sentCount: 2, alreadySentCount: 0, failedCount: 1 });
+    expect(mock.bidderNumbers[2][13]).toBe(""); // Bob not recorded as emailed, so a re-run tries him again
+  });
+
+  it("stops the batch if a send can't be recorded, so a re-run can't email those bidders twice", async () => {
+    const mock = mockReceiptSheets({ bidderNumbers: bidderNumbers(), bidManagement: BID_MANAGEMENT_ROWS, auctionItems: AUCTION_ITEMS_ROWS });
+    // Receipts go out sorted by last name - Alice One (row 2) first.
+    mock.failWritesTo.add("!M2:N2");
+
+    await expect(processAllEmails(fakeClient, "ss-id", "items-ss-id", paypal()))
+      .rejects.toThrow(/Stopped emailing receipts after 1 sent: bidder 101's receipt was emailed but couldn't be recorded/);
+    expect(mock.sentEmails.map((e) => e.to)).toEqual(["alice@example.com"]);
   });
 });

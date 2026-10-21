@@ -1,20 +1,14 @@
 /**
  * @vitest-environment jsdom
  *
- * useGoogleAuth had zero test coverage. Confirmed two already-logged bugs
- * were real while designing these tests:
- *
- * 1. The postMessage listener didn't check event.origin - same issue and
- *    same fix as useApiAuthStatus.ts (see that file's test header for the
- *    full investigation: the real sender was accidentally deleted from
- *    server.ts in a past refactor, so the listener is dead code today but
- *    was still a live injection surface with no origin check).
- * 2. checkAuth() was called from *inside* a setAuthenticated updater
- *    function in the 5-second fallback poll - updaters must be pure, and
- *    React (especially StrictMode) can invoke them more than once,
- *    doubling /auth/status requests. Fixed by reading a ref mirror of
- *    `authenticated` instead, which preserves the original "only poll
- *    while not yet authenticated" behavior without the impure updater.
+ * useGoogleAuth had zero test coverage. Designing these tests confirmed
+ * an already-logged bug: checkAuth() was called from *inside* a
+ * setAuthenticated updater function in the 5-second fallback poll -
+ * updaters must be pure, and React (especially StrictMode) can invoke
+ * them more than once, doubling /auth/status requests. Fixed by reading a
+ * ref mirror of `authenticated` instead, which preserves the original
+ * "only poll while not yet authenticated" behavior without the impure
+ * updater.
  */
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -39,17 +33,13 @@ const mockedGetAuthStatus = vi.mocked(getAuthStatus);
 const mockedGetAuthUrl = vi.mocked(getAuthUrl);
 const mockedLogout = vi.mocked(logout);
 
-function postMessageEvent(data: any, origin = window.location.origin) {
-  window.dispatchEvent(new MessageEvent("message", { data, origin }));
-}
-
 function mockLocation() {
   const location = { href: "", origin: "http://localhost:3000" };
   Object.defineProperty(window, "location", { configurable: true, value: location });
   return location;
 }
 
-describe("useGoogleAuth - mount and postMessage", () => {
+describe("useGoogleAuth - mount", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
@@ -68,50 +58,6 @@ describe("useGoogleAuth - mount and postMessage", () => {
     const { result } = renderHook(() => useGoogleAuth());
 
     await waitFor(() => expect(result.current.authenticated).toBe(false));
-  });
-
-  it("re-checks auth and persists tokens on a same-origin OAUTH_AUTH_SUCCESS message", async () => {
-    mockedGetAuthStatus.mockResolvedValueOnce({ authenticated: false }).mockResolvedValueOnce({ authenticated: true });
-    const { result } = renderHook(() => useGoogleAuth());
-    await waitFor(() => expect(result.current.authenticated).toBe(false));
-
-    act(() => {
-      postMessageEvent({ type: "OAUTH_AUTH_SUCCESS", tokens: { access_token: "tok-123" } });
-    });
-
-    expect(localStorage.getItem("google_tokens")).toBe(JSON.stringify({ access_token: "tok-123" }));
-    await waitFor(() => expect(result.current.authenticated).toBe(true));
-  });
-
-  it("ignores a postMessage from a different origin (regression guard for the origin-check fix)", async () => {
-    mockedGetAuthStatus.mockResolvedValue({ authenticated: false });
-    renderHook(() => useGoogleAuth());
-    await waitFor(() => expect(getAuthStatus).toHaveBeenCalledTimes(1));
-
-    act(() => {
-      postMessageEvent({ type: "OAUTH_AUTH_SUCCESS", tokens: { access_token: "attacker-token" } }, "https://evil.example.com");
-    });
-
-    expect(localStorage.getItem("google_tokens")).toBeNull();
-    expect(getAuthStatus).toHaveBeenCalledTimes(1);
-  });
-
-  it("falls back to window._fallbackTokens when localStorage.setItem throws", async () => {
-    mockedGetAuthStatus.mockResolvedValue({ authenticated: false });
-    const originalSetItem = Storage.prototype.setItem;
-    Storage.prototype.setItem = () => { throw new Error("blocked"); };
-
-    renderHook(() => useGoogleAuth());
-    await waitFor(() => expect(getAuthStatus).toHaveBeenCalledTimes(1));
-
-    act(() => {
-      postMessageEvent({ type: "OAUTH_AUTH_SUCCESS", tokens: { access_token: "tok-123" } });
-    });
-
-    expect((window as any)._fallbackTokens).toBe(JSON.stringify({ access_token: "tok-123" }));
-
-    Storage.prototype.setItem = originalSetItem;
-    delete (window as any)._fallbackTokens;
   });
 });
 
@@ -165,7 +111,7 @@ describe("useGoogleAuth - the 5-second fallback poll", () => {
   });
 });
 
-describe("useGoogleAuth - handleLogin (not embedded in an iframe)", () => {
+describe("useGoogleAuth - handleLogin", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
@@ -215,69 +161,6 @@ describe("useGoogleAuth - handleLogin (not embedded in an iframe)", () => {
     });
 
     expect(toast.error).toHaveBeenCalledWith("Could not reach auth server.");
-  });
-});
-
-describe("useGoogleAuth - handleLogin (embedded in an iframe)", () => {
-  let originalTop: any;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    localStorage.clear();
-    mockedGetAuthStatus.mockResolvedValue({ authenticated: false });
-    mockLocation();
-    // Simulate window.self !== window.top.
-    originalTop = window.top;
-    Object.defineProperty(window, "top", { configurable: true, value: {} });
-  });
-
-  afterEach(() => {
-    Object.defineProperty(window, "top", { configurable: true, value: originalTop });
-  });
-
-  it("opens a popup named 'oauth_popup' and navigates it to the real auth URL", async () => {
-    mockedGetAuthUrl.mockResolvedValue({ url: "https://accounts.google.com/o/oauth2/auth?real=1" });
-    const fakePopup = { location: { href: "" }, close: vi.fn() };
-    const openSpy = vi.spyOn(window, "open").mockReturnValue(fakePopup as any);
-
-    const { result } = renderHook(() => useGoogleAuth());
-    await waitFor(() => expect(result.current.authenticated).toBe(false));
-
-    await act(async () => {
-      await result.current.handleLogin();
-    });
-
-    expect(openSpy).toHaveBeenCalledWith("about:blank", "oauth_popup", expect.any(String));
-    expect(fakePopup.location.href).toBe("https://accounts.google.com/o/oauth2/auth?real=1");
-  });
-
-  it("shows a popup-blocked error and never fetches an auth URL when the popup is blocked", async () => {
-    vi.spyOn(window, "open").mockReturnValue(null);
-
-    const { result } = renderHook(() => useGoogleAuth());
-    await waitFor(() => expect(result.current.authenticated).toBe(false));
-
-    await act(async () => {
-      await result.current.handleLogin();
-    });
-
-    expect(toast.error).toHaveBeenCalledWith("Popup blocked! Please allow popups for this site in your browser settings.");
-    expect(getAuthUrl).not.toHaveBeenCalled();
-  });
-
-  it("closes the popup when the server returns no valid auth URL", async () => {
-    mockedGetAuthUrl.mockResolvedValue({ error: "misconfigured" } as any);
-    const fakePopup = { location: { href: "" }, close: vi.fn() };
-    vi.spyOn(window, "open").mockReturnValue(fakePopup as any);
-
-    const { result } = renderHook(() => useGoogleAuth());
-    await waitFor(() => expect(result.current.authenticated).toBe(false));
-
-    await act(async () => {
-      await result.current.handleLogin();
-    });
-
-    expect(fakePopup.close).toHaveBeenCalled();
   });
 });
 

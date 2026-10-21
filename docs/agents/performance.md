@@ -99,7 +99,7 @@ The oversized top-level views (`AuctionItemsTab.tsx`, `Bidders.tsx`,
 `Checkout.tsx`, `ConfigSettings.tsx`, `Dashboard.tsx`) are also a
 rendering-performance concern, not just a maintainability one: a single
 969-line component re-renders as one unit on any state change inside it.
-Splitting them (tracked in `refactor-opportunities.md`) has a real
+Splitting them (log it in `ROADMAP.md`'s audit backlog if pursued) has a real
 rendering-performance benefit alongside the readability one.
 
 ---

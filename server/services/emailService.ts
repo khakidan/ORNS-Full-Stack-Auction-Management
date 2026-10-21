@@ -1,13 +1,35 @@
-import { google } from "googleapis";
+import { google, sheets_v4 } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
-import { calculatePayPalSurcharge } from "../utils/financeUtils";
-import { buildItemNameLookup, findBidderColumn, resolveWonItems } from "./receiptDataService";
+import { withLock } from "../utils/asyncLock";
+import { ensureTrackingHeaders } from "../utils/bidderNumbersHeaders";
+import { PayPalService } from "./paypalService";
+import { attachInvoice, buildBidderReceipt, BidderReceiptWithInvoice } from "./receiptDataService";
+
+/**
+ * Bidder-Numbers columns M/N record each receipt email: when it was sent,
+ * and which invoice link it carried. Batch email-all skips a bidder whose
+ * column N already matches their current invoice, so a retried or
+ * re-clicked batch never emails the same receipt twice (ROADMAP.md H3).
+ */
+const EMAILED_AT_COL = "M";
+const EMAILED_INVOICE_COL = "N";
+export const EMAILED_INVOICE_INDEX = 13; // 0-based index of column N
+
+/** Escapes text for an HTML body or a double-quoted attribute. */
+function escapeHtml(value: unknown): string {
+  return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+}
+
+/** Only an http(s) link may become the button's href - anything else (e.g. `javascript:`) is dropped. */
+function safeHref(url: string): string {
+  return /^https?:\/\//i.test(url.trim()) ? escapeHtml(url.trim()) : "#";
+}
 
 export function generateEmailHtml(receipt: any, paymentUrl: string, adjustedTotal: string, feeAmount: string): string {
   const itemRows = receipt.itemsWon.map((id: string, i: number) => `
       <tr>
-          <td style="padding: 8px 0; border-bottom: 1px solid #eeeeee;">${id}</td>
-          <td style="padding: 8px 0; border-bottom: 1px solid #eeeeee;">${receipt.itemNames[i]}</td>
+          <td style="padding: 8px 0; border-bottom: 1px solid #eeeeee;">${escapeHtml(id)}</td>
+          <td style="padding: 8px 0; border-bottom: 1px solid #eeeeee;">${escapeHtml(receipt.itemNames[i])}</td>
           <td style="padding: 8px 0; border-bottom: 1px solid #eeeeee; text-align: right;">$${Number(receipt.itemPrices[i]).toFixed(2)}</td>
       </tr>
   `).join('');
@@ -21,9 +43,9 @@ export function generateEmailHtml(receipt: any, paymentUrl: string, adjustedTota
       <div style="max-width: 600px; margin: auto; padding: 40px 20px; font-family: 'Raleway', sans-serif; color: #000000;">
           <p>Thank you for supporting Orchard Ridge Nursery School's Auction. Your donations today will ensure that we can continue to provide high quality preschool education.</p>
           <h1 style="font-family: 'Inter', sans-serif; font-size: 18px; font-weight: bold; margin-bottom: 5px;">
-              Receipt for ${receipt.firstName} ${receipt.lastName}
+              Receipt for ${escapeHtml(receipt.firstName)} ${escapeHtml(receipt.lastName)}
           </h1>
-          <p style="font-size: 11px; margin-top: 0; color: #444444;">Bidder #${receipt.bidId}</p>
+          <p style="font-size: 11px; margin-top: 0; color: #444444;">Bidder #${escapeHtml(receipt.bidId)}</p>
           <p style="font-size: 11px; line-height: 1.5; margin-top: 20px;">The following items have been purchased:</p>
           <table style="width: 100%; border-collapse: collapse; font-family: 'Source Code Pro', monospace; font-size: 10px; margin-top: 15px;">
               <thead>
@@ -41,11 +63,11 @@ export function generateEmailHtml(receipt: any, paymentUrl: string, adjustedTota
           <div style="margin-top: 25px; padding: 15px; border: 1px solid #eee; background-color: #fafafa;">
               <p style="margin-top: 0;">Do you still need to pay? Cash or checks are preferred, but if you wish to pay by credit card, here's the link to pay.</p>
               <p style="text-align: center;">
-                  <a href="${paymentUrl}" style="background-color: #e31b23; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">
-                      Pay $${adjustedTotal} via PayPal
+                  <a href="${safeHref(paymentUrl)}" style="background-color: #e31b23; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                      Pay $${escapeHtml(adjustedTotal)} via PayPal
                   </a>
               </p>
-              <p style="font-size: 11px; color: #666; text-align: center;">(Includes a 3.49% + $0.49 processing fee of $${feeAmount})</p>
+              <p style="font-size: 11px; color: #666; text-align: center;">(Includes a 3.49% + $0.49 processing fee of $${escapeHtml(feeAmount)})</p>
           </div>
           <div style="margin-top: 30px;">
               <p>Thanks again,</p>
@@ -68,11 +90,31 @@ export function generateEmailHtml(receipt: any, paymentUrl: string, adjustedTota
   </html>`;
 }
 
+/** Removes CR/LF so a value can never end its header line and start a new one (e.g. an injected `Bcc:`). */
+function headerSafe(value: string): string {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+/** RFC 2047-encodes a header value that isn't plain ASCII, so names like "José" arrive intact. */
+function encodeHeaderText(value: string): string {
+  const clean = headerSafe(value);
+  return /^[\x20-\x7e]*$/.test(clean) ? clean : `=?UTF-8?B?${Buffer.from(clean, "utf-8").toString("base64")}?=`;
+}
+
+/** One plain address: no whitespace, no separators that could add recipients, no header syntax. */
+export function isValidEmailAddress(address: string): boolean {
+  return /^[^\s@,;<>"()]+@[^\s@,;<>"()]+\.[^\s@,;<>"()]+$/.test(address);
+}
+
 export function createRawEmail(to: string, subject: string, htmlBody: string, fromName?: string, fromEmail?: string): string {
+  // A plain-ASCII display name is quoted; an RFC 2047-encoded one must
+  // not be (encoded words aren't allowed inside a quoted string).
+  const encodedFromName = fromName ? encodeHeaderText(fromName) : "";
+  const fromDisplay = !encodedFromName ? "" : encodedFromName.startsWith("=?") ? encodedFromName : `"${encodedFromName.replace(/"/g, "")}"`;
   const headers = [
-    `To: ${to}`,
-    fromName && fromEmail ? `From: "${fromName}" <${fromEmail}>` : (fromName ? `From: "${fromName}"` : ""),
-    `Subject: ${subject}`,
+    `To: ${headerSafe(to)}`,
+    fromDisplay && fromEmail ? `From: ${fromDisplay} <${headerSafe(fromEmail)}>` : (fromDisplay ? `From: ${fromDisplay}` : ""),
+    `Subject: ${encodeHeaderText(subject)}`,
     `Content-Type: text/html; charset="UTF-8"`,
     `MIME-Version: 1.0`
   ].filter(Boolean);
@@ -82,83 +124,83 @@ export function createRawEmail(to: string, subject: string, htmlBody: string, fr
     ``,
     htmlBody
   ].join("\r\n");
-  
+
   return Buffer.from(message, 'utf-8').toString("base64").replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export async function processEmail(client: OAuth2Client, spreadsheetId: string, bidderId: string, itemsSpreadsheetId: string) {
-  const sheets = google.sheets({ version: "v4", auth: client });
-  const bMgmt = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bid-Management'!A1:ZZ1000" });
-  const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });
-  // Items live in the separate Auction Items spreadsheet, not a copy synced
-  // into Bid Management - see docs/agents/refactor-opportunities.md's Code
-  // Hardening item #1 / CHANGELOG.md.
-  const aucItems = await sheets.spreadsheets.values.get({ spreadsheetId: itemsSpreadsheetId, range: "'Auction-Items'!A:Z" });
-
-  const numData = bNum.data.values || [];
-  let email = '';
-  let firstName = '';
-  let lastName = '';
-  let invoiceUrl = '';
-  
-  for (let i = 1; i < numData.length; i++) {
-    if (String(numData[i][0]).trim() === String(bidderId).trim()) {
-      // A short/malformed row (missing trailing cells) leaves these
-      // `undefined` rather than blank - without the fallback, the sent
-      // email's subject/greeting would literally read "undefined
-      // undefined" instead of degrading to an empty name.
-      firstName = numData[i][1] || '';
-      lastName = numData[i][2] || '';
-      email = numData[i][3] || '';
-      invoiceUrl = numData[i][9] || '';
-      break;
-    }
-  }
-
-  if (!email) return { success: false, error: "No email address found for this bidder." };
-
-  const mgmtData = bMgmt.data.values || [];
-  const colIndex = findBidderColumn(mgmtData, bidderId);
-  if (colIndex === -1) return { success: false, error: "Bidder not found in Bid-Management matrix." };
-
-  const itemsRows = aucItems.data.values || [];
-  const getItemName = buildItemNameLookup(itemsRows);
-  const { itemsWon, itemNames, itemPrices, totalCost } = resolveWonItems(mgmtData, colIndex, getItemName);
-
-  if (itemsWon.length === 0) return { success: false, error: "No items won for this bidder." };
-
-  const receipt = {
-    bidId: bidderId,
-    firstName,
-    lastName,
-    itemsWon,
-    itemNames,
-    itemPrices,
-    totalCost
-  };
-
-  const fees = calculatePayPalSurcharge(totalCost);
-  const paymentUrl = invoiceUrl || "https://www.paypal.com";
-  
-  const oauth2 = google.oauth2({ version: 'v2', auth: client });
-  let senderEmail = 'me';
+/** The signed-in staff member's address, used as the From: address. Falls back to Gmail's "me". */
+export async function getSenderEmail(client: OAuth2Client): Promise<string> {
   try {
-    const userInfo = await oauth2.userinfo.get();
-    if (userInfo.data.email) {
-      senderEmail = userInfo.data.email;
-    }
+    const userInfo = await google.oauth2({ version: "v2", auth: client }).userinfo.get();
+    if (userInfo.data.email) return userInfo.data.email;
   } catch (e) {
     console.warn("Could not retrieve user info profile for sender email:", e);
   }
+  return "me";
+}
 
-  const htmlBody = generateEmailHtml(receipt, paymentUrl, fees.total.toFixed(2), fees.surcharge.toFixed(2));
-  const raw = createRawEmail(email, `Your Auction Receipt: ${firstName} ${lastName}`, htmlBody, "Orchard Ridge Nursery School", senderEmail);
-  
-  const gmail = google.gmail({ version: "v1", auth: client });
-  await gmail.users.messages.send({
+/**
+ * Sends one receipt email. The "Pay $X" button shows the invoice's own
+ * total (`adjustedTotal`) and links to that same invoice (`paymentUrl`),
+ * so the email can never advertise a different amount than the link
+ * actually charges (ROADMAP.md H2).
+ */
+export async function sendReceiptEmail(client: OAuth2Client, receipt: BidderReceiptWithInvoice, senderEmail: string): Promise<void> {
+  const feeAmount = Math.round((receipt.adjustedTotal - receipt.totalCost) * 100) / 100;
+  const htmlBody = generateEmailHtml(receipt, receipt.paymentUrl, receipt.adjustedTotal.toFixed(2), feeAmount.toFixed(2));
+  const raw = createRawEmail(receipt.email.trim(), `Your Auction Receipt: ${receipt.firstName} ${receipt.lastName}`, htmlBody, "Orchard Ridge Nursery School", senderEmail);
+
+  await google.gmail({ version: "v1", auth: client }).users.messages.send({
     userId: "me",
     requestBody: { raw }
   });
+}
+
+/** Records in Bidder-Numbers M/N that this row's receipt was just emailed with this invoice link. */
+export async function recordReceiptEmailed(sheets: sheets_v4.Sheets, spreadsheetId: string, rowIndex: number, paymentUrl: string): Promise<void> {
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'Bidder-Numbers'!${EMAILED_AT_COL}${rowIndex}:${EMAILED_INVOICE_COL}${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[new Date().toISOString(), paymentUrl]] },
+  });
+}
+
+/**
+ * Emails one bidder their receipt (the single "Email" button). Always
+ * sends - this is an explicit, per-bidder action - and records it in M/N.
+ *
+ * Resolves the bidder's PayPal invoice first, exactly as receipt
+ * generation does (ROADMAP.md H2): it used to link whatever URL was cached
+ * in Column J (possibly for an old total, or already cancelled), or a bare
+ * paypal.com link when there was none. Must not be called while holding
+ * the `bidder-numbers:` lock - it takes that lock itself, only around the
+ * invoice step.
+ */
+export async function processEmail(
+  client: OAuth2Client,
+  spreadsheetId: string,
+  bidderId: string,
+  itemsSpreadsheetId: string,
+  paypal: PayPalService
+): Promise<{ success: true } | { success: false; error: string }> {
+  const built = await buildBidderReceipt(client, spreadsheetId, itemsSpreadsheetId, bidderId);
+  if (built.success === false) return built;
+
+  const email = built.receipt.email.trim();
+  if (!email) return { success: false, error: "No email address found for this bidder." };
+  if (!isValidEmailAddress(email)) return { success: false, error: `The email address on file for bidder ${bidderId} isn't valid: "${email}".` };
+
+  const attached = await withLock(`bidder-numbers:${spreadsheetId}`, () =>
+    attachInvoice(client, spreadsheetId, built.receipt, paypal)
+  );
+  if (attached.success === false) return attached;
+
+  await sendReceiptEmail(client, attached.receipt, await getSenderEmail(client));
+
+  const sheets = google.sheets({ version: "v4", auth: client });
+  await recordReceiptEmailed(sheets, spreadsheetId, attached.rowIndex, attached.receipt.paymentUrl);
+  await ensureTrackingHeaders(sheets, spreadsheetId).catch((e) => console.warn("[processEmail] Could not label Bidder-Numbers L1:N1:", e?.message || e));
 
   return { success: true };
 }

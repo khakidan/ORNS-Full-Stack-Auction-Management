@@ -27,30 +27,51 @@ The codebase is split into highly modular structural patterns:
 
 *   `/src/components/`: Extracted React components, including lazy-loaded operational interfaces (`ConfigSettings.tsx`, `AuctionTicketsWorkflow.tsx`, `AuctionItemsWorkflow.tsx`) and highly interactive sub-modules.
 *   `/server/routes/`: Isolated REST endpoint pathways (`authRoutes.ts`, `bidRoutes.ts`, `bundleRoutes.ts`, `dataRoutes.ts`, `health.ts`, `productionRoutes.ts`, `receiptRoutes.ts`, `setupRoutes.ts`).
-*   `/server/services/`: Global services such as `google.ts` (handling robust retry-with-backoff logic for Sheets API) and `genai.ts` (modern SDK configuration for Gemini assistant tools).
-*   `/server/middleware/`: Global error interceptors, cookie session controllers, token restorer states, and cache control mechanisms.
-*   `/server/utils/`: Backend computational files, Sheet API retry patterns, and cryptographic session managers.
+*   `/server/services/`: Global services such as `google.ts` (the Google API retry policy - GET/PUT/PATCH/DELETE only; POSTs that are safe to repeat opt in with `server/utils/googleRetry.ts`) and `genai.ts` (modern SDK configuration for Gemini assistant tools).
+*   `/server/middleware/`: The centralized error handler, the `requireAuth` session guard, and no-store cache headers for `/api` and `/auth`.
+*   `/server/utils/`: Backend helpers - the in-process `withLock` mutex, idempotency cache, sheet read cache, range/column helpers, category and min-raise logic, the PayPal surcharge formula, and boot-time env validation.
 
 ---
 
 ## Environment Setup
 
-The application relies on environment variables registered in a `.env` file (never `.env.local` or `.env.example` directly in execution) to boot and operate correctly:
+The server reads its configuration from environment variables. Locally
+they come from a `.env` file at the repo root (gitignored; copy
+`.env.example`), which `server/env.ts` loads at boot. On Cloud Run they
+are set on the service itself and there is no `.env`.
 
 *   `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`: OAuth credentials for administrative sign-in
-*   `SESSION_SECRET`: Long cryptographic string for session integrity
-*   `APP_URL`: Dynamic host URL (e.g., `http://localhost:3000` or production container endpoint)
-*   `GEMINI_API_KEY`: Secret token for server-side AI-powered assistant functions
-*   `PORT` (optional): local port to bind to, defaults to `3000` if unset. Cloud Run sets this automatically in deployed environments - only set it locally if `3000` is already taken by another app on your machine (and update `APP_URL` and the OAuth client's Authorized redirect URI, `<APP_URL>/auth/callback`, to match).
+*   `SESSION_SECRET`: Long random string that signs the `orns_session` cookie
+*   `APP_URL`: The URL the server is reached at (`http://localhost:<PORT>` locally, `https://orns-auction-manager.cloud.run` in production). The OAuth redirect URI is built from it as `<APP_URL>/auth/callback`
+*   `GEMINI_API_KEY`: Key for the server-side Gemini bundle-suggestion features
+*   `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET`: PayPal Invoicing API credentials (sandbox credentials locally)
+*   `SWEEPER_TRIGGER_SECRET`: Shared secret Cloud Scheduler sends to `POST /internal/paypal-sweep` to run the PayPal sweep (see "Deployment"). Production only; leave it empty locally, which turns that endpoint off
+*   `APPS_SCRIPT_DEV_MODE` (optional): `true` makes Apps Script calls run each script's latest *saved* editor code instead of its deployed API-executable version - only works for the script's owner; for trying `.gs` edits locally before deploying them. Default (unset/`false`) runs the deployed version - see "Deployment"
+*   `PORT` (optional): Port to bind to, default `3000`. Cloud Run sets it automatically
 
-`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GEMINI_API_KEY` are hard
-requirements - `server/utils/validateEnv.ts` calls `process.exit(1)` on
-boot if any are missing. Every other var (spreadsheet/script/template/
+`SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and
+`GEMINI_API_KEY` are hard requirements - `server/utils/validateEnv.ts`
+calls `process.exit(1)` on boot if any are missing (and `server/app.ts`
+independently throws on a missing `SESSION_SECRET`, so cookies are never
+signed with a fallback key). Every other var (spreadsheet/script/template/
 Drive IDs) is soft-required - the server boots without them, but the
 corresponding feature is degraded until set (either in `.env` or via the
 in-app Config screen once signed in).
 
-Run `npm install`, then `npm run dev` to start the local Express/Vite dev server (port `3000` by default).
+---
+
+## Running Locally
+
+One-time setup:
+
+1.  **Node.js 22** (the version Cloud Run's buildpack uses), then `npm install`.
+2.  `cp .env.example .env` and fill it in. Use the same `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` as production (one OAuth client serves both), any long random `SESSION_SECRET`, and **PayPal sandbox** credentials. Set `APP_URL=http://localhost:<PORT>` with the `PORT` you'll use.
+3.  In Google Cloud Console (project `orns-auction-bid-management`) -> Google Auth Platform -> Clients -> the app's OAuth client, add `http://localhost:<PORT>/auth/callback` to **Authorized redirect URIs**. Firebase Auth (the Cloud Sync sign-in) already allows `localhost` by default.
+4.  Run `gcloud auth application-default login` with an account that can access the `orns-auction-bid-management` Firebase project, so `firebase-admin` can reach Firestore. The server reads the PayPal sandbox/live setting from there, so without it checkout and receipt generate/email fail with "Couldn't read the PayPal sandbox/live setting" (and the sweeper status card can't load). Sign-in and the other screens still work. If those errors mention `invalid_rapt`/`invalid_grant`, the login has expired - run the command again.
+
+Then `npm run dev` (or `npm run dev:watch` to auto-restart on backend edits) and open `http://localhost:<PORT>`.
+
+**A local server works on live data.** It reads the same shared Config from Firestore (`settings/global`) as production, so it opens the same spreadsheets, and the in-app PayPal sandbox/live toggle is shared too. A local server never runs the PayPal sweeper on its own (only Cloud Scheduler triggers it, in production), so it won't touch the live Bidder-Numbers sheet unless you click **Run Sweep Now**. To test against throwaway data, point the Config screen at copies of the spreadsheets - and remember that changes it there for production too.
 
 ---
 
@@ -74,64 +95,106 @@ Safari/iOS requires "Add to Home Screen" from the share sheet.
 
 ## Key Scripts
 
-All core operations are managed via unified npm scripts declared in `package.json`:
+All core operations are managed via npm scripts declared in `package.json`:
 
-*   `npm run dev`: Starts the TypeScript Express development server utilizing `tsx` on port `3000`. This exact script is also what AI Studio's own live-editing preview runs under the hood (see `vite.config.ts`'s `DISABLE_HMR` comment) - don't change its behavior here.
-*   `npm run dev:watch`: Same as `npm run dev`, but backend files (`server/**`, `server.ts`) trigger an automatic restart on save via `tsx watch` (excludes `src/**`, which is already handled by Vite's own HMR). Local-only convenience - deliberately a separate script from `dev` rather than a change to it, so AI Studio's environment is unaffected.
-*   `npm run build`: Bundles the React frontend into `dist/` using Vite, and compiles `server.ts` to a standalone, production-ready CommonJS file (`dist/server.cjs`) via `esbuild`.
-*   `npm run start`: Runs the compiled server using standard node environments (`node dist/server.cjs`).
-*   `npm run lint`: Performs static type checks using TypeScript (`tsc --noEmit`).
-*   `npm run test`: Executes the complete test suite with Vitest in runner mode.
-*   `npm run test:quiet`: Same as `npm run test`, but sets `NODE_OPTIONS=--no-experimental-webstorage` to suppress Node's `[DEP...]`/`ExperimentalWarning: localStorage is not available...` noise (Node's own built-in Web Storage feature, unrelated to and not used by jsdom's `window.localStorage` that the tests actually run against). Local-only convenience, deliberately a separate script rather than a change to `test` itself - that flag doesn't exist on older Node versions and would hard-error there instead of just warning, so it's not safe to assume for whatever Node version AI Studio's own environment runs. Uses inline `VAR=value` shell syntax, which needs a POSIX shell (bash/zsh/Git Bash) - not plain Windows `cmd.exe`.
+*   `npm run dev`: Starts the Express server with Vite in middleware mode (HMR for `src/**`) via `tsx`, on `PORT` (default `3000`).
+*   `npm run dev:watch`: Same as `npm run dev`, but backend files (`server/**`, `server.ts`) also trigger an automatic restart on save via `tsx watch`.
+*   `npm run build`: Bundles the React frontend into `dist/` using Vite, and compiles `server.ts` to a standalone CommonJS file (`dist/server.cjs`) via `esbuild`. Cloud Run's buildpack runs this.
+*   `npm run start`: Runs the compiled server (`node dist/server.cjs`). This is the production entry point on Cloud Run; locally, run it after `npm run build` with `NODE_ENV=production` to try the production build.
+*   `npm run lint`: Static type checks (`tsc --noEmit`).
+*   `npm run test`: Runs the complete test suite with Vitest.
+*   `npm run test:quiet`: Same as `npm run test`, with `NODE_OPTIONS=--no-experimental-webstorage` - required on Node 22+, where Node's own built-in Web Storage global can leave jsdom's `window.localStorage` undefined (`ConfigContext.tsx` reads it at module load). Uses inline `VAR=value` shell syntax, which needs a POSIX shell (bash/zsh/Git Bash).
 
 ---
 
 ## Test Suite
 
-The codebase enforces a zero-regression policy backed by a robust test suite. Current pass/fail totals and file counts live only in [`testing-batches.md`](./testing-batches.md), not duplicated here - re-derive them via `find server/test src -iname "*.test.ts" -o -iname "*.test.tsx"` (file count) and the two `npx vitest run` commands there (test counts) rather than trusting a stale number:
-*   **Backend Integration & Units**: Managed by **Vitest**, **supertest**, and **MSW (Mock Service Worker)** to mock Google API payloads and ensure absolute safety across Sheets transactional structures.
-*   **Frontend Interaction**: Managed by **React Testing Library** and **Vitest** to assert interactive transitions, sorting, searching, and conditional warning dialogs.
+The codebase enforces a zero-regression policy. Current pass/fail totals live only in [`testing-batches.md`](./testing-batches.md), not duplicated here:
+*   **Backend Integration & Units**: **Vitest**, **supertest**, and **MSW (Mock Service Worker)** to mock Google/PayPal API payloads. Route tests sign in with a real signed `orns_session` cookie (`server/test/helpers/session.ts`), the same way a browser does.
+*   **Frontend Interaction**: **React Testing Library** and **Vitest**.
 
-To run the complete suite locally:
+To run the complete suite:
 ```bash
-npm run test
+npm run test:quiet
 ```
 
 ---
 
 ## Deployment
 
-The application is deployed on **Google Cloud Run**, built and hosted
-through **Google AI Studio** at a live URL
-(`https://orns-auction-manager-37624994705.us-east1.run.app/`). When
-building production containers:
-1. The container compiles the application through `npm run build`.
-2. The server boots via `npm run start` and binds to `0.0.0.0:<PORT>`
-   inside the container (`PORT` defaults to `3000`; Cloud Run sets it
-   automatically to match the container's configured port).
-3. Ingress routing forwards standard HTTPS traffic directly to the container, with cookie sessions preserved securely via the renamed `orns_session` cookie name.
+**Pushing to `main` deploys to production.** The GitHub repo
+(`khakidan/ORNS-Full-Stack-Auction-Management`) is connected to Cloud
+Run through Developer Connect: every push to `main` fires a Cloud Build
+trigger that builds the repo with Google Cloud's Node.js 22 buildpack (no
+Dockerfile - it runs `npm run build`, then starts the container with
+`npm start`) and deploys it to the Cloud Run service
+**`orns-auction-manager-gh`** in **us-east1**, served at
+**https://orns-auction-manager.cloud.run**. (The Cloud Build trigger
+itself lives in `europe-west1` - a quirk of how it was created - but it
+deploys to us-east1.)
 
-### Relationship between this local checkout and the AI Studio deployment
+Workflow:
 
-This local git repository is **not** wired to AI Studio's build/deploy
-pipeline - there is no git remote or CI hook that pushes changes made
-here to the live Cloud Run instance. The AI Studio-hosted instance is
-being treated as the **staging/reference environment**: it is the
-currently-live version of the app, and changes made in this local
-checkout are ported back into AI Studio's own editor by hand once
-verified here. Practical implications for anyone (human or agent)
-working in this repo:
+1.  Do work on a branch, never directly on `main`.
+2.  Run the tests (`npm run test:quiet`, `npm run lint`) and try the change locally (`npm run dev`).
+3.  Merge to `main` (via a GitHub pull request) only when it's ready to go live - the merge is the deploy, live within a few minutes.
 
-*   Keep changes portable - avoid anything that depends on this specific
-    machine (absolute local paths, machine-specific env values baked
-    into tracked files, dependencies that need a system package manager
-    outside `npm`). `.env` (gitignored) is the right place for anything
-    genuinely local-only, like the `PORT` override for a taken port.
-*   Prefer configuration that reads from environment variables with
-    sane defaults (as `PORT` and `APP_URL` already do) over hardcoded
-    values, so the same code behaves correctly whether it's running
-    locally, in AI Studio's own preview, or on the deployed Cloud Run
-    instance.
-*   Since changes are ported by hand, keep diffs reviewable - avoid
-    sweeping reformatting or unrelated cleanup mixed into a real change,
-    since that makes manual porting back into AI Studio's editor harder.
+Production configuration (all the environment variables above, with
+production values) is set on the `orns-auction-manager-gh` service in
+the Cloud Run console, not in any file in this repo. The server binds
+`0.0.0.0:$PORT`; Cloud Run terminates HTTPS in front of it, and
+`app.set("trust proxy", 1)` is what lets Express treat those requests as
+secure for the `orns_session` cookie.
+
+**Required Cloud Run settings.** The server keeps several pieces of state
+in process memory - the `bidder-numbers:` lock that prevents duplicate
+PayPal invoices, the idempotency map, the sheet cache, the bug-report
+rate limit - so the `orns-auction-manager-gh` service must run with
+**Maximum instances = 1** (Scaling tab). With two instances, two requests
+could each take "the" lock on different machines. Everything else stays
+at the cheap defaults: minimum instances 0 and **Request-based** billing.
+
+**PayPal sweeper schedule (Cloud Scheduler).** The sweeper that checks
+deferred credit-card checkouts against PayPal isn't a timer inside the
+server - with request-based billing, Cloud Run throttles the CPU between
+requests, and an always-on instance would cost money all year for an app
+used one night a year. Instead a Cloud Scheduler job calls
+`POST /internal/paypal-sweep` every 5 minutes
+(`server/routes/schedulerRoutes.ts`), authenticated by the
+`X-Sweeper-Secret` header matching the service's `SWEEPER_TRIGGER_SECRET`.
+The job (`paypal-sweeper`, region us-east1):
+
+*   Frequency `*/5 * * * *`, target type HTTP, URL
+    `https://orns-auction-manager.cloud.run/internal/paypal-sweep`, method
+    POST, header `X-Sweeper-Secret: <the secret>`, no auth header.
+*   **Resume it before checkout opens; pause it after the auction.** The
+    Configuration page's PayPal Sweeper card shows "Running" while it's
+    firing and "Paused" otherwise.
+
+Cloud Scheduler's free tier covers 3 jobs per billing account, and each
+run is a few seconds of Cloud Run CPU.
+
+The service account also needs Firestore access (it already has it if
+the PayPal sweeper status card works): the server reads the PayPal
+sandbox/live setting from `settings/global` on every PayPal-touching
+request, and refuses to make PayPal calls if it can't.
+
+**Apps Script changes deploy separately.** The server calls each Apps
+Script project's *deployed* API-executable version (`devMode: false`), not
+the editor's latest saved code. After changing a `.gs` file, open that
+script's editor -> Deploy -> Manage deployments -> the API executable
+deployment -> Edit -> Version: **New version** -> Deploy. Until then the
+app keeps running the previous version.
+
+When the production URL changes (a new service or custom domain), two
+allowlists must be updated or sign-in breaks: the OAuth client's
+**Authorized redirect URIs** (`<URL>/auth/callback`) in Google Cloud
+Console, and **Firebase console -> Authentication -> Settings ->
+Authorized domains** (bare domain) for the Cloud Sync sign-in.
+
+The app was originally built in Google AI Studio, which ran it inside an
+iframe and deployed it to a separate Cloud Run service
+(`orns-auction-manager`, domain `orns-auction-manager.ai.studio`). That
+service, if it still exists, is a retired fallback that no longer
+receives updates; AI Studio is no longer part of development or
+deployment.

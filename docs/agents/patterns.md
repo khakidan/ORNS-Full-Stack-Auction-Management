@@ -13,12 +13,9 @@ This document outlines the core operational guidelines, synchronizations, and no
 
 ## 2. Non-Negotiable Rules (DO NOT VIOLATE)
 
-### File Preservation
-*   **NEVER DELETE `server/routes/bidRoutes.ts`**: This route manages key transactional bid bindings. Deleting, moving, or merging this file breaks the main live-auction flow.
-*   **DO NOT MODIFY core client SDK files**: Under no circumstances should you edit `src/lib/firebase.ts`, `src/context/ConfigContext.tsx`, or `firestore.rules` unless explicitly ordered.
-
 ### Session Cookie Rules
-*   **DO NOT REVERT COOKIE NAME**: The session cookie **MUST** remain named **`orns_session`**. The legacy `__session` name was a Firebase Hosting caching CDN constraint that is no longer required on Cloud Run.
+*   **DO NOT REVERT COOKIE NAME**: The session cookie **MUST** remain named **`orns_session`** - renaming it signs every user out. The legacy `__session` name was a Firebase Hosting caching CDN constraint that is no longer required on Cloud Run.
+*   **The cookie is the only credential**: OAuth tokens live in the signed, `httpOnly` `orns_session` cookie and nowhere else - never in page HTML, `localStorage`, or a request header. (The `x-google-tokens` header/`localStorage` bridge that existed for running inside AI Studio's iframe was removed on 2026-10-21.)
 
 ### Code Splitting Rules
 *   **Vite Chunks Form**: The `manualChunks` function inside `vite.config.ts` must use the dynamic functional matcher structure. Do not revert it to a static object-mapping form, as this breaks vendor code-splitting and balloons the critical chunk size.
@@ -34,8 +31,10 @@ This document outlines the core operational guidelines, synchronizations, and no
 *   **Re-sequencing**: Any operation that changes item status or category must trigger a re-sequencing of the affected categories to ensure gap-free Auction Item IDs.
 
 #### Charity Auction Workflows & PayPal Integration
-*   **Tracking Columns**: The 'Bidder-Numbers' sheet contains automated tracking data fields in Column J (`Invoice URL`, public PayPal checkout) and Column K (`Invoice Total Amount`, numerical balance with fees).
-*   **apiSendAllEmails**: Call this execution loop once all winning entries are processed. It internally evaluates rows, constructs unique invoices, logs them to Columns J/K, and dispatches custom checkout URLs.
-*   **apiCreateAllReceipts**: Safe to run before or after emailing. It dynamically uses the cached 'Invoice URL' in Column J, or generates a new one to embed accurate QR codes within documents.
-*   **apiCreateIndividualReceipt / apiSendReceiptEmail**: Target specific IDs, leverage the same caching logic, and auto-update tracking metrics. MUST pass strict primitive string or numerical items (e.g., `apiCreateIndividualReceipt(String(bidderId), emailReceipt)`).
-*   **Surcharges**: NEVER manually calculate surcharge processing totals within the client application; `PayPalService.calculatePayPalSurcharge` natively executes this in the backend workspace.
+*   **Tracking Columns**: The 'Bidder-Numbers' sheet contains automated tracking data fields in Column J (`Invoice URL`, public PayPal checkout), Column K (`Invoiced Amount`, numerical balance with fees), and Column L (the "PayPal Verification Pending" timestamp the sweeper reads). See `schema.md` for the full column layout.
+*   **Invoice resolution is Node-side**: `server/services/receiptDataService.ts`'s `resolveInvoiceUrl` reuses the Column J invoice when Column K still matches the current total-with-fees, otherwise cancels the stale one and creates/sends a new one. Callers persist the result to Columns J/K - per bidder, immediately after each invoice is created, never batched at the end (a batch that dies mid-run would otherwise leave sent-but-unrecorded invoices that the next run duplicates).
+*   **Receipts** (`POST /api/receipts/generate`, `/generate-all`): Node resolves each bidder's won items and invoice, then hands the finished data to the Bid Management Apps Script's `apiCreateIndividualReceipt(String(bidderId), null, receiptData)` / `apiCreateAllReceipts(null, receipts)`, which only render the Doc/PDF (with the QR code). Pass the bidder ID as a strict string primitive.
+*   **Emails** (`POST /api/receipts/email-all`, `/email-only`): sent from Node via the Gmail API (`server/services/emailService.ts`'s `processEmail` / `receiptService.ts`'s `processAllEmails`) - there is no Apps Script email function. Both resolve each bidder's invoice exactly as receipts do (`attachInvoice`, under the `bidder-numbers:` lock) and email that invoice's link and its own total, so the email can never advertise a different amount than the link charges. Each send is recorded in Bidder-Numbers M/N; email-all skips a bidder whose Column N already holds their current invoice, so re-running it only emails bidders whose total changed. Email headers are CR/LF-stripped and RFC 2047-encoded, and the HTML body is escaped - names and item names come from sheet cells anyone can type into.
+*   **Locking**: every write to Bidder-Numbers - checkout, walk-ins, check-in, winning bids, invoice creation, and the PayPal sweeper - holds `withLock('bidder-numbers:<spreadsheetId>')`. A function that takes the lock itself (e.g. `processEmail`) must not be called by code already holding it; the lock isn't reentrant.
+*   **Idempotency**: mutating routes run through `withIdempotency(<route>, idempotencyKey, fn)` (`server/utils/idempotency.ts`). A retry with the same key while the first request is still running waits for it rather than running the action again.
+*   **Surcharges**: NEVER manually calculate surcharge processing totals within the client application; `calculatePayPalSurcharge` (`server/utils/financeUtils.ts`, used by `PayPalService`) executes this server-side.

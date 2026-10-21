@@ -1,21 +1,12 @@
 /**
  * @vitest-environment jsdom
  *
- * useApiAuthStatus had zero test coverage. Confirmed while designing
- * these tests that the already-logged "postMessage listener doesn't
- * check event.origin" bug was real - and, per investigation, the
- * feature that would have legitimately sent this message (a server-side
- * HTML page at /auth/callback) was accidentally deleted in a past
- * server.ts refactor, so the listener was dead code with no real sender
- * at the time - but still a live injection surface, since without an
- * origin check ANY page holding a reference to this window could inject
- * fake tokens for the app to trust. Fixed by rejecting any postMessage
- * whose origin isn't this app's own before reading event.data at all.
- * The "ignores a postMessage from a different origin" test below is the
- * regression guard for that fix. The sender has since been restored
- * (server/routes/authRoutes.ts's /auth/callback, see
- * server/test/auth.test.ts), with the same origin-lockdown applied on
- * its side too (an explicit targetOrigin instead of the original's '*').
+ * useApiAuthStatus reports whether the browser has a valid session
+ * cookie (via /auth/status). It used to also listen for an
+ * OAUTH_AUTH_SUCCESS postMessage and copy the OAuth tokens it carried
+ * into localStorage - a bridge that only existed for running inside AI
+ * Studio's iframe. That bridge is gone; the tests below also guard that
+ * it stays gone and that any copy a browser kept is cleaned up.
  */
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -28,10 +19,6 @@ vi.mock("@/services/google-api", () => ({
 import { getAuthStatus } from "@/services/google-api";
 
 const mockedGetAuthStatus = vi.mocked(getAuthStatus);
-
-function postMessageEvent(data: any, origin = window.location.origin) {
-  window.dispatchEvent(new MessageEvent("message", { data, origin }));
-}
 
 describe("useApiAuthStatus", () => {
   beforeEach(() => {
@@ -61,58 +48,29 @@ describe("useApiAuthStatus", () => {
     await waitFor(() => expect(result.current.isApiAuthenticated).toBe(false));
   });
 
-  it("re-checks auth and persists tokens on a same-origin OAUTH_AUTH_SUCCESS message", async () => {
-    mockedGetAuthStatus.mockResolvedValueOnce({ authenticated: false }).mockResolvedValueOnce({ authenticated: true });
-    const { result } = renderHook(() => useApiAuthStatus());
-    await waitFor(() => expect(result.current.isApiAuthenticated).toBe(false));
+  it("removes OAuth tokens a browser kept in localStorage from the old iframe login", async () => {
+    localStorage.setItem("google_tokens", JSON.stringify({ access_token: "old", refresh_token: "old-refresh" }));
+    mockedGetAuthStatus.mockResolvedValue({ authenticated: true });
 
-    act(() => {
-      postMessageEvent({ type: "OAUTH_AUTH_SUCCESS", tokens: { access_token: "tok-123" } });
-    });
+    renderHook(() => useApiAuthStatus());
 
-    expect(localStorage.getItem("google_tokens")).toBe(JSON.stringify({ access_token: "tok-123" }));
-    await waitFor(() => expect(result.current.isApiAuthenticated).toBe(true));
-    expect(getAuthStatus).toHaveBeenCalledTimes(2);
-  });
-
-  it("ignores a postMessage from a different origin (regression guard for the origin-check fix)", async () => {
-    mockedGetAuthStatus.mockResolvedValue({ authenticated: false });
-    const { result } = renderHook(() => useApiAuthStatus());
-    await waitFor(() => expect(result.current.isApiAuthenticated).toBe(false));
-
-    act(() => {
-      postMessageEvent({ type: "OAUTH_AUTH_SUCCESS", tokens: { access_token: "attacker-token" } }, "https://evil.example.com");
-    });
-
-    // No token should be persisted, and auth must not be re-checked.
+    await waitFor(() => expect(getAuthStatus).toHaveBeenCalledTimes(1));
     expect(localStorage.getItem("google_tokens")).toBeNull();
-    expect(getAuthStatus).toHaveBeenCalledTimes(1);
   });
 
-  it("ignores a same-origin message with an unrelated type", async () => {
+  it("ignores an OAUTH_AUTH_SUCCESS postMessage - tokens are never accepted from page messages", async () => {
     mockedGetAuthStatus.mockResolvedValue({ authenticated: false });
     renderHook(() => useApiAuthStatus());
     await waitFor(() => expect(getAuthStatus).toHaveBeenCalledTimes(1));
 
     act(() => {
-      postMessageEvent({ type: "SOME_OTHER_MESSAGE" });
+      window.dispatchEvent(new MessageEvent("message", {
+        data: { type: "OAUTH_AUTH_SUCCESS", tokens: { access_token: "injected" } },
+        origin: window.location.origin,
+      }));
     });
 
     expect(localStorage.getItem("google_tokens")).toBeNull();
-    expect(getAuthStatus).toHaveBeenCalledTimes(1);
-  });
-
-  it("removes its message listener on unmount", async () => {
-    mockedGetAuthStatus.mockResolvedValue({ authenticated: false });
-    const { unmount } = renderHook(() => useApiAuthStatus());
-    await waitFor(() => expect(getAuthStatus).toHaveBeenCalledTimes(1));
-
-    unmount();
-
-    postMessageEvent({ type: "OAUTH_AUTH_SUCCESS", tokens: { access_token: "tok-123" } });
-
-    // Give any (incorrectly still-attached) listener a chance to run.
-    await new Promise((r) => setTimeout(r, 0));
     expect(getAuthStatus).toHaveBeenCalledTimes(1);
   });
 });

@@ -298,7 +298,9 @@ export async function resolveInvoiceUrl(
  * Builds one bidder's receipt AND resolves/writes their PayPal invoice in
  * one call - the Node-side replacement for
  * Class_ReceiptManager.gs's `getOrCreateInvoiceUrl` being called from
- * GAS. Used by the `/generate` (single-receipt) route.
+ * GAS. Used by the `/generate` (single-receipt) route and checkout's
+ * credit-card path. Callers must hold the `bidder-numbers:<spreadsheetId>`
+ * lock (see attachInvoice).
  */
 export async function buildBidderReceiptWithInvoice(
   client: any,
@@ -310,25 +312,57 @@ export async function buildBidderReceiptWithInvoice(
   const receiptResult = await buildBidderReceipt(client, spreadsheetId, itemsSpreadsheetId, bidderId);
   if (receiptResult.success === false) return receiptResult;
 
+  const attached = await attachInvoice(client, spreadsheetId, receiptResult.receipt, paypal);
+  if (attached.success === false) return attached;
+  return { success: true, receipt: attached.receipt };
+}
+
+/**
+ * Gives an already-built receipt its PayPal invoice: reuses the bidder's
+ * Column J invoice when its amount still matches, otherwise replaces or
+ * creates one (resolveInvoiceUrl), saving any new invoice to J/K
+ * straight away. Also returns the bidder's 1-based Bidder-Numbers row.
+ *
+ * Callers must hold the `bidder-numbers:<spreadsheetId>` lock, so two
+ * requests for the same bidder can't both see "no invoice yet" and each
+ * create (and send) one.
+ */
+export async function attachInvoice(
+  client: any,
+  spreadsheetId: string,
+  receipt: BidderReceiptData,
+  paypal: PayPalService
+): Promise<{ success: true; receipt: BidderReceiptWithInvoice; rowIndex: number } | { success: false; error: string }> {
   const sheets = google.sheets({ version: "v4", auth: client });
   const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });
-  const existing = findExistingInvoice(bNum.data.values || [], bidderId);
+  const existing = findExistingInvoice(bNum.data.values || [], receipt.bidId);
   if (!existing) {
-    return { success: false, error: `Bidder ID ${bidderId} not found in the Bidder-Numbers sheet.` };
+    return { success: false, error: `Bidder ID ${receipt.bidId} not found in the Bidder-Numbers sheet.` };
   }
 
-  const { paymentUrl, totalAmount, changed } = await resolveInvoiceUrl(paypal, receiptResult.receipt, bidderId, existing);
+  const { paymentUrl, totalAmount, changed } = await resolveInvoiceUrl(paypal, receipt, receipt.bidId, existing);
 
   if (changed) {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `'Bidder-Numbers'!J${existing.rowIndex}:K${existing.rowIndex}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [[paymentUrl, totalAmount]] },
-    });
+    await persistInvoice(sheets, spreadsheetId, existing.rowIndex, paymentUrl, totalAmount);
   }
 
-  return { success: true, receipt: { ...receiptResult.receipt, paymentUrl, adjustedTotal: totalAmount } };
+  return { success: true, receipt: { ...receipt, paymentUrl, adjustedTotal: totalAmount }, rowIndex: existing.rowIndex };
+}
+
+/** Writes one bidder's freshly created invoice URL/amount into Bidder-Numbers columns J/K. */
+async function persistInvoice(
+  sheets: ReturnType<typeof google.sheets>,
+  spreadsheetId: string,
+  rowIndex: number,
+  paymentUrl: string,
+  totalAmount: number
+): Promise<void> {
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'Bidder-Numbers'!J${rowIndex}:K${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[paymentUrl, totalAmount]] },
+  });
 }
 
 /**
@@ -338,20 +372,34 @@ export async function buildBidderReceiptWithInvoice(
  * GAS. One bidder's invoice failure (e.g. a PayPal API error) is logged
  * and skipped rather than aborting the whole batch, matching
  * `processBatch_`'s own per-bidder try/catch resilience.
+ *
+ * Each newly created invoice is written to J/K immediately, before the
+ * next bidder is touched (ROADMAP.md H1). createAndSendInvoice has
+ * already had PayPal email the bidder by the time it returns, so a
+ * write deferred to the end of the loop meant any batch that died
+ * part-way (Cloud Run request timeout, a Sheets 429, a client retry
+ * re-running the route) left sent-but-unrecorded invoices that the next
+ * run would duplicate. For the same reason, a failed J/K write aborts the
+ * batch instead of being skipped: if Sheets writes are failing, carrying
+ * on would just send more invoices nothing records.
+ *
+ * Callers must hold the `bidder-numbers:<spreadsheetId>` lock (see
+ * receiptRoutes.ts) so this can't race checkout's own invoice creation.
  */
 export async function buildAllBidderReceiptsWithInvoices(
   client: any,
   spreadsheetId: string,
   itemsSpreadsheetId: string,
-  paypal: PayPalService
+  paypal: PayPalService,
+  /** Only these bidders get an invoice (and a result) - e.g. email-all skips bidders with no email address. */
+  include: (receipt: BidderReceiptData) => boolean = () => true
 ): Promise<BidderReceiptWithInvoice[]> {
-  const receipts = await buildAllBidderReceipts(client, spreadsheetId, itemsSpreadsheetId);
+  const receipts = (await buildAllBidderReceipts(client, spreadsheetId, itemsSpreadsheetId)).filter(include);
 
   const sheets = google.sheets({ version: "v4", auth: client });
   const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });
   const bidderNumbersRows = bNum.data.values || [];
 
-  const sheetUpdates: { range: string; values: any[][] }[] = [];
   const results: BidderReceiptWithInvoice[] = [];
 
   for (const receipt of receipts) {
@@ -361,22 +409,26 @@ export async function buildAllBidderReceiptsWithInvoices(
       continue;
     }
 
+    let resolved: Awaited<ReturnType<typeof resolveInvoiceUrl>>;
     try {
-      const { paymentUrl, totalAmount, changed } = await resolveInvoiceUrl(paypal, receipt, receipt.bidId, existing);
-      if (changed) {
-        sheetUpdates.push({ range: `'Bidder-Numbers'!J${existing.rowIndex}:K${existing.rowIndex}`, values: [[paymentUrl, totalAmount]] });
-      }
-      results.push({ ...receipt, paymentUrl, adjustedTotal: totalAmount });
+      resolved = await resolveInvoiceUrl(paypal, receipt, receipt.bidId, existing);
     } catch (e: any) {
       console.error(`buildAllBidderReceiptsWithInvoices: failed to resolve invoice for bidder ${receipt.bidId}. ${e.message || e}`);
+      continue;
     }
-  }
 
-  if (sheetUpdates.length > 0) {
-    await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId,
-      requestBody: { valueInputOption: "RAW", data: sheetUpdates },
-    });
+    const { paymentUrl, totalAmount, changed } = resolved;
+    if (changed) {
+      try {
+        await persistInvoice(sheets, spreadsheetId, existing.rowIndex, paymentUrl, totalAmount);
+      } catch (e: any) {
+        throw new Error(
+          `Stopped generating receipts: PayPal invoice ${paymentUrl} was sent to bidder ${receipt.bidId} but could not be saved to Bidder-Numbers row ${existing.rowIndex} (J/K). ` +
+          `Enter it there by hand before re-running, or a duplicate invoice will be sent. Cause: ${e.message || e}`
+        );
+      }
+    }
+    results.push({ ...receipt, paymentUrl, adjustedTotal: totalAmount });
   }
 
   return results;

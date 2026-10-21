@@ -1,6 +1,8 @@
 /**
  * Class GoogleAIStudio
- * Handles backend execution pipelines invoked by external applications (e.g., Google AI Studio).
+ * Bridge functions the ORNS web app's Node server calls via the Apps Script API
+ * (scripts.run). The class name is historical - the app was first built in Google
+ * AI Studio - and is kept so the deployed script projects don't need re-pasting.
  * Encapsulates all bridge functions into a clean, object-oriented structure
  * matching the rest of the auction tickets system architecture.
  */
@@ -46,7 +48,7 @@ class GoogleAIStudio {
 }
 
 // ── Public-facing bridge functions ────────────────────────────────────────────
-// These wrapper names must remain stable — they are called directly by Google AI Studio.
+// These wrapper names must remain stable — the Node server calls them by name via the Apps Script API.
 
 function apiCreateBidderLabels ( folderID, bidders ) {
     try {

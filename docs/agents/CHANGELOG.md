@@ -6,6 +6,87 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Fixed
 
+- **ROADMAP.md M4: the PayPal sweeper runs from Cloud Scheduler instead of an in-process timer.** The `setInterval` in `server.ts` needed Cloud Run's instance-based billing (and realistically a minimum of 1 instance) to fire reliably, which costs money all year for an app used one night a year.
+  - New `POST /internal/paypal-sweep` (`server/routes/schedulerRoutes.ts`, no session) runs one sweep when the `X-Sweeper-Secret` header matches `SWEEPER_TRIGGER_SECRET`. It returns 401 on a wrong secret, and 404 when the variable is unset, which is the local default.
+  - A Cloud Scheduler job calls it every 5 minutes; it is resumed before the auction and paused after. Setup is in `README.md` "Deployment".
+  - Removed `startPaypalSweeperSchedule` and `PAYPAL_SWEEPER_INTERVAL_MINUTES`.
+  - `runPaypalSweep(trigger)` now runs one sweep at a time (a concurrent call shares the running one's result), and records Cloud Scheduler runs (`scheduledAt` in `system/paypalSweeperStatus`).
+  - The status card replaces "Next expected run" with an "Automatic schedule" row, and shows **Paused** (not "Needs Attention") when the credential is fine but no scheduled run happened in the last 15 minutes.
+  - Cloud Run keeps max instances = 1 (already set), minimum 0, and request-based billing.
+  - Tests: new `schedulerRoutes.test.ts`; sweeper tests for scheduled-run tracking and single-flight; status card test for Paused. Backend 530 -> 533, frontend 636 -> 637, total 1166 -> 1170.
+
+- **ROADMAP.md M1/M2/M3/M5/M6/M7 (2026-10-21 code audit): security hardening and operational fixes.**
+  - **M1: unauthenticated endpoints.**
+    - Removed `POST /log`. Nothing in the client called it, and it printed up to 5 MB of anyone's JSON into the server logs.
+    - `POST /api/bug-reports` (still open, so a broken session can be reported):
+      - `type` must be one of the dialog's three values, and `timestamp` is re-serialized as ISO 8601 or replaced with the server time.
+      - The Report ID, timestamp and type columns now go through `sanitizeForSheetFormula` like the rest.
+      - Every text field is capped at 50,000 characters and console activity at 200 entries.
+      - Requests without a session are limited to 5 per IP per 10 minutes (429 after that) and can't attach a screenshot.
+    - In production the fallback for a failed Sheet save is now one structured Cloud Logging entry (`jsonPayload.bugReport`, screenshot left out) instead of a file on Cloud Run's in-memory disk, which was lost whenever an instance recycled. Local development still writes `bug-reports/*.md`. The response's `storage` is `"log"` in that case.
+  - **M2: OAuth login CSRF.** `/auth/url` stores a random one-time `state` in the session cookie and sends it to Google. `/auth/callback` rejects (403) any callback whose `state` is missing, wrong, or already used, before it exchanges the code. The domain gate now also requires the userinfo `hd` (Workspace domain) claim to be `orns.org` and the email to be verified, not just an `@orns.org` suffix.
+  - **M3: PayPal sandbox/live is decided server-side.** New `server/services/sharedConfig.ts` (`getPaypalIsSandbox`) reads `paypalIsSandbox` from Firestore `settings/global` with a 30-second cache. Receipt generate/generate-all/email-only/email-all and checkout use it, so they always agree with the sweeper. The client no longer sends the flag, and a body value is ignored. If Firestore can't be read and no value has been read before, the request fails with an explicit error instead of guessing an environment. A failed refresh keeps the last value read.
+  - **M5: no automatic retry of POSTs.** `server/services/google.ts` dropped `POST` from the global retry list, so a 5xx on `values.append`, `spreadsheets.batchUpdate`, Gmail send or Apps Script run is no longer repeated (if Google had already applied it, the retry added a duplicate row or email). Calls that are safe to repeat opt back in with `IDEMPOTENT_POST_RETRY` (`server/utils/googleRetry.ts`): `values.batchUpdate` when closing the auction, the transaction rollback's `values.clear`, and the clear-range route.
+  - **M6: Apps Script runs the deployed version.** `scripts.run` now sends `devMode: false` unless `APPS_SCRIPT_DEV_MODE=true` (`server/utils/appsScriptMode.ts`). `devMode: true` only applied for the script's owner, so the owner ran the editor's latest saved code while everyone else ran the deployed version. **A .gs change now goes live only after a new version of that script's API-executable deployment.**
+  - **M7: dependencies.** Removed unused `nodemailer`, `express-session` and `session-file-store` (and their `@types`); moved `msw` and `shadcn` to `devDependencies`; ran `npm audit fix`; and added `overrides` for `qs` (^6.16.1) and the client Firebase SDK's `@grpc/grpc-js` (^1.14.6). `npm audit --omit=dev` went from 34 vulnerabilities (2 critical) to 0. Seven high-severity findings remain, all dev-only (`braces` via the `shadcn` CLI, no fix published).
+  - Tests: new `sharedConfig.test.ts` and `googleRetry.test.ts`. New cases in:
+    - `auth.test.ts`: state missing, wrong, or replayed; `hd` missing.
+    - `bugReportRoutes.test.ts`: type validation, timestamp/ID columns, field caps, rate limit, anonymous screenshot dropped, production log fallback.
+    - `receipts.test.ts`: the body's sandbox flag is ignored.
+    - `production.test.ts`: `devMode`.
+
+    `server/test/setup.ts` mocks `sharedConfig` to sandbox for every test. Backend 511 -> 530, total 1147 -> 1166.
+
+- **Bidder-Numbers columns L-N now always have header labels.** Column L (the PayPal-pending timestamp) never had one, and M/N were only labeled by an Email All run. One header list now lives in `server/utils/bidderNumbersHeaders.ts`: A-K plus `PayPal Pending Since`, `Receipt Emailed At`, `Receipt Emailed Invoice`. Building the tab writes all 14. On an existing tab, `ensureTrackingHeaders` fills in any blank L1/M1/N1 whenever checkout defers to PayPal or a receipt is emailed (single or batch), keeping any header someone already typed. The header write is best-effort and never blocks a checkout or email. Five new tests in `bidderNumbersHeaders.test.ts`. Totals 1142 -> 1147 (511 backend / 636 frontend).
+
+- **ROADMAP.md H2/H3 (2026-10-21 code audit): receipt emails linked stale invoices, re-sent on every batch run, and were built from unescaped sheet text.**
+  - **H2: wrong invoice link.** `processEmail` emailed whatever URL was cached in Bidder-Numbers Column J, possibly for an older total or one `resolveInvoiceUrl` had already cancelled, or a bare `https://www.paypal.com` link when there was none. Meanwhile it computed the "Pay $X" amount fresh, so the button and the link could disagree. Emails now resolve the invoice exactly as receipt printing does: a new `attachInvoice` in `receiptDataService.ts`, split out of `buildBidderReceiptWithInvoice`, runs under the `bidder-numbers:` lock. The email shows that invoice's own `adjustedTotal`. The email routes now take `paypalIsSandbox` like the generate routes, and the client sends it (`useCheckoutReceiptActions.ts`/`useCheckoutBatchActions.ts`). Without it, live mode would have emailed sandbox links.
+  - **H3: re-sends.** Email All had no record of who was already emailed, so a retried or re-clicked batch emailed everyone again. It also re-read three full sheets plus userinfo per bidder, which makes quota errors and timeouts (and so retries) likely. `processAllEmails` now:
+    - resolves every invoice once, under the lock, skipping bidders with no valid address (no invoice created for them);
+    - records each send in new Bidder-Numbers columns M (`Receipt Emailed At`) and N (`Receipt Emailed Invoice`), with the header written on first run (see `schema.md`);
+    - skips a bidder whose Column N already equals their current invoice, so a re-run only emails bidders whose total changed;
+    - stops with an explicit error if a send can't be recorded.
+
+    The route is also idempotent (`withIdempotency`, client sends a key), and the toast now reports sent/skipped/failed counts instead of "being sent... check in a few minutes".
+  - **H3: unsafe construction.**
+    - `createRawEmail` strips CR/LF from every header value, so a line break in a name can't inject `Bcc:`.
+    - Non-ASCII subjects and From names are RFC 2047-encoded, so "José" arrives intact.
+    - The recipient must be a single plain address (`isValidEmailAddress`); `"a@x.com, b@y.com"` is refused.
+    - `generateEmailHtml` escapes every interpolated value, and only allows an http(s) link on the Pay button.
+  - Tests: rewrote `emailService.test.ts` and `receiptService.test.ts` against stateful Sheets/Gmail/PayPal mocks (new `server/test/helpers/receiptSheets.ts`). They cover:
+    - invoice create, replace-stale, and reuse;
+    - the M/N records, and a re-run sending nothing;
+    - only the bidder whose total changed getting re-sent;
+    - invalid and multi-address skips;
+    - one failed send not aborting the batch;
+    - the stop when a record can't be written;
+    - header injection, encoding, HTML escaping, and non-http links.
+
+    Because `processEmail`/`processAllEmails` changed signature, these can't be run against the pre-fix code the way the H1/H5/H6 tests were.
+
+- **ROADMAP.md H5 (2026-10-21 code audit): the PayPal sweeper could overwrite a checkout.** `runPaypalSweepInner` worked from a snapshot of Bidder-Numbers and wrote rows without the `bidder-numbers:` lock. A bidder staff marked "Cash" mid-sweep could then be overwritten with "Failed Verification - Follow Up Required". The PayPal status lookup still runs outside the lock (so slow PayPal responses never hold up checkout), but each row's writes now happen in `applySweepResultLocked` under the lock. It re-reads the row first and leaves it alone unless it is still the same bidder, still pending, and on the same invoice. Three new tests (staff marked Cash after the snapshot; checkout re-ran on a new invoice; the sweep waits for a held lock) all fail against the pre-fix code.
+
+- **ROADMAP.md H6 (2026-10-21 code audit): idempotency keys didn't stop concurrent duplicates.** `checkIdempotency`/`saveIdempotency` only recorded a key once its request had finished, so a retry arriving mid-request (exactly what `fetchWithRetry` sends after a timeout) ran the whole action again. Keys were also global across routes.
+  - Replaced both with `withIdempotency(scope, key, fn)` (`server/utils/idempotency.ts`). It tracks in-flight keys, so a concurrent retry waits for and shares the first run's result. A failure is never cached, so a later retry runs again. Keys are namespaced per route.
+  - All 10 mutating routes moved over (bundle process/restore, settings update, item add/delete/bulk-update, record-winning-bid, checkout, walk-in, check-in-with-bid), plus email-all.
+  - A duplicate checkout now returns the original's status (202 for a deferred PayPal verification) instead of always 200; the client accepts either.
+  - New unit tests cover in-flight sharing, failure not cached, per-route scoping, and TTL. A new route test (two simultaneous checkouts with the same key: 3 writes, not 6) fails against the pre-fix code.
+
+- Totals: 1129 -> 1142 (506 backend / 636 frontend). `tsc --noEmit` clean.
+
+- **ROADMAP.md H1 (2026-10-21 code audit): batch receipt generation could send bidders duplicate PayPal invoices.** `buildAllBidderReceiptsWithInvoices` (`server/services/receiptDataService.ts`) created *and sent* each bidder's invoice (PayPal emails the bidder on send) but only saved the URLs/amounts to Bidder-Numbers J/K in one `batchUpdate` after the whole loop. Any run that died part-way - a Cloud Run request timeout, a Sheets 429, or `fetchWithRetry` re-running the POST after a 5xx - left invoices sent but unrecorded, so the next run created and sent new ones. The receipt routes also didn't take the `bidder-numbers:` lock that checkout's own invoice creation holds, so a receipt and a checkout (or two receipt requests) for the same bidder could both create an invoice.
+  - Each new invoice's J/K is now written immediately after it's created (shared `persistInvoice` helper, also used by `buildBidderReceiptWithInvoice`). If that write fails, the batch stops with an error naming the bidder, the invoice URL, and the sheet row to fill by hand, rather than skipping the bidder and carrying on sending more invoices that nothing records. A failure to *create* an invoice still just skips that bidder, as before.
+  - `/api/receipts/generate` and `/generate-all` (`server/routes/receiptRoutes.ts`) now wrap invoice resolution in `withLock('bidder-numbers:<spreadsheetId>')`, at route level rather than inside the service, since `checkoutMarkPaid` already holds that same non-reentrant lock when it calls `buildBidderReceiptWithInvoice`. A retried or concurrent run now waits, then reuses the invoices the first run saved.
+  - Tests: replaced the "batch-writes the changed ones" test with three on a stateful Bidder-Numbers mock: create/save ordering per bidder, the batch stopping on a failed J/K write, and a re-run after an interrupted batch creating no duplicates. Also added a route test that two concurrent `/generate` requests create exactly one invoice. All four fail against the pre-fix code. Backend 505 -> 508 (1154 total). `tsc --noEmit` clean.
+
+- **ROADMAP.md D1-D7 (2026-10-21 code audit): docs that no longer matched the code.**
+  - `file-reference.md`: rebuilt the topography from the real tree. It listed seven files that don't exist (`server/services/paypal.ts`, `server/middleware/auth.ts`/`cache.ts`/`session.ts`, `server/utils/sheets.ts`/`crypto.ts`, `src/lib/firebase.ts`) and left out most real ones.
+  - `patterns.md`: the protected Firebase file is `src/services/firebase.ts` (matching `AGENTS.md`), not `src/lib/firebase.ts`. Rewrote the PayPal section: `apiSendAllEmails`/`apiSendReceiptEmail` don't exist (emailing is Node-side via Gmail), and invoice resolution is Node's `resolveInvoiceUrl`.
+  - `schema.md`: replaced the Bidder-Numbers table (it listed Phone/Ticket Type/Table Number/Status/Notes columns) with the real A-K header from `syncService.ts` plus Column L's sweeper timestamp. In the Firestore field list, dropped `auctionItemsSheet` (not in `Config`/`firestore.rules`) and added `paypalIsSandbox`. Replaced the nonexistent `/api/checkout/calculate-total` endpoint with where `calculatePayPalSurcharge` really runs.
+  - `testing-batches.md`: test counts updated (were 502 backend / 1148 total).
+  - `README.md` (docs/agents): `SESSION_SECRET` added to the hard-required env vars; `/server/utils/` description no longer claims "cryptographic session managers".
+  - `refactor-opportunities.md` was stale (it reported Code Hardening "fully closed" and its "Passed Audit Inspection" list cited `server/services/paypal.ts`). Cleared to a pointer; the live backlog now lives in `ROADMAP.md`. `AGENTS.md`'s registry and the backlog references in `component-standards.md`, `react-patterns.md`, and `performance.md` now point there.
+
 - **User-reported UI bug: "Filter bar is clipped" - Bidders' Sort by dropdown trigger cut off its own selected label text ("Bidder # (Low to Hig...").** Root cause: `BiddersFilterControls.tsx`'s Sort by `SelectTrigger` was fixed at `w-50` (200px), too narrow for its longest label ("Status (Checked-In First)", 26 characters) once the icon/padding/chevron overhead is accounted for.
   - **First attempt was wrong and the user caught it**: widening the trigger alone (`w-50` -> `w-72`) fixed the trigger's own internal clipping, but pushed the whole 4-filter row's total width past what fits in the toolbar at normal desktop widths, forcing horizontal scrolling to see the Sort by filter at all - the opposite of "show all options without scrolling," which is what the user actually wanted (and immediately reported after testing). Also applied the same oversized width to `AuctionItemsFilterControls.tsx`'s twin Sort by trigger (same `w-50` pattern, same latent bug) for consistency, with the same regression.
   - **Fixed properly with three smaller, combined changes** instead of one large one: (1) shortened the two long "Status (...)" sort labels to drop the redundant "Status" prefix (`"Status (Checked-In First)"` -> `"Checked-In First"`, `"Status (Not Present First)"` -> `"Not Present First"`) - the shorter strings mean the trigger only needs to fit "Bidder # (Low to High)" (22 characters) instead of 26, letting a smaller width increase suffice (`w-50` -> `w-64`, not `w-72`); (2) sized `AuctionItemsFilterControls.tsx`'s Sort by trigger to `w-60` (its own longest label, "Item # (Low to High)", is 21 characters); (3) per the user's own suggestion, narrowed `Bidders.tsx`'s search input (`searchClassName`, `md:max-w-xs` -> `md:max-w-52`) to free up the room the wider Sort by trigger needs, since a search box's placeholder ("Search bidders...") tolerates a narrower box far more gracefully than a dropdown's selected-value label does. `AuctionItemsTab.tsx`'s own search input was left untouched - its placeholder is much longer ("Search by name, description, donor...") and narrowing it risks clipping that instead.
@@ -53,6 +134,34 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
   - Added `src/components/FilterToolbar.test.tsx` (2 tests: the default `filtersWrap=true` behavior is unchanged for every existing caller; `filtersWrap={false}` produces `flex-nowrap overflow-x-auto` instead) and 2 tests to `Bidders.test.tsx` (the filter wrapper carries `flex-nowrap` not `flex-wrap`; the Bidder Check-In card's header no longer carries the old `py-6`). Sanity-checked both independently by reverting each fix and confirming its own test failed with the real symptom (the wrapper still `flex-wrap`; the header still carrying `py-6`), then restored both. Test count: 961 → 965 (484 backend / 481 frontend); updated everywhere asserted. `tsc --noEmit` clean; `npm run build` clean.
 
 ### Changed
+
+- **The app no longer assumes it runs inside Google AI Studio (2026-10-21).** Development is now Claude Code in this repo -> GitHub -> a Cloud Build trigger on `main` -> Cloud Run service `orns-auction-manager-gh` (<https://orns-auction-manager.cloud.run>). AI Studio-era workarounds and rules were removed:
+  - **Iframe token bridge removed; the session cookie is the only credential.** AI Studio ran the app in an iframe, where the `orns_session` cookie was blocked as third-party. To work around that, `/auth/callback` posted the OAuth tokens (refresh token included) to the opener window, the client kept them in `localStorage`, `fetchWithRetry` sent them on every request as `x-google-tokens`, and `server/middleware/tokenRestorer.ts` turned that header back into a session. The app is now always a top-level page, so all of that is gone: `tokenRestorer.ts` deleted; the callback page no longer contains any tokens; `useGoogleAuth.ts` always does a plain redirect (no popup); `useApiAuthStatus.ts` no longer listens for postMessages and deletes any `google_tokens` copy a browser still has; `google-api.ts` sends no auth header. Closes most of ROADMAP.md's M2 (refresh token in `localStorage`, no audience check on header tokens, unpruned validation cache).
+  - **`server/middleware/cookiePolicy.ts` deleted.** It switched the cookie to `SameSite=None` for iframe requests (detected via `ais-dev-`/`ais-pre-` hosts or `Sec-Fetch-Dest: iframe`). The cookie is now set once in `app.ts`: `SameSite=Lax`, `httpOnly`, and `Secure` in the deployed production build.
+  - **CORS middleware and the `cors` dependency removed.** The allowlist served a Tauri desktop shell that doesn't exist (`tauri://`) and accepted lookalike origins such as `http://localhost.attacker.com` (ROADMAP.md H4). Every API call is same-origin, so no CORS headers are needed.
+  - **Local runs work again (ROADMAP.md H7).** Commit `e937903` had emptied `server/env.ts`, so nothing loaded `.env` and `npm run dev` stopped at boot on a missing `SESSION_SECRET`. Restored the `dotenv` load. Verified from a clean shell: 35 variables loaded from `.env`, server up, `/api/health` ok, OAuth redirect URI `http://localhost:<PORT>/auth/callback`.
+  - **New: `PAYPAL_SWEEPER_INTERVAL_MINUTES=0` turns the background PayPal sweep off** (`startPaypalSweeperSchedule` returns `null`). A local server reads the same Firestore config as production, so without this it would sweep the live Bidder-Numbers sheet alongside Cloud Run's. `.env.example` now defaults to `0`.
+  - Smaller cleanups:
+    - `oauth.ts` upgrades any non-localhost `http://` `APP_URL` to `https://`, instead of a list of AI Studio host patterns.
+    - The "check the Secrets panel in AI Studio" messages in `oauth.ts`/`validateEnv.ts` now point to `.env` or the Cloud Run service's variables.
+    - Removed the `aistudio-build` Gemini User-Agent and `vite.config.ts`'s `DISABLE_HMR` switch, so Vite HMR is always on.
+    - Removed the Tauri leftovers from `boot.ts`/`.gitignore`/`dev:watch`.
+    - Deleted the AI Studio applet files `metadata.json` and `firebase-blueprint.json` (nothing referenced them).
+    - Renamed the package from the template name `react-example` to `orns-auction-manager`.
+    - Updated the Apps Script bridge-class header comments. The `GoogleAIStudio` class names are unchanged, since renaming them means re-pasting all three script projects.
+  - **Docs:**
+    - Removed the AI Studio-era "never delete `bidRoutes.ts`" and "do not edit `firebase.ts`/`ConfigContext.tsx`/`firestore.rules`" rules from `AGENTS.md`/`patterns.md`.
+    - Replaced the two-batch test mandate (an AI Studio sandbox memory limit; the full suite runs in one ~20 s pass locally) with `npm run test:quiet` + `npm run lint`.
+    - Added the rule never to push straight to `main`, since that deploys to production.
+    - New "How This App Is Built and Shipped" section in `AGENTS.md`.
+    - New "Running Locally" guide and rewritten Deployment section in `docs/agents/README.md`.
+    - Rewrote the root `README.md`, which was still AI Studio's template.
+    - Rewrote `testing-batches.md`.
+  - Tests:
+    - Route tests now sign in with a real signed `orns_session` cookie (`server/test/helpers/session.ts`) instead of the removed header.
+    - Removed the cookiePolicy/tokenRestorer/postMessage/popup tests along with their code.
+    - Added tests that the old header no longer authenticates, that the callback page never contains tokens, that a leftover `localStorage` token copy is deleted and never sent, that a postMessage can't plant tokens, that a localhost `APP_URL` stays `http`, and that the sweeper schedule can be turned off.
+    - Totals: 1154 -> 1129 (493 backend / 636 frontend). `tsc --noEmit` and `npm run build` clean.
 
 - **Closed the last open finding from the 2026-09-07 audit: `FormSection.tsx`'s hardcoded `text-[11px]` -> `text-xxs`**, finishing the audit's "Code quality" section entirely (and the whole 2026-09-07 audit, across all its sections). `tailwind-style-guide.md`'s Type Scale section names this exact case: no sanctioned 11px step exists, so "a little smaller than `text-xs`" should use this app's own `text-xxs` (10px) token rather than inventing an in-between arbitrary value. One-line fix, shared by all 4 sectioned dialogs (`AddAttendeeDialog.tsx`, `EditAttendeeDialog.tsx`, `AddAuctionItemDialog.tsx`, `EditAuctionItemDialog.tsx`) via `FormSection.tsx`. Added a regression test to `FormSection.test.tsx` asserting the label carries `text-xxs` and not `text-[11px]` - sanity-checked by reverting the fix and confirming it failed with the real symptom, then restored. Test count: 1135 -> 1136 (493 backend / 643 frontend); updated everywhere asserted. `tsc --noEmit` clean; `npm run build` clean.
 

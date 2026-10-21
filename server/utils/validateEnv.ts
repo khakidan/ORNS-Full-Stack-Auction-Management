@@ -26,7 +26,7 @@ export function validateEnv(): void {
     if (!process.env[envVar]) {
       // Configuration variables should not crash the app on boot to allow the management UI to load.
       if (envVar.startsWith("DRIVE_") || envVar.startsWith("SCRIPT_ID_") || envVar.startsWith("TEMPLATE_")) {
-        console.warn(`\n[WARNING] Configuration variable missing: ${envVar}. Some features may be degraded until this is set in the Secrets panel.\n`);
+        console.warn(`\n[WARNING] Configuration variable missing: ${envVar}. Some features may be degraded until this is set (in .env locally, or the Cloud Run service's environment variables).\n`);
         continue;
       }
       console.error(`\n[FATAL SYSTEM ERROR] Boot aborted. Missing required environment variable: ${envVar}\n`);

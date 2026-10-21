@@ -6,6 +6,7 @@
  * NOTE: The bulk of the tests here are dynamically generated using a `testCases.forEach` loop
  * that maps over the various document creation endpoints to produce 18 total tests.
  */
+import { authCookieHeader } from "./helpers/session";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app";
@@ -19,7 +20,7 @@ const mockTokens = {
   refresh_token: "workflow-mock-refresh",
   expiry_date: Date.now() + 3600000
 };
-const authHeader = { "x-google-tokens": JSON.stringify(mockTokens) };
+const authHeader = authCookieHeader(mockTokens);
 
 // Node now resolves the Items spreadsheet's valid/sorted item list itself
 // (itemDataService.ts's getValidSortedItems, the Node port of
@@ -147,6 +148,29 @@ describe("Document and Presentation Creation workflow", () => {
         expect(appsScriptCallCount).toBe(0);
       });
     });
+  });
+
+  it("runs the deployed script version (devMode: false) unless APPS_SCRIPT_DEV_MODE=true (ROADMAP.md M6)", async () => {
+    const devModes: unknown[] = [];
+    server.use(
+      http.post("https://script.googleapis.com/v1/scripts/:scriptId\\:run", async ({ request }) => {
+        devModes.push(((await request.json()) as any).devMode);
+        return HttpResponse.json({ response: { result: { success: true } } });
+      })
+    );
+    const send = () => request(app).post("/api/production/item-entry/catalog").set(authHeader).send({ folderId: "f", spreadsheetId: "test-items-ss-id" });
+
+    const previous = process.env.APPS_SCRIPT_DEV_MODE;
+    try {
+      delete process.env.APPS_SCRIPT_DEV_MODE;
+      await send();
+      process.env.APPS_SCRIPT_DEV_MODE = "true";
+      await send();
+    } finally {
+      if (previous === undefined) delete process.env.APPS_SCRIPT_DEV_MODE;
+      else process.env.APPS_SCRIPT_DEV_MODE = previous;
+    }
+    expect(devModes).toEqual([false, true]);
   });
 
   it("handles Apps Script execution failure with 500 status", async () => {

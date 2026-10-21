@@ -1,6 +1,15 @@
 import { setupServer } from 'msw/node'
 import { handlers } from './handlers'
-import { beforeAll, afterAll, afterEach } from 'vitest'
+import { beforeAll, afterAll, afterEach, vi } from 'vitest'
+
+// PayPal sandbox/live is read from Firestore server-side (sharedConfig.ts,
+// ROADMAP.md M3). Tests never reach real Firestore, so every test sees
+// sandbox unless it overrides this mock; sharedConfig.test.ts covers the
+// real module via vi.importActual.
+vi.mock('../services/sharedConfig', () => ({
+  getPaypalIsSandbox: vi.fn(async () => true),
+  _resetSharedConfigForTesting: () => {},
+}))
 
 export const server = setupServer(...handlers)
 

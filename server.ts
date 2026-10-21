@@ -3,8 +3,8 @@ import "./server/services/google"; // Does not read process.env
 import { app } from "./server/app";
 import { validateEnv } from "./server/utils/validateEnv";
 import { startServer } from "./server/boot";
-import { startPaypalSweeperSchedule } from "./server/services/paypalSweeperJob";
 
 validateEnv();
 startServer(app, Number(process.env.PORT) || 3000);
-startPaypalSweeperSchedule();
+// The PayPal sweeper has no timer here: Cloud Scheduler calls
+// POST /internal/paypal-sweep (server/routes/schedulerRoutes.ts).

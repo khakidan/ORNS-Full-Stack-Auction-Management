@@ -91,7 +91,6 @@ function renderWithTwoWinners(overrides: { spreadsheetId?: string; fetchAllData?
       bidManagementSheet: "Bid-Management",
       bidderNumbersSheet: "Bidder-Numbers",
       folderId: "folder-id",
-      paypalIsSandbox: true,
     })
   );
 }
@@ -210,7 +209,6 @@ describe("useCheckoutState.filteredWinners", () => {
         bidManagementSheet: "Bid-Management",
         bidderNumbersSheet: "Bidder-Numbers",
         folderId: "folder-id",
-        paypalIsSandbox: true,
       })
     );
     await waitFor(() => expect(result.current.winners).toHaveLength(2));
@@ -248,7 +246,6 @@ describe("useCheckoutState.statusFilter", () => {
         bidManagementSheet: "Bid-Management",
         bidderNumbersSheet: "Bidder-Numbers",
         folderId: "folder-id",
-        paypalIsSandbox: true,
       })
     );
   }
@@ -307,7 +304,6 @@ describe("useCheckoutState.stats", () => {
         bidManagementSheet: "Bid-Management",
         bidderNumbersSheet: "Bidder-Numbers",
         folderId: "folder-id",
-        paypalIsSandbox: true,
       })
     );
     await waitFor(() => expect(result.current.winners).toHaveLength(2));

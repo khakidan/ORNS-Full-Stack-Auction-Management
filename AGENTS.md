@@ -19,16 +19,16 @@ To keep developer directives clean, maintainable, and modular, the monolithic Ag
     *   Historical logs of feature additions, bug fixes, and critical updates.
     *   Documenting the transition of our Gemini GenAI mock tests from CIRCULAR to GOOD test cases.
 
-3.  **[Product Roadmap & Structural Blueprint (ROADMAP.md)](./docs/agents/ROADMAP.md)**
-    *   Future milestones, proposed UI component unifications, and synchronization improvements.
-    *   Documentation on the componentized modular structure.
+3.  **[Product Roadmap & Audit Backlog (ROADMAP.md)](./docs/agents/ROADMAP.md)**
+    *   The current, verified bug/security/hardening backlog from the latest code audit (stable item IDs like `H1`, `M2`, `D4`).
+    *   Net-new feature milestones.
 
 4.  **[File Reference & Topography (file-reference.md)](./docs/agents/file-reference.md)**
     *   Full stack workspace maps and comprehensive directory layouts.
     *   Index of REST routes, React views, services, and middlewares.
 
 5.  **[Architectural Patterns & Critical Rules (patterns.md)](./docs/agents/patterns.md)**
-    *   **CRITICAL DEVIATION GUARDS**: Rules on file preservation (`bidRoutes.ts`), cookie renaming (`orns_session`), and code-splitting matchers.
+    *   The standing technical rules: the `orns_session` cookie name, the functional `manualChunks` matcher, and server-side-only PayPal surcharges.
     *   Specific charity auction and payment surcharge integration business rules.
 
 6.  **[Data & Integration Schemas (schema.md)](./docs/agents/schema.md)**
@@ -42,8 +42,8 @@ To keep developer directives clean, maintainable, and modular, the monolithic Ag
 8.  **[User Workflows & Operational Guidelines (USER_GUIDE.md)](./docs/agents/USER_GUIDE.md)**
     *   Detailed instructions for auction operations, bidding procedures, ticket sales, registration, and PayPal checkout.
 
-9.  **[Sandbox-Safe Testing & Batches (testing-batches.md)](./docs/agents/testing-batches.md)**
-    *   Step-by-step procedures to run tests in partition batches to prevent sandboxed environment command timeouts. Current pass/fail totals live only there - not duplicated here.
+9.  **[Running the Tests (testing-batches.md)](./docs/agents/testing-batches.md)**
+    *   The one command that runs the full suite, per-layer commands, and the current pass/fail totals (which live only there - not duplicated here).
 
 10. **[Testing Philosophy & Quality Standards (testing-philosophy.md)](./docs/agents/testing-philosophy.md)**
     *   Kent C. Dodds prime directive and test quality ratings (GOOD, SHALLOW, CIRCULAR, SMOKE).
@@ -62,7 +62,15 @@ To keep developer directives clean, maintainable, and modular, the monolithic Ag
     *   Confirms this app's existing `React.lazy()` code-splitting and `vite.config.ts` vendor chunking, and flags the unverified 103 kB bundle claim in `style_guide.md`.
 
 15. **[Refactor Opportunities (refactor-opportunities.md)](./docs/agents/refactor-opportunities.md)**
-    *   Running backlog of verified refactor items: oversized components, missing shared components, and doc-vs-code mismatches to fix.
+    *   Retired on 2026-10-21 (had gone stale) - now a pointer to `ROADMAP.md`'s backlog. Older code comments citing its "Code Hardening item #N" refer to work recorded in `CHANGELOG.md`.
+
+---
+
+## 🚀 How This App Is Built and Shipped
+
+Claude Code writes the code in this local repo and pushes it to GitHub (`khakidan/ORNS-Full-Stack-Auction-Management`). **Every push to `main` deploys to production** - a Cloud Build trigger builds it and deploys it to the Cloud Run service `orns-auction-manager-gh` at <https://orns-auction-manager.cloud.run> (details in [`README.md`'s Deployment section](./docs/agents/README.md#deployment)). So: work on a branch, test locally (`npm run dev` - see "Running Locally" in the same README), and merge to `main` only when the change is ready to go live.
+
+The app was originally built in Google AI Studio. AI Studio is no longer part of development or deployment, and any file in this repo can be edited like any other.
 
 ---
 
@@ -70,19 +78,17 @@ To keep developer directives clean, maintainable, and modular, the monolithic Ag
 
 For the complete guidelines and background, see [`/docs/agents/patterns.md`](./docs/agents/patterns.md).
 
-1.  **File Preservation**: **NEVER DELETE `server/routes/bidRoutes.ts`**. This managing endpoint handles critical transactional bid logs. Do not edit core SDK files (`src/services/firebase.ts`, `src/context/ConfigContext.tsx`, `firestore.rules`).
-2.  **Testing Mandate**: Always run tests and verify that the full suite continues to pass green (see [`testing-batches.md`](./docs/agents/testing-batches.md) for the current totals). Tests must be run in two partition batches to avoid memory sandbox timeouts:
-    *   **Backend**: `npx vitest run server/test/`
-    *   **Frontend**: `NODE_OPTIONS=--no-experimental-webstorage npx vitest run src/` (the flag is required on Node 22+ - `ConfigContext.tsx` reads `localStorage` at module load, and Node's own built-in Web Storage global can leave jsdom's `window.localStorage` undefined without it)
-3.  **Session Cookie Rules**: Session cookie **MUST** remain named **`orns_session`**. Do not revert it to `__session`.
+1.  **Testing Mandate**: Always run `npm run test:quiet` (the full suite) and `npm run lint`, and confirm the totals in [`testing-batches.md`](./docs/agents/testing-batches.md), before declaring a task complete. Update those totals when they change.
+2.  **Never push straight to `main`**: it deploys to production. Push a branch and let the user decide when to merge.
+3.  **Session Cookie Rules**: The session cookie **MUST** remain named **`orns_session`** - renaming it signs every user out. Do not revert it to the legacy `__session`.
 4.  **Code Splitting Rules**: The `manualChunks` function inside `vite.config.ts` must use the dynamic functional matcher structure.
-5.  **PayPal Surcharges**: NEVER calculate fees client-side; always utilize `PayPalService.calculatePayPalSurcharge` server-side.
+5.  **PayPal Surcharges**: NEVER calculate fees client-side; the surcharge is computed only server-side, by `calculatePayPalSurcharge` in `server/utils/financeUtils.ts`.
 
 ---
 
 ## 🐛 In-App Bug Reports & Their Lifecycle
 
-The floating bug icon (bottom-left corner) / Ctrl-Cmd-Shift-B shortcut lets anyone using the app capture a bug/UI/workflow-friction note without breaking flow - it auto-captures the current route, app state, browser info, recent console activity, and an optional screenshot, then saves it as a row in the dedicated **Bug-Reports spreadsheet** (`Config.bugReportsSpreadsheetId`, see `schema.md`'s "Sheet: 'Bug-Reports'" section), with screenshots uploaded to `Config.bugReportsFolderId` on Drive. If that Sheets write fails for any reason (no spreadsheet configured, an expired session), the server falls back to a local `.md`/`.png` file pair under a gitignored `bug-reports/` directory at the repo root, so a report is never silently lost.
+The floating bug icon (bottom-left corner) / Ctrl-Cmd-Shift-B shortcut lets anyone using the app capture a bug/UI/workflow-friction note without breaking flow - it auto-captures the current route, app state, browser info, recent console activity, and an optional screenshot, then saves it as a row in the dedicated **Bug-Reports spreadsheet** (`Config.bugReportsSpreadsheetId`, see `schema.md`'s "Sheet: 'Bug-Reports'" section), with screenshots uploaded to `Config.bugReportsFolderId` on Drive. If that Sheets write fails for any reason (no spreadsheet configured, an expired session), the server falls back so a report is never silently lost: in production, to one structured Cloud Logging entry (search `jsonPayload.bugReport`; the screenshot is left out, since Cloud Run's disk is in-memory and wiped on restart); in local development, to a `.md`/`.png` file pair under a gitignored `bug-reports/` directory at the repo root. The endpoint is open to unauthenticated requests on purpose; those are rate-limited per IP and can't attach a screenshot.
 
 **These reports are a working note, not a permanent record.** Once a report's underlying fix has actually shipped and been written up in `CHANGELOG.md` (the real permanent history), close the loop:
 

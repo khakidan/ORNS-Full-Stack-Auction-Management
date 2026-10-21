@@ -82,7 +82,8 @@ ${formatConsoleActivityForFile(report.consoleActivity)}
  * configured, an expired/missing OAuth session, a Sheets API error.
  * Writes one self-contained .md file per report (+ a sibling .png if a
  * screenshot was captured), so a report is never silently lost even when
- * the cloud catalog is unreachable.
+ * the cloud catalog is unreachable. Local development only - production
+ * uses logReportFallback below instead.
  */
 export async function writeLocalReportFallback(report: BugReportPayload): Promise<{ filePath: string; screenshotPath: string | null }> {
   await fsPromises.mkdir(LOCAL_FALLBACK_DIR, { recursive: true });
@@ -98,6 +99,23 @@ export async function writeLocalReportFallback(report: BugReportPayload): Promis
   await fsPromises.writeFile(filePath, buildReportMarkdown(report, screenshotFilename));
 
   return { filePath, screenshotPath: screenshotFilename ? path.join(LOCAL_FALLBACK_DIR, screenshotFilename) : null };
+}
+
+/**
+ * The production fallback (ROADMAP.md M1): Cloud Run's filesystem is
+ * in-memory and wiped whenever an instance recycles, so a "local file"
+ * there is neither durable nor safe (every anonymous 5 MB request would
+ * eat instance RAM). Instead the report's text goes to Cloud Logging as
+ * one structured entry - kept for the project's log retention period and
+ * searchable by `jsonPayload.bugReport`. The screenshot is left out.
+ */
+export function logReportFallback(report: BugReportPayload): void {
+  const { screenshotBase64, ...text } = report;
+  console.error(JSON.stringify({
+    severity: "ERROR",
+    message: `[BugReport] Saved to logs (Sheet unavailable): ${report.title}`,
+    bugReport: { ...text, consoleActivity: formatConsoleActivityForFile(report.consoleActivity), screenshotOmitted: !!screenshotBase64 },
+  }));
 }
 
 export async function uploadScreenshotToDrive(drive: drive_v3.Drive, folderId: string, screenshotBase64: string, filename: string): Promise<string> {
@@ -118,10 +136,10 @@ export async function appendBugReportToSheet(sheets: sheets_v4.Sheets, spreadshe
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [[
-        reportId,
-        report.timestamp,
+        sanitizeForSheetFormula(reportId),
+        sanitizeForSheetFormula(report.timestamp),
         "Open",
-        report.type,
+        sanitizeForSheetFormula(report.type),
         sanitizeForSheetFormula(report.title),
         sanitizeForSheetFormula(report.description),
         sanitizeForSheetFormula(report.route),

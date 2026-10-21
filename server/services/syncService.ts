@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { BIDDER_NUMBERS_HEADERS } from "../utils/bidderNumbersHeaders";
 
 /** Reads the staff/tickets/sponsor rows from the external Auction Tickets spreadsheet. */
 async function fetchTicketSheetRows(sheets: any, auctionTicketSheetsID: string): Promise<{ ticketsRows: any[][]; staffRows: any[][]; sponsorRows: any[][] }> {
@@ -154,9 +155,7 @@ export function computeBidderNumbersRows(staffRows: any[][], ticketsRows: any[][
 
 /** Writes computed Bidder-Numbers rows into the given sheet, then applies checkbox validation (Checked In/Proxy/Checked Out/Paid) and freezes the header row. */
 async function writeBidderNumbersSheet(sheets: any, spreadsheetId: string, bnSheetId: number, finalBidders: any[][]): Promise<void> {
-  const bidderNumbersHeader = [
-    "ID", "First Name", "Last Name", "Email", "Checked In", "Proxy Bidder", "Checked Out", "Paid", "Payment Method", "Invoice URL", "Invoiced Amount"
-  ];
+  const bidderNumbersHeader = BIDDER_NUMBERS_HEADERS;
   const bidderNumbersValues = [
     bidderNumbersHeader,
     ...finalBidders
