@@ -19,9 +19,9 @@ To keep developer directives clean, maintainable, and modular, the monolithic Ag
     *   Historical logs of feature additions, bug fixes, and critical updates.
     *   Documenting the transition of our Gemini GenAI mock tests from CIRCULAR to GOOD test cases.
 
-3.  **[Product Roadmap & Structural Blueprint (ROADMAP.md)](./docs/agents/ROADMAP.md)**
-    *   Future milestones, proposed UI component unifications, and synchronization improvements.
-    *   Documentation on the componentized modular structure.
+3.  **[Product Roadmap & Audit Backlog (ROADMAP.md)](./docs/agents/ROADMAP.md)**
+    *   The current, verified bug/security/hardening backlog from the latest code audit (stable item IDs like `H1`, `M2`, `D4`).
+    *   Net-new feature milestones.
 
 4.  **[File Reference & Topography (file-reference.md)](./docs/agents/file-reference.md)**
     *   Full stack workspace maps and comprehensive directory layouts.
@@ -62,7 +62,7 @@ To keep developer directives clean, maintainable, and modular, the monolithic Ag
     *   Confirms this app's existing `React.lazy()` code-splitting and `vite.config.ts` vendor chunking, and flags the unverified 103 kB bundle claim in `style_guide.md`.
 
 15. **[Refactor Opportunities (refactor-opportunities.md)](./docs/agents/refactor-opportunities.md)**
-    *   Running backlog of verified refactor items: oversized components, missing shared components, and doc-vs-code mismatches to fix.
+    *   Retired on 2026-10-21 (had gone stale) - now a pointer to `ROADMAP.md`'s backlog. Older code comments citing its "Code Hardening item #N" refer to work recorded in `CHANGELOG.md`.
 
 ---
 

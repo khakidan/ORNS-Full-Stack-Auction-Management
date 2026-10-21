@@ -29,7 +29,7 @@ The codebase is split into highly modular structural patterns:
 *   `/server/routes/`: Isolated REST endpoint pathways (`authRoutes.ts`, `bidRoutes.ts`, `bundleRoutes.ts`, `dataRoutes.ts`, `health.ts`, `productionRoutes.ts`, `receiptRoutes.ts`, `setupRoutes.ts`).
 *   `/server/services/`: Global services such as `google.ts` (handling robust retry-with-backoff logic for Sheets API) and `genai.ts` (modern SDK configuration for Gemini assistant tools).
 *   `/server/middleware/`: Global error interceptors, cookie session controllers, token restorer states, and cache control mechanisms.
-*   `/server/utils/`: Backend computational files, Sheet API retry patterns, and cryptographic session managers.
+*   `/server/utils/`: Backend helpers - the in-process `withLock` mutex, idempotency cache, sheet read cache, range/column helpers, category and min-raise logic, the PayPal surcharge formula, and boot-time env validation.
 
 ---
 
@@ -43,9 +43,11 @@ The application relies on environment variables registered in a `.env` file (nev
 *   `GEMINI_API_KEY`: Secret token for server-side AI-powered assistant functions
 *   `PORT` (optional): local port to bind to, defaults to `3000` if unset. Cloud Run sets this automatically in deployed environments - only set it locally if `3000` is already taken by another app on your machine (and update `APP_URL` and the OAuth client's Authorized redirect URI, `<APP_URL>/auth/callback`, to match).
 
-`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GEMINI_API_KEY` are hard
-requirements - `server/utils/validateEnv.ts` calls `process.exit(1)` on
-boot if any are missing. Every other var (spreadsheet/script/template/
+`SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and
+`GEMINI_API_KEY` are hard requirements - `server/utils/validateEnv.ts`
+calls `process.exit(1)` on boot if any are missing (and `server/app.ts`
+independently throws on a missing `SESSION_SECRET`, so cookies are never
+signed with a fallback key). Every other var (spreadsheet/script/template/
 Drive IDs) is soft-required - the server boots without them, but the
 corresponding feature is degraded until set (either in `.env` or via the
 in-app Config screen once signed in).

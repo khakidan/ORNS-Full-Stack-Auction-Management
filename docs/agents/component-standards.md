@@ -273,5 +273,5 @@ inventing a second button/card/select/dialog/table pattern when this
 app's real ones (`IconButton`, `LoadingButton`, `ConfirmationDialog`,
 `DataTableWrapper` all now exist, alongside `Button`/`Card`/`Select`)
 already cover the case. When a genuinely new gap turns up, check
-`refactor-opportunities.md` first before building a wrapper - it may
+`ROADMAP.md`'s audit backlog first before building a wrapper - it may
 already be logged.

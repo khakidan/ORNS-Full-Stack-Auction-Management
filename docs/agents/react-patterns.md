@@ -41,7 +41,7 @@ architectural gap relative to the ideal layering, not a design decision
 to imitate in new code - new networked logic should go through a real
 service-style module (or at minimum be clearly separated from anything
 in `categoryHelpers.ts`-style pure code), and this split is worth
-formalizing - see `refactor-opportunities.md`.
+formalizing - log it in `ROADMAP.md`'s audit backlog if pursued.
 
 The Express backend layering (`server/routes/` - `server/services/` -
 `server/middleware/`/`server/utils/`) is real and does follow the
@@ -159,7 +159,7 @@ touching one of the oversized files listed above, prefer extracting a
 sub-component over adding more inline logic, even if the task at hand
 doesn't strictly require it - but don't do large opportunistic refactors
 inside an unrelated task; log the opportunity in
-`refactor-opportunities.md` instead if it's out of scope.
+`ROADMAP.md`'s audit backlog instead if it's out of scope.
 
 If uncertain: choose the simpler implementation that matches this app's
 existing real patterns over a generic "ideal" architecture doc.

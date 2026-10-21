@@ -15,7 +15,7 @@ This document outlines the core operational guidelines, synchronizations, and no
 
 ### File Preservation
 *   **NEVER DELETE `server/routes/bidRoutes.ts`**: This route manages key transactional bid bindings. Deleting, moving, or merging this file breaks the main live-auction flow.
-*   **DO NOT MODIFY core client SDK files**: Under no circumstances should you edit `src/lib/firebase.ts`, `src/context/ConfigContext.tsx`, or `firestore.rules` unless explicitly ordered.
+*   **DO NOT MODIFY core client SDK files**: Under no circumstances should you edit `src/services/firebase.ts`, `src/context/ConfigContext.tsx`, or `firestore.rules` unless explicitly ordered.
 
 ### Session Cookie Rules
 *   **DO NOT REVERT COOKIE NAME**: The session cookie **MUST** remain named **`orns_session`**. The legacy `__session` name was a Firebase Hosting caching CDN constraint that is no longer required on Cloud Run.
@@ -34,8 +34,8 @@ This document outlines the core operational guidelines, synchronizations, and no
 *   **Re-sequencing**: Any operation that changes item status or category must trigger a re-sequencing of the affected categories to ensure gap-free Auction Item IDs.
 
 #### Charity Auction Workflows & PayPal Integration
-*   **Tracking Columns**: The 'Bidder-Numbers' sheet contains automated tracking data fields in Column J (`Invoice URL`, public PayPal checkout) and Column K (`Invoice Total Amount`, numerical balance with fees).
-*   **apiSendAllEmails**: Call this execution loop once all winning entries are processed. It internally evaluates rows, constructs unique invoices, logs them to Columns J/K, and dispatches custom checkout URLs.
-*   **apiCreateAllReceipts**: Safe to run before or after emailing. It dynamically uses the cached 'Invoice URL' in Column J, or generates a new one to embed accurate QR codes within documents.
-*   **apiCreateIndividualReceipt / apiSendReceiptEmail**: Target specific IDs, leverage the same caching logic, and auto-update tracking metrics. MUST pass strict primitive string or numerical items (e.g., `apiCreateIndividualReceipt(String(bidderId), emailReceipt)`).
-*   **Surcharges**: NEVER manually calculate surcharge processing totals within the client application; `PayPalService.calculatePayPalSurcharge` natively executes this in the backend workspace.
+*   **Tracking Columns**: The 'Bidder-Numbers' sheet contains automated tracking data fields in Column J (`Invoice URL`, public PayPal checkout), Column K (`Invoiced Amount`, numerical balance with fees), and Column L (the "PayPal Verification Pending" timestamp the sweeper reads). See `schema.md` for the full column layout.
+*   **Invoice resolution is Node-side**: `server/services/receiptDataService.ts`'s `resolveInvoiceUrl` reuses the Column J invoice when Column K still matches the current total-with-fees, otherwise cancels the stale one and creates/sends a new one. Callers persist the result to Columns J/K - per bidder, immediately after each invoice is created, never batched at the end (a batch that dies mid-run would otherwise leave sent-but-unrecorded invoices that the next run duplicates).
+*   **Receipts** (`POST /api/receipts/generate`, `/generate-all`): Node resolves each bidder's won items and invoice, then hands the finished data to the Bid Management Apps Script's `apiCreateIndividualReceipt(String(bidderId), null, receiptData)` / `apiCreateAllReceipts(null, receipts)`, which only render the Doc/PDF (with the QR code). Pass the bidder ID as a strict string primitive.
+*   **Emails** (`POST /api/receipts/email-all`, `/email-only`): sent from Node via the Gmail API (`server/services/emailService.ts`'s `processEmail` / `receiptService.ts`'s `processAllEmails`) - there is no Apps Script email function. Note: the email path currently links whatever URL is cached in Column J rather than resolving the invoice first - see `ROADMAP.md` item H2.
+*   **Surcharges**: NEVER manually calculate surcharge processing totals within the client application; `calculatePayPalSurcharge` (`server/utils/financeUtils.ts`, used by `PayPalService`) executes this server-side.
