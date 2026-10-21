@@ -67,7 +67,7 @@ One-time setup:
 1.  **Node.js 22** (the version Cloud Run's buildpack uses), then `npm install`.
 2.  `cp .env.example .env` and fill it in. Use the same `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` as production (one OAuth client serves both), any long random `SESSION_SECRET`, and **PayPal sandbox** credentials. Set `APP_URL=http://localhost:<PORT>` with the `PORT` you'll use.
 3.  In Google Cloud Console (project `orns-auction-bid-management`) -> Google Auth Platform -> Clients -> the app's OAuth client, add `http://localhost:<PORT>/auth/callback` to **Authorized redirect URIs**. Firebase Auth (the Cloud Sync sign-in) already allows `localhost` by default.
-4.  Optional - only needed for the PayPal sweeper and its status card: run `gcloud auth application-default login` with an account that can access the `orns-auction-bid-management` Firebase project, so `firebase-admin` can reach Firestore. Without it, login and normal use still work; the sweeper just logs that it can't reach Firestore.
+4.  Run `gcloud auth application-default login` with an account that can access the `orns-auction-bid-management` Firebase project, so `firebase-admin` can reach Firestore. The server reads the PayPal sandbox/live setting from there, so without it checkout and receipt generate/email fail with "Couldn't read the PayPal sandbox/live setting" (and the sweeper status card can't load). Sign-in and the other screens still work. If those errors mention `invalid_rapt`/`invalid_grant`, the login has expired - run the command again.
 
 Then `npm run dev` (or `npm run dev:watch` to auto-restart on backend edits) and open `http://localhost:<PORT>`.
 
