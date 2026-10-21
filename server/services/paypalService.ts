@@ -35,6 +35,16 @@ export interface PayPalInvoiceResult {
 
 import { calculatePayPalSurcharge } from "../utils/financeUtils";
 
+/**
+ * Invoice statuses that mean the bidder owes nothing more: PAID (paid
+ * through PayPal) and MARKED_AS_PAID (a payment recorded by hand, e.g. in
+ * the PayPal dashboard). Checkout and the sweeper both use this, so they
+ * never disagree about whether an invoice is settled (ROADMAP.md L2).
+ */
+export function isPaidInvoiceStatus(status: string): boolean {
+  return status === "PAID" || status === "MARKED_AS_PAID";
+}
+
 export class PayPalService {
   private fetcher: typeof fetch;
   private clientId: string;

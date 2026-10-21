@@ -143,6 +143,60 @@ describe("Ticket Payment Status workflow", () => {
     expect(response.body.attendeeUpdated).toBe(false);
   });
 
+  it("Check-in fails with 400 and writes nothing when the bidder isn't in Bidder-Numbers (ROADMAP.md L4)", async () => {
+    let writes = 0;
+    server.use(
+      http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+        const range = decodeURIComponent(new URL(request.url).pathname.split('/').pop() || "");
+        // In the Bid-Management matrix, but missing from Bidder-Numbers.
+        if (range.includes("Bid-Management")) return HttpResponse.json({ values: [["1001", "Price"], ["Total", ""], ["", ""], ["", ""]] });
+        if (range.includes("Bidder-Numbers")) return HttpResponse.json({ values: [["ID"], ["2002"]] });
+        return HttpResponse.json({ values: [] });
+      }),
+      http.post('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values\\:batchUpdate', () => {
+        writes++;
+        return HttpResponse.json({});
+      }),
+      http.put('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', () => {
+        writes++;
+        return HttpResponse.json({});
+      })
+    );
+
+    const response = await request(app)
+      .post("/api/auction/check-in-with-bid")
+      .set(authHeader)
+      .send({
+        bidderId: "1001",
+        spreadsheetId: "test-spread-id",
+        bidManagementSheet: "Bid-Management",
+        bidderNumbersSheet: "Bidder-Numbers",
+        bidValue: 35,
+        idempotencyKey: crypto.randomUUID()
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/Bidder 1001 not found in Bidder-Numbers/);
+    expect(writes).toBe(0);
+  });
+
+  it("Check-in rejects a non-numeric bidValue with 400, like record-winning-bid's price (ROADMAP.md L4)", async () => {
+    const response = await request(app)
+      .post("/api/auction/check-in-with-bid")
+      .set(authHeader)
+      .send({
+        bidderId: "1001",
+        spreadsheetId: "test-spread-id",
+        bidManagementSheet: "Bid-Management",
+        bidderNumbersSheet: "Bidder-Numbers",
+        bidValue: "thirty-five",
+        idempotencyKey: crypto.randomUUID()
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe("bidValue must be a valid number.");
+  });
+
   it("Auth failure (check-in) — returns 401 when unauthenticated", async () => {
     const response = await request(app)
       .post("/api/auction/check-in-with-bid")

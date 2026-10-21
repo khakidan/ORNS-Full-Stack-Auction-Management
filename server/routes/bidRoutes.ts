@@ -77,6 +77,7 @@ export default function createBidRouter() {
       itemsSpreadsheetId,
       ticketsSpreadsheetId,
       bidderNumbersSheet,
+      bidManagementSheet,
       attendeeInfo,
       paymentMethod,
       idempotencyKey
@@ -96,6 +97,7 @@ export default function createBidRouter() {
           itemsSpreadsheetId,
           ticketsSpreadsheetId,
           bidderNumbersSheet,
+          bidManagementSheet,
           paymentMethod: paymentMethod || "cash",
           // From Firestore, never the request body (ROADMAP.md M3).
           paypalIsSandbox: await getPaypalIsSandbox(),
@@ -217,6 +219,14 @@ export default function createBidRouter() {
       return res.status(400).json({ error: "Missing required parameters for check-in with bid." });
     }
 
+    // Same check as record-winning-bid's price (ROADMAP.md L4): a
+    // non-numeric value would be stored as the ticket's price and then
+    // invoiced as $0.
+    const numericBidValue = typeof bidValue === "number" ? bidValue : parseFloat(bidValue);
+    if (isNaN(numericBidValue) || !isFinite(numericBidValue)) {
+      return res.status(400).json({ error: "bidValue must be a valid number." });
+    }
+
     try {
       const outcome = await withIdempotency("auction/check-in-with-bid", idempotencyKey, async () => {
         const client = getAuthenticatedClient(req.session.tokens);
@@ -227,7 +237,7 @@ export default function createBidRouter() {
           spreadsheetId,
           bidManagementSheet,
           bidderNumbersSheet,
-          bidValue
+          bidValue: numericBidValue
         });
 
         clearCacheForSpreadsheet(spreadsheetId);

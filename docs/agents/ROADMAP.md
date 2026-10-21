@@ -22,15 +22,9 @@ Nothing outstanding - M1-M7 are all fixed (see `CHANGELOG.md`).
 
 ### Low
 
-- **L1. Hardcoded sheet names in the receipt/email paths.** `receiptDataService.ts`, `emailService.ts`, and `receiptService.ts` read/write `'Bidder-Numbers'`/`'Bid-Management'` literally instead of the configured `bidderNumbersSheet`/`bidManagementSheet` that checkout and the sweeper use.
-- **L2. Paid-status mismatch.** Checkout's credit-card path (`auctionService.ts`) only treats `"PAID"` as paid; the sweeper also accepts `"MARKED_AS_PAID"`, so a marked-as-paid invoice is needlessly deferred at checkout.
-- **L3. Cash/check ledger amount.** Checkout records the offline payment on PayPal at Column K's surcharge-inclusive total rather than the cash subtotal, and ignores `recordOfflinePayment`'s `false` return (failures are silent).
-- **L4. Check-in result is optimistic.** `checkInBidderWithBid` (`bidderService.ts`) returns `checkedIn: true` even when the bidder isn't found in Bidder-Numbers; `bidValue` is never checked to be numeric (unlike `record-winning-bid`'s `price`).
-- **L5. Shared sheet cache.** `dataRoutes.ts`'s GET `/sheets/:id/:range` serves `sheetCache` entries to any authenticated user without confirming that user can read the spreadsheet.
-- **L6. Raw error messages to clients.** `errorHandler.ts` returns `err.message` (Google/PayPal API error text) in every 500 response.
-- **L7. Drive query interpolation.** `dataRoutes.ts`'s `/drive/files/:folderId` interpolates `folderId` into the Drive `q` string unescaped.
-- **L8. Invoice for a bidder with no email** is addressed to `no-reply@example.com` (`resolveInvoiceUrl`, `receiptDataService.ts`).
-- **L9. No security headers** - no CSP and no `frame-ancestors` restriction. The app is no longer embedded anywhere (AI Studio's iframe is gone), so `frame-ancestors 'none'` / `X-Frame-Options: DENY` can be set outright.
+- **L8. Invoice for a bidder with no email** is addressed to `no-reply@example.com` (`resolveInvoiceUrl`, `receiptDataService.ts`), so PayPal tries to email a fake address. The likely fix is to create the invoice with no recipient email and send it with `send_to_recipient: false`, which still returns a payment link for the printed receipt. **Not done yet:** PayPal's docs don't say clearly whether an invoice can be created without a recipient email. Try it once in the PayPal sandbox first. If PayPal rejects it, no-email bidders' receipts would fail at checkout, which is worse than today.
+
+L1-L7 and L9 are fixed (see `CHANGELOG.md`).
 
 ### Confirmed fine (don't "fix")
 

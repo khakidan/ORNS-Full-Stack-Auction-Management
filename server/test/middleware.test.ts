@@ -84,7 +84,7 @@ describe("middleware - errorHandler", () => {
 
   it("A thrown Error with a message returns status 500 with JSON body", () => {
     const errorLogSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const req = {} as Request;
+    const req = { session: { tokens: { access_token: "staff-token" } } } as unknown as Request;
     const jsonMock = vi.fn();
     const res = {
       status: vi.fn().mockReturnValue({ json: jsonMock }),
@@ -106,7 +106,7 @@ describe("middleware - errorHandler", () => {
 
   it("A thrown Error with an empty message returns status 500 with an empty message field", () => {
     const errorLogSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const req = {} as Request;
+    const req = { session: { tokens: { access_token: "staff-token" } } } as unknown as Request;
     const jsonMock = vi.fn();
     const res = {
       status: vi.fn().mockReturnValue({ json: jsonMock }),
@@ -135,7 +135,8 @@ describe("middleware - errorHandler", () => {
     } as unknown as Response;
     const next = vi.fn();
 
-    const err = Object.assign(new Error("request entity too large"), { status: 413, type: "entity.too.large" });
+    // body-parser marks its client errors `expose: true` - safe to show even without a session.
+    const err = Object.assign(new Error("request entity too large"), { status: 413, type: "entity.too.large", expose: true });
     errorHandler(err, req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(413);
@@ -147,7 +148,7 @@ describe("middleware - errorHandler", () => {
 
   it("Also respects statusCode (not just status) - different middleware/libraries use either property", () => {
     const errorLogSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const req = {} as Request;
+    const req = { session: { tokens: { access_token: "staff-token" } } } as unknown as Request;
     const jsonMock = vi.fn();
     const res = {
       status: vi.fn().mockReturnValue({ json: jsonMock }),
@@ -162,7 +163,7 @@ describe("middleware - errorHandler", () => {
 
   it("A thrown Error with special characters in the message returns the message unchanged", () => {
     const errorLogSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const req = {} as Request;
+    const req = { session: { tokens: { access_token: "staff-token" } } } as unknown as Request;
     const jsonMock = vi.fn();
     const res = {
       status: vi.fn().mockReturnValue({ json: jsonMock }),
@@ -180,6 +181,18 @@ describe("middleware - errorHandler", () => {
     expect(next).not.toHaveBeenCalled();
     expect(errorLogSpy).toHaveBeenCalledTimes(1);
     expect(errorLogSpy).toHaveBeenCalledWith("Centralized Error:", err);
+  });
+  it("Leaves out the message for a caller who isn't signed in - it can carry Google/PayPal API text (ROADMAP.md L6)", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const jsonMock = vi.fn();
+    const res = {
+      status: vi.fn().mockReturnValue({ json: jsonMock }),
+    } as unknown as Response;
+
+    errorHandler(new Error("Request had invalid authentication credentials for spreadsheet 1AbC"), { session: null } as unknown as Request, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(jsonMock).toHaveBeenCalledWith({ error: "Internal Server Error" });
   });
 });
 

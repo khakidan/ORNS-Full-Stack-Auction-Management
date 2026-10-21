@@ -5,7 +5,8 @@ import { withLock } from "../utils/asyncLock";
 import { ensureTrackingHeaders } from "../utils/bidderNumbersHeaders";
 import { PayPalService } from "./paypalService";
 import { EMAILED_INVOICE_INDEX, getSenderEmail, isValidEmailAddress, recordReceiptEmailed, sendReceiptEmail } from "./emailService";
-import { BidderReceiptData, buildAllBidderReceiptsWithInvoices, findExistingInvoice } from "./receiptDataService";
+import { BidderReceiptData, buildAllBidderReceiptsWithInvoices, DEFAULT_SHEET_NAMES, findExistingInvoice, SheetNames } from "./receiptDataService";
+import { quoteSheetName } from "../utils/rangeUtils";
 
 export async function createIndividualReceipt(script: script_v1.Script, scriptId: string, bidderId: string, receiptData: BidderReceiptData) {
     const response = await script.scripts.run({
@@ -66,17 +67,21 @@ export async function processAllEmails(
     client: OAuth2Client,
     spreadsheetId: string,
     itemsSpreadsheetId: string,
-    paypal: PayPalService
+    paypal: PayPalService,
+    sheetNames: SheetNames = DEFAULT_SHEET_NAMES
 ): Promise<EmailAllResult> {
     const sheets = google.sheets({ version: "v4", auth: client });
 
     const receipts = await withLock(`bidder-numbers:${spreadsheetId}`, () =>
-        buildAllBidderReceiptsWithInvoices(client, spreadsheetId, itemsSpreadsheetId, paypal, (r) => isValidEmailAddress(r.email.trim()))
+        buildAllBidderReceiptsWithInvoices(client, spreadsheetId, itemsSpreadsheetId, paypal, {
+            include: (r) => isValidEmailAddress(r.email.trim()),
+            sheetNames,
+        })
     );
 
-    const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:N" });
+    const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${quoteSheetName(sheetNames.bidderNumbers)}!A:N` });
     const bidderRows = bNum.data.values || [];
-    await ensureTrackingHeaders(sheets, spreadsheetId).catch((e) => console.warn("[processAllEmails] Could not label Bidder-Numbers L1:N1:", e?.message || e));
+    await ensureTrackingHeaders(sheets, spreadsheetId, sheetNames.bidderNumbers).catch((e) => console.warn("[processAllEmails] Could not label Bidder-Numbers L1:N1:", e?.message || e));
 
     const senderEmail = await getSenderEmail(client);
     const result: EmailAllResult = { sentCount: 0, alreadySentCount: 0, failedCount: 0 };
@@ -102,10 +107,10 @@ export async function processAllEmails(
         result.sentCount++;
 
         try {
-            await recordReceiptEmailed(sheets, spreadsheetId, existing.rowIndex, receipt.paymentUrl);
+            await recordReceiptEmailed(sheets, spreadsheetId, existing.rowIndex, receipt.paymentUrl, sheetNames.bidderNumbers);
         } catch (e: any) {
             throw new Error(
-                `Stopped emailing receipts after ${result.sentCount} sent: bidder ${receipt.bidId}'s receipt was emailed but couldn't be recorded in Bidder-Numbers row ${existing.rowIndex} (M/N), ` +
+                `Stopped emailing receipts after ${result.sentCount} sent: bidder ${receipt.bidId}'s receipt was emailed but couldn't be recorded in ${sheetNames.bidderNumbers} row ${existing.rowIndex} (M/N), ` +
                 `so re-running now would email them again. Cause: ${e.message || e}`
             );
         }

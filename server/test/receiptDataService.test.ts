@@ -376,6 +376,34 @@ describe("buildBidderReceiptWithInvoice", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("reads and writes the configured tab names, not the defaults (ROADMAP.md L1)", async () => {
+    const requestedRanges: string[] = [];
+    let capturedUpdateRange = "";
+    server.use(
+      http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ params }) => {
+        const range = decodeURIComponent(String(params.range));
+        requestedRanges.push(range);
+        if (range.startsWith("'Bids 2026'!")) return HttpResponse.json({ values: BID_MANAGEMENT_ROWS });
+        if (range.startsWith("'Dan''s Bidders'!")) return HttpResponse.json({ values: BIDDER_NUMBERS_ROWS });
+        if (range.includes("Auction-Items")) return HttpResponse.json({ values: AUCTION_ITEMS_ROWS });
+        return HttpResponse.json({ values: [] });
+      }),
+      http.put("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ params }) => {
+        capturedUpdateRange = decodeURIComponent(String(params.range));
+        return HttpResponse.json({ updatedRows: 1 });
+      })
+    );
+
+    const result = await buildBidderReceiptWithInvoice(fakeClient, "bm-id", "items-id", "101", newSandboxPaypal(), {
+      bidderNumbers: "Dan's Bidders",
+      bidManagement: "Bids 2026",
+    });
+
+    expect(result.success).toBe(true);
+    expect(capturedUpdateRange).toBe("'Dan''s Bidders'!J2:K2");
+    expect(requestedRanges.some((r) => r.includes("Bidder-Numbers") || r.includes("Bid-Management"))).toBe(false);
+  });
+
   it("propagates the underlying buildBidderReceipt error without ever touching PayPal", async () => {
     mockSheets();
     const fetcher = vi.fn();

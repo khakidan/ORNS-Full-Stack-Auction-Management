@@ -16,6 +16,7 @@ import createSchedulerRouter from './routes/schedulerRoutes';
 // Middleware
 import { errorHandler } from './middleware/errorHandler';
 import { cacheControl } from './middleware/cacheControl';
+import { createSecurityHeaders } from './middleware/securityHeaders';
 
 declare global {
   namespace Express {
@@ -66,6 +67,10 @@ app.set("trust proxy", 1);
 // http://localhost, where a secure cookie would never be stored.
 const isLocalhost = !process.env.APP_URL || process.env.APP_URL.includes("localhost");
 const secureCookies = process.env.NODE_ENV === "production" && !isLocalhost;
+
+// Before every route and before boot.ts's static/Vite handlers, so pages
+// and assets get them too.
+app.use(createSecurityHeaders({ hsts: secureCookies }));
 
 app.use(
   cookieSession({

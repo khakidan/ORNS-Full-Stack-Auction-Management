@@ -59,8 +59,8 @@ export function useCheckoutState({
   folderId,
 }: UseCheckoutStateArgs) {
   const winnersList = useWinnersList({ bidders, items, fetchAllData, spreadsheetId, bidManagementSheet });
-  const receiptActions = useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, folderId });
-  const batchActions = useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, folderId });
+  const receiptActions = useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, folderId, bidderNumbersSheet, bidManagementSheet });
+  const batchActions = useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, folderId, bidderNumbersSheet, bidManagementSheet });
   const paymentFlow = useCheckoutPaymentFlow({
     bidders,
     attendees,
@@ -71,6 +71,7 @@ export function useCheckoutState({
     itemsSpreadsheetId,
     ticketsSpreadsheetId,
     bidderNumbersSheet,
+    bidManagementSheet,
   });
 
   return {

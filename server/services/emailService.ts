@@ -3,7 +3,8 @@ import { OAuth2Client } from "google-auth-library";
 import { withLock } from "../utils/asyncLock";
 import { ensureTrackingHeaders } from "../utils/bidderNumbersHeaders";
 import { PayPalService } from "./paypalService";
-import { attachInvoice, buildBidderReceipt, BidderReceiptWithInvoice } from "./receiptDataService";
+import { attachInvoice, buildBidderReceipt, BidderReceiptWithInvoice, DEFAULT_SHEET_NAMES, SheetNames } from "./receiptDataService";
+import { quoteSheetName } from "../utils/rangeUtils";
 
 /**
  * Bidder-Numbers columns M/N record each receipt email: when it was sent,
@@ -157,10 +158,16 @@ export async function sendReceiptEmail(client: OAuth2Client, receipt: BidderRece
 }
 
 /** Records in Bidder-Numbers M/N that this row's receipt was just emailed with this invoice link. */
-export async function recordReceiptEmailed(sheets: sheets_v4.Sheets, spreadsheetId: string, rowIndex: number, paymentUrl: string): Promise<void> {
+export async function recordReceiptEmailed(
+  sheets: sheets_v4.Sheets,
+  spreadsheetId: string,
+  rowIndex: number,
+  paymentUrl: string,
+  bidderNumbersSheet = DEFAULT_SHEET_NAMES.bidderNumbers
+): Promise<void> {
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `'Bidder-Numbers'!${EMAILED_AT_COL}${rowIndex}:${EMAILED_INVOICE_COL}${rowIndex}`,
+    range: `${quoteSheetName(bidderNumbersSheet)}!${EMAILED_AT_COL}${rowIndex}:${EMAILED_INVOICE_COL}${rowIndex}`,
     valueInputOption: "RAW",
     requestBody: { values: [[new Date().toISOString(), paymentUrl]] },
   });
@@ -182,9 +189,10 @@ export async function processEmail(
   spreadsheetId: string,
   bidderId: string,
   itemsSpreadsheetId: string,
-  paypal: PayPalService
+  paypal: PayPalService,
+  sheetNames: SheetNames = DEFAULT_SHEET_NAMES
 ): Promise<{ success: true } | { success: false; error: string }> {
-  const built = await buildBidderReceipt(client, spreadsheetId, itemsSpreadsheetId, bidderId);
+  const built = await buildBidderReceipt(client, spreadsheetId, itemsSpreadsheetId, bidderId, sheetNames);
   if (built.success === false) return built;
 
   const email = built.receipt.email.trim();
@@ -192,15 +200,15 @@ export async function processEmail(
   if (!isValidEmailAddress(email)) return { success: false, error: `The email address on file for bidder ${bidderId} isn't valid: "${email}".` };
 
   const attached = await withLock(`bidder-numbers:${spreadsheetId}`, () =>
-    attachInvoice(client, spreadsheetId, built.receipt, paypal)
+    attachInvoice(client, spreadsheetId, built.receipt, paypal, sheetNames)
   );
   if (attached.success === false) return attached;
 
   await sendReceiptEmail(client, attached.receipt, await getSenderEmail(client));
 
   const sheets = google.sheets({ version: "v4", auth: client });
-  await recordReceiptEmailed(sheets, spreadsheetId, attached.rowIndex, attached.receipt.paymentUrl);
-  await ensureTrackingHeaders(sheets, spreadsheetId).catch((e) => console.warn("[processEmail] Could not label Bidder-Numbers L1:N1:", e?.message || e));
+  await recordReceiptEmailed(sheets, spreadsheetId, attached.rowIndex, attached.receipt.paymentUrl, sheetNames.bidderNumbers);
+  await ensureTrackingHeaders(sheets, spreadsheetId, sheetNames.bidderNumbers).catch((e) => console.warn("[processEmail] Could not label Bidder-Numbers L1:N1:", e?.message || e));
 
   return { success: true };
 }

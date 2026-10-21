@@ -2,7 +2,7 @@ import { google } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
 import { getOAuthClient } from "./oauth";
 import { getAdminFirestore } from "./firebaseAdmin";
-import { PayPalService } from "./paypalService";
+import { PayPalService, isPaidInvoiceStatus } from "./paypalService";
 import { withLock } from "../utils/asyncLock";
 
 /**
@@ -283,7 +283,7 @@ async function applySweepResultLocked(
   const amountDue = row[10];
   const timestampStr = row[11];
 
-  if (liveStatus === "PAID" || liveStatus === "MARKED_AS_PAID") {
+  if (isPaidInvoiceStatus(liveStatus)) {
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `'${bidderNumbersSheet}'!G${rowNumber}:I${rowNumber}`,

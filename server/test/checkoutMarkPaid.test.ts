@@ -22,7 +22,8 @@ const mockExtractInvoiceIdFromUrl = vi.fn();
 const mockRecordOfflinePayment = vi.fn();
 const mockGetInvoiceStatus = vi.fn();
 
-vi.mock("../services/paypalService", () => ({
+vi.mock("../services/paypalService", async (importOriginal) => ({
+  isPaidInvoiceStatus: (await importOriginal<typeof import("../services/paypalService")>()).isPaidInvoiceStatus,
   // A regular function, not an arrow function - arrow functions can't be
   // used as a `new`-constructor, which is exactly how auctionService.ts
   // instantiates this (`new PayPalService(...)`).
@@ -41,7 +42,8 @@ vi.mock("../services/paypalService", () => ({
 // a failure correctly), not receiptDataService's own invoice-creation
 // logic, which has its own coverage.
 const mockBuildBidderReceiptWithInvoice = vi.fn();
-vi.mock("../services/receiptDataService", () => ({
+vi.mock("../services/receiptDataService", async (importOriginal) => ({
+  DEFAULT_SHEET_NAMES: (await importOriginal<typeof import("../services/receiptDataService")>()).DEFAULT_SHEET_NAMES,
   buildBidderReceiptWithInvoice: (...args: any[]) => mockBuildBidderReceiptWithInvoice(...args),
 }));
 
@@ -131,17 +133,43 @@ describe("checkoutMarkPaid - offline payment methods (cash/check)", () => {
     expect(giUpdate?.values).toEqual([[true, true, "Check"]]);
   });
 
-  it("still marks the bidder paid even if the PayPal-side recording throws", async () => {
+  it("still marks the bidder paid if the PayPal-side recording throws, and warns staff the invoice is still open (ROADMAP.md L3)", async () => {
     const row = makeBidderRow({ 9: "https://www.paypal.com/invoice/p/#INV2-X", 10: 50 });
     const { getUpdates } = mockBidderNumbers(row);
     mockExtractInvoiceIdFromUrl.mockReturnValue("INV2-X");
     mockRecordOfflinePayment.mockRejectedValue(new Error("PayPal API down"));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const result = await checkoutMarkPaid(fakeClient, baseParams({ paymentMethod: "cash" }));
 
     expect(result.success).toBe(true);
     const giUpdate = getUpdates().find((u) => u.range.includes("G2:I2"));
     expect(giUpdate?.values).toEqual([[true, true, "Cash"]]);
+    expect(result.warning).toMatch(/INV2-X.*can still be paid online/);
+  });
+
+  it("warns staff when PayPal answers but doesn't accept the recorded payment (recordOfflinePayment returns false)", async () => {
+    const row = makeBidderRow({ 9: "https://www.paypal.com/invoice/p/#INV2-X", 10: 50 });
+    mockBidderNumbers(row);
+    mockExtractInvoiceIdFromUrl.mockReturnValue("INV2-X");
+    mockRecordOfflinePayment.mockResolvedValue(false);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = await checkoutMarkPaid(fakeClient, baseParams({ paymentMethod: "check" }));
+
+    expect(result.success).toBe(true);
+    expect(result.warning).toMatch(/marked paid \(Check\).*Mark it paid in the PayPal dashboard/);
+  });
+
+  it("gives no warning when PayPal records the payment", async () => {
+    const row = makeBidderRow({ 9: "https://www.paypal.com/invoice/p/#INV2-X", 10: 50 });
+    mockBidderNumbers(row);
+    mockExtractInvoiceIdFromUrl.mockReturnValue("INV2-X");
+    mockRecordOfflinePayment.mockResolvedValue(true);
+
+    const result = await checkoutMarkPaid(fakeClient, baseParams({ paymentMethod: "cash" }));
+
+    expect(result.warning).toBeUndefined();
   });
 
   it("skips the PayPal call entirely when there's no invoice ID", async () => {
@@ -171,6 +199,19 @@ describe("checkoutMarkPaid - credit_card (live PayPal gate)", () => {
     expect(giUpdate?.values).toEqual([[true, true, "Credit Card / PayPal"]]);
     const lUpdate = getUpdates().find((u) => u.range.includes("L2"));
     expect(lUpdate?.values).toEqual([[""]]);
+  });
+
+  it("also marks paid immediately for MARKED_AS_PAID, as the sweeper does (ROADMAP.md L2)", async () => {
+    const row = makeBidderRow({ 9: "https://www.paypal.com/invoice/p/#INV2-X", 10: 104.12 });
+    const { getUpdates } = mockBidderNumbers(row);
+    mockExtractInvoiceIdFromUrl.mockReturnValue("INV2-X");
+    mockGetInvoiceStatus.mockResolvedValue("MARKED_AS_PAID");
+
+    const result = await checkoutMarkPaid(fakeClient, baseParams({ paymentMethod: "credit_card" }));
+
+    expect(result.deferred).toBeFalsy();
+    const giUpdate = getUpdates().find((u) => u.range.includes("G2:I2"));
+    expect(giUpdate?.values).toEqual([[true, true, "Credit Card / PayPal"]]);
   });
 
   it("defers to the background sweeper when PayPal doesn't show the invoice as paid yet", async () => {
@@ -209,7 +250,11 @@ describe("checkoutMarkPaid - credit_card (live PayPal gate)", () => {
     const result = await checkoutMarkPaid(fakeClient, baseParams({ paymentMethod: "credit_card" }));
 
     expect(mockGetInvoiceStatus).not.toHaveBeenCalled();
-    expect(mockBuildBidderReceiptWithInvoice).toHaveBeenCalledWith(fakeClient, "bm-id", "items-id", "101", expect.anything());
+    // With the configured tab names (ROADMAP.md L1) - Bid-Management falls back to its default when the request didn't send one.
+    expect(mockBuildBidderReceiptWithInvoice).toHaveBeenCalledWith(fakeClient, "bm-id", "items-id", "101", expect.anything(), {
+      bidderNumbers: "Bidder-Numbers",
+      bidManagement: "Bid-Management",
+    });
     expect(result.deferred).toBe(true);
     const giUpdate = getUpdates().find((u) => u.range.includes("G2:I2"));
     expect(giUpdate?.values).toEqual([[false, false, "PayPal Verification Pending"]]);

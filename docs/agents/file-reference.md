@@ -34,8 +34,9 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │
 │   ├── middleware/
 │   │   ├── cacheControl.ts    # no-store on /api/* and /auth/*
-│   │   ├── errorHandler.ts    # Centralized JSON error responses
-│   │   └── requireAuth.ts     # 401 unless the orns_session cookie carries tokens
+│   │   ├── errorHandler.ts    # Centralized JSON error responses (message only for signed-in staff)
+│   │   ├── requireAuth.ts     # 401 unless the orns_session cookie carries tokens
+│   │   └── securityHeaders.ts # No framing (CSP frame-ancestors, X-Frame-Options), nosniff, Referrer-Policy, HSTS when deployed
 │   │
 │   ├── services/
 │   │   ├── auctionService.ts        # recordWinningBid, checkoutMarkPaid, closeAuctionAndCleanup
@@ -69,7 +70,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── idempotency.ts     # In-memory idempotency-key cache
 │   │   ├── minRaiseHelpers.ts # Minimum-raise tiers
 │   │   ├── rangeUtils.ts      # A1 range sheet-name quoting
-│   │   ├── sheetCache.ts      # 5-second shared Sheets read cache
+│   │   ├── sheetCache.ts      # 5-second Sheets read cache, keyed per user
 │   │   └── validateEnv.ts     # Boot-time required env var check
 │   │
 │   └── test/                  # Vitest + supertest + MSW backend suite (helpers/ incl. session.ts for signed test cookies, handlers.ts, setup.ts)

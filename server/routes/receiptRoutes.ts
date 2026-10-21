@@ -3,7 +3,7 @@ import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
 import { processEmail } from '../services/emailService';
 import { createIndividualReceipt, createAllReceipts, processAllEmails } from '../services/receiptService';
-import { buildBidderReceiptWithInvoice, buildAllBidderReceiptsWithInvoices } from '../services/receiptDataService';
+import { buildBidderReceiptWithInvoice, buildAllBidderReceiptsWithInvoices, sheetNamesFromBody } from '../services/receiptDataService';
 import { PayPalService } from '../services/paypalService';
 import { getPaypalIsSandbox } from '../services/sharedConfig';
 import { requireAuth } from '../middleware/requireAuth';
@@ -36,7 +36,7 @@ export default function createReceiptsRouter() {
       // bidder - or a client retry of this route - could each see "no
       // invoice yet" and both create and send one.
       const receiptResult = await withLock(`bidder-numbers:${spreadsheetId}`, () =>
-        buildBidderReceiptWithInvoice(client, spreadsheetId, itemsSpreadsheetId, String(bidderId), paypal)
+        buildBidderReceiptWithInvoice(client, spreadsheetId, itemsSpreadsheetId, String(bidderId), paypal, sheetNamesFromBody(req.body))
       );
       if (receiptResult.success === false) return res.status(400).json({ error: receiptResult.error });
 
@@ -61,7 +61,7 @@ export default function createReceiptsRouter() {
       // See /generate above - a retried or concurrent run now waits here,
       // then reuses the invoices the first run already saved to J/K.
       const receipts = await withLock(`bidder-numbers:${spreadsheetId}`, () =>
-        buildAllBidderReceiptsWithInvoices(client, spreadsheetId, itemsSpreadsheetId, paypal)
+        buildAllBidderReceiptsWithInvoices(client, spreadsheetId, itemsSpreadsheetId, paypal, { sheetNames: sheetNamesFromBody(req.body) })
       );
 
       const script = google.script({ version: "v1", auth: client });
@@ -83,7 +83,7 @@ export default function createReceiptsRouter() {
       const outcome = await withIdempotency("receipts/email-all", idempotencyKey, async () => {
         const client = getAuthenticatedClient(req.session.tokens);
         const paypal = new PayPalService({ isSandbox: await getPaypalIsSandbox() });
-        const result = await processAllEmails(client, spreadsheetId, itemsSpreadsheetId, paypal);
+        const result = await processAllEmails(client, spreadsheetId, itemsSpreadsheetId, paypal, sheetNamesFromBody(req.body));
         return { success: true, ...result };
       });
       res.json(idempotentBody(outcome));
@@ -99,7 +99,7 @@ export default function createReceiptsRouter() {
     try {
       const client = getAuthenticatedClient(req.session.tokens);
       const paypal = new PayPalService({ isSandbox: await getPaypalIsSandbox() });
-      const result = await processEmail(client, spreadsheetId, String(bidderId), itemsSpreadsheetId, paypal);
+      const result = await processEmail(client, spreadsheetId, String(bidderId), itemsSpreadsheetId, paypal, sheetNamesFromBody(req.body));
 
       if (result.success === false) return res.status(400).json({ error: result.error });
 
