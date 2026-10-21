@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { google } from 'googleapis';
 import { getColumnLetter } from '../utils/columnUtils';
 import { getAuthenticatedClient } from '../services/oauth';
-import { checkIdempotency, saveIdempotency } from '../utils/idempotency';
+import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { executeGoogleSheetsTransaction, SheetOp } from '../services/sheetsService';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { registerWalkInBidder, checkInBidderWithBid } from '../services/bidderService';
@@ -41,26 +41,24 @@ export default function createBidRouter() {
       return res.status(400).json({ error: "price must be a valid number." });
     }
 
-    const cached = checkIdempotency(req, res, idempotencyKey);
-    if (cached) return;
-
     try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
+      const outcome = await withIdempotency("auction/record-winning-bid", idempotencyKey, async () => {
+        const client = getAuthenticatedClient(req.session.tokens);
+        const sheets = google.sheets({ version: "v4", auth: client });
 
-      const result = await recordWinningBid(sheets, {
-        bidderId,
-        itemId,
-        price: numericPrice,
-        spreadsheetId,
-        bidManagementSheet,
-        bidderNumbersSheet
+        const result = await recordWinningBid(sheets, {
+          bidderId,
+          itemId,
+          price: numericPrice,
+          spreadsheetId,
+          bidManagementSheet,
+          bidderNumbersSheet
+        });
+
+        clearCacheForSpreadsheet(spreadsheetId);
+        return result;
       });
-
-      clearCacheForSpreadsheet(spreadsheetId);
-
-      saveIdempotency(idempotencyKey, result);
-      res.json(result);
+      res.json(idempotentBody(outcome));
     } catch (error: any) {
       console.error("[Route Error] record-winning-bid:", error);
       if (error.message.includes("not found")) {
@@ -88,36 +86,35 @@ export default function createBidRouter() {
       return res.status(400).json({ error: "Missing required parameters for checkout" });
     }
 
-    const cached = checkIdempotency(req, res, idempotencyKey);
-    if (cached) return;
-
     try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      
-      const result = await checkoutMarkPaid(client, {
-        bidderId: String(bidderId),
-        spreadsheetId,
-        itemsSpreadsheetId,
-        ticketsSpreadsheetId,
-        bidderNumbersSheet,
-        paymentMethod: paymentMethod || "cash",
-        paypalIsSandbox,
-        attendeeInfo
+      const outcome = await withIdempotency("auction/checkout-mark-paid", idempotencyKey, async () => {
+        const client = getAuthenticatedClient(req.session.tokens);
+
+        const result = await checkoutMarkPaid(client, {
+          bidderId: String(bidderId),
+          spreadsheetId,
+          itemsSpreadsheetId,
+          ticketsSpreadsheetId,
+          bidderNumbersSheet,
+          paymentMethod: paymentMethod || "cash",
+          paypalIsSandbox,
+          attendeeInfo
+        });
+
+        clearCacheForSpreadsheet(spreadsheetId);
+        if (ticketsSpreadsheetId) clearCacheForSpreadsheet(ticketsSpreadsheetId);
+        return result;
       });
+      const body = idempotentBody(outcome);
 
-      clearCacheForSpreadsheet(spreadsheetId);
-      if (ticketsSpreadsheetId) clearCacheForSpreadsheet(ticketsSpreadsheetId);
-
-      saveIdempotency(idempotencyKey, result);
-      
-      if (result.deferred) {
+      if (body.deferred) {
         res.status(202).json({
-          ...result,
+          ...body,
           message: "Verification deferred",
           bidderId: String(bidderId)
         });
       } else {
-        res.status(200).json(result);
+        res.status(200).json(body);
       }
     } catch (error: any) {
       console.error("[Route Error] checkout-mark-paid:", error);
@@ -174,29 +171,27 @@ export default function createBidRouter() {
       return res.status(400).json({ error: "Missing required fields for walk-in." });
     }
 
-    const cached = checkIdempotency(req, res, idempotencyKey);
-    if (cached) return;
-
     try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
+      const outcome = await withIdempotency("bidders/walk-in", idempotencyKey, async () => {
+        const client = getAuthenticatedClient(req.session.tokens);
+        const sheets = google.sheets({ version: "v4", auth: client });
 
-      const result = await registerWalkInBidder(sheets, {
-        firstName,
-        lastName,
-        email,
-        spreadsheetId,
-        ticketsSpreadsheetId,
-        ticketPrice,
-        bidderNumbersSheet,
-        bidManagementSheet
+        const result = await registerWalkInBidder(sheets, {
+          firstName,
+          lastName,
+          email,
+          spreadsheetId,
+          ticketsSpreadsheetId,
+          ticketPrice,
+          bidderNumbersSheet,
+          bidManagementSheet
+        });
+
+        clearCacheForSpreadsheet(spreadsheetId);
+        if (ticketsSpreadsheetId) clearCacheForSpreadsheet(ticketsSpreadsheetId);
+        return result;
       });
-
-      clearCacheForSpreadsheet(spreadsheetId);
-      if (ticketsSpreadsheetId) clearCacheForSpreadsheet(ticketsSpreadsheetId);
-
-      saveIdempotency(idempotencyKey, result);
-      res.json(result);
+      res.json(idempotentBody(outcome));
     } catch (error: any) {
       console.error("[Route Error] walk-in:", error);
       if (error.message.includes("not found")) {
@@ -221,25 +216,23 @@ export default function createBidRouter() {
       return res.status(400).json({ error: "Missing required parameters for check-in with bid." });
     }
 
-    const cached = checkIdempotency(req, res, idempotencyKey);
-    if (cached) return;
-
     try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
+      const outcome = await withIdempotency("auction/check-in-with-bid", idempotencyKey, async () => {
+        const client = getAuthenticatedClient(req.session.tokens);
+        const sheets = google.sheets({ version: "v4", auth: client });
 
-      const result = await checkInBidderWithBid(sheets, {
-        bidderId,
-        spreadsheetId,
-        bidManagementSheet,
-        bidderNumbersSheet,
-        bidValue
+        const result = await checkInBidderWithBid(sheets, {
+          bidderId,
+          spreadsheetId,
+          bidManagementSheet,
+          bidderNumbersSheet,
+          bidValue
+        });
+
+        clearCacheForSpreadsheet(spreadsheetId);
+        return result;
       });
-
-      clearCacheForSpreadsheet(spreadsheetId);
-      
-      saveIdempotency(idempotencyKey, result);
-      res.json(result);
+      res.json(idempotentBody(outcome));
     } catch (error: any) {
       console.error("[Route Error] check-in-with-bid:", error);
       if (error.message.includes("not found")) {

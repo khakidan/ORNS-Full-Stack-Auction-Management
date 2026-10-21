@@ -62,12 +62,25 @@ function pendingRow(overrides: Record<number, any> = {}) {
   return row;
 }
 
-function mockBidderNumbers(rows: any[][]) {
+/**
+ * Serves the whole sheet for a full-column read (the sweep's snapshot),
+ * and just that row for a single-row `A{n}:L{n}` read (the sweep's
+ * under-lock re-check). `rowsAtRecheck`, when given, is what the sheet
+ * looks like by the time of that re-check - i.e. staff changed it
+ * mid-sweep.
+ */
+function mockBidderNumbers(rows: any[][], rowsAtRecheck?: any[][]) {
   server.use(
     http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ request }) => {
       const url = new URL(request.url);
-      if (url.pathname.includes("Bidder-Numbers")) return HttpResponse.json({ values: [HEADER, ...rows] });
-      return HttpResponse.json({ values: [] });
+      const range = decodeURIComponent(url.pathname.split("/").pop() || "");
+      if (!range.includes("Bidder-Numbers")) return HttpResponse.json({ values: [] });
+      const singleRow = range.match(/!A(\d+):L\1$/);
+      if (singleRow) {
+        const all = [HEADER, ...(rowsAtRecheck ?? rows)];
+        return HttpResponse.json({ values: [all[Number(singleRow[1]) - 1] ?? []] });
+      }
+      return HttpResponse.json({ values: [HEADER, ...rows] });
     })
   );
 }
@@ -241,6 +254,75 @@ describe("runPaypalSweep - resolving/escalating pending rows", () => {
     mockBidderNumbers([]);
     await runPaypalSweep();
     expect(lastPayPalServiceCtorArgs).toEqual({ isSandbox: false });
+  });
+});
+
+describe("runPaypalSweep - never overwrites a row staff changed mid-sweep (ROADMAP.md H5)", () => {
+  function captureWrites() {
+    const writes: string[] = [];
+    server.use(
+      http.put("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ params }) => {
+        writes.push(decodeURIComponent(String(params.range)));
+        return HttpResponse.json({ updatedRows: 1 });
+      }),
+      http.post("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range\\:append", ({ params }) => {
+        writes.push(`append:${decodeURIComponent(String(params.range))}`);
+        return HttpResponse.json({ updates: {} });
+      })
+    );
+    return writes;
+  }
+
+  it("leaves a timed-out row alone if staff marked it Cash after the sweep's snapshot", async () => {
+    const elevenMinutesAgo = new Date(Date.now() - 11 * 60 * 1000).toISOString();
+    mockBidderNumbers(
+      [pendingRow({ 11: elevenMinutesAgo })],
+      [pendingRow({ 6: true, 7: true, 8: "Cash", 11: "" })]
+    );
+    mockExtractInvoiceIdFromUrl.mockReturnValue("INV2-X");
+    mockGetInvoiceStatus.mockResolvedValue("SENT");
+    const writes = captureWrites();
+
+    const result = await runPaypalSweep();
+
+    expect(result).toEqual({ pending: 1, resolved: 0, escalated: 0 });
+    expect(writes).toEqual([]);
+  });
+
+  it("leaves a row alone if checkout re-ran on a new invoice after the snapshot", async () => {
+    mockBidderNumbers(
+      [pendingRow()],
+      [pendingRow({ 9: "https://www.paypal.com/invoice/p/#INV2-NEW" })]
+    );
+    mockExtractInvoiceIdFromUrl.mockReturnValue("INV2-X");
+    mockGetInvoiceStatus.mockResolvedValue("PAID");
+    const writes = captureWrites();
+
+    const result = await runPaypalSweep();
+
+    expect(result).toEqual({ pending: 1, resolved: 0, escalated: 0 });
+    expect(writes).toEqual([]);
+  });
+
+  it("waits for the bidder-numbers lock before writing, so it can't interleave with checkout", async () => {
+    const { withLock } = await import("../utils/asyncLock");
+    mockBidderNumbers([pendingRow()]);
+    mockExtractInvoiceIdFromUrl.mockReturnValue("INV2-X");
+    mockGetInvoiceStatus.mockResolvedValue("PAID");
+    const writes = captureWrites();
+
+    // Stand-in for a checkout holding the lock on the same spreadsheet.
+    let releaseCheckout!: () => void;
+    const checkoutHolding = withLock("bidder-numbers:bm-id", () => new Promise<void>((resolve) => { releaseCheckout = resolve; }));
+
+    const sweep = runPaypalSweep();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(writes).toEqual([]);
+
+    releaseCheckout();
+    await checkoutHolding;
+    expect(await sweep).toEqual({ pending: 1, resolved: 1, escalated: 0 });
+    expect(writes.length).toBeGreaterThan(0);
   });
 });
 

@@ -11,7 +11,7 @@ import {
   bulkUpdateItems,
   ensureFollowUpSheet
 } from '../services/itemService';
-import { checkIdempotency, saveIdempotency } from '../utils/idempotency';
+import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { updateAttendeeField } from '../services/bidderService';
 import { requireAuth } from '../middleware/requireAuth';
 import { withLock } from '../utils/asyncLock';
@@ -89,56 +89,54 @@ export default function createDataRouter() {
     // it gets the same protection for consistency's sake. A distinct lock
     // key from `auction-items:*`/`bidder-numbers:*` - a different sheet
     // entirely.
-    const cached = checkIdempotency(req, res, idempotencyKey);
-    if (cached) return;
-
     try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
+      const outcome = await withIdempotency("settings/update", idempotencyKey, async () => {
+        const client = getAuthenticatedClient(req.session.tokens);
+        const sheets = google.sheets({ version: "v4", auth: client });
 
-      await withLock(`settings:${spreadsheetId}`, async () => {
-        // 1. Get all settings
-        const result = await sheets.spreadsheets.values.get({
-          spreadsheetId,
-          range: "_Settings!A:C",
-        });
-
-        const rows = result.data.values || [];
-        let rowIndex = -1;
-
-        for (let i = 0; i < rows.length; i++) {
-          if (rows[i][0] === key) {
-            rowIndex = i + 1;
-            break;
-          }
-        }
-
-        if (rowIndex !== -1) {
-          // 2. Update existing
-          await sheets.spreadsheets.values.update({
-            spreadsheetId,
-            range: `_Settings!B${rowIndex}:C${rowIndex}`,
-            valueInputOption: "USER_ENTERED",
-            requestBody: {
-              values: [[value, description || rows[rowIndex - 1][2] || ""]],
-            },
-          });
-        } else {
-          // 3. Append new
-          await sheets.spreadsheets.values.append({
+        await withLock(`settings:${spreadsheetId}`, async () => {
+          // 1. Get all settings
+          const result = await sheets.spreadsheets.values.get({
             spreadsheetId,
             range: "_Settings!A:C",
-            valueInputOption: "USER_ENTERED",
-            requestBody: {
-              values: [[key, value, description || ""]],
-            },
           });
-        }
-      });
 
-      const response = { success: true };
-      saveIdempotency(idempotencyKey, response);
-      res.json(response);
+          const rows = result.data.values || [];
+          let rowIndex = -1;
+
+          for (let i = 0; i < rows.length; i++) {
+            if (rows[i][0] === key) {
+              rowIndex = i + 1;
+              break;
+            }
+          }
+
+          if (rowIndex !== -1) {
+            // 2. Update existing
+            await sheets.spreadsheets.values.update({
+              spreadsheetId,
+              range: `_Settings!B${rowIndex}:C${rowIndex}`,
+              valueInputOption: "USER_ENTERED",
+              requestBody: {
+                values: [[value, description || rows[rowIndex - 1][2] || ""]],
+              },
+            });
+          } else {
+            // 3. Append new
+            await sheets.spreadsheets.values.append({
+              spreadsheetId,
+              range: "_Settings!A:C",
+              valueInputOption: "USER_ENTERED",
+              requestBody: {
+                values: [[key, value, description || ""]],
+              },
+            });
+          }
+        });
+
+        return { success: true };
+      });
+      res.json(idempotentBody(outcome));
     } catch (error: any) {
       if (error.code === 404) {
         return res.status(404).json({ error: "Spreadsheet or Settings tab not found. Please check your IDs." });
@@ -154,26 +152,23 @@ export default function createDataRouter() {
       return res.status(400).json({ error: "Missing required parameters for adding item" });
     }
 
-    const cached = checkIdempotency(req, res, idempotencyKey);
-    if (cached) return;
-
     try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
+      const outcome = await withIdempotency("auction/add-item", idempotencyKey, async () => {
+        const client = getAuthenticatedClient(req.session.tokens);
+        const sheets = google.sheets({ version: "v4", auth: client });
 
-      const result = await addItem(sheets, {
-        spreadsheetId,
-        category,
-        name,
-        description,
-        value,
-        donor,
-        itemType,
-        allowMultipleWinners: !!allowMultipleWinners
+        return addItem(sheets, {
+          spreadsheetId,
+          category,
+          name,
+          description,
+          value,
+          donor,
+          itemType,
+          allowMultipleWinners: !!allowMultipleWinners
+        });
       });
-
-      saveIdempotency(idempotencyKey, result);
-      res.json(result);
+      res.json(idempotentBody(outcome));
     } catch (error: any) {
       console.error("[Server Error] add-item:", error);
       next(error);
@@ -194,21 +189,20 @@ export default function createDataRouter() {
     // re-deleting an already-blanked row is a no-op, but a retried
     // duplicate should still short-circuit like every other mutating
     // route here does).
-    const cached = checkIdempotency(req, res, idempotencyKey);
-    if (cached) return;
-
     try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
+      const outcome = await withIdempotency("auction/delete-item", idempotencyKey, async () => {
+        const client = getAuthenticatedClient(req.session.tokens);
+        const sheets = google.sheets({ version: "v4", auth: client });
 
-      const result = await deleteItem(sheets, {
-        spreadsheetId,
-        rowIndex
+        const result = await deleteItem(sheets, {
+          spreadsheetId,
+          rowIndex
+        });
+
+        clearCacheForSpreadsheet(spreadsheetId);
+        return result;
       });
-
-      clearCacheForSpreadsheet(spreadsheetId);
-      saveIdempotency(idempotencyKey, result);
-      res.json(result);
+      res.json(idempotentBody(outcome));
     } catch (error: any) {
       console.error("[Server Error] delete-item:", error);
       next(error);
@@ -250,22 +244,19 @@ export default function createDataRouter() {
       return res.status(400).json({ error: "Missing required bulk update parameters" });
     }
 
-    const cached = checkIdempotency(req, res, idempotencyKey);
-    if (cached) return;
-
     try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
+      const outcome = await withIdempotency("auction/bulk-update-items", idempotencyKey, async () => {
+        const client = getAuthenticatedClient(req.session.tokens);
+        const sheets = google.sheets({ version: "v4", auth: client });
 
-      const result = await bulkUpdateItems(sheets, {
-        spreadsheetId,
-        rowIndices,
-        field,
-        value
+        return bulkUpdateItems(sheets, {
+          spreadsheetId,
+          rowIndices,
+          field,
+          value
+        });
       });
-
-      saveIdempotency(idempotencyKey, result);
-      res.json(result);
+      res.json(idempotentBody(outcome));
     } catch (error: any) {
       console.error("[Server Error] bulk-update-items:", error);
       next(error);

@@ -1,102 +1,109 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import express from "express";
 
-describe("idempotency - Concurrency and TTL caching", () => {
-  let checkIdempotency: any;
-  let saveIdempotency: any;
-  let mockReq: any;
-  let mockRes: any;
-  let resJsonData: any;
+/**
+ * server/utils/idempotency.ts's withIdempotency. The "in-flight" and
+ * "scope" tests are the regression guards for ROADMAP.md H6: the old
+ * check-then-save helpers only recorded a key once its request had
+ * finished, so a retry arriving mid-request ran the whole action again,
+ * and keys were shared across every route.
+ */
+describe("withIdempotency", () => {
+  let withIdempotency: typeof import("../utils/idempotency").withIdempotency;
+  let idempotentBody: typeof import("../utils/idempotency").idempotentBody;
 
   beforeEach(async () => {
     vi.useFakeTimers();
-    // Reset module cache so that when the file is dynamically imported, 
-    // it registers its setInterval using vitest's fake timers.
+    // Fresh module per test, so its cleanup setInterval is registered
+    // against these fake timers and no keys leak between tests.
     vi.resetModules();
     const mod = await import("../utils/idempotency");
-    checkIdempotency = mod.checkIdempotency;
-    saveIdempotency = mod.saveIdempotency;
-
-    resJsonData = null;
-    mockReq = {} as any;
-    mockRes = {
-      json: vi.fn().mockImplementation((data) => {
-        resJsonData = data;
-        return mockRes;
-      }),
-    } as any;
+    withIdempotency = mod.withIdempotency;
+    idempotentBody = mod.idempotentBody;
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    vi.restoreAllMocks();
   });
 
-  it("returns cached responses for duplicate request keys", () => {
-    const key = "test-unique-idempotency-key";
-    const samplePayload = { success: true, bidId: 442 };
+  it("runs the action once and returns the cached result for a repeated key", async () => {
+    const fn = vi.fn().mockResolvedValue({ success: true, bidId: 442 });
 
-    // Initially, there will be no cached response
-    const firstCheck = checkIdempotency(mockReq, mockRes, key);
-    expect(firstCheck).toBeNull();
-    expect(mockRes.json).not.toHaveBeenCalled();
+    const first = await withIdempotency("route", "key-1", fn);
+    const second = await withIdempotency("route", "key-1", fn);
 
-    // Now save the result
-    saveIdempotency(key, samplePayload);
-
-    // Second request with exact key should hit the cache and receive cached payload + duplicated: true
-    const secondCheck = checkIdempotency(mockReq, mockRes, key);
-    expect(secondCheck).not.toBeNull();
-    expect(mockRes.json).toHaveBeenCalledTimes(1);
-    expect(resJsonData).toEqual({ success: true, bidId: 442, duplicated: true });
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(first).toEqual({ result: { success: true, bidId: 442 }, duplicated: false });
+    expect(second).toEqual({ result: { success: true, bidId: 442 }, duplicated: true });
   });
 
-  it("supports concurrent evaluation where first wins and subsequent reads are blocked", async () => {
-    const key = "concurrent-rapid-key";
-    const winningResult = { success: true, item: "Gift Card A" };
+  it("makes a retry that arrives while the first request is still running wait for it instead of running the action again", async () => {
+    let finish!: (value: { success: boolean }) => void;
+    const fn = vi.fn(() => new Promise<{ success: boolean }>((resolve) => { finish = resolve; }));
 
-    // Simulating rapid sequential checks on identical key during high-concurrency race condition:
-    const check1 = checkIdempotency(mockReq, mockRes, key);
-    expect(check1).toBeNull(); // Clean path for first racer
+    const first = withIdempotency("route", "key-2", fn);
+    const retry = withIdempotency("route", "key-2", fn);
+    finish({ success: true });
 
-    // First racer finishes and commits progress
-    saveIdempotency(key, winningResult);
-
-    // Second racer checking dynamically afterward
-    const check2 = checkIdempotency(mockReq, mockRes, key);
-    expect(check2).not.toBeNull();
-    expect(resJsonData).toEqual({ success: true, item: "Gift Card A", duplicated: true });
+    expect(await first).toEqual({ result: { success: true }, duplicated: false });
+    expect(await retry).toEqual({ result: { success: true }, duplicated: true });
+    expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it("correctly clears older cache entries past the 1-hour TTL interval", () => {
-    const key = "ttl-expiry-key";
-    const value = { balance: 95 };
+  it("does not cache a failure - requests waiting on it fail too, and a later retry runs the action again", async () => {
+    let fail!: (error: Error) => void;
+    const fn = vi.fn()
+      .mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; }))
+      .mockResolvedValueOnce({ success: true });
 
-    saveIdempotency(key, value);
+    const first = withIdempotency("route", "key-3", fn);
+    const waiting = withIdempotency("route", "key-3", fn);
+    fail(new Error("Sheets write failed"));
 
-    // Trigger check verifying it exists right now
-    let check = checkIdempotency(mockReq, mockRes, key);
-    expect(check).not.toBeNull();
+    await expect(first).rejects.toThrow("Sheets write failed");
+    await expect(waiting).rejects.toThrow("Sheets write failed");
 
-    // Advance physical clocks by 30 minutes (1800000ms), checking if still present
-    vi.advanceTimersByTime(1800000);
-    // Cleanup interval ticks every 10 minutes (600000ms) inside code:
-    vi.advanceTimersByTime(600000);
+    const later = await withIdempotency("route", "key-3", fn);
+    expect(later).toEqual({ result: { success: true }, duplicated: false });
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
 
-    // Reset standard mock records
-    mockRes.json.mockClear();
-    check = checkIdempotency(mockReq, mockRes, key);
-    expect(check).not.toBeNull(); // Still valid (< 1 hour)
+  it("keeps the same key on two different routes separate", async () => {
+    const restore = vi.fn().mockResolvedValue({ action: "restore" });
+    const processBundle = vi.fn().mockResolvedValue({ action: "process" });
 
-    // Advance clocks beyond 1 hour mark (e.g. 1.2 hours overall)
-    // 3600000 + 600000 ticks would be more than enough.
-    // Let's advance by 3600000 ms to expire the entry, then trigger 600000 ms to trigger the cleanup interval.
-    vi.advanceTimersByTime(3600000); 
-    vi.advanceTimersByTime(600000); 
+    await withIdempotency("bundle/restore", "shared-key", restore);
+    const other = await withIdempotency("bundle/process", "shared-key", processBundle);
 
-    // Reset standard mock records again
-    mockRes.json.mockClear();
-    check = checkIdempotency(mockReq, mockRes, key);
-    expect(check).toBeNull(); // Purged! Free to re-execute!
+    expect(processBundle).toHaveBeenCalledTimes(1);
+    expect(other).toEqual({ result: { action: "process" }, duplicated: false });
+  });
+
+  it("runs the action every time when no usable key is given", async () => {
+    const fn = vi.fn().mockResolvedValue({ success: true });
+
+    await withIdempotency("route", undefined, fn);
+    await withIdempotency("route", "", fn);
+    await withIdempotency("route", 123, fn);
+
+    expect(fn).toHaveBeenCalledTimes(3);
+  });
+
+  it("expires a completed key after the 1-hour TTL", async () => {
+    const fn = vi.fn().mockResolvedValue({ balance: 95 });
+    await withIdempotency("route", "ttl-key", fn);
+
+    // 40 minutes in (cleanup runs every 10): still cached.
+    vi.advanceTimersByTime(40 * 60 * 1000);
+    expect((await withIdempotency("route", "ttl-key", fn)).duplicated).toBe(true);
+
+    // Past the hour plus one cleanup tick: purged, so the action runs again.
+    vi.advanceTimersByTime(30 * 60 * 1000);
+    expect((await withIdempotency("route", "ttl-key", fn)).duplicated).toBe(false);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("idempotentBody flags reused results with duplicated: true and leaves fresh ones unchanged", () => {
+    expect(idempotentBody({ result: { success: true }, duplicated: false })).toEqual({ success: true });
+    expect(idempotentBody({ result: { success: true }, duplicated: true })).toEqual({ success: true, duplicated: true });
   });
 });

@@ -354,7 +354,7 @@ describe('Receipt Email-Only workflow', () => {
       .send({ bidderId: '999', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toContain('No email address found');
+    expect(response.body.error).toBe('Bidder ID 999 not found in the Bidder-Numbers sheet.');
   });
 
   it('Auth failure', async () => {

@@ -4,7 +4,6 @@ import { calculatePayPalSurcharge } from "../utils/financeUtils";
 import { normalizeRange } from "../utils/rangeUtils";
 import { validateEnv } from "../utils/validateEnv";
 import { getColumnLetter } from "../utils/columnUtils";
-import { checkIdempotency, saveIdempotency } from "../utils/idempotency";
 import { sheetCache, clearCacheForSpreadsheet, CACHE_TTL } from "../utils/sheetCache";
 import { Request, Response } from "express";
 
@@ -293,81 +292,6 @@ describe("columnUtils - getColumnLetter", () => {
     expect(getColumnLetter(1.9)).toBe("B");
   });
 });
-
-describe("idempotency", () => {
-  it("saveIdempotency with a valid key stores the response — a subsequent checkIdempotency call with the same key finds it", () => {
-    const key = "test-key-idemp-1";
-    const data = { success: true, value: 456 };
-    saveIdempotency(key, data);
-
-    const jsonMock = vi.fn();
-    const mockReq = {} as unknown as Request;
-    const mockRes = {
-      json: jsonMock
-    } as unknown as Response & MockIdempotencyRes;
-
-    const result = checkIdempotency(mockReq, mockRes, key);
-    expect(result).not.toBeNull();
-    expect(jsonMock).toHaveBeenCalledWith({ success: true, value: 456, duplicated: true });
-  });
-
-  it("saveIdempotency with an empty string key does nothing — checkIdempotency returns null", () => {
-    const jsonMock = vi.fn();
-    const mockReq = {} as unknown as Request;
-    const mockRes = {
-      json: jsonMock
-    } as unknown as Response & MockIdempotencyRes;
-
-    saveIdempotency("", { success: true });
-    const result = checkIdempotency(mockReq, mockRes, "");
-    expect(result).toBeNull();
-    expect(jsonMock).not.toHaveBeenCalled();
-  });
-
-  it("checkIdempotency with a key that was never saved returns null", () => {
-    const jsonMock = vi.fn();
-    const mockReq = {} as unknown as Request;
-    const mockRes = {
-      json: jsonMock
-    } as unknown as Response & MockIdempotencyRes;
-
-    const result = checkIdempotency(mockReq, mockRes, "non-existent-key-123");
-    expect(result).toBeNull();
-    expect(jsonMock).not.toHaveBeenCalled();
-  });
-
-  it("saveIdempotency overwrites the first save when called with the same key twice", () => {
-    const key = "test-key-overwrite-2";
-    saveIdempotency(key, { name: "initial" });
-    saveIdempotency(key, { name: "updated" });
-
-    const jsonMock = vi.fn();
-    const mockReq = {} as unknown as Request;
-    const mockRes = {
-      json: jsonMock
-    } as unknown as Response & MockIdempotencyRes;
-
-    const result = checkIdempotency(mockReq, mockRes, key);
-    expect(result).not.toBeNull();
-    expect(jsonMock).toHaveBeenCalledWith({ name: "updated", duplicated: true });
-  });
-
-  it("checkIdempotency returns null for key that does not exist without calling res.json", () => {
-    const jsonMock = vi.fn();
-    const mockReq = {} as unknown as Request;
-    const mockRes = {
-      json: jsonMock
-    } as unknown as Response & MockIdempotencyRes;
-
-    const result = checkIdempotency(mockReq, mockRes, "no-exist-no-call");
-    expect(result).toBeNull();
-    expect(jsonMock).not.toHaveBeenCalled();
-  });
-});
-
-interface MockIdempotencyRes {
-  json: ReturnType<typeof vi.fn>;
-}
 
 describe("sheetCache", () => {
   afterEach(() => {

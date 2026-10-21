@@ -7,6 +7,7 @@ import { buildBidderReceiptWithInvoice, buildAllBidderReceiptsWithInvoices } fro
 import { PayPalService } from '../services/paypalService';
 import { requireAuth } from '../middleware/requireAuth';
 import { withLock } from '../utils/asyncLock';
+import { withIdempotency, idempotentBody } from '../utils/idempotency';
 
 export default function createReceiptsRouter() {
   const router = Router();
@@ -72,28 +73,36 @@ export default function createReceiptsRouter() {
   });
 
 
+  // Emailing resolves each bidder's PayPal invoice (ROADMAP.md H2), so,
+  // like /generate, these routes need `paypalIsSandbox` - and default to
+  // sandbox unless the client's Config toggle explicitly says false.
   router.post("/email-all", async (req, res, next) => {
-    const { spreadsheetId, itemsSpreadsheetId } = req.body;
+    const { spreadsheetId, itemsSpreadsheetId, paypalIsSandbox, idempotencyKey } = req.body;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
 
     try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sentCount = await processAllEmails(client, spreadsheetId, itemsSpreadsheetId);
-      res.json({ success: true, sentCount });
+      const outcome = await withIdempotency("receipts/email-all", idempotencyKey, async () => {
+        const client = getAuthenticatedClient(req.session.tokens);
+        const paypal = new PayPalService({ isSandbox: paypalIsSandbox !== false });
+        const result = await processAllEmails(client, spreadsheetId, itemsSpreadsheetId, paypal);
+        return { success: true, ...result };
+      });
+      res.json(idempotentBody(outcome));
     } catch (error) {
       next(error);
     }
   });
 
   router.post("/email-only", async (req, res, next) => {
-    const { bidderId, spreadsheetId, itemsSpreadsheetId } = req.body;
+    const { bidderId, spreadsheetId, itemsSpreadsheetId, paypalIsSandbox } = req.body;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
 
     try {
       const client = getAuthenticatedClient(req.session.tokens);
-      const result = await processEmail(client, spreadsheetId, String(bidderId), itemsSpreadsheetId);
+      const paypal = new PayPalService({ isSandbox: paypalIsSandbox !== false });
+      const result = await processEmail(client, spreadsheetId, String(bidderId), itemsSpreadsheetId, paypal);
 
-      if (!result.success) return res.status(400).json({ error: result.error });
+      if (result.success === false) return res.status(400).json({ error: result.error });
 
       res.json({ success: true, result });
     } catch (error) {

@@ -451,14 +451,41 @@ describe('Checkout workflow', () => {
       .set(authHeader)
       .send(payload);
 
-    expect(res2.status).toBe(200);
+    // Same status as the original (a deferred checkout stays a 202), so a
+    // retried request reads exactly like the first response did.
+    expect(res2.status).toBe(202);
     expect(res2.body.duplicated).toBe(true);
+    expect(res2.body.deferred).toBe(true);
     // 3 Bidder-Numbers writes must only have run once - the second,
     // duplicate submission is served entirely from the idempotency cache
     // without re-executing checkoutMarkPaid: the G:I checkbox/label
     // range, the L timestamp cell, and (new, since no invoice existed
     // for bidder 42 yet) the J:K invoice-URL/amount write that creating
     // a fresh PayPal invoice now makes.
+    expect(updateCallCount).toBe(3);
+  });
+
+  it('Idempotency — a retry sent while the first checkout is still running does not run checkout again (ROADMAP.md H6)', async () => {
+    mockWonItemForBidder42();
+    const payload = {
+      bidderId: "42",
+      spreadsheetId: "test-spreadsheet-id",
+      itemsSpreadsheetId: "test-items-spreadsheet-id",
+      bidderNumbersSheet: "Bidder-Numbers",
+      paymentMethod: "credit_card",
+      idempotencyKey: crypto.randomUUID()
+    };
+
+    // Both requests in flight at once - the second arrives before the
+    // first has finished, which the old check-then-save helpers missed.
+    const [res1, res2] = await Promise.all([
+      request(app).post("/api/auction/checkout-mark-paid").set(authHeader).send(payload),
+      request(app).post("/api/auction/checkout-mark-paid").set(authHeader).send(payload),
+    ]);
+
+    expect([res1.status, res2.status]).toEqual([202, 202]);
+    expect([res1.body.duplicated, res2.body.duplicated].filter(Boolean)).toHaveLength(1);
+    // Same 3 writes as one checkout - not 6.
     expect(updateCallCount).toBe(3);
   });
 

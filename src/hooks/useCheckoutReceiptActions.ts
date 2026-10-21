@@ -27,12 +27,18 @@ export function useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, f
         body: JSON.stringify({
           bidderId: winner.bidderId,
           spreadsheetId,
-          itemsSpreadsheetId
+          itemsSpreadsheetId,
+          // The server resolves the bidder's PayPal invoice before emailing,
+          // so it needs the same sandbox/live mode as receipt printing.
+          paypalIsSandbox
         }),
         credentials: "include"
       });
 
-      if (!res.ok) throw new Error("Failed to send email");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to send email");
+      }
       toast.success(`Receipt emailed to ${winner.name}`);
     } catch (error: any) {
       toast.error(error.message);

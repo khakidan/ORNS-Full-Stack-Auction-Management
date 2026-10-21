@@ -298,7 +298,9 @@ export async function resolveInvoiceUrl(
  * Builds one bidder's receipt AND resolves/writes their PayPal invoice in
  * one call - the Node-side replacement for
  * Class_ReceiptManager.gs's `getOrCreateInvoiceUrl` being called from
- * GAS. Used by the `/generate` (single-receipt) route.
+ * GAS. Used by the `/generate` (single-receipt) route and checkout's
+ * credit-card path. Callers must hold the `bidder-numbers:<spreadsheetId>`
+ * lock (see attachInvoice).
  */
 export async function buildBidderReceiptWithInvoice(
   client: any,
@@ -310,20 +312,41 @@ export async function buildBidderReceiptWithInvoice(
   const receiptResult = await buildBidderReceipt(client, spreadsheetId, itemsSpreadsheetId, bidderId);
   if (receiptResult.success === false) return receiptResult;
 
+  const attached = await attachInvoice(client, spreadsheetId, receiptResult.receipt, paypal);
+  if (attached.success === false) return attached;
+  return { success: true, receipt: attached.receipt };
+}
+
+/**
+ * Gives an already-built receipt its PayPal invoice: reuses the bidder's
+ * Column J invoice when its amount still matches, otherwise replaces or
+ * creates one (resolveInvoiceUrl), saving any new invoice to J/K
+ * straight away. Also returns the bidder's 1-based Bidder-Numbers row.
+ *
+ * Callers must hold the `bidder-numbers:<spreadsheetId>` lock, so two
+ * requests for the same bidder can't both see "no invoice yet" and each
+ * create (and send) one.
+ */
+export async function attachInvoice(
+  client: any,
+  spreadsheetId: string,
+  receipt: BidderReceiptData,
+  paypal: PayPalService
+): Promise<{ success: true; receipt: BidderReceiptWithInvoice; rowIndex: number } | { success: false; error: string }> {
   const sheets = google.sheets({ version: "v4", auth: client });
   const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });
-  const existing = findExistingInvoice(bNum.data.values || [], bidderId);
+  const existing = findExistingInvoice(bNum.data.values || [], receipt.bidId);
   if (!existing) {
-    return { success: false, error: `Bidder ID ${bidderId} not found in the Bidder-Numbers sheet.` };
+    return { success: false, error: `Bidder ID ${receipt.bidId} not found in the Bidder-Numbers sheet.` };
   }
 
-  const { paymentUrl, totalAmount, changed } = await resolveInvoiceUrl(paypal, receiptResult.receipt, bidderId, existing);
+  const { paymentUrl, totalAmount, changed } = await resolveInvoiceUrl(paypal, receipt, receipt.bidId, existing);
 
   if (changed) {
     await persistInvoice(sheets, spreadsheetId, existing.rowIndex, paymentUrl, totalAmount);
   }
 
-  return { success: true, receipt: { ...receiptResult.receipt, paymentUrl, adjustedTotal: totalAmount } };
+  return { success: true, receipt: { ...receipt, paymentUrl, adjustedTotal: totalAmount }, rowIndex: existing.rowIndex };
 }
 
 /** Writes one bidder's freshly created invoice URL/amount into Bidder-Numbers columns J/K. */
@@ -367,9 +390,11 @@ export async function buildAllBidderReceiptsWithInvoices(
   client: any,
   spreadsheetId: string,
   itemsSpreadsheetId: string,
-  paypal: PayPalService
+  paypal: PayPalService,
+  /** Only these bidders get an invoice (and a result) - e.g. email-all skips bidders with no email address. */
+  include: (receipt: BidderReceiptData) => boolean = () => true
 ): Promise<BidderReceiptWithInvoice[]> {
-  const receipts = await buildAllBidderReceipts(client, spreadsheetId, itemsSpreadsheetId);
+  const receipts = (await buildAllBidderReceipts(client, spreadsheetId, itemsSpreadsheetId)).filter(include);
 
   const sheets = google.sheets({ version: "v4", auth: client });
   const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });

@@ -3,6 +3,7 @@ import { OAuth2Client } from "google-auth-library";
 import { getOAuthClient } from "./oauth";
 import { getAdminFirestore } from "./firebaseAdmin";
 import { PayPalService } from "./paypalService";
+import { withLock } from "../utils/asyncLock";
 
 /**
  * Node-side port of
@@ -28,6 +29,7 @@ const SWEEPER_CREDENTIAL_DOC = "paypalSweeperAuth";
 const SWEEPER_STATUS_DOC = "paypalSweeperStatus";
 const TEN_MINUTES_MS = 10 * 60 * 1000;
 const DEFAULT_INTERVAL_MINUTES = 5;
+const PAYPAL_PENDING_LABEL = "PayPal Verification Pending";
 
 export async function persistSweeperCredential(refreshToken: string, updatedBy: string): Promise<void> {
   const db = getAdminFirestore();
@@ -204,18 +206,14 @@ async function runPaypalSweepInner(): Promise<PaypalSweepOutcome> {
   let escalated = 0;
 
   for (let i = rows.length - 1; i >= 1; i--) {
-    const row = rows[i];
-    const methodLabel = row[8];
-    if (methodLabel !== "PayPal Verification Pending") continue;
+    const snapshotRow = rows[i];
+    if (snapshotRow[8] !== PAYPAL_PENDING_LABEL) continue;
     pending++;
 
     const rowNumber = i + 1;
-    const bidderId = row[0];
-    const firstName = row[1];
-    const lastName = row[2];
-    const invoiceUrlCell = row[9];
-    const amountDue = row[10];
-    const timestampStr = row[11];
+    const bidderId = snapshotRow[0];
+    const lastName = snapshotRow[2];
+    const invoiceUrlCell = snapshotRow[9];
 
     try {
       const invoiceId = paypal.extractInvoiceIdFromUrl(invoiceUrlCell);
@@ -224,77 +222,125 @@ async function runPaypalSweepInner(): Promise<PaypalSweepOutcome> {
         continue;
       }
 
+      // The PayPal lookup happens outside the lock, so a slow PayPal
+      // response never holds up checkout or bid recording.
       const liveStatus = await paypal.getInvoiceStatus(invoiceId);
       console.log(`[PayPalSweeper] Bidder #${bidderId} (${lastName}) -> PayPal status: ${liveStatus}`);
 
-      if (liveStatus === "PAID" || liveStatus === "MARKED_AS_PAID") {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range: `'${bidderNumbersSheet}'!G${rowNumber}:I${rowNumber}`,
-          valueInputOption: "RAW",
-          requestBody: { values: [[true, true, "Credit Card / PayPal"]] },
-        });
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range: `'${bidderNumbersSheet}'!L${rowNumber}`,
-          valueInputOption: "RAW",
-          requestBody: { values: [[""]] },
-        });
-        resolved++;
-        continue;
-      }
-
-      const initTime = timestampStr ? new Date(timestampStr).getTime() : 0;
-
-      if (!initTime || isNaN(initTime)) {
-        // Fallback safety if the timestamp cell is blank: seed it now.
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range: `'${bidderNumbersSheet}'!L${rowNumber}`,
-          valueInputOption: "RAW",
-          requestBody: { values: [[new Date().toISOString()]] },
-        });
-        continue;
-      }
-
-      if (now - initTime > TEN_MINUTES_MS) {
-        console.warn(`[PayPalSweeper] Bidder #${bidderId} verification exceeded the timeout. Escalating to ${PAYPAL_FOLLOW_UP_SHEET}.`);
-        await ensureFollowUpSheet(sheets, spreadsheetId);
-        await sheets.spreadsheets.values.append({
-          spreadsheetId,
-          range: `${PAYPAL_FOLLOW_UP_SHEET}!A:F`,
-          valueInputOption: "USER_ENTERED",
-          requestBody: {
-            values: [[
-              new Date().toISOString(),
-              bidderId,
-              `${firstName} ${lastName}`.trim(),
-              amountDue,
-              invoiceUrlCell,
-              `PayPal timeout error. Terminal status remained: '${liveStatus}' after 10 minutes checking execution window.`,
-            ]],
-          },
-        });
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range: `'${bidderNumbersSheet}'!G${rowNumber}:I${rowNumber}`,
-          valueInputOption: "RAW",
-          requestBody: { values: [[false, false, "Failed Verification - Follow Up Required"]] },
-        });
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range: `'${bidderNumbersSheet}'!L${rowNumber}`,
-          valueInputOption: "RAW",
-          requestBody: { values: [[""]] },
-        });
-        escalated++;
-      }
+      const outcome = await withLock(`bidder-numbers:${spreadsheetId}`, () =>
+        applySweepResultLocked(sheets, spreadsheetId, bidderNumbersSheet, rowNumber, snapshotRow, liveStatus, now)
+      );
+      if (outcome === "resolved") resolved++;
+      if (outcome === "escalated") escalated++;
     } catch (rowErr: any) {
       console.error(`[PayPalSweeper] Row ${rowNumber} failed: ${rowErr.message || rowErr}`);
     }
   }
 
   return { pending, resolved, escalated };
+}
+
+
+/**
+ * Applies one pending row's PayPal result, holding the same
+ * `bidder-numbers:<spreadsheetId>` lock checkout and bid recording use
+ * (ROADMAP.md H5). The sweep's sheet snapshot can be minutes old by the
+ * time a row comes up, so this re-reads the row first and leaves it alone
+ * unless it is still the same bidder, still pending, and still on the
+ * same invoice. Without that, a bidder staff had just marked "Cash" could
+ * be overwritten with "Failed Verification - Follow Up Required".
+ */
+async function applySweepResultLocked(
+  sheets: ReturnType<typeof google.sheets>,
+  spreadsheetId: string,
+  bidderNumbersSheet: string,
+  rowNumber: number,
+  snapshotRow: any[],
+  liveStatus: string,
+  now: number
+): Promise<"resolved" | "escalated" | "changed" | "waiting"> {
+  const fresh = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'${bidderNumbersSheet}'!A${rowNumber}:L${rowNumber}`,
+  });
+  const row = fresh.data.values?.[0] || [];
+  const stillSamePendingRow =
+    String(row[0] ?? "") === String(snapshotRow[0] ?? "") &&
+    row[8] === PAYPAL_PENDING_LABEL &&
+    String(row[9] ?? "") === String(snapshotRow[9] ?? "");
+  if (!stillSamePendingRow) {
+    console.log(`[PayPalSweeper] Row ${rowNumber} changed since the sweep started (now '${row[8] ?? ""}'); leaving it alone.`);
+    return "changed";
+  }
+
+  const bidderId = row[0];
+  const firstName = row[1];
+  const lastName = row[2];
+  const invoiceUrlCell = row[9];
+  const amountDue = row[10];
+  const timestampStr = row[11];
+
+  if (liveStatus === "PAID" || liveStatus === "MARKED_AS_PAID") {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${bidderNumbersSheet}'!G${rowNumber}:I${rowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[true, true, "Credit Card / PayPal"]] },
+    });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${bidderNumbersSheet}'!L${rowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[""]] },
+    });
+    return "resolved";
+  }
+
+  const initTime = timestampStr ? new Date(timestampStr).getTime() : 0;
+
+  if (!initTime || isNaN(initTime)) {
+    // Fallback safety if the timestamp cell is blank: seed it now.
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${bidderNumbersSheet}'!L${rowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[new Date().toISOString()]] },
+    });
+    return "waiting";
+  }
+
+  if (now - initTime <= TEN_MINUTES_MS) return "waiting";
+
+  console.warn(`[PayPalSweeper] Bidder #${bidderId} verification exceeded the timeout. Escalating to ${PAYPAL_FOLLOW_UP_SHEET}.`);
+  await ensureFollowUpSheet(sheets, spreadsheetId);
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: `${PAYPAL_FOLLOW_UP_SHEET}!A:F`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [[
+        new Date().toISOString(),
+        bidderId,
+        `${firstName} ${lastName}`.trim(),
+        amountDue,
+        invoiceUrlCell,
+        `PayPal timeout error. Terminal status remained: '${liveStatus}' after 10 minutes checking execution window.`,
+      ]],
+    },
+  });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${bidderNumbersSheet}'!G${rowNumber}:I${rowNumber}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[false, false, "Failed Verification - Follow Up Required"]] },
+  });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${bidderNumbersSheet}'!L${rowNumber}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[""]] },
+  });
+  return "escalated";
 }
 
 /**

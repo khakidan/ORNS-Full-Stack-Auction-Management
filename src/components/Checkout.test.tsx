@@ -18,7 +18,8 @@ vi.mock("@/context/ConfigContext", () => ({
       bidManagementSpreadsheetId: "mock-spreadsheet-id",
       auctionItemsSpreadsheetId: "mock-items-spreadsheet-id",
       receiptFolderId: "mock-folder-id",
-      bidManagementSheet: "Bid-Management"
+      bidManagementSheet: "Bid-Management",
+      paypalIsSandbox: false
     }
   })
 }));
@@ -140,7 +141,7 @@ describe("Checkout", () => {
       })
     );
     const printBody = JSON.parse(vi.mocked(fetchWithRetry).mock.calls[0][1]!.body as string);
-    expect(printBody).toEqual({ spreadsheetId: "mock-spreadsheet-id", receiptFolderId: "mock-folder-id", itemsSpreadsheetId: "mock-items-spreadsheet-id" });
+    expect(printBody).toEqual({ spreadsheetId: "mock-spreadsheet-id", receiptFolderId: "mock-folder-id", itemsSpreadsheetId: "mock-items-spreadsheet-id", paypalIsSandbox: false });
   });
 
   it("Email All Winners button calls the correct endpoint", async () => {
@@ -168,7 +169,14 @@ describe("Checkout", () => {
       })
     );
     const emailBody = JSON.parse(vi.mocked(fetchWithRetry).mock.calls[0][1]!.body as string);
-    expect(emailBody).toEqual({ spreadsheetId: "mock-spreadsheet-id", itemsSpreadsheetId: "mock-items-spreadsheet-id" });
+    // paypalIsSandbox matters: emailing now resolves each bidder's PayPal
+    // invoice, so a missing flag would mean sandbox links in live mode.
+    expect(emailBody).toEqual({
+      spreadsheetId: "mock-spreadsheet-id",
+      itemsSpreadsheetId: "mock-items-spreadsheet-id",
+      paypalIsSandbox: false,
+      idempotencyKey: expect.any(String)
+    });
   });
 
   it("Per-bidder receipt buttons", async () => {
@@ -214,6 +222,8 @@ describe("Checkout", () => {
         body: expect.stringContaining('"bidderId":"101"')
       })
     );
+    const emailOnlyCall = vi.mocked(fetchWithRetry).mock.calls.find(([url]) => String(url).includes("/receipts/email-only"))!;
+    expect(JSON.parse(emailOnlyCall[1]!.body as string).paypalIsSandbox).toBe(false);
   });
 
   it("Empty state — no winners yet", async () => {

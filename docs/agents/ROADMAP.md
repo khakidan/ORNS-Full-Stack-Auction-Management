@@ -14,17 +14,7 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 
 ### High - money path / data integrity
 
-- **H2. Emailed receipts can link to a stale or cancelled invoice.** `processEmail` (`server/services/emailService.ts`) uses whatever URL is cached in Column J, but computes the "Pay $X" button amount fresh from the current total. If the bidder won more items since the invoice was made, the link pays the old amount - or points at an invoice `resolveInvoiceUrl` has since cancelled. With no Column J value at all, it falls back to a bare `https://www.paypal.com` link. Should resolve the invoice via `resolveInvoiceUrl` (same as the receipt routes) before emailing.
-
-- **H3. Email-all re-sends on retry, and email construction is unescaped.**
-  - No per-bidder "emailed" marker exists, so a retried `/api/receipts/email-all` (`fetchWithRetry` in `src/services/google-api.ts` auto-retries any 5xx, POSTs included) re-emails every bidder. `processAllEmails` (`server/services/receiptService.ts`) also re-reads three full sheets per bidder, making Sheets quota 429s/timeouts - and therefore retries - likely at real auction scale.
-  - `createRawEmail` interpolates sheet-sourced values straight into the `To:`/`Subject:` headers. A CR/LF in a sheet cell can inject extra headers (e.g. `Bcc:`), sending from the staff member's Gmail to an address nobody chose.
-  - The subject isn't RFC 2047-encoded, so non-ASCII names ("José") arrive mangled.
-  - `generateEmailHtml` interpolates names/item names/IDs and the payment URL into HTML without escaping.
-
-- **H5. PayPal sweeper writes Bidder-Numbers without the bidder lock.** `runPaypalSweepInner` (`server/services/paypalSweeperJob.ts`) reads a snapshot, then writes G:I/L per row without `withLock('bidder-numbers:...')`. If staff mark a pending bidder as Cash mid-sweep, the sweeper can then overwrite that row with "Failed Verification - Follow Up Required".
-
-- **H6. Idempotency doesn't stop concurrent duplicates.** `server/utils/idempotency.ts` checks for a key at request start but only saves it after the work succeeds, so a retry arriving while the first request is still in flight runs the full operation again - the exact case the key exists to prevent. Keys are also global (not scoped per route or per user), so the same key on two routes returns the wrong cached response. Track in-flight keys (store a pending promise) and namespace keys by route.
+Nothing outstanding - H1-H7 are all fixed (see `CHANGELOG.md`).
 
 ### Medium - security hardening / operational
 

@@ -25,6 +25,8 @@ This sheet tracks all event registrations, active bidders, and their checkout/pa
 | **Column J** | `Invoice URL` | String | **Automated Field**: cached PayPal invoice checkout URL |
 | **Column K** | `Invoiced Amount` | Number | **Automated Field**: invoice total including PayPal processing fees |
 | **Column L** | *(no header)* | String (ISO) | **Automated Field**: timestamp set when checkout defers to "PayPal Verification Pending"; read and cleared by the PayPal sweeper (`server/services/paypalSweeperJob.ts`) |
+| **Column M** | `Receipt Emailed At` | String (ISO) | **Automated Field**: when this bidder's receipt was last emailed (`emailService.ts`'s `recordReceiptEmailed`). Header written by the first Email All run |
+| **Column N** | `Receipt Emailed Invoice` | String | **Automated Field**: the invoice link that email carried. Email All skips a bidder whose Column N equals their current Column J, so a re-run never re-sends an unchanged receipt. Clear it to force a re-send |
 
 ### Sheet: 'Bug-Reports'
 

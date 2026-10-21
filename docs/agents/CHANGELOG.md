@@ -6,6 +6,41 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Fixed
 
+- **ROADMAP.md H2/H3 (2026-10-21 code audit): receipt emails linked stale invoices, re-sent on every batch run, and were built from unescaped sheet text.**
+  - **H2: wrong invoice link.** `processEmail` emailed whatever URL was cached in Bidder-Numbers Column J, possibly for an older total or one `resolveInvoiceUrl` had already cancelled, or a bare `https://www.paypal.com` link when there was none. Meanwhile it computed the "Pay $X" amount fresh, so the button and the link could disagree. Emails now resolve the invoice exactly as receipt printing does: a new `attachInvoice` in `receiptDataService.ts`, split out of `buildBidderReceiptWithInvoice`, runs under the `bidder-numbers:` lock. The email shows that invoice's own `adjustedTotal`. The email routes now take `paypalIsSandbox` like the generate routes, and the client sends it (`useCheckoutReceiptActions.ts`/`useCheckoutBatchActions.ts`). Without it, live mode would have emailed sandbox links.
+  - **H3: re-sends.** Email All had no record of who was already emailed, so a retried or re-clicked batch emailed everyone again. It also re-read three full sheets plus userinfo per bidder, which makes quota errors and timeouts (and so retries) likely. `processAllEmails` now:
+    - resolves every invoice once, under the lock, skipping bidders with no valid address (no invoice created for them);
+    - records each send in new Bidder-Numbers columns M (`Receipt Emailed At`) and N (`Receipt Emailed Invoice`), with the header written on first run (see `schema.md`);
+    - skips a bidder whose Column N already equals their current invoice, so a re-run only emails bidders whose total changed;
+    - stops with an explicit error if a send can't be recorded.
+
+    The route is also idempotent (`withIdempotency`, client sends a key), and the toast now reports sent/skipped/failed counts instead of "being sent... check in a few minutes".
+  - **H3: unsafe construction.**
+    - `createRawEmail` strips CR/LF from every header value, so a line break in a name can't inject `Bcc:`.
+    - Non-ASCII subjects and From names are RFC 2047-encoded, so "José" arrives intact.
+    - The recipient must be a single plain address (`isValidEmailAddress`); `"a@x.com, b@y.com"` is refused.
+    - `generateEmailHtml` escapes every interpolated value, and only allows an http(s) link on the Pay button.
+  - Tests: rewrote `emailService.test.ts` and `receiptService.test.ts` against stateful Sheets/Gmail/PayPal mocks (new `server/test/helpers/receiptSheets.ts`). They cover:
+    - invoice create, replace-stale, and reuse;
+    - the M/N records, and a re-run sending nothing;
+    - only the bidder whose total changed getting re-sent;
+    - invalid and multi-address skips;
+    - one failed send not aborting the batch;
+    - the stop when a record can't be written;
+    - header injection, encoding, HTML escaping, and non-http links.
+
+    Because `processEmail`/`processAllEmails` changed signature, these can't be run against the pre-fix code the way the H1/H5/H6 tests were.
+
+- **ROADMAP.md H5 (2026-10-21 code audit): the PayPal sweeper could overwrite a checkout.** `runPaypalSweepInner` worked from a snapshot of Bidder-Numbers and wrote rows without the `bidder-numbers:` lock. A bidder staff marked "Cash" mid-sweep could then be overwritten with "Failed Verification - Follow Up Required". The PayPal status lookup still runs outside the lock (so slow PayPal responses never hold up checkout), but each row's writes now happen in `applySweepResultLocked` under the lock. It re-reads the row first and leaves it alone unless it is still the same bidder, still pending, and on the same invoice. Three new tests (staff marked Cash after the snapshot; checkout re-ran on a new invoice; the sweep waits for a held lock) all fail against the pre-fix code.
+
+- **ROADMAP.md H6 (2026-10-21 code audit): idempotency keys didn't stop concurrent duplicates.** `checkIdempotency`/`saveIdempotency` only recorded a key once its request had finished, so a retry arriving mid-request (exactly what `fetchWithRetry` sends after a timeout) ran the whole action again. Keys were also global across routes.
+  - Replaced both with `withIdempotency(scope, key, fn)` (`server/utils/idempotency.ts`). It tracks in-flight keys, so a concurrent retry waits for and shares the first run's result. A failure is never cached, so a later retry runs again. Keys are namespaced per route.
+  - All 10 mutating routes moved over (bundle process/restore, settings update, item add/delete/bulk-update, record-winning-bid, checkout, walk-in, check-in-with-bid), plus email-all.
+  - A duplicate checkout now returns the original's status (202 for a deferred PayPal verification) instead of always 200; the client accepts either.
+  - New unit tests cover in-flight sharing, failure not cached, per-route scoping, and TTL. A new route test (two simultaneous checkouts with the same key: 3 writes, not 6) fails against the pre-fix code.
+
+- Totals: 1129 -> 1142 (506 backend / 636 frontend). `tsc --noEmit` clean.
+
 - **ROADMAP.md H1 (2026-10-21 code audit): batch receipt generation could send bidders duplicate PayPal invoices.** `buildAllBidderReceiptsWithInvoices` (`server/services/receiptDataService.ts`) created *and sent* each bidder's invoice (PayPal emails the bidder on send) but only saved the URLs/amounts to Bidder-Numbers J/K in one `batchUpdate` after the whole loop. Any run that died part-way - a Cloud Run request timeout, a Sheets 429, or `fetchWithRetry` re-running the POST after a 5xx - left invoices sent but unrecorded, so the next run created and sent new ones. The receipt routes also didn't take the `bidder-numbers:` lock that checkout's own invoice creation holds, so a receipt and a checkout (or two receipt requests) for the same bidder could both create an invoice.
   - Each new invoice's J/K is now written immediately after it's created (shared `persistInvoice` helper, also used by `buildBidderReceiptWithInvoice`). If that write fails, the batch stops with an error naming the bidder, the invoice URL, and the sheet row to fill by hand, rather than skipping the bidder and carrying on sending more invoices that nothing records. A failure to *create* an invoice still just skips that bidder, as before.
   - `/api/receipts/generate` and `/generate-all` (`server/routes/receiptRoutes.ts`) now wrap invoice resolution in `withLock('bidder-numbers:<spreadsheetId>')`, at route level rather than inside the service, since `checkoutMarkPaid` already holds that same non-reentrant lock when it calls `buildBidderReceiptWithInvoice`. A retried or concurrent run now waits, then reuses the invoices the first run saved.
