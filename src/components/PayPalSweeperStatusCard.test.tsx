@@ -31,10 +31,10 @@ describe("PayPalSweeperStatusCard", () => {
       credentialUpdatedBy: "staff@orns.org",
       credentialUpdatedAt: "2026-01-01T00:00:00.000Z",
       intervalMinutes: 5,
-      scheduleRunning: true,
+      scheduleActive: true,
+      lastScheduledRunAt: "2026-01-01T00:05:00.000Z",
       lastRunAt: "2026-01-01T00:05:00.000Z",
       lastResult: { pending: 1, resolved: 1, escalated: 0 },
-      nextRunAt: "2026-01-01T00:10:00.000Z",
     });
 
     render(<PayPalSweeperStatusCard />);
@@ -50,17 +50,35 @@ describe("PayPalSweeperStatusCard", () => {
       credentialUpdatedBy: null,
       credentialUpdatedAt: null,
       intervalMinutes: 5,
-      scheduleRunning: true,
+      scheduleActive: false,
+      lastScheduledRunAt: null,
       lastRunAt: null,
       lastResult: null,
-      nextRunAt: null,
     });
 
     render(<PayPalSweeperStatusCard />);
 
     await waitFor(() => expect(screen.getByText("Needs Attention")).toBeInTheDocument());
     expect(screen.getByText(/Not configured yet - sign in once to enable/)).toBeInTheDocument();
-    expect(screen.getByText(/No runs yet since the server last started/)).toBeInTheDocument();
+    expect(screen.getByText(/No runs recorded yet/)).toBeInTheDocument();
+  });
+
+  it("shows Paused (not Needs Attention) when the credential is fine but the Cloud Scheduler job isn't running - normal off-season", async () => {
+    mockedGetStatus.mockResolvedValue({
+      credentialConfigured: true,
+      credentialUpdatedBy: "staff@orns.org",
+      credentialUpdatedAt: "2026-01-01T00:00:00.000Z",
+      intervalMinutes: 5,
+      scheduleActive: false,
+      lastScheduledRunAt: "2025-10-01T00:00:00.000Z",
+      lastRunAt: "2025-10-01T00:00:00.000Z",
+      lastResult: { pending: 0, resolved: 0, escalated: 0 },
+    });
+
+    render(<PayPalSweeperStatusCard />);
+
+    await waitFor(() => expect(screen.getByText("Paused")).toBeInTheDocument());
+    expect(screen.getByText("Paused or not set up")).toBeInTheDocument();
   });
 
   it("shows an unreachable-server state without crashing when the status fetch fails", async () => {
@@ -77,10 +95,10 @@ describe("PayPalSweeperStatusCard", () => {
       credentialUpdatedBy: "staff@orns.org",
       credentialUpdatedAt: "2026-01-01T00:00:00.000Z",
       intervalMinutes: 5,
-      scheduleRunning: true,
+      scheduleActive: true,
+      lastScheduledRunAt: "2026-01-01T00:05:00.000Z",
       lastRunAt: "2026-01-01T00:05:00.000Z",
       lastResult: { pending: 1, resolved: 1, escalated: 0 },
-      nextRunAt: "2026-01-01T00:10:00.000Z",
     });
     mockedRunNow.mockResolvedValue({ pending: 0, resolved: 0, escalated: 0 });
 

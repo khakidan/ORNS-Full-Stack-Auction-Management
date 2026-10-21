@@ -6,6 +6,15 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Fixed
 
+- **ROADMAP.md M4: the PayPal sweeper runs from Cloud Scheduler instead of an in-process timer.** The `setInterval` in `server.ts` needed Cloud Run's instance-based billing (and realistically a minimum of 1 instance) to fire reliably, which costs money all year for an app used one night a year.
+  - New `POST /internal/paypal-sweep` (`server/routes/schedulerRoutes.ts`, no session) runs one sweep when the `X-Sweeper-Secret` header matches `SWEEPER_TRIGGER_SECRET`. It returns 401 on a wrong secret, and 404 when the variable is unset, which is the local default.
+  - A Cloud Scheduler job calls it every 5 minutes; it is resumed before the auction and paused after. Setup is in `README.md` "Deployment".
+  - Removed `startPaypalSweeperSchedule` and `PAYPAL_SWEEPER_INTERVAL_MINUTES`.
+  - `runPaypalSweep(trigger)` now runs one sweep at a time (a concurrent call shares the running one's result), and records Cloud Scheduler runs (`scheduledAt` in `system/paypalSweeperStatus`).
+  - The status card replaces "Next expected run" with an "Automatic schedule" row, and shows **Paused** (not "Needs Attention") when the credential is fine but no scheduled run happened in the last 15 minutes.
+  - Cloud Run keeps max instances = 1 (already set), minimum 0, and request-based billing.
+  - Tests: new `schedulerRoutes.test.ts`; sweeper tests for scheduled-run tracking and single-flight; status card test for Paused. Backend 530 -> 533, frontend 636 -> 637, total 1166 -> 1170.
+
 - **ROADMAP.md M1/M2/M3/M5/M6/M7 (2026-10-21 code audit): security hardening and operational fixes.**
   - **M1: unauthenticated endpoints.**
     - Removed `POST /log`. Nothing in the client called it, and it printed up to 5 MB of anyone's JSON into the server logs.

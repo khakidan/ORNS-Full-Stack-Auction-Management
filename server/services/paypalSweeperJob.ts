@@ -11,8 +11,9 @@ import { withLock } from "../utils/asyncLock";
  * `checkPendingPayPalInvoices` (Code Hardening item #2, Step 4) - a
  * standing background service, not "data Node fetches on request" like
  * Steps 1-3, so it needs its own credential and its own scheduling
- * (see startPaypalSweeperSchedule below) rather than piggybacking on an
- * HTTP request's session tokens.
+ * (Cloud Scheduler calls POST /internal/paypal-sweep - see
+ * schedulerRoutes.ts) rather than piggybacking on an HTTP request's
+ * session tokens.
  *
  * Authenticates via a refresh token persisted the last time any staff
  * member logged into the app (see authRoutes.ts's `/auth/callback` ->
@@ -28,7 +29,10 @@ const SWEEPER_CREDENTIAL_COLLECTION = "system";
 const SWEEPER_CREDENTIAL_DOC = "paypalSweeperAuth";
 const SWEEPER_STATUS_DOC = "paypalSweeperStatus";
 const TEN_MINUTES_MS = 10 * 60 * 1000;
-const DEFAULT_INTERVAL_MINUTES = 5;
+/** How often the Cloud Scheduler job is set to call /internal/paypal-sweep (README.md "Deployment"). */
+const SCHEDULE_INTERVAL_MINUTES = 5;
+/** No scheduled run for this long means the Cloud Scheduler job is paused or not set up. */
+const SCHEDULE_STALE_MS = 3 * SCHEDULE_INTERVAL_MINUTES * 60 * 1000;
 const PAYPAL_PENDING_LABEL = "PayPal Verification Pending";
 
 export async function persistSweeperCredential(refreshToken: string, updatedBy: string): Promise<void> {
@@ -77,31 +81,31 @@ export type PaypalSweepOutcome = PaypalSweepResult | { skipped: string };
  * and falls back to the Firestore copy when the process is fresh.
  */
 let lastRun: { at: string; outcome: PaypalSweepOutcome } | null = null;
-let scheduleStartedAt: number | null = null;
-let configuredIntervalMinutes = DEFAULT_INTERVAL_MINUTES;
+let lastScheduledRunAt: string | null = null;
 
 export interface SweeperStatus {
   credentialConfigured: boolean;
   credentialUpdatedBy: string | null;
   credentialUpdatedAt: string | null;
+  /** The Cloud Scheduler job's expected interval. */
   intervalMinutes: number;
-  scheduleRunning: boolean;
+  /** A Cloud Scheduler run happened within the last few intervals. False = job paused (off-season) or not set up. */
+  scheduleActive: boolean;
+  lastScheduledRunAt: string | null;
   lastRunAt: string | null;
   lastResult: PaypalSweepOutcome | null;
-  nextRunAt: string | null;
 }
 
 /**
  * Reads both halves of "is the background sweep actually working": the
  * stored credential (`persistSweeperCredential` only ever runs on a real
- * login) and this process's own record of its last run. `nextRunAt` is a
- * best-effort estimate (last run time, or schedule start if it hasn't run
- * yet, plus one interval) - accurate for a steady `setInterval`, but not a
- * guarantee, since a slow sweep or a process restart can shift it.
+ * login) and the record of recent runs - in particular whether Cloud
+ * Scheduler has triggered one lately (`scheduleActive`).
  */
 export async function getSweeperStatus(): Promise<SweeperStatus> {
   let data: any = null;
   let persistedRun: { at: string; outcome: PaypalSweepOutcome } | null = null;
+  let persistedScheduledAt: string | null = null;
   try {
     const db = getAdminFirestore();
     const [credentialSnap, statusSnap] = await Promise.all([
@@ -113,24 +117,23 @@ export async function getSweeperStatus(): Promise<SweeperStatus> {
     if (statusData?.at && statusData?.outcome) {
       persistedRun = { at: statusData.at, outcome: statusData.outcome };
     }
+    persistedScheduledAt = statusData?.scheduledAt ?? null;
   } catch (err: any) {
     console.warn("[Sweeper] getSweeperStatus failed to query Firestore:", err?.message || err);
   }
 
   const effectiveRun = lastRun ?? persistedRun;
-  const intervalMs = configuredIntervalMinutes * 60 * 1000;
-  const anchor = effectiveRun ? new Date(effectiveRun.at).getTime() : scheduleStartedAt;
-  const nextRunAt = anchor !== null ? new Date(anchor + intervalMs).toISOString() : null;
+  const scheduledAt = lastScheduledRunAt ?? persistedScheduledAt;
 
   return {
     credentialConfigured: !!data?.refreshToken,
     credentialUpdatedBy: data?.updatedBy ?? null,
     credentialUpdatedAt: data?.updatedAt ?? null,
-    intervalMinutes: configuredIntervalMinutes,
-    scheduleRunning: scheduleStartedAt !== null,
+    intervalMinutes: SCHEDULE_INTERVAL_MINUTES,
+    scheduleActive: !!scheduledAt && Date.now() - new Date(scheduledAt).getTime() < SCHEDULE_STALE_MS,
+    lastScheduledRunAt: scheduledAt,
     lastRunAt: effectiveRun?.at ?? null,
     lastResult: effectiveRun?.outcome ?? null,
-    nextRunAt,
   };
 }
 
@@ -343,63 +346,47 @@ async function applySweepResultLocked(
   return "escalated";
 }
 
+export type SweepTrigger = "scheduler" | "manual";
+
+let inFlight: Promise<PaypalSweepOutcome> | null = null;
+
 /**
- * Public entry point - runs the sweep and records the outcome (used by
- * the schedule below, and by the Configuration page's manual "Run Sweep
- * Now" button via the /api/paypal-sweeper/run-now route).
+ * Public entry point - runs the sweep and records the outcome. Called by
+ * Cloud Scheduler via POST /internal/paypal-sweep (`"scheduler"`) and by
+ * the Configuration page's "Run Sweep Now" button (`"manual"`).
+ *
+ * One sweep at a time: a call that arrives while one is running shares
+ * its result instead of starting a second pass over the same rows.
+ *
+ * There is no in-process timer any more: Cloud Run's request-based billing
+ * throttles CPU between requests, so a `setInterval` didn't fire reliably,
+ * and keeping an instance always on costs money all year for an app used
+ * one night a year. Cloud Scheduler's job is paused off-season instead.
  */
-export async function runPaypalSweep(): Promise<PaypalSweepOutcome> {
+export function runPaypalSweep(trigger: SweepTrigger = "manual"): Promise<PaypalSweepOutcome> {
+  if (!inFlight) {
+    inFlight = runAndRecord(trigger).finally(() => {
+      inFlight = null;
+    });
+  }
+  return inFlight;
+}
+
+async function runAndRecord(trigger: SweepTrigger): Promise<PaypalSweepOutcome> {
   const outcome = await runPaypalSweepInner();
-  lastRun = { at: new Date().toISOString(), outcome };
+  const at = new Date().toISOString();
+  lastRun = { at, outcome };
+  if (trigger === "scheduler") lastScheduledRunAt = at;
 
   try {
     const db = getAdminFirestore();
-    await db.collection(SWEEPER_CREDENTIAL_COLLECTION).doc(SWEEPER_STATUS_DOC).set(lastRun);
+    await db.collection(SWEEPER_CREDENTIAL_COLLECTION).doc(SWEEPER_STATUS_DOC).set(
+      { ...lastRun, ...(trigger === "scheduler" ? { scheduledAt: at } : {}) },
+      { merge: true }
+    );
   } catch (err: any) {
     console.warn("[Sweeper] Failed to persist run status to Firestore:", err?.message || err);
   }
 
   return outcome;
-}
-
-/**
- * Starts the recurring sweep on a fixed interval - the Node-side
- * replacement for `PayPalSweeper.gs`'s time-driven trigger. Called once
- * from server.ts (never from server/app.ts, which the test suite
- * exercises directly via supertest - tests must never have a background
- * timer running against real/mocked Google APIs on their own schedule).
- *
- * `PAYPAL_SWEEPER_INTERVAL_MINUTES=0` turns the schedule off (returns
- * null). Meant for local development: a local server reads the same
- * Firestore `settings/global` as production, so its sweeper would
- * otherwise sweep the live Bidder-Numbers sheet alongside Cloud Run's.
- * The manual "Run Sweep Now" route still works with the schedule off.
- */
-export function startPaypalSweeperSchedule(): NodeJS.Timeout | null {
-  if (process.env.PAYPAL_SWEEPER_INTERVAL_MINUTES?.trim() === "0") {
-    console.log("[PayPalSweeper] Schedule disabled (PAYPAL_SWEEPER_INTERVAL_MINUTES=0).");
-    return null;
-  }
-
-  const intervalMinutes = Number(process.env.PAYPAL_SWEEPER_INTERVAL_MINUTES) || DEFAULT_INTERVAL_MINUTES;
-  const intervalMs = intervalMinutes * 60 * 1000;
-
-  configuredIntervalMinutes = intervalMinutes;
-  scheduleStartedAt = Date.now();
-
-  console.log(`[PayPalSweeper] Scheduled to run every ${intervalMinutes} minute(s).`);
-
-  return setInterval(() => {
-    runPaypalSweep()
-      .then((result) => {
-        if ("skipped" in result) {
-          console.log(`[PayPalSweeper] Skipped: ${result.skipped}`);
-        } else if (result.pending > 0) {
-          console.log(`[PayPalSweeper] Swept ${result.pending} pending row(s): ${result.resolved} resolved, ${result.escalated} escalated.`);
-        }
-      })
-      .catch((e) => {
-        console.error("[PayPalSweeper] Sweep run failed:", e);
-      });
-  }, intervalMs);
 }

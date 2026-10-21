@@ -52,7 +52,7 @@ vi.mock("../services/firebaseAdmin", () => ({
   getAdminFirestore: () => makeFakeAdminDb(),
 }));
 
-import { runPaypalSweep, persistSweeperCredential, getSweeperStatus, startPaypalSweeperSchedule } from "../services/paypalSweeperJob";
+import { runPaypalSweep, persistSweeperCredential, getSweeperStatus } from "../services/paypalSweeperJob";
 
 const HEADER = ["ID", "First", "Last", "Email", "CheckedIn", "Proxy", "CheckedOut", "Paid", "Method", "InvoiceURL", "Amount", "Timestamp"];
 
@@ -346,7 +346,7 @@ describe("getSweeperStatus", () => {
     expect(status.credentialUpdatedAt).toBe("2026-01-01T00:00:00.000Z");
   });
 
-  it("records a completed run's outcome and computes nextRunAt one interval past it", async () => {
+  it("records a completed run's outcome", async () => {
     mockBidderNumbers([]);
     const beforeRun = Date.now();
 
@@ -354,35 +354,25 @@ describe("getSweeperStatus", () => {
     const status = await getSweeperStatus();
 
     expect(status.lastResult).toEqual(result);
-    expect(status.lastRunAt).not.toBeNull();
     expect(new Date(status.lastRunAt!).getTime()).toBeGreaterThanOrEqual(beforeRun);
-
-    const lastRunMs = new Date(status.lastRunAt!).getTime();
-    const nextRunMs = new Date(status.nextRunAt!).getTime();
-    expect(nextRunMs - lastRunMs).toBe(status.intervalMinutes * 60 * 1000);
   });
 
-  it("starts no timer when PAYPAL_SWEEPER_INTERVAL_MINUTES is 0 (local development)", () => {
-    const original = process.env.PAYPAL_SWEEPER_INTERVAL_MINUTES;
-    process.env.PAYPAL_SWEEPER_INTERVAL_MINUTES = "0";
-    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
-    try {
-      expect(startPaypalSweeperSchedule()).toBeNull();
-      expect(setIntervalSpy).not.toHaveBeenCalled();
-    } finally {
-      setIntervalSpy.mockRestore();
-      if (original === undefined) delete process.env.PAYPAL_SWEEPER_INTERVAL_MINUTES;
-      else process.env.PAYPAL_SWEEPER_INTERVAL_MINUTES = original;
-    }
+  it("marks the schedule active only after a Cloud Scheduler run, and persists that time", async () => {
+    mockBidderNumbers([]);
+    await runPaypalSweep("manual");
+    const scheduledSetsBefore = capturedSets.filter((c) => c.data.scheduledAt).length;
+    expect(scheduledSetsBefore).toBe(0);
+
+    await runPaypalSweep("scheduler");
+    const status = await getSweeperStatus();
+    expect(status.scheduleActive).toBe(true);
+    expect(status.lastScheduledRunAt).not.toBeNull();
+    expect(capturedSets.some((c) => c.doc === "paypalSweeperStatus" && c.data.scheduledAt)).toBe(true);
   });
 
-  it("reports scheduleRunning once startPaypalSweeperSchedule has been called", async () => {
-    const timer = startPaypalSweeperSchedule();
-    try {
-      const status = await getSweeperStatus();
-      expect(status.scheduleRunning).toBe(true);
-    } finally {
-      if (timer) clearInterval(timer);
-    }
+  it("runs one sweep at a time - a second call while one is running shares its result", async () => {
+    mockBidderNumbers([]);
+    const [a, b] = await Promise.all([runPaypalSweep("scheduler"), runPaypalSweep("manual")]);
+    expect(a).toBe(b);
   });
 });

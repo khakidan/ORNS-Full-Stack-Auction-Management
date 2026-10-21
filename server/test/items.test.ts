@@ -931,10 +931,10 @@ describe("PayPal Sweeper status routes", () => {
       credentialUpdatedBy: "staff@orns.org",
       credentialUpdatedAt: "2026-01-01T00:00:00.000Z",
       intervalMinutes: 5,
-      scheduleRunning: true,
+      scheduleActive: true,
+      lastScheduledRunAt: "2026-01-01T00:05:00.000Z",
       lastRunAt: "2026-01-01T00:05:00.000Z",
       lastResult: { pending: 1, resolved: 1, escalated: 0 },
-      nextRunAt: "2026-01-01T00:10:00.000Z",
     };
     mockGetSweeperStatus.mockResolvedValue(status);
 

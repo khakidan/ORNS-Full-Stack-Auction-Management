@@ -18,9 +18,7 @@ Nothing outstanding - H1-H7 are all fixed (see `CHANGELOG.md`).
 
 ### Medium - security hardening / operational
 
-M1, M2, M3, M5, M6 and M7 are fixed (see `CHANGELOG.md`).
-
-- **M4. Single-instance assumptions need Cloud Run settings to match.** `withLock`, the idempotency map, `sheetCache`, the bug-report rate limit, the PayPal-mode cache, and the `setInterval` sweeper are all in-process (`asyncLock.ts`'s own comment: "not horizontally scaled"). That requires the Cloud Run service to run with **maximum instances = 1**, and the sweeper also needs **CPU always allocated** (instance-based billing; CPU is throttled between requests otherwise). Both settings are now documented in `README.md`'s Deployment section, but they haven't been confirmed on the live service (`gcloud` wasn't signed in during the audit). Remove this item once they're confirmed.
+Nothing outstanding - M1-M7 are all fixed (see `CHANGELOG.md`).
 
 ### Low
 

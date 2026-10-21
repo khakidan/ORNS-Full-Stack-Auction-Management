@@ -45,7 +45,7 @@ are set on the service itself and there is no `.env`.
 *   `APP_URL`: The URL the server is reached at (`http://localhost:<PORT>` locally, `https://orns-auction-manager.cloud.run` in production). The OAuth redirect URI is built from it as `<APP_URL>/auth/callback`
 *   `GEMINI_API_KEY`: Key for the server-side Gemini bundle-suggestion features
 *   `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET`: PayPal Invoicing API credentials (sandbox credentials locally)
-*   `PAYPAL_SWEEPER_INTERVAL_MINUTES`: Background PayPal sweep interval (default `5`); `0` turns the schedule off - see "Running Locally"
+*   `SWEEPER_TRIGGER_SECRET`: Shared secret Cloud Scheduler sends to `POST /internal/paypal-sweep` to run the PayPal sweep (see "Deployment"). Production only; leave it empty locally, which turns that endpoint off
 *   `APPS_SCRIPT_DEV_MODE` (optional): `true` makes Apps Script calls run each script's latest *saved* editor code instead of its deployed API-executable version - only works for the script's owner; for trying `.gs` edits locally before deploying them. Default (unset/`false`) runs the deployed version - see "Deployment"
 *   `PORT` (optional): Port to bind to, default `3000`. Cloud Run sets it automatically
 
@@ -71,7 +71,7 @@ One-time setup:
 
 Then `npm run dev` (or `npm run dev:watch` to auto-restart on backend edits) and open `http://localhost:<PORT>`.
 
-**A local server works on live data.** It reads the same shared Config from Firestore (`settings/global`) as production, so it opens the same spreadsheets, and the in-app PayPal sandbox/live toggle is shared too. Keep `PAYPAL_SWEEPER_INTERVAL_MINUTES=0` in `.env` (the `.env.example` default) so your machine doesn't run a second PayPal sweeper against the live Bidder-Numbers sheet. To test against throwaway data, point the Config screen at copies of the spreadsheets - and remember that changes it there for production too.
+**A local server works on live data.** It reads the same shared Config from Firestore (`settings/global`) as production, so it opens the same spreadsheets, and the in-app PayPal sandbox/live toggle is shared too. A local server never runs the PayPal sweeper on its own (only Cloud Scheduler triggers it, in production), so it won't touch the live Bidder-Numbers sheet unless you click **Run Sweep Now**. To test against throwaway data, point the Config screen at copies of the spreadsheets - and remember that changes it there for production too.
 
 ---
 
@@ -149,21 +149,30 @@ secure for the `orns_session` cookie.
 **Required Cloud Run settings.** The server keeps several pieces of state
 in process memory - the `bidder-numbers:` lock that prevents duplicate
 PayPal invoices, the idempotency map, the sheet cache, the bug-report
-rate limit - and runs the PayPal sweeper on a `setInterval`. So the
-`orns-auction-manager-gh` service must have:
+rate limit - so the `orns-auction-manager-gh` service must run with
+**Maximum instances = 1** (Scaling tab). With two instances, two requests
+could each take "the" lock on different machines. Everything else stays
+at the cheap defaults: minimum instances 0 and **Request-based** billing.
 
-*   **Maximum instances = 1** (Edit & deploy new revision -> Revisions
-    scaling). With two instances, two requests can each take "the" lock on
-    different machines.
-*   **CPU always allocated** (Billing: instance-based). Otherwise Cloud
-    Run throttles the CPU between requests and the sweeper's timer
-    doesn't fire reliably.
+**PayPal sweeper schedule (Cloud Scheduler).** The sweeper that checks
+deferred credit-card checkouts against PayPal isn't a timer inside the
+server - with request-based billing, Cloud Run throttles the CPU between
+requests, and an always-on instance would cost money all year for an app
+used one night a year. Instead a Cloud Scheduler job calls
+`POST /internal/paypal-sweep` every 5 minutes
+(`server/routes/schedulerRoutes.ts`), authenticated by the
+`X-Sweeper-Secret` header matching the service's `SWEEPER_TRIGGER_SECRET`.
+The job (`paypal-sweeper`, region us-east1):
 
-To check: `gcloud run services describe orns-auction-manager-gh
---region us-east1 --project orns-auction-bid-management
---format="yaml(spec.template.metadata.annotations)"` should show
-`autoscaling.knative.dev/maxScale: '1'` and
-`run.googleapis.com/cpu-throttling: 'false'`.
+*   Frequency `*/5 * * * *`, target type HTTP, URL
+    `https://orns-auction-manager.cloud.run/internal/paypal-sweep`, method
+    POST, header `X-Sweeper-Secret: <the secret>`, no auth header.
+*   **Resume it before checkout opens; pause it after the auction.** The
+    Configuration page's PayPal Sweeper card shows "Running" while it's
+    firing and "Paused" otherwise.
+
+Cloud Scheduler's free tier covers 3 jobs per billing account, and each
+run is a few seconds of Cloud Run CPU.
 
 The service account also needs Firestore access (it already has it if
 the PayPal sweeper status card works): the server reads the PayPal

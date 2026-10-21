@@ -21,7 +21,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   ├── boot.ts                # Vite middleware in dev; static dist/ + SPA fallback in production; listen()
 │   │
 │   ├── routes/
-│   │   ├── authRoutes.ts      # /auth/url, /auth/callback (OAuth -> session cookie), /auth/status, /auth/logout, /log
+│   │   ├── authRoutes.ts      # /auth/url, /auth/callback (OAuth -> session cookie), /auth/status, /auth/logout
 │   │   ├── bidRoutes.ts       # Live-auction transactions: record-winning-bid, checkout-mark-paid, close-and-cleanup, walk-in, check-in-with-bid
 │   │   ├── bugReportRoutes.ts # POST /api/bug-reports (unauthenticated), /list, /resolve
 │   │   ├── bundleRoutes.ts    # Gemini name/description suggestions; bundle process/restore
@@ -29,6 +29,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── health.ts          # GET /api/health
 │   │   ├── productionRoutes.ts# Apps Script document generators (item docs/labels/slides, bidder labels)
 │   │   ├── receiptRoutes.ts   # Receipt generation (single/all) and receipt emails (single/all)
+│   │   ├── schedulerRoutes.ts # POST /internal/paypal-sweep (Cloud Scheduler, shared-secret header)
 │   │   └── setupRoutes.ts     # NDJSON-streamed new-auction setup
 │   │
 │   ├── middleware/
@@ -50,7 +51,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── itemService.ts           # Auction item add/update/delete/bulk-update + resequencing
 │   │   ├── oauth.ts                 # OAuth2 client (redirect URI from APP_URL only) and scopes
 │   │   ├── paypalService.ts         # PayPal Invoicing API (create/send, cancel, offline payment, status)
-│   │   ├── paypalSweeperJob.ts      # Background PayPal verification sweep + status
+│   │   ├── paypalSweeperJob.ts      # PayPal verification sweep (run by Cloud Scheduler / Run Now) + status
 │   │   ├── receiptDataService.ts    # Won-item resolution and invoice get-or-create for receipts
 │   │   ├── receiptService.ts        # Apps Script receipt calls; batch email loop
 │   │   ├── sharedConfig.ts          # Server-side settings/global reads (PayPal sandbox/live)

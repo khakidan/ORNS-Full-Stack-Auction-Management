@@ -11,6 +11,7 @@ import createBidRouter from './routes/bidRoutes';
 import createDataRouter from './routes/dataRoutes';
 import createProductionRouter from './routes/productionRoutes';
 import createBugReportRouter from './routes/bugReportRoutes';
+import createSchedulerRouter from './routes/schedulerRoutes';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -90,6 +91,8 @@ app.use("/api/bundle", createBundleRouter());
 // requireAuth.integration.test.ts), so registering this router first is
 // what actually lets its own routes stay reachable without a session.
 app.use("/api/bug-reports", createBugReportRouter());
+// Cloud Scheduler (no session - its own shared-secret check).
+app.use("/internal", createSchedulerRouter());
 app.use("/api", createBidRouter());
 app.use("/api", createDataRouter());
 
