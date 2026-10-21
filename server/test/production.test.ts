@@ -6,6 +6,7 @@
  * NOTE: The bulk of the tests here are dynamically generated using a `testCases.forEach` loop
  * that maps over the various document creation endpoints to produce 18 total tests.
  */
+import { authCookieHeader } from "./helpers/session";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app";
@@ -19,7 +20,7 @@ const mockTokens = {
   refresh_token: "workflow-mock-refresh",
   expiry_date: Date.now() + 3600000
 };
-const authHeader = { "x-google-tokens": JSON.stringify(mockTokens) };
+const authHeader = authCookieHeader(mockTokens);
 
 // Node now resolves the Items spreadsheet's valid/sorted item list itself
 // (itemDataService.ts's getValidSortedItems, the Node port of

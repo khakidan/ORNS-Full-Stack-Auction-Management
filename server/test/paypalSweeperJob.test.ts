@@ -280,13 +280,27 @@ describe("getSweeperStatus", () => {
     expect(nextRunMs - lastRunMs).toBe(status.intervalMinutes * 60 * 1000);
   });
 
+  it("starts no timer when PAYPAL_SWEEPER_INTERVAL_MINUTES is 0 (local development)", () => {
+    const original = process.env.PAYPAL_SWEEPER_INTERVAL_MINUTES;
+    process.env.PAYPAL_SWEEPER_INTERVAL_MINUTES = "0";
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+    try {
+      expect(startPaypalSweeperSchedule()).toBeNull();
+      expect(setIntervalSpy).not.toHaveBeenCalled();
+    } finally {
+      setIntervalSpy.mockRestore();
+      if (original === undefined) delete process.env.PAYPAL_SWEEPER_INTERVAL_MINUTES;
+      else process.env.PAYPAL_SWEEPER_INTERVAL_MINUTES = original;
+    }
+  });
+
   it("reports scheduleRunning once startPaypalSweeperSchedule has been called", async () => {
     const timer = startPaypalSweeperSchedule();
     try {
       const status = await getSweeperStatus();
       expect(status.scheduleRunning).toBe(true);
     } finally {
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
     }
   });
 });

@@ -250,14 +250,11 @@ export const handlers = [
   }),
 
   // Google OAuth v2 userinfo: Intercepts GETs to the v2 userinfo API.
-  // Needed because emailService.ts and tokenRestorer.ts both use the v2 API
-  // (google.oauth2({ version: 'v2' }).userinfo.get()) - tokenRestorer to
-  // resolve and domain-validate the account behind an x-google-tokens
-  // header, emailService to resolve the sender's email address - whereas
-  // the global app handler above uses v3. Defaults to an @orns.org email
-  // so the default mockTokens fixture used across the suite passes
-  // tokenRestorer's domain check; auth.test.ts overrides this per-test to
-  // exercise the rejection path.
+  // Needed because authRoutes.ts's /auth/callback (domain check) and
+  // emailService.ts (sender's address) both use the v2 API
+  // (google.oauth2({ version: 'v2' }).userinfo.get()), whereas the global
+  // app handler above uses v3. Defaults to an @orns.org email;
+  // auth.test.ts overrides this per-test to exercise the rejection path.
   http.get('https://www.googleapis.com/oauth2/v2/userinfo', () => {
     return HttpResponse.json({ email: 'test@orns.org', name: 'Test User' });
   }),

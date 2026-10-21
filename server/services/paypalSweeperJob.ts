@@ -322,8 +322,19 @@ export async function runPaypalSweep(): Promise<PaypalSweepOutcome> {
  * from server.ts (never from server/app.ts, which the test suite
  * exercises directly via supertest - tests must never have a background
  * timer running against real/mocked Google APIs on their own schedule).
+ *
+ * `PAYPAL_SWEEPER_INTERVAL_MINUTES=0` turns the schedule off (returns
+ * null). Meant for local development: a local server reads the same
+ * Firestore `settings/global` as production, so its sweeper would
+ * otherwise sweep the live Bidder-Numbers sheet alongside Cloud Run's.
+ * The manual "Run Sweep Now" route still works with the schedule off.
  */
-export function startPaypalSweeperSchedule(): NodeJS.Timeout {
+export function startPaypalSweeperSchedule(): NodeJS.Timeout | null {
+  if (process.env.PAYPAL_SWEEPER_INTERVAL_MINUTES?.trim() === "0") {
+    console.log("[PayPalSweeper] Schedule disabled (PAYPAL_SWEEPER_INTERVAL_MINUTES=0).");
+    return null;
+  }
+
   const intervalMinutes = Number(process.env.PAYPAL_SWEEPER_INTERVAL_MINUTES) || DEFAULT_INTERVAL_MINUTES;
   const intervalMs = intervalMinutes * 60 * 1000;
 

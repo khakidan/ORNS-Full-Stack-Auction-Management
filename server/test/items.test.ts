@@ -4,6 +4,7 @@
  * as well as bulk updating items. It validates re-sequencing logic upon item deletion
  * and category changes. Also covers Settings Update endpoints.
  */
+import { authCookieHeader } from "./helpers/session";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 
@@ -31,7 +32,7 @@ const mockTokens = {
   refresh_token: "workflow-mock-refresh",
   expiry_date: Date.now() + 3600000
 };
-const authHeader = { "x-google-tokens": JSON.stringify(mockTokens) };
+const authHeader = authCookieHeader(mockTokens);
 
 describe("Add Auction Item workflow", () => {
   const validItemBody = {

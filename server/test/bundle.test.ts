@@ -11,6 +11,7 @@ import { app } from "../app";
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
 import { resetHandlersState, bundleWritePayload, updateCallCount } from "./handlers";
+import { authCookieHeader } from "./helpers/session";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -44,7 +45,7 @@ vi.mock("../services/genai", () => ({
   },
 }));
 
-const authHeader = { "x-google-tokens": JSON.stringify(mockTokens) };
+const authHeader = authCookieHeader(mockTokens);
 
 describe('Bundle Creation workflow', () => {
   const validProcessBody = {

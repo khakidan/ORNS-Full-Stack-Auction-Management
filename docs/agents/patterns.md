@@ -13,12 +13,9 @@ This document outlines the core operational guidelines, synchronizations, and no
 
 ## 2. Non-Negotiable Rules (DO NOT VIOLATE)
 
-### File Preservation
-*   **NEVER DELETE `server/routes/bidRoutes.ts`**: This route manages key transactional bid bindings. Deleting, moving, or merging this file breaks the main live-auction flow.
-*   **DO NOT MODIFY core client SDK files**: Under no circumstances should you edit `src/services/firebase.ts`, `src/context/ConfigContext.tsx`, or `firestore.rules` unless explicitly ordered.
-
 ### Session Cookie Rules
-*   **DO NOT REVERT COOKIE NAME**: The session cookie **MUST** remain named **`orns_session`**. The legacy `__session` name was a Firebase Hosting caching CDN constraint that is no longer required on Cloud Run.
+*   **DO NOT REVERT COOKIE NAME**: The session cookie **MUST** remain named **`orns_session`** - renaming it signs every user out. The legacy `__session` name was a Firebase Hosting caching CDN constraint that is no longer required on Cloud Run.
+*   **The cookie is the only credential**: OAuth tokens live in the signed, `httpOnly` `orns_session` cookie and nowhere else - never in page HTML, `localStorage`, or a request header. (The `x-google-tokens` header/`localStorage` bridge that existed for running inside AI Studio's iframe was removed on 2026-10-21.)
 
 ### Code Splitting Rules
 *   **Vite Chunks Form**: The `manualChunks` function inside `vite.config.ts` must use the dynamic functional matcher structure. Do not revert it to a static object-mapping form, as this breaks vendor code-splitting and balloons the critical chunk size.

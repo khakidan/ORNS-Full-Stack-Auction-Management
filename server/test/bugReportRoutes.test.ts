@@ -14,13 +14,14 @@ import { http, HttpResponse } from "msw";
 import { app } from "../app";
 import { server } from "./setup";
 import { resetHandlersState, appendCallCount, lastAppendedRow } from "./handlers";
+import { authCookieHeader } from "./helpers/session";
 
 const mockTokens = {
   access_token: "bug-report-mock-token",
   refresh_token: "bug-report-mock-refresh",
   expiry_date: Date.now() + 3600000,
 };
-const authHeader = { "x-google-tokens": JSON.stringify(mockTokens) };
+const authHeader = authCookieHeader(mockTokens);
 
 const BUG_REPORTS_DIR = path.join(process.cwd(), "bug-reports");
 
@@ -127,7 +128,7 @@ describe("POST /api/bug-reports", () => {
   it("falls back to a local .md file when there is no authenticated session at all (e.g. an expired OAuth session)", async () => {
     const res = await request(app)
       .post("/api/bug-reports")
-      // no x-google-tokens header at all
+      // no session cookie at all
       .send({ ...validBody, bugReportsSpreadsheetId: "sheet-abc" });
 
     expect(res.status).toBe(200);

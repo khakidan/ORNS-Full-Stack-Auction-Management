@@ -1,5 +1,4 @@
 import express from "express";
-import cors from "cors";
 import cookieSession from "cookie-session";
 
 // Routers
@@ -16,8 +15,6 @@ import createBugReportRouter from './routes/bugReportRoutes';
 // Middleware
 import { errorHandler } from './middleware/errorHandler';
 import { cacheControl } from './middleware/cacheControl';
-import { cookiePolicy } from './middleware/cookiePolicy';
-import { tokenRestorer } from './middleware/tokenRestorer';
 
 declare global {
   namespace Express {
@@ -38,20 +35,10 @@ if (!process.env.SESSION_SECRET) {
 
 const app = express();
 
-// This tool runs as a local application (browser + Tauri desktop shell).
-// No public deployment exists, so the allowlist covers only localhost
-// and the Tauri custom protocol. All other origins are rejected.
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || origin.startsWith('tauri://') || origin.startsWith('http://localhost')) {
-      callback(null, true);
-    } else {
-      callback(null, false);
-    }
-  },
-  credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-google-tokens']
-}));
+// No CORS middleware: the React app is served by this same Express
+// server (Vite middleware locally, dist/ on Cloud Run), so every API call
+// is same-origin. Without CORS headers, browsers won't let any other
+// site read these responses or send the JSON requests the API expects.
 
 // Middleware
 // Default express.json() body limit is 100kb - too small for the bug
@@ -64,24 +51,27 @@ app.use(express.json({ limit: "5mb" }));
 // Global middleware to prevent caching
 app.use(cacheControl);
 
+// Cloud Run terminates TLS at Google's front end and forwards plain HTTP;
+// trusting that one proxy hop is what lets Express (and cookie-session's
+// `secure` option below) see the original request as HTTPS.
 app.set("trust proxy", 1);
+
+// Secure (HTTPS-only) cookies in the deployed production build. Off for
+// `npm run dev`, tests, and a local `npm start` against
+// http://localhost, where a secure cookie would never be stored.
+const isLocalhost = !process.env.APP_URL || process.env.APP_URL.includes("localhost");
+const secureCookies = process.env.NODE_ENV === "production" && !isLocalhost;
 
 app.use(
   cookieSession({
     name: "orns_session",
     keys: [process.env.SESSION_SECRET],
-    secure: process.env.NODE_ENV === "production" && !process.env.APP_URL?.includes("localhost"),
-    sameSite: (process.env.NODE_ENV === "production" && !process.env.APP_URL?.includes("localhost")) ? "none" : "lax",
+    secure: secureCookies,
+    sameSite: "lax",
     httpOnly: true,
     maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
   })
 );
-
-// Dynamic cookie settings middleware for proper iframe (AI Studio build site) and top-level tab sameSite settings
-app.use(cookiePolicy);
-
-// Restore session tokens if present in client headers, bypassing cookie block restrictions
-app.use(tokenRestorer);
 
 // Setup Base Routes (Mounting everything cleanly)
 app.use("/api/health", healthRouter);

@@ -10,8 +10,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
- * Single, app-wide instance of the Google auth status check + postMessage
- * listener + fallback poll (useGoogleAuth.ts, itself built on
+ * Single, app-wide instance of the Google auth status check + fallback
+ * poll (useGoogleAuth.ts, itself built on
  * useApiAuthStatus.ts). Mounted once in main.tsx above both App.tsx (the
  * login gate) and AuctionProvider (which needs the same status to decide
  * when to start fetching auction data) - previously each called its own

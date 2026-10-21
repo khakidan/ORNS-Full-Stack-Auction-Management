@@ -26,7 +26,7 @@ export default defineConfig(({ mode }) => {
           // authRoutes.ts at all as a result: the browser gets the cached
           // app shell instead of the real response, no session cookie is
           // ever set, and the app just reloads "logged out" - the exact
-          // symptom behind the AI Studio login loop. Excluding /auth/ and
+          // symptom behind an earlier "login loop" bug. Excluding /auth/ and
           // /api/ from the fallback lets those navigations hit the network
           // (and the real server) instead.
           navigateFallbackDenylist: [/^\/auth\//, /^\/api\//],
@@ -111,12 +111,9 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify - file watching is disabled to prevent flickering during agent edits.
       watch: {
-        ignored: ['**/sessions/**', '**/src-tauri/**', '**/dist-desktop/**'],
+        ignored: ['**/sessions/**', '**/bug-reports/**'],
       },
-      hmr: process.env.DISABLE_HMR !== 'true',
     },
   };
 });

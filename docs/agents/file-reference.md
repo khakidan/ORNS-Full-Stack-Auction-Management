@@ -7,22 +7,22 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 ## Codebase Topography
 
 ```
-├── README.md / AGENTS.md / CLAUDE.md   # Entry docs; AGENTS.md holds the non-negotiable rules
+├── README.md / AGENTS.md / CLAUDE.md   # Entry docs; AGENTS.md holds the rules and the branch -> main -> Cloud Run workflow
 ├── package.json               # Dependencies and npm scripts (see docs/agents/README.md "Key Scripts")
 ├── vite.config.ts             # React build, PWA plugin, functional manualChunks vendor splitting
 ├── vitest.config.ts           # Test runner config
-├── firestore.rules            # Firestore security rules (protected - do not edit unless ordered)
+├── firestore.rules            # Firestore security rules
 ├── firebase-applet-config.json# Firebase web client config (public identifiers, not secrets)
-├── server.ts                  # Express entry point: env import, validateEnv(), startServer(), PayPal sweeper schedule
+├── server.ts                  # Express entry point: .env load, validateEnv(), startServer(), PayPal sweeper schedule
 │
 ├── server/                    # Express Backend Layer
-│   ├── env.ts                 # Imported first by server.ts (currently empty - see ROADMAP.md H7)
-│   ├── app.ts                 # Express app: CORS, JSON body limit, cookie-session (orns_session), middleware, router mounting
+│   ├── env.ts                 # Imported first by server.ts; loads .env (local development only)
+│   ├── app.ts                 # Express app: JSON body limit, cookie-session (orns_session), middleware, router mounting
 │   ├── boot.ts                # Vite middleware in dev; static dist/ + SPA fallback in production; listen()
 │   │
 │   ├── routes/
-│   │   ├── authRoutes.ts      # /auth/url, /auth/callback (OAuth + popup token bridge), /auth/status, /auth/logout, /log
-│   │   ├── bidRoutes.ts       # Live-auction transactions: record-winning-bid, checkout-mark-paid, close-and-cleanup, walk-in, check-in-with-bid (NEVER DELETE)
+│   │   ├── authRoutes.ts      # /auth/url, /auth/callback (OAuth -> session cookie), /auth/status, /auth/logout, /log
+│   │   ├── bidRoutes.ts       # Live-auction transactions: record-winning-bid, checkout-mark-paid, close-and-cleanup, walk-in, check-in-with-bid
 │   │   ├── bugReportRoutes.ts # POST /api/bug-reports (unauthenticated), /list, /resolve
 │   │   ├── bundleRoutes.ts    # Gemini name/description suggestions; bundle process/restore
 │   │   ├── dataRoutes.ts      # Bidder sync, PayPal sweeper status/run-now, _Settings, auction item CRUD, generic Sheets/Drive proxies, attendee field updates
@@ -33,10 +33,8 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │
 │   ├── middleware/
 │   │   ├── cacheControl.ts    # no-store on /api/* and /auth/*
-│   │   ├── cookiePolicy.ts    # Per-request secure/sameSite for iframe vs. top-level
 │   │   ├── errorHandler.ts    # Centralized JSON error responses
-│   │   ├── requireAuth.ts     # 401 unless req.session.tokens is set
-│   │   └── tokenRestorer.ts   # Restores session from the x-google-tokens header after an @orns.org check
+│   │   └── requireAuth.ts     # 401 unless the orns_session cookie carries tokens
 │   │
 │   ├── services/
 │   │   ├── auctionService.ts        # recordWinningBid, checkoutMarkPaid, closeAuctionAndCleanup
@@ -69,7 +67,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── sheetCache.ts      # 5-second shared Sheets read cache
 │   │   └── validateEnv.ts     # Boot-time required env var check
 │   │
-│   └── test/                  # Vitest + supertest + MSW backend suite (helpers/, handlers.ts, setup.ts)
+│   └── test/                  # Vitest + supertest + MSW backend suite (helpers/ incl. session.ts for signed test cookies, handlers.ts, setup.ts)
 │
 ├── scripts/GoogleAppsScriptsCode/   # Apps Script sources, one folder per bound spreadsheet
 │   ├── BidManagementSpreadsheet/    # Receipt docs (Node supplies the data)
@@ -81,9 +79,9 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
     ├── App.tsx                # Layout shell, workflow/tab routing, lazy-loaded views
     ├── index.css              # Tailwind + design tokens
     ├── types.ts               # Shared types (Config, GoogleTokens, bug report shapes, ...)
-    ├── context/               # AuctionContext, AuthContext, ConfigContext (protected)
+    ├── context/               # AuctionContext, AuthContext, ConfigContext
     ├── services/
-    │   ├── firebase.ts        # Lazy Firebase app/auth/Firestore init (protected)
+    │   ├── firebase.ts        # Lazy Firebase app/auth/Firestore init
     │   └── google-api.ts      # fetchWithRetry + every API call to the Express server
     ├── hooks/                 # One hook per view/state concern (useCheckoutState, useGoogleAuth, ...)
     ├── lib/                   # Pure parsing/validation/formatting helpers, error buffer, screenshot capture

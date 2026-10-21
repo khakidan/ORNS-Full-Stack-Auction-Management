@@ -146,7 +146,7 @@ reached this way from the frontend.
 25 test files exist today (`src/components/*.test.tsx` +
 `server/test/*.test.ts`), matching `README.md`'s count. See
 `testing-philosophy.md` (GOOD/SHALLOW/CIRCULAR/SMOKE ratings) and
-`testing-batches.md` (partitioned test runs to avoid sandbox timeouts) -
+`testing-batches.md` (how to run the suite, and the current totals) -
 those are the authoritative, already-correct docs for this app's testing
 rules; this document doesn't restate them.
 

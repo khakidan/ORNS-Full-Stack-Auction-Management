@@ -3,6 +3,7 @@
  * Covers endpoints related to recording winning bids, checking out, walk-in registrations,
  * checking in with starting bids, and auction closing & cleanup.
  */
+import { authCookieHeader } from "./helpers/session";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app";
@@ -17,7 +18,7 @@ const mockTokens = {
   refresh_token: "workflow-mock-refresh",
   expiry_date: Date.now() + 3600000
 };
-const authHeader = { "x-google-tokens": JSON.stringify(mockTokens) };
+const authHeader = authCookieHeader(mockTokens);
 
 describe("bidRoutes - Legacy Compatibility & Error Handling", () => {
   it("handles a Google API 429 Rate Limit error gracefully via errorHandler middleware", async () => {

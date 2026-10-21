@@ -22,13 +22,9 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
   - The subject isn't RFC 2047-encoded, so non-ASCII names ("José") arrive mangled.
   - `generateEmailHtml` interpolates names/item names/IDs and the payment URL into HTML without escaping.
 
-- **H4. CORS allowlist matches lookalike origins.** `server/app.ts` accepts any origin where `origin.startsWith('http://localhost')`, which includes `http://localhost.attacker.com` - credentialed cross-origin requests are allowed from such a page. Parse the origin and compare the hostname exactly. The comment above it ("No public deployment exists") is also false - the app is deployed on Cloud Run (see `README.md`).
-
 - **H5. PayPal sweeper writes Bidder-Numbers without the bidder lock.** `runPaypalSweepInner` (`server/services/paypalSweeperJob.ts`) reads a snapshot, then writes G:I/L per row without `withLock('bidder-numbers:...')`. If staff mark a pending bidder as Cash mid-sweep, the sweeper can then overwrite that row with "Failed Verification - Follow Up Required".
 
 - **H6. Idempotency doesn't stop concurrent duplicates.** `server/utils/idempotency.ts` checks for a key at request start but only saves it after the work succeeds, so a retry arriving while the first request is still in flight runs the full operation again - the exact case the key exists to prevent. Keys are also global (not scoped per route or per user), so the same key on two routes returns the wrong cached response. Track in-flight keys (store a pending promise) and namespace keys by route.
-
-- **H7. `.env` is no longer loaded at boot.** Commit `e937903` ("remove redundant dotenv configuration") emptied `server/env.ts`, but nothing else in the repo calls `dotenv` - `server.ts`'s comment still says `server/env.ts` "loads .env before any other module". Verified 2026-10-21: importing `server/env` from a clean shell leaves `process.env.SESSION_SECRET` unset, so local `npm run dev`/`npm start` abort at boot (`app.ts` throws, `validateEnv` exits) unless the variables are already exported in the shell. AI Studio/Cloud Run inject secrets as real env vars, so production is unaffected. Restore the `dotenv` load in `server/env.ts` (or switch the scripts to `node --env-file=.env`).
 
 ### Medium - security hardening / operational
 
@@ -37,12 +33,7 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
   - `POST /api/bug-reports/`'s local-file fallback writes up to 5 MB to disk per anonymous request. On Cloud Run the writable filesystem is in-memory (OOM risk) and is wiped on instance recycle, so `AGENTS.md`'s "a report is never silently lost" guarantee doesn't hold in production.
   - Spreadsheet formula injection on that same endpoint: `report.type`, `report.timestamp`, and the report ID (built from `timestamp`) skip `sanitizeForSheetFormula` in `appendBugReportToSheet` (`server/services/bugReportService.ts`).
 
-- **M2. OAuth token handling.**
-  - `/auth/callback` hands every user's **refresh token** (Drive + Gmail-send + Sheets scopes) to page JavaScript; `useApiAuthStatus.ts` persists it in `localStorage`, and `fetchWithRetry` sends it as `x-google-tokens` on every request - even when the cookie session works. Any XSS becomes durable account takeover. Strip `refresh_token` from what reaches the client, and only use the header bridge in the iframe case.
-  - `tokenRestorer.ts` only checks the userinfo email suffix - not the token's audience (`aud`, i.e. that it was issued to this OAuth client) or the Workspace `hd` claim - then trusts the entire client-supplied blob as session tokens. Use `tokeninfo`/`getTokenInfo` and check `aud` + `hd`.
-  - `tokenRestorer.ts`'s `validatedTokens` map is never pruned (slow memory growth).
-  - The OAuth flow has no `state` parameter (login CSRF).
-  - **(plausible - not reproduced)** Iframe (AI Studio) sessions likely die after ~1 hour: the `localStorage` access token is never refreshed, and `tokenRestorer` validates it with a bare client that can't refresh.
+- **M2. OAuth flow has no `state` parameter** (`server/routes/authRoutes.ts`'s `/auth/url` + `/auth/callback`), which allows login CSRF. The domain gate is also an email-suffix check only; checking the userinfo `hd` (Workspace domain) claim as well would be stricter.
 
 - **M3. Client chooses PayPal sandbox vs. production.** `paypalIsSandbox` is read from the request body in `receiptRoutes.ts` and `bidRoutes.ts`'s checkout, but from Firestore `settings/global` in the sweeper. A browser with stale config can create invoices in one mode that the sweeper then checks in the other. Read it server-side from Firestore everywhere.
 
@@ -64,7 +55,7 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 - **L6. Raw error messages to clients.** `errorHandler.ts` returns `err.message` (Google/PayPal API error text) in every 500 response.
 - **L7. Drive query interpolation.** `dataRoutes.ts`'s `/drive/files/:folderId` interpolates `folderId` into the Drive `q` string unescaped.
 - **L8. Invoice for a bidder with no email** is addressed to `no-reply@example.com` (`resolveInvoiceUrl`, `receiptDataService.ts`).
-- **L9. No security headers** - no CSP and no `frame-ancestors` restriction (the app is intentionally framed by AI Studio, so restrict to those origins rather than denying all).
+- **L9. No security headers** - no CSP and no `frame-ancestors` restriction. The app is no longer embedded anywhere (AI Studio's iframe is gone), so `frame-ancestors 'none'` / `X-Frame-Options: DENY` can be set outright.
 
 ### Confirmed fine (don't "fix")
 

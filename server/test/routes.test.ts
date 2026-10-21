@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import { app } from "../app";
+import { authCookieHeader } from "./helpers/session";
 
 describe("Route Integration Tests", () => {
   describe("GET /api/health", () => {
@@ -36,16 +37,24 @@ describe("Route Integration Tests", () => {
       expect(response.body.error).toBe("Unauthorized");
     });
 
-    it("returns 200 and data when valid token is provided in x-google-tokens", async () => {
-      const mockTokens = {
-        access_token: "mock-access-token",
-        refresh_token: "mock-refresh-token",
-        expiry_date: Date.now() + 3600000
-      };
+    const mockTokens = {
+      access_token: "mock-access-token",
+      refresh_token: "mock-refresh-token",
+      expiry_date: Date.now() + 3600000
+    };
 
+    it("returns 401 for a token blob sent in the retired x-google-tokens header - only the session cookie authenticates", async () => {
       const response = await request(app)
         .get(`/api/sheets/${spreadsheetId}/${range}`)
         .set("x-google-tokens", JSON.stringify(mockTokens));
+
+      expect(response.status).toBe(401);
+    });
+
+    it("returns 200 and data with a valid orns_session cookie", async () => {
+      const response = await request(app)
+        .get(`/api/sheets/${spreadsheetId}/${range}`)
+        .set(authCookieHeader(mockTokens));
 
       // If we get a 500, let's see the error
       if (response.status === 500) {

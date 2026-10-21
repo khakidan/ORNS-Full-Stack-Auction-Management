@@ -10,44 +10,12 @@ const BASE_DELAY = 1000;
 export async function fetchWithRetry(url: string | URL | Request, options: RequestInit = {}, retries = MAX_RETRIES): Promise<Response> {
   let attempt = 0;
 
-  // Inject Google OAuth tokens from localStorage to bypassed cookie limits in cross-origin iframes
-  let savedTokensStr = null;
-  try {
-    savedTokensStr = typeof window !== "undefined" ? localStorage.getItem("google_tokens") : null;
-  } catch (e) {
-    console.warn("[google-api] Could not read localStorage for tokens");
-  }
-  if (!savedTokensStr && typeof window !== "undefined") {
-    savedTokensStr = (window as any)._fallbackTokens;
-    if (savedTokensStr) {
-      console.log("[google-api] Using fallback tokens from memory");
-    }
-  }
-
-  // Clone before mutating - the caller's options object (and its headers)
-  // must not be touched, or a caller reusing an options literal across
-  // multiple calls would silently accumulate state (e.g. leaking one
-  // call's injected auth header into an unrelated later call sharing the
-  // same object).
-  const requestOptions: RequestInit = { ...options };
-
-  if (savedTokensStr) {
-    console.log(`[google-api] Token string present for ${url.toString()}, injecting x-google-tokens`);
-    if (requestOptions.headers instanceof Headers) {
-      requestOptions.headers = new Headers(requestOptions.headers);
-      requestOptions.headers.set("x-google-tokens", savedTokensStr);
-    } else if (Array.isArray(requestOptions.headers)) {
-      // Find and remove existing if any to avoid duplicates
-      requestOptions.headers = requestOptions.headers.filter(h => h[0] !== "x-google-tokens");
-      requestOptions.headers.push(["x-google-tokens", savedTokensStr]);
-    } else {
-      requestOptions.headers = { ...(requestOptions.headers as Record<string, string> | undefined), "x-google-tokens": savedTokensStr };
-    }
-  }
-
+  // Authentication rides on the orns_session cookie, which the browser
+  // sends automatically on these same-origin requests - no auth header
+  // is added here.
   while (attempt < retries) {
     try {
-      const response = await fetch(url, requestOptions);
+      const response = await fetch(url, options);
       
       if (response.status === 429 || (response.status >= 500 && response.status < 600)) {
         const errorText = await response.clone().text().catch(() => "");
@@ -82,9 +50,6 @@ export async function getAuthStatus() {
 }
 
 export async function logout() {
-  if (typeof window !== "undefined") {
-    localStorage.removeItem("google_tokens");
-  }
   const res = await fetchWithRetry(`${getBaseUrl()}/auth/logout`, { method: "POST", credentials: "include" });
   return res.json();
 }

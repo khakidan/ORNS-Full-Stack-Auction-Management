@@ -3,6 +3,7 @@ import request from "supertest";
 import { app } from "../app";
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
+import { authCookieHeader } from "./helpers/session";
 
 const mockTokens = {
   access_token: "mock-access-token",
@@ -10,7 +11,7 @@ const mockTokens = {
   expiry_date: Date.now() + 3600000
 };
 
-const authHeader = { "x-google-tokens": JSON.stringify(mockTokens) };
+const authHeader = authCookieHeader(mockTokens);
 
 describe("Proxy Route Integration Tests", () => {
 

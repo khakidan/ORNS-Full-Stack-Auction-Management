@@ -14,6 +14,7 @@ vi.mock("../services/paypalSweeperJob", () => ({
 }));
 
 import { app } from "../app";
+import { authCookieHeader } from "./helpers/session";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -21,7 +22,7 @@ const mockTokens = {
   expiry_date: Date.now() + 3600000
 };
 
-const authHeader = { "x-google-tokens": JSON.stringify(mockTokens) };
+const authHeader = authCookieHeader(mockTokens);
 
 describe('Auth Routes workflow', () => {
   beforeEach(() => {
@@ -63,20 +64,14 @@ describe('Auth Routes workflow', () => {
       );
 
       const response = await request(app).get('/auth/callback?code=valid-code-123');
-      // No longer a redirect: the response is an HTML bridge page whose
-      // inline script either postMessages the tokens back to
-      // window.opener (the OAuth popup path - see authRoutes.ts) or
-      // redirects the top-level tab itself, neither of which this
-      // server-side request simulates. Assert on the page's actual
-      // contract instead: 200 + html, the real session cookie set, and
-      // the same tokens embedded for the postMessage bridge to send.
+      // An HTML page (not a 302) because the post-login return path lives
+      // in the browser's sessionStorage (saved by useGoogleAuth.ts), which
+      // only the page's inline script can read. The tokens go only into
+      // the signed orns_session cookie.
       expect(response.status).toBe(200);
       expect(response.headers['content-type']).toContain('text/html');
-      expect(response.headers['set-cookie']).toBeDefined();
-      expect(response.text).toContain("OAUTH_AUTH_SUCCESS");
-      expect(response.text).toContain('"access_token":"workflow-mock-token"');
-      expect(response.text).toContain("window.opener.postMessage");
-      expect(response.text).not.toContain("id_token");
+      expect(String(response.headers['set-cookie'])).toContain("orns_session=");
+      expect(response.text).toContain("post_auth_redirect_path");
       // Best-effort background-sync credential persist (Code Hardening
       // item #2, Step 4) - fires for any login that returns a
       // refresh_token, which this mock response always does.
@@ -84,7 +79,7 @@ describe('Auth Routes workflow', () => {
       expect(mockPersistSweeperCredential).toHaveBeenCalledWith("workflow-mock-refresh", "test@orns.org");
     });
 
-    it('Happy path — the postMessage bridge targets window.location.origin, not "*", so a malicious window.opener cannot harvest another user\'s tokens via this page', async () => {
+    it('Never writes the OAuth tokens into the callback page - they live only in the httpOnly session cookie', async () => {
       server.use(
         http.post('https://oauth2.googleapis.com/token', () => {
           return HttpResponse.json({
@@ -101,8 +96,10 @@ describe('Auth Routes workflow', () => {
 
       const response = await request(app).get('/auth/callback?code=valid-code-123');
 
-      expect(response.text).toContain("window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', tokens: tokens }, window.location.origin)");
-      expect(response.text).not.toMatch(/postMessage\([^)]*,\s*['"]\*['"]\)/);
+      expect(response.status).toBe(200);
+      expect(response.text).not.toContain("workflow-mock-token");
+      expect(response.text).not.toContain("workflow-mock-refresh");
+      expect(response.text).not.toContain("postMessage");
     });
 
     it('Rejected domain — non-org email', async () => {

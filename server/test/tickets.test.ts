@@ -10,13 +10,14 @@ import { server } from "./setup";
 import { http, HttpResponse } from "msw";
 import { resetHandlersState, lastBulkWritePayload } from "./handlers";
 import { AUCTION_TICKETS_ITEM_ID } from "../utils/categoryHelpers";
+import { authCookieHeader } from "./helpers/session";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
   refresh_token: "workflow-mock-refresh",
   expiry_date: Date.now() + 3600000
 };
-const authHeader = { "x-google-tokens": JSON.stringify(mockTokens) };
+const authHeader = authCookieHeader(mockTokens);
 
 describe("Ticket Payment Status workflow", () => {
   beforeEach(() => {

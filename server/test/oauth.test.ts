@@ -59,12 +59,20 @@ describe("getOAuthClient", () => {
     expect((client as any).redirectUri).toBe("https://my-service-abc123.run.app/auth/callback");
   });
 
-  it("upgrades an ai.studio APP_URL to https and sets the callback path", () => {
-    process.env.APP_URL = "https://orns-auction-manager.ai.studio";
+  it("upgrades the cloud.run custom URL to https if misconfigured as http", () => {
+    process.env.APP_URL = "http://orns-auction-manager.cloud.run";
 
     const client = getOAuthClient();
 
-    expect((client as any).redirectUri).toBe("https://orns-auction-manager.ai.studio/auth/callback");
+    expect((client as any).redirectUri).toBe("https://orns-auction-manager.cloud.run/auth/callback");
+  });
+
+  it("keeps plain http for a localhost APP_URL (local development)", () => {
+    process.env.APP_URL = "http://localhost:3000";
+
+    const client = getOAuthClient();
+
+    expect((client as any).redirectUri).toBe("http://localhost:3000/auth/callback");
   });
 
 

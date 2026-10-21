@@ -29,14 +29,15 @@ export const getOAuthClient = (_req?: express.Request) => {
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
 
   if (!clientId || !clientSecret) {
-    throw new Error("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing from environment. Please check the Secrets panel in AI Studio.");
+    throw new Error("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing from environment. Set them in .env for local development, or in the Cloud Run service's environment variables.");
   }
 
   let baseUrl = process.env.APP_URL?.trim() || "http://localhost:3000";
   if (!/^https?:\/\//i.test(baseUrl)) {
     baseUrl = `https://${baseUrl}`;
   }
-  if ((baseUrl.includes("run.app") || baseUrl.includes("ais-") || baseUrl.includes("orns.org") || baseUrl.includes("ai.studio")) && baseUrl.startsWith("http:")) {
+  // Every deployed URL is HTTPS; only local development uses plain http.
+  if (baseUrl.startsWith("http:") && !/^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(baseUrl)) {
     baseUrl = baseUrl.replace("http:", "https:");
   }
 
