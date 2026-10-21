@@ -25,6 +25,7 @@ import { PayPalService } from "./paypalService";
 
 const SWEEPER_CREDENTIAL_COLLECTION = "system";
 const SWEEPER_CREDENTIAL_DOC = "paypalSweeperAuth";
+const SWEEPER_STATUS_DOC = "paypalSweeperStatus";
 const TEN_MINUTES_MS = 10 * 60 * 1000;
 const DEFAULT_INTERVAL_MINUTES = 5;
 
@@ -62,15 +63,16 @@ export interface PaypalSweepResult {
 export type PaypalSweepOutcome = PaypalSweepResult | { skipped: string };
 
 /**
- * In-process record of the sweeper's own health, for the Configuration
- * page's status card (Code Hardening item #2's two manual-only steps -
- * "an admin must sign in once" and "confirm the Node job is running
- * reliably" - were otherwise unverifiable from inside the app itself; see
- * docs/agents/refactor-opportunities.md). Deliberately in-memory, not
- * Firestore: this is a live "is the current server process healthy"
- * signal, not a durable record - it resets on restart by design, which is
- * itself useful information (a status card showing "no runs yet" right
- * after a deploy is accurate, not stale).
+ * In-process cache of the sweeper's last run, for the Configuration page's
+ * status card (Code Hardening item #2's two manual-only steps - "an admin
+ * must sign in once" and "confirm the Node job is running reliably" - were
+ * otherwise unverifiable from inside the app itself; see
+ * docs/agents/refactor-opportunities.md). Also mirrored to Firestore
+ * (`system/paypalSweeperStatus`, written by `runPaypalSweep` below) so the
+ * status card survives a Cloud Run redeploy instead of reporting "Never"
+ * on every new revision even though the sweep has genuinely run before -
+ * `getSweeperStatus` prefers this in-memory copy (cheap, no round trip)
+ * and falls back to the Firestore copy when the process is fresh.
  */
 let lastRun: { at: string; outcome: PaypalSweepOutcome } | null = null;
 let scheduleStartedAt: number | null = null;
@@ -97,16 +99,25 @@ export interface SweeperStatus {
  */
 export async function getSweeperStatus(): Promise<SweeperStatus> {
   let data: any = null;
+  let persistedRun: { at: string; outcome: PaypalSweepOutcome } | null = null;
   try {
     const db = getAdminFirestore();
-    const snap = await db.collection(SWEEPER_CREDENTIAL_COLLECTION).doc(SWEEPER_CREDENTIAL_DOC).get();
-    data = snap.data();
+    const [credentialSnap, statusSnap] = await Promise.all([
+      db.collection(SWEEPER_CREDENTIAL_COLLECTION).doc(SWEEPER_CREDENTIAL_DOC).get(),
+      db.collection(SWEEPER_CREDENTIAL_COLLECTION).doc(SWEEPER_STATUS_DOC).get(),
+    ]);
+    data = credentialSnap.data();
+    const statusData = statusSnap.data();
+    if (statusData?.at && statusData?.outcome) {
+      persistedRun = { at: statusData.at, outcome: statusData.outcome };
+    }
   } catch (err: any) {
     console.warn("[Sweeper] getSweeperStatus failed to query Firestore:", err?.message || err);
   }
 
+  const effectiveRun = lastRun ?? persistedRun;
   const intervalMs = configuredIntervalMinutes * 60 * 1000;
-  const anchor = lastRun ? new Date(lastRun.at).getTime() : scheduleStartedAt;
+  const anchor = effectiveRun ? new Date(effectiveRun.at).getTime() : scheduleStartedAt;
   const nextRunAt = anchor !== null ? new Date(anchor + intervalMs).toISOString() : null;
 
   return {
@@ -115,8 +126,8 @@ export async function getSweeperStatus(): Promise<SweeperStatus> {
     credentialUpdatedAt: data?.updatedAt ?? null,
     intervalMinutes: configuredIntervalMinutes,
     scheduleRunning: scheduleStartedAt !== null,
-    lastRunAt: lastRun?.at ?? null,
-    lastResult: lastRun?.outcome ?? null,
+    lastRunAt: effectiveRun?.at ?? null,
+    lastResult: effectiveRun?.outcome ?? null,
     nextRunAt,
   };
 }
@@ -294,6 +305,14 @@ async function runPaypalSweepInner(): Promise<PaypalSweepOutcome> {
 export async function runPaypalSweep(): Promise<PaypalSweepOutcome> {
   const outcome = await runPaypalSweepInner();
   lastRun = { at: new Date().toISOString(), outcome };
+
+  try {
+    const db = getAdminFirestore();
+    await db.collection(SWEEPER_CREDENTIAL_COLLECTION).doc(SWEEPER_STATUS_DOC).set(lastRun);
+  } catch (err: any) {
+    console.warn("[Sweeper] Failed to persist run status to Firestore:", err?.message || err);
+  }
+
   return outcome;
 }
 
