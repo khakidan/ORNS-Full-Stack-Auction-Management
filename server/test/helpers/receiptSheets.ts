@@ -49,7 +49,16 @@ export function mockReceiptSheets(opts: { bidderNumbers: any[][]; bidManagement:
     http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ params }) => {
       const range = decodeURIComponent(String(params.range));
       if (range.includes("Bid-Management")) return HttpResponse.json({ values: opts.bidManagement });
-      if (range.includes("Bidder-Numbers")) return HttpResponse.json({ values: bidderNumbers });
+      if (range.includes("Bidder-Numbers")) {
+        // A bounded range like 'Bidder-Numbers'!L1:N1 gets just that block;
+        // a whole-column range like A:N gets every row.
+        const bounded = range.match(/!([A-Z])(\d+):([A-Z])(\d+)$/);
+        if (bounded) {
+          const [c1, r1, c2, r2] = [bounded[1].charCodeAt(0) - 65, Number(bounded[2]), bounded[3].charCodeAt(0) - 65, Number(bounded[4])];
+          return HttpResponse.json({ values: bidderNumbers.slice(r1 - 1, r2).map((row) => row.slice(c1, c2 + 1)) });
+        }
+        return HttpResponse.json({ values: bidderNumbers });
+      }
       if (range.includes("Auction-Items")) return HttpResponse.json({ values: opts.auctionItems });
       return HttpResponse.json({ values: [] });
     }),

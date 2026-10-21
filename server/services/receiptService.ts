@@ -1,8 +1,9 @@
-import { google, script_v1, sheets_v4 } from "googleapis";
+import { google, script_v1 } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
 import { withLock } from "../utils/asyncLock";
+import { ensureTrackingHeaders } from "../utils/bidderNumbersHeaders";
 import { PayPalService } from "./paypalService";
-import { EMAILED_INVOICE_INDEX, RECEIPT_EMAIL_HEADERS, getSenderEmail, isValidEmailAddress, recordReceiptEmailed, sendReceiptEmail } from "./emailService";
+import { EMAILED_INVOICE_INDEX, getSenderEmail, isValidEmailAddress, recordReceiptEmailed, sendReceiptEmail } from "./emailService";
 import { BidderReceiptData, buildAllBidderReceiptsWithInvoices, findExistingInvoice } from "./receiptDataService";
 
 export async function createIndividualReceipt(script: script_v1.Script, scriptId: string, bidderId: string, receiptData: BidderReceiptData) {
@@ -74,7 +75,7 @@ export async function processAllEmails(
 
     const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:N" });
     const bidderRows = bNum.data.values || [];
-    await ensureReceiptEmailHeaders(sheets, spreadsheetId, bidderRows[0] || []);
+    await ensureTrackingHeaders(sheets, spreadsheetId).catch((e) => console.warn("[processAllEmails] Could not label Bidder-Numbers L1:N1:", e?.message || e));
 
     const senderEmail = await getSenderEmail(client);
     const result: EmailAllResult = { sentCount: 0, alreadySentCount: 0, failedCount: 0 };
@@ -109,15 +110,4 @@ export async function processAllEmails(
         }
     }
     return result;
-}
-
-/** Labels columns M/N on the Bidder-Numbers header row the first time receipts are batch-emailed. */
-async function ensureReceiptEmailHeaders(sheets: sheets_v4.Sheets, spreadsheetId: string, headerRow: any[]): Promise<void> {
-    if (headerRow[12] && headerRow[13]) return;
-    await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: "'Bidder-Numbers'!M1:N1",
-        valueInputOption: "RAW",
-        requestBody: { values: [RECEIPT_EMAIL_HEADERS] },
-    });
 }

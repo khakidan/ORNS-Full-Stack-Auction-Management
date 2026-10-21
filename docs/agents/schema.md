@@ -9,7 +9,7 @@ This document contains the structural definitions and schemas utilized for exter
 The application relies on Google Sheets as its primary database. The following sheets must conform to these strict column-indexed formats:
 
 ### Sheet: 'Bidder-Numbers'
-This sheet tracks all event registrations, active bidders, and their checkout/payment statuses. Header row (A-K) is written by `server/services/syncService.ts`'s `writeBidderNumbersSheet`; verified against that code and every reader/writer of this sheet on 2026-10-21 (this replaces an older table that listed Phone/Ticket Type/Table Number/Status/Notes columns that don't exist).
+This sheet tracks all event registrations, active bidders, and their checkout/payment statuses. The full A-N header row lives in `server/utils/bidderNumbersHeaders.ts` and is written when the tab is built (`syncService.ts`'s `writeBidderNumbersSheet`); on a tab built before L-N existed, `ensureTrackingHeaders` fills in any blank L1/M1/N1 the first time checkout or a receipt email writes to those columns (never overwriting a header someone typed). Table verified against that code and every reader/writer of this sheet on 2026-10-21 (this replaces an older table that listed Phone/Ticket Type/Table Number/Status/Notes columns that don't exist).
 
 | Column Index | Header | Type | Description |
 |---|---|---|---|
@@ -24,8 +24,8 @@ This sheet tracks all event registrations, active bidders, and their checkout/pa
 | Column I | `Payment Method` | String | `Cash`, `Check`, `Credit Card / PayPal`, `PayPal Verification Pending`, or `Failed Verification - Follow Up Required` |
 | **Column J** | `Invoice URL` | String | **Automated Field**: cached PayPal invoice checkout URL |
 | **Column K** | `Invoiced Amount` | Number | **Automated Field**: invoice total including PayPal processing fees |
-| **Column L** | *(no header)* | String (ISO) | **Automated Field**: timestamp set when checkout defers to "PayPal Verification Pending"; read and cleared by the PayPal sweeper (`server/services/paypalSweeperJob.ts`) |
-| **Column M** | `Receipt Emailed At` | String (ISO) | **Automated Field**: when this bidder's receipt was last emailed (`emailService.ts`'s `recordReceiptEmailed`). Header written by the first Email All run |
+| **Column L** | `PayPal Pending Since` | String (ISO) | **Automated Field**: timestamp set when checkout defers to "PayPal Verification Pending"; read and cleared by the PayPal sweeper (`server/services/paypalSweeperJob.ts`) |
+| **Column M** | `Receipt Emailed At` | String (ISO) | **Automated Field**: when this bidder's receipt was last emailed (`emailService.ts`'s `recordReceiptEmailed`) |
 | **Column N** | `Receipt Emailed Invoice` | String | **Automated Field**: the invoice link that email carried. Email All skips a bidder whose Column N equals their current Column J, so a re-run never re-sends an unchanged receipt. Clear it to force a re-send |
 
 ### Sheet: 'Bug-Reports'

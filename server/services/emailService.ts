@@ -1,6 +1,7 @@
 import { google, sheets_v4 } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
 import { withLock } from "../utils/asyncLock";
+import { ensureTrackingHeaders } from "../utils/bidderNumbersHeaders";
 import { PayPalService } from "./paypalService";
 import { attachInvoice, buildBidderReceipt, BidderReceiptWithInvoice } from "./receiptDataService";
 
@@ -13,7 +14,6 @@ import { attachInvoice, buildBidderReceipt, BidderReceiptWithInvoice } from "./r
 const EMAILED_AT_COL = "M";
 const EMAILED_INVOICE_COL = "N";
 export const EMAILED_INVOICE_INDEX = 13; // 0-based index of column N
-export const RECEIPT_EMAIL_HEADERS = ["Receipt Emailed At", "Receipt Emailed Invoice"];
 
 /** Escapes text for an HTML body or a double-quoted attribute. */
 function escapeHtml(value: unknown): string {
@@ -200,6 +200,7 @@ export async function processEmail(
 
   const sheets = google.sheets({ version: "v4", auth: client });
   await recordReceiptEmailed(sheets, spreadsheetId, attached.rowIndex, attached.receipt.paymentUrl);
+  await ensureTrackingHeaders(sheets, spreadsheetId).catch((e) => console.warn("[processEmail] Could not label Bidder-Numbers L1:N1:", e?.message || e));
 
   return { success: true };
 }

@@ -69,7 +69,7 @@ describe("processAllEmails", () => {
       expect(row[13]).toBe(row[9]); // emailed exactly the invoice now in Column J
       expect(row[12]).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     }
-    expect(mock.bidderNumbers[0].slice(12, 14)).toEqual(["Receipt Emailed At", "Receipt Emailed Invoice"]);
+    expect(mock.bidderNumbers[0].slice(11, 14)).toEqual(["PayPal Pending Since", "Receipt Emailed At", "Receipt Emailed Invoice"]);
   });
 
   it("running the batch again sends nothing, creates no new invoices, and reports the skips (ROADMAP.md H3)", async () => {

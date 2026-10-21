@@ -3,6 +3,7 @@ import { OAuth2Client } from "google-auth-library";
 import { getColumnLetter } from "../utils/columnUtils";
 import { executeGoogleSheetsTransaction, SheetOp } from "../services/sheetsService";
 import { withLock } from "../utils/asyncLock";
+import { ensureTrackingHeaders } from "../utils/bidderNumbersHeaders";
 import { PayPalService } from "./paypalService";
 import { buildBidderReceiptWithInvoice } from "./receiptDataService";
 
@@ -315,6 +316,10 @@ async function checkoutMarkPaidLocked(
   }
 
   await executeGoogleSheetsTransaction(sheets, paymentOps);
+  if (deferred) {
+    // Column L now holds a timestamp - make sure it has a label.
+    await ensureTrackingHeaders(sheets, spreadsheetId, bidderNumbersSheet).catch((e) => console.warn("[checkout] Could not label Bidder-Numbers L1:N1:", e?.message || e));
+  }
 
   // 2. Optional: Update Tickets Spreadsheet
   let attendeeUpdated = false;
