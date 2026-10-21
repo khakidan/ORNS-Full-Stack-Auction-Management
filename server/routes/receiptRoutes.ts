@@ -6,6 +6,7 @@ import { createIndividualReceipt, createAllReceipts, processAllEmails } from '..
 import { buildBidderReceiptWithInvoice, buildAllBidderReceiptsWithInvoices } from '../services/receiptDataService';
 import { PayPalService } from '../services/paypalService';
 import { requireAuth } from '../middleware/requireAuth';
+import { withLock } from '../utils/asyncLock';
 
 export default function createReceiptsRouter() {
   const router = Router();
@@ -29,7 +30,13 @@ export default function createReceiptsRouter() {
       // explicitly set to false by the client's Config toggle - a missing
       // value must never accidentally mean production.
       const paypal = new PayPalService({ isSandbox: paypalIsSandbox !== false });
-      const receiptResult = await buildBidderReceiptWithInvoice(client, spreadsheetId, itemsSpreadsheetId, String(bidderId), paypal);
+      // Same lock key checkoutMarkPaid holds while it creates invoices
+      // (ROADMAP.md H1): without it, a receipt and a checkout for the same
+      // bidder - or a client retry of this route - could each see "no
+      // invoice yet" and both create and send one.
+      const receiptResult = await withLock(`bidder-numbers:${spreadsheetId}`, () =>
+        buildBidderReceiptWithInvoice(client, spreadsheetId, itemsSpreadsheetId, String(bidderId), paypal)
+      );
       if (receiptResult.success === false) return res.status(400).json({ error: receiptResult.error });
 
       const script = google.script({ version: "v1", auth: client });
@@ -50,7 +57,11 @@ export default function createReceiptsRouter() {
     try {
       const client = getAuthenticatedClient(req.session.tokens);
       const paypal = new PayPalService({ isSandbox: paypalIsSandbox !== false });
-      const receipts = await buildAllBidderReceiptsWithInvoices(client, spreadsheetId, itemsSpreadsheetId, paypal);
+      // See /generate above - a retried or concurrent run now waits here,
+      // then reuses the invoices the first run already saved to J/K.
+      const receipts = await withLock(`bidder-numbers:${spreadsheetId}`, () =>
+        buildAllBidderReceiptsWithInvoices(client, spreadsheetId, itemsSpreadsheetId, paypal)
+      );
 
       const script = google.script({ version: "v1", auth: client });
       const result = await createAllReceipts(script, scriptId, receipts);

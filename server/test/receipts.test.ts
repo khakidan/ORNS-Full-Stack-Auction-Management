@@ -89,6 +89,51 @@ describe('Receipt Generate workflow', () => {
     expect(productionScriptCallLog).toContain('apiCreateIndividualReceipt');
   });
 
+  it('Concurrent requests for the same bidder create only one PayPal invoice (ROADMAP.md H1)', async () => {
+    // Bidder-Numbers with no invoice yet, backed by state so the first
+    // request's J/K write is visible to the second request's read.
+    const bidderRow = ['42', 'John', 'Doe', 'john@example.com', 'TRUE', '', '', '', '', '', ''];
+    let invoicesCreated = 0;
+    server.use(
+      http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
+        const range = decodeURIComponent(new URL(request.url).pathname.split('/').pop() || '');
+        if (range.includes('Bid-Management')) {
+          return HttpResponse.json({ values: [['42', 'Price'], ['', ''], ['', ''], ['801', '50']] });
+        }
+        if (range.includes('Bidder-Numbers')) {
+          return HttpResponse.json({ values: [['ID', 'First Name', 'Last Name', 'Email'], bidderRow] });
+        }
+        if (range.includes('Auction-Items')) {
+          return HttpResponse.json({ values: [['Item Number', 'Category', 'Item Name'], ['801', 'Food', 'Pizza Night']] });
+        }
+        return HttpResponse.json({ values: [] });
+      }),
+      http.put('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', async ({ request }) => {
+        const body: any = await request.clone().json();
+        bidderRow[9] = body.values[0][0];
+        bidderRow[10] = String(body.values[0][1]);
+        return HttpResponse.json({ updatedRows: 1 });
+      }),
+      http.post('https://api-m.sandbox.paypal.com/v2/invoicing/invoices', async () => {
+        invoicesCreated++;
+        // Widen the race window - without the lock, both requests read
+        // "no invoice yet" while this one is still in flight.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return HttpResponse.json({ id: 'INV2-MOCK-0000-0000-0001' }, { status: 201 });
+      })
+    );
+
+    const send = () => request(app)
+      .post('/api/receipts/generate')
+      .set(authHeader)
+      .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
+    const [first, second] = await Promise.all([send(), send()]);
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(invoicesCreated).toBe(1);
+  });
+
   it('Happy path — Node-resolved receipt data is forwarded to Apps Script', async () => {
     let capturedScriptBody: any = null;
 
