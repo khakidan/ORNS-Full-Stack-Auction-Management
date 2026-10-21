@@ -416,7 +416,6 @@ export default function createDataRouter() {
       const client = getAuthenticatedClient(req.session.tokens);
       const drive = google.drive({ version: "v3", auth: client });
 
-      console.log(`[Drive API] Cached Scopes: ${req.session.tokens.scope}`);
       console.log(`[Drive API] Fetching files for folderId: ${req.params.folderId}`);
       
       if (!req.params.folderId || req.params.folderId === "undefined" || req.params.folderId === "null" || req.params.folderId === "") {
