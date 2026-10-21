@@ -19,7 +19,11 @@ import { cacheControl } from './middleware/cacheControl';
 declare global {
   namespace Express {
     interface Request {
-      session: { tokens?: import('../src/types').GoogleTokens } | null;
+      session: {
+        tokens?: import('../src/types').GoogleTokens;
+        /** One-time OAuth `state`, set by /auth/url and consumed by /auth/callback. */
+        oauthState?: string;
+      } | null;
     }
   }
 }

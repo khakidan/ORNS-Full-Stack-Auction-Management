@@ -46,7 +46,7 @@ A separate, dedicated spreadsheet (its ID lives in `Config.bugReportsSpreadsheet
 | Column J | `Recent Console Activity` | String | Last ~20 `console.error`/`warn` entries + uncaught errors (`src/lib/errorBuffer.ts`) at submit time |
 | Column K | `Screenshot Link` | String | Google Drive view link (uploaded to `Config.bugReportsFolderId`), blank if no screenshot was captured/configured |
 
-If the Sheets write itself fails (no spreadsheet configured, an expired/missing OAuth session, a Sheets API error), the server falls back to writing the report as a self-contained `.md` file (+ sibling `.png` if a screenshot was captured) under a gitignored local `bug-reports/` directory at the repo root, so a report is never silently lost.
+If the Sheets write itself fails (no spreadsheet configured, an expired/missing OAuth session, a Sheets API error), the report is never silently lost: in production the server writes it as one structured Cloud Logging entry (`jsonPayload.bugReport`, screenshot omitted); locally it writes a self-contained `.md` file (+ sibling `.png` if a screenshot was captured) under a gitignored `bug-reports/` directory at the repo root.
 
 ---
 

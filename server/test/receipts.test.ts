@@ -6,7 +6,8 @@
  * Bidder-Numbers, Bid-Management, and Auction-Items data structures so that the 
  * `email-all` and `email-only` handlers operate with successfully built receipt data.
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { getPaypalIsSandbox } from "../services/sharedConfig";
 import request from "supertest";
 import { app } from "../app";
 import { server } from "./setup";
@@ -345,6 +346,24 @@ describe('Receipt Email-Only workflow', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
+  });
+
+  it('Uses the PayPal environment from Firestore, not the request body (ROADMAP.md M3)', async () => {
+    vi.mocked(getPaypalIsSandbox).mockResolvedValueOnce(false);
+    let liveHits = 0;
+    let sandboxHits = 0;
+    server.use(
+      http.post('https://api-m.paypal.com/v1/oauth2/token', () => { liveHits++; return HttpResponse.json({ error: 'invalid_client' }, { status: 401 }); }),
+      http.post('https://api-m.sandbox.paypal.com/v1/oauth2/token', () => { sandboxHits++; return HttpResponse.json({ access_token: 'x', expires_in: 3600 }); })
+    );
+
+    await request(app)
+      .post('/api/receipts/email-only')
+      .set(authHeader)
+      .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id', paypalIsSandbox: true });
+
+    expect(liveHits).toBeGreaterThan(0);
+    expect(sandboxHits).toBe(0);
   });
 
   it('Bidder not found in Bidder-Numbers — returns 400', async () => {

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import { google } from 'googleapis';
 import { getOAuthClient, SCOPES } from '../services/oauth';
 import { persistSweeperCredential } from '../services/paypalSweeperJob';
@@ -9,19 +10,29 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 }
 
-router.post("/log", (req, res) => {
-  console.log(`[CLIENT LOG] ${new Date().toISOString()}:`, JSON.stringify(req.body, null, 2));
-  res.status(200).end();
-});
+const ORG_DOMAIN = "orns.org";
+
+/** Constant-time string comparison (both values are ours or the query's - never logged). */
+function sameState(a: unknown, b: unknown): boolean {
+  if (typeof a !== "string" || typeof b !== "string" || !a || a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 router.get("/auth/url", (req, res, next) => {
   try {
     const client = getOAuthClient(req);
+    // A one-time `state` tied to this browser's session cookie
+    // (ROADMAP.md M2): the callback only accepts a code that comes back
+    // with it, so a link someone else started can't sign this browser
+    // into their account (login CSRF).
+    const state = crypto.randomBytes(24).toString("base64url");
+    req.session!.oauthState = state;
     const url = client.generateAuthUrl({
       access_type: "offline",
       scope: SCOPES,
       prompt: "select_account consent",
-      hd: "orns.org",
+      hd: ORG_DOMAIN,
+      state,
     });
     res.json({ url });
   } catch (error) {
@@ -30,7 +41,12 @@ router.get("/auth/url", (req, res, next) => {
 });
 
 router.get("/auth/callback", async (req, res, next) => {
-  const { code } = req.query;
+  const { code, state } = req.query;
+  const expectedState = req.session?.oauthState;
+  if (req.session) delete req.session.oauthState;
+  if (!sameState(state, expectedState)) {
+    return res.status(403).send(`<html><body>This sign-in link has expired or was started in another browser. <a href="/">Return to the app</a> and sign in again.</body></html>`);
+  }
   try {
     const client = getOAuthClient(req);
     const { tokens } = await client.getToken(code as string);
@@ -40,7 +56,9 @@ router.get("/auth/callback", async (req, res, next) => {
     const userInfo = await oauth2.userinfo.get();
     const email = userInfo.data.email || "";
 
-    if (!email.endsWith("@orns.org")) {
+    // `hd` is the account's Google Workspace domain - unlike the email
+    // suffix, a personal Google account can't claim it.
+    if (!email.endsWith(`@${ORG_DOMAIN}`) || userInfo.data.hd !== ORG_DOMAIN || userInfo.data.verified_email === false) {
       return res.status(403).send(`<html><body>Access Denied: @orns.org required.</body></html>`);
     }
 

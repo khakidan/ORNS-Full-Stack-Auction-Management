@@ -1,4 +1,5 @@
 import { google, sheets_v4 } from "googleapis";
+import { IDEMPOTENT_POST_RETRY } from "../utils/googleRetry";
 import { OAuth2Client } from "google-auth-library";
 import { getColumnLetter } from "../utils/columnUtils";
 import { executeGoogleSheetsTransaction, SheetOp } from "../services/sheetsService";
@@ -410,7 +411,7 @@ export async function closeAuctionAndCleanup(
         data: updates,
         valueInputOption: "USER_ENTERED"
       }
-    });
+    }, IDEMPOTENT_POST_RETRY);
   }
 
   return { success: true, count: updates.length };

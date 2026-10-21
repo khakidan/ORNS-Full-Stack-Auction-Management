@@ -141,7 +141,7 @@ describe("Checkout", () => {
       })
     );
     const printBody = JSON.parse(vi.mocked(fetchWithRetry).mock.calls[0][1]!.body as string);
-    expect(printBody).toEqual({ spreadsheetId: "mock-spreadsheet-id", receiptFolderId: "mock-folder-id", itemsSpreadsheetId: "mock-items-spreadsheet-id", paypalIsSandbox: false });
+    expect(printBody).toEqual({ spreadsheetId: "mock-spreadsheet-id", receiptFolderId: "mock-folder-id", itemsSpreadsheetId: "mock-items-spreadsheet-id" });
   });
 
   it("Email All Winners button calls the correct endpoint", async () => {
@@ -169,12 +169,11 @@ describe("Checkout", () => {
       })
     );
     const emailBody = JSON.parse(vi.mocked(fetchWithRetry).mock.calls[0][1]!.body as string);
-    // paypalIsSandbox matters: emailing now resolves each bidder's PayPal
-    // invoice, so a missing flag would mean sandbox links in live mode.
+    // No paypalIsSandbox: the server reads sandbox/live from Firestore
+    // itself (ROADMAP.md M3).
     expect(emailBody).toEqual({
       spreadsheetId: "mock-spreadsheet-id",
       itemsSpreadsheetId: "mock-items-spreadsheet-id",
-      paypalIsSandbox: false,
       idempotencyKey: expect.any(String)
     });
   });
@@ -223,7 +222,7 @@ describe("Checkout", () => {
       })
     );
     const emailOnlyCall = vi.mocked(fetchWithRetry).mock.calls.find(([url]) => String(url).includes("/receipts/email-only"))!;
-    expect(JSON.parse(emailOnlyCall[1]!.body as string).paypalIsSandbox).toBe(false);
+    expect(JSON.parse(emailOnlyCall[1]!.body as string)).not.toHaveProperty("paypalIsSandbox");
   });
 
   it("Empty state — no winners yet", async () => {

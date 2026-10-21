@@ -7,7 +7,6 @@ interface UseCheckoutReceiptActionsArgs {
   spreadsheetId: string;
   itemsSpreadsheetId: string;
   folderId: string;
-  paypalIsSandbox: boolean;
 }
 
 /**
@@ -15,7 +14,7 @@ interface UseCheckoutReceiptActionsArgs {
  * bidder's receipt). Split out of useCheckoutState.ts (was 416 lines) so
  * that container stays focused on composing the split-out pieces.
  */
-export function useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, folderId, paypalIsSandbox }: UseCheckoutReceiptActionsArgs) {
+export function useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, folderId }: UseCheckoutReceiptActionsArgs) {
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const handleEmailReceipt = async (winner: WinnerRecord) => {
@@ -27,10 +26,7 @@ export function useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, f
         body: JSON.stringify({
           bidderId: winner.bidderId,
           spreadsheetId,
-          itemsSpreadsheetId,
-          // The server resolves the bidder's PayPal invoice before emailing,
-          // so it needs the same sandbox/live mode as receipt printing.
-          paypalIsSandbox
+          itemsSpreadsheetId
         }),
         credentials: "include"
       });
@@ -57,8 +53,7 @@ export function useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, f
           bidderId: winner.bidderId,
           spreadsheetId,
           itemsSpreadsheetId,
-          receiptFolderId: folderId,
-          paypalIsSandbox
+          receiptFolderId: folderId
         }),
         credentials: "include"
       });

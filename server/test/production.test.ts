@@ -150,6 +150,29 @@ describe("Document and Presentation Creation workflow", () => {
     });
   });
 
+  it("runs the deployed script version (devMode: false) unless APPS_SCRIPT_DEV_MODE=true (ROADMAP.md M6)", async () => {
+    const devModes: unknown[] = [];
+    server.use(
+      http.post("https://script.googleapis.com/v1/scripts/:scriptId\\:run", async ({ request }) => {
+        devModes.push(((await request.json()) as any).devMode);
+        return HttpResponse.json({ response: { result: { success: true } } });
+      })
+    );
+    const send = () => request(app).post("/api/production/item-entry/catalog").set(authHeader).send({ folderId: "f", spreadsheetId: "test-items-ss-id" });
+
+    const previous = process.env.APPS_SCRIPT_DEV_MODE;
+    try {
+      delete process.env.APPS_SCRIPT_DEV_MODE;
+      await send();
+      process.env.APPS_SCRIPT_DEV_MODE = "true";
+      await send();
+    } finally {
+      if (previous === undefined) delete process.env.APPS_SCRIPT_DEV_MODE;
+      else process.env.APPS_SCRIPT_DEV_MODE = previous;
+    }
+    expect(devModes).toEqual([false, true]);
+  });
+
   it("handles Apps Script execution failure with 500 status", async () => {
     server.use(
       http.post("https://script.googleapis.com/v1/scripts/:scriptId\\:run", () => {

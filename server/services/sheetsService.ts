@@ -1,4 +1,5 @@
 import { sheets_v4 } from 'googleapis';
+import { IDEMPOTENT_POST_RETRY } from "../utils/googleRetry";
 import { normalizeRange } from '../utils/rangeUtils';
 
 export interface SheetOp {
@@ -85,7 +86,7 @@ export async function executeGoogleSheetsTransaction(
            await sheets.spreadsheets.values.clear({
              spreadsheetId: opToRevert.spreadsheetId,
              range: opToRevert.appendedRange,
-           });
+           }, IDEMPOTENT_POST_RETRY);
         }
       } catch (rollbackErr: any) {
          rollbackErrors.push(`Failed to revert ${opToRevert.range}: ${rollbackErr.message}`);

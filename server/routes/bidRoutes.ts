@@ -8,6 +8,7 @@ import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { registerWalkInBidder, checkInBidderWithBid } from '../services/bidderService';
 import { recordWinningBid, checkoutMarkPaid, closeAuctionAndCleanup } from '../services/auctionService';
 import { requireAuth } from '../middleware/requireAuth';
+import { getPaypalIsSandbox } from '../services/sharedConfig';
 
 export default function createBidRouter() {
   const router = Router();
@@ -78,7 +79,6 @@ export default function createBidRouter() {
       bidderNumbersSheet,
       attendeeInfo,
       paymentMethod,
-      paypalIsSandbox,
       idempotencyKey
     } = req.body;
 
@@ -97,7 +97,8 @@ export default function createBidRouter() {
           ticketsSpreadsheetId,
           bidderNumbersSheet,
           paymentMethod: paymentMethod || "cash",
-          paypalIsSandbox,
+          // From Firestore, never the request body (ROADMAP.md M3).
+          paypalIsSandbox: await getPaypalIsSandbox(),
           attendeeInfo
         });
 

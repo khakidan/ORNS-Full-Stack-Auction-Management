@@ -68,7 +68,7 @@ To keep developer directives clean, maintainable, and modular, the monolithic Ag
 
 ## 🚀 How This App Is Built and Shipped
 
-Claude Code writes the code in this local repo and pushes it to GitHub (`khakidan/ORNS-Full-Stack-Auction-Management`). **Every push to `main` deploys to production** - a Cloud Build trigger builds it and deploys it to the Cloud Run service `orns-auction-manager-gh` at https://orns-auction-manager.cloud.run (details in [`README.md`'s Deployment section](./docs/agents/README.md#deployment)). So: work on a branch, test locally (`npm run dev` - see "Running Locally" in the same README), and merge to `main` only when the change is ready to go live.
+Claude Code writes the code in this local repo and pushes it to GitHub (`khakidan/ORNS-Full-Stack-Auction-Management`). **Every push to `main` deploys to production** - a Cloud Build trigger builds it and deploys it to the Cloud Run service `orns-auction-manager-gh` at <https://orns-auction-manager.cloud.run> (details in [`README.md`'s Deployment section](./docs/agents/README.md#deployment)). So: work on a branch, test locally (`npm run dev` - see "Running Locally" in the same README), and merge to `main` only when the change is ready to go live.
 
 The app was originally built in Google AI Studio. AI Studio is no longer part of development or deployment, and any file in this repo can be edited like any other.
 
@@ -88,7 +88,7 @@ For the complete guidelines and background, see [`/docs/agents/patterns.md`](./d
 
 ## 🐛 In-App Bug Reports & Their Lifecycle
 
-The floating bug icon (bottom-left corner) / Ctrl-Cmd-Shift-B shortcut lets anyone using the app capture a bug/UI/workflow-friction note without breaking flow - it auto-captures the current route, app state, browser info, recent console activity, and an optional screenshot, then saves it as a row in the dedicated **Bug-Reports spreadsheet** (`Config.bugReportsSpreadsheetId`, see `schema.md`'s "Sheet: 'Bug-Reports'" section), with screenshots uploaded to `Config.bugReportsFolderId` on Drive. If that Sheets write fails for any reason (no spreadsheet configured, an expired session), the server falls back to a local `.md`/`.png` file pair under a gitignored `bug-reports/` directory at the repo root, so a report is never silently lost.
+The floating bug icon (bottom-left corner) / Ctrl-Cmd-Shift-B shortcut lets anyone using the app capture a bug/UI/workflow-friction note without breaking flow - it auto-captures the current route, app state, browser info, recent console activity, and an optional screenshot, then saves it as a row in the dedicated **Bug-Reports spreadsheet** (`Config.bugReportsSpreadsheetId`, see `schema.md`'s "Sheet: 'Bug-Reports'" section), with screenshots uploaded to `Config.bugReportsFolderId` on Drive. If that Sheets write fails for any reason (no spreadsheet configured, an expired session), the server falls back so a report is never silently lost: in production, to one structured Cloud Logging entry (search `jsonPayload.bugReport`; the screenshot is left out, since Cloud Run's disk is in-memory and wiped on restart); in local development, to a `.md`/`.png` file pair under a gitignored `bug-reports/` directory at the repo root. The endpoint is open to unauthenticated requests on purpose; those are rate-limited per IP and can't attach a screenshot.
 
 **These reports are a working note, not a permanent record.** Once a report's underlying fix has actually shipped and been written up in `CHANGELOG.md` (the real permanent history), close the loop:
 

@@ -1,4 +1,5 @@
 import { google, script_v1 } from "googleapis";
+import { appsScriptDevMode } from "../utils/appsScriptMode";
 import { OAuth2Client } from "google-auth-library";
 import { withLock } from "../utils/asyncLock";
 import { ensureTrackingHeaders } from "../utils/bidderNumbersHeaders";
@@ -16,7 +17,7 @@ export async function createIndividualReceipt(script: script_v1.Script, scriptId
           // the same 3rd position Class_GoogleAIStudio.gs's function
           // signature expects, rather than silently shifting it.
           parameters: [String(bidderId), null, receiptData],
-          devMode: true,
+          devMode: appsScriptDevMode(),
         },
       });
       if (response.data.error) throw new Error(response.data.error.message);
@@ -29,7 +30,7 @@ export async function createAllReceipts(script: script_v1.Script, scriptId: stri
         requestBody: {
           function: "apiCreateAllReceipts",
           parameters: [null, receipts],
-          devMode: true,
+          devMode: appsScriptDevMode(),
         },
       });
       if (response.data.error) throw new Error(response.data.error.message);

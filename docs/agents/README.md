@@ -27,7 +27,7 @@ The codebase is split into highly modular structural patterns:
 
 *   `/src/components/`: Extracted React components, including lazy-loaded operational interfaces (`ConfigSettings.tsx`, `AuctionTicketsWorkflow.tsx`, `AuctionItemsWorkflow.tsx`) and highly interactive sub-modules.
 *   `/server/routes/`: Isolated REST endpoint pathways (`authRoutes.ts`, `bidRoutes.ts`, `bundleRoutes.ts`, `dataRoutes.ts`, `health.ts`, `productionRoutes.ts`, `receiptRoutes.ts`, `setupRoutes.ts`).
-*   `/server/services/`: Global services such as `google.ts` (handling robust retry-with-backoff logic for Sheets API) and `genai.ts` (modern SDK configuration for Gemini assistant tools).
+*   `/server/services/`: Global services such as `google.ts` (the Google API retry policy - GET/PUT/PATCH/DELETE only; POSTs that are safe to repeat opt in with `server/utils/googleRetry.ts`) and `genai.ts` (modern SDK configuration for Gemini assistant tools).
 *   `/server/middleware/`: The centralized error handler, the `requireAuth` session guard, and no-store cache headers for `/api` and `/auth`.
 *   `/server/utils/`: Backend helpers - the in-process `withLock` mutex, idempotency cache, sheet read cache, range/column helpers, category and min-raise logic, the PayPal surcharge formula, and boot-time env validation.
 
@@ -46,6 +46,7 @@ are set on the service itself and there is no `.env`.
 *   `GEMINI_API_KEY`: Key for the server-side Gemini bundle-suggestion features
 *   `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET`: PayPal Invoicing API credentials (sandbox credentials locally)
 *   `PAYPAL_SWEEPER_INTERVAL_MINUTES`: Background PayPal sweep interval (default `5`); `0` turns the schedule off - see "Running Locally"
+*   `APPS_SCRIPT_DEV_MODE` (optional): `true` makes Apps Script calls run each script's latest *saved* editor code instead of its deployed API-executable version - only works for the script's owner; for trying `.gs` edits locally before deploying them. Default (unset/`false`) runs the deployed version - see "Deployment"
 *   `PORT` (optional): Port to bind to, default `3000`. Cloud Run sets it automatically
 
 `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and
@@ -144,6 +145,37 @@ the Cloud Run console, not in any file in this repo. The server binds
 `0.0.0.0:$PORT`; Cloud Run terminates HTTPS in front of it, and
 `app.set("trust proxy", 1)` is what lets Express treat those requests as
 secure for the `orns_session` cookie.
+
+**Required Cloud Run settings.** The server keeps several pieces of state
+in process memory - the `bidder-numbers:` lock that prevents duplicate
+PayPal invoices, the idempotency map, the sheet cache, the bug-report
+rate limit - and runs the PayPal sweeper on a `setInterval`. So the
+`orns-auction-manager-gh` service must have:
+
+*   **Maximum instances = 1** (Edit & deploy new revision -> Revisions
+    scaling). With two instances, two requests can each take "the" lock on
+    different machines.
+*   **CPU always allocated** (Billing: instance-based). Otherwise Cloud
+    Run throttles the CPU between requests and the sweeper's timer
+    doesn't fire reliably.
+
+To check: `gcloud run services describe orns-auction-manager-gh
+--region us-east1 --project orns-auction-bid-management
+--format="yaml(spec.template.metadata.annotations)"` should show
+`autoscaling.knative.dev/maxScale: '1'` and
+`run.googleapis.com/cpu-throttling: 'false'`.
+
+The service account also needs Firestore access (it already has it if
+the PayPal sweeper status card works): the server reads the PayPal
+sandbox/live setting from `settings/global` on every PayPal-touching
+request, and refuses to make PayPal calls if it can't.
+
+**Apps Script changes deploy separately.** The server calls each Apps
+Script project's *deployed* API-executable version (`devMode: false`), not
+the editor's latest saved code. After changing a `.gs` file, open that
+script's editor -> Deploy -> Manage deployments -> the API executable
+deployment -> Edit -> Version: **New version** -> Deploy. Until then the
+app keeps running the previous version.
 
 When the production URL changes (a new service or custom domain), two
 allowlists must be updated or sign-in breaks: the OAuth client's

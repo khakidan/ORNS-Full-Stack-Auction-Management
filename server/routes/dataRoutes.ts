@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { IDEMPOTENT_POST_RETRY } from '../utils/googleRetry';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
 import { performSheetSync } from '../services/syncService';
@@ -390,7 +391,7 @@ export default function createDataRouter() {
       const result = await sheets.spreadsheets.values.clear({
         spreadsheetId,
         range: normalizedRange,
-      });
+      }, IDEMPOTENT_POST_RETRY);
 
       clearCacheForSpreadsheet(spreadsheetId);
 

@@ -40,12 +40,12 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── auctionService.ts        # recordWinningBid, checkoutMarkPaid, closeAuctionAndCleanup
 │   │   ├── auctionSetupService.ts   # Annual rollover / new-auction spreadsheet setup
 │   │   ├── bidderService.ts         # Walk-in registration, check-in with bid, attendee field updates
-│   │   ├── bugReportService.ts      # Bug-Reports sheet rows, Drive screenshots, local fallback files
+│   │   ├── bugReportService.ts      # Bug-Reports sheet rows, Drive screenshots, log/local-file fallback
 │   │   ├── bundleService.ts         # Gemini bundle suggestions, bundle process/restore + resequencing
 │   │   ├── emailService.ts          # Receipt email HTML/MIME + Gmail send
 │   │   ├── firebaseAdmin.ts         # Admin Firestore (sweeper credential/status, settings/global reads)
 │   │   ├── genai.ts                 # Gemini SDK client
-│   │   ├── google.ts                # googleapis global retry config
+│   │   ├── google.ts                # googleapis global retry config (no POST retries)
 │   │   ├── itemDataService.ts       # Valid, sorted item list for Apps Script doc generators
 │   │   ├── itemService.ts           # Auction item add/update/delete/bulk-update + resequencing
 │   │   ├── oauth.ts                 # OAuth2 client (redirect URI from APP_URL only) and scopes
@@ -53,14 +53,18 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── paypalSweeperJob.ts      # Background PayPal verification sweep + status
 │   │   ├── receiptDataService.ts    # Won-item resolution and invoice get-or-create for receipts
 │   │   ├── receiptService.ts        # Apps Script receipt calls; batch email loop
+│   │   ├── sharedConfig.ts          # Server-side settings/global reads (PayPal sandbox/live)
 │   │   ├── sheetsService.ts         # Staged multi-op Sheets "transaction" with rollback
 │   │   └── syncService.ts           # Bidder-Numbers / Bid-Management sheet build from ticket sheets
 │   │
 │   ├── utils/
+│   │   ├── appsScriptMode.ts  # APPS_SCRIPT_DEV_MODE -> scripts.run devMode
 │   │   ├── asyncLock.ts       # In-process per-key mutex (withLock)
+│   │   ├── bidderNumbersHeaders.ts # Bidder-Numbers A-N header row; labels L1:N1
 │   │   ├── categoryHelpers.ts # Category ID bases and resequencing
 │   │   ├── columnUtils.ts     # Column index -> letter
 │   │   ├── financeUtils.ts    # calculatePayPalSurcharge (the only surcharge implementation)
+│   │   ├── googleRetry.ts     # IDEMPOTENT_POST_RETRY opt-in for safe-to-repeat POSTs
 │   │   ├── idempotency.ts     # In-memory idempotency-key cache
 │   │   ├── minRaiseHelpers.ts # Minimum-raise tiers
 │   │   ├── rangeUtils.ts      # A1 range sheet-name quoting

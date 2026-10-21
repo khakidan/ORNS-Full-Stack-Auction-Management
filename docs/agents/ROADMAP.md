@@ -18,22 +18,9 @@ Nothing outstanding - H1-H7 are all fixed (see `CHANGELOG.md`).
 
 ### Medium - security hardening / operational
 
-- **M1. Unauthenticated endpoints.**
-  - `POST /log` (`server/routes/authRoutes.ts`) pretty-prints up to 5 MB of arbitrary JSON from anyone into server logs (log flooding / Cloud Logging cost).
-  - `POST /api/bug-reports/`'s local-file fallback writes up to 5 MB to disk per anonymous request. On Cloud Run the writable filesystem is in-memory (OOM risk) and is wiped on instance recycle, so `AGENTS.md`'s "a report is never silently lost" guarantee doesn't hold in production.
-  - Spreadsheet formula injection on that same endpoint: `report.type`, `report.timestamp`, and the report ID (built from `timestamp`) skip `sanitizeForSheetFormula` in `appendBugReportToSheet` (`server/services/bugReportService.ts`).
+M1, M2, M3, M5, M6 and M7 are fixed (see `CHANGELOG.md`).
 
-- **M2. OAuth flow has no `state` parameter** (`server/routes/authRoutes.ts`'s `/auth/url` + `/auth/callback`), which allows login CSRF. The domain gate is also an email-suffix check only; checking the userinfo `hd` (Workspace domain) claim as well would be stricter.
-
-- **M3. Client chooses PayPal sandbox vs. production.** `paypalIsSandbox` is read from the request body in `receiptRoutes.ts` and `bidRoutes.ts`'s checkout, but from Firestore `settings/global` in the sweeper. A browser with stale config can create invoices in one mode that the sweeper then checks in the other. Read it server-side from Firestore everywhere.
-
-- **M4. Single-instance assumptions need Cloud Run settings to match.** `withLock`, the idempotency map, `sheetCache`, and the `setInterval` sweeper are all in-process (`asyncLock.ts`'s own comment: "not horizontally scaled"). That requires the Cloud Run service to run with max-instances = 1, and the sweeper also needs "CPU always allocated" (CPU is throttled between requests otherwise). Verify both on the live service and document them in `README.md`'s Deployment section.
-
-- **M5. Google API client retries non-idempotent POSTs.** `server/services/google.ts` sets `httpMethodsToRetry` to include `POST`, so a transient 5xx after the server already applied the write can duplicate a `values.append` row (walk-ins, Follow-Up rows) or a Gmail send.
-
-- **M6. Apps Script runs with `devMode: true` in production.** `productionRoutes.ts` and `receiptService.ts` call `scripts.run` with `devMode: true`, which executes whatever is currently *saved* in the script editor (not a versioned deployment) and requires every caller to have edit access to the script.
-
-- **M7. Dependencies.** `npm audit --omit=dev` reports 34 vulnerabilities (2 critical: `proxy-addr` via `express`, `websocket-driver` via `firebase`). `nodemailer` (high severity), `express-session`, and `session-file-store` have no importers anywhere and can be removed; `msw` (test mocks) and `shadcn` (a CLI) belong in `devDependencies`.
+- **M4. Single-instance assumptions need Cloud Run settings to match.** `withLock`, the idempotency map, `sheetCache`, the bug-report rate limit, the PayPal-mode cache, and the `setInterval` sweeper are all in-process (`asyncLock.ts`'s own comment: "not horizontally scaled"). That requires the Cloud Run service to run with **maximum instances = 1**, and the sweeper also needs **CPU always allocated** (instance-based billing; CPU is throttled between requests otherwise). Both settings are now documented in `README.md`'s Deployment section, but they haven't been confirmed on the live service (`gcloud` wasn't signed in during the audit). Remove this item once they're confirmed.
 
 ### Low
 

@@ -5,6 +5,7 @@ import { processEmail } from '../services/emailService';
 import { createIndividualReceipt, createAllReceipts, processAllEmails } from '../services/receiptService';
 import { buildBidderReceiptWithInvoice, buildAllBidderReceiptsWithInvoices } from '../services/receiptDataService';
 import { PayPalService } from '../services/paypalService';
+import { getPaypalIsSandbox } from '../services/sharedConfig';
 import { requireAuth } from '../middleware/requireAuth';
 import { withLock } from '../utils/asyncLock';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
@@ -14,7 +15,7 @@ export default function createReceiptsRouter() {
   router.use(requireAuth);
 
   router.post("/generate", async (req, res, next) => {
-    const { bidderId, spreadsheetId, itemsSpreadsheetId, paypalIsSandbox } = req.body;
+    const { bidderId, spreadsheetId, itemsSpreadsheetId } = req.body;
     const scriptId = process.env.SCRIPT_ID_BID_MANAGEMENT;
 
     if (!scriptId) return res.status(500).json({ error: "SCRIPT_ID_BID_MANAGEMENT not configured." });
@@ -27,10 +28,9 @@ export default function createReceiptsRouter() {
       // invoice itself now (see receiptDataService.ts) instead of
       // Class_ReceiptManager.gs doing either a second, independent way -
       // see refactor-opportunities.md's Code Hardening item #2 /
-      // CHANGELOG.md. `paypalIsSandbox` defaults to sandbox (true) unless
-      // explicitly set to false by the client's Config toggle - a missing
-      // value must never accidentally mean production.
-      const paypal = new PayPalService({ isSandbox: paypalIsSandbox !== false });
+      // CHANGELOG.md. Sandbox vs. live comes from Firestore, never the
+      // request body (ROADMAP.md M3 - see sharedConfig.ts).
+      const paypal = new PayPalService({ isSandbox: await getPaypalIsSandbox() });
       // Same lock key checkoutMarkPaid holds while it creates invoices
       // (ROADMAP.md H1): without it, a receipt and a checkout for the same
       // bidder - or a client retry of this route - could each see "no
@@ -49,7 +49,7 @@ export default function createReceiptsRouter() {
   });
 
   router.post("/generate-all", async (req, res, next) => {
-    const { spreadsheetId, itemsSpreadsheetId, paypalIsSandbox } = req.body;
+    const { spreadsheetId, itemsSpreadsheetId } = req.body;
     const scriptId = process.env.SCRIPT_ID_BID_MANAGEMENT;
 
     if (!scriptId) return res.status(500).json({ error: "SCRIPT_ID_BID_MANAGEMENT not configured." });
@@ -57,7 +57,7 @@ export default function createReceiptsRouter() {
 
     try {
       const client = getAuthenticatedClient(req.session.tokens);
-      const paypal = new PayPalService({ isSandbox: paypalIsSandbox !== false });
+      const paypal = new PayPalService({ isSandbox: await getPaypalIsSandbox() });
       // See /generate above - a retried or concurrent run now waits here,
       // then reuses the invoices the first run already saved to J/K.
       const receipts = await withLock(`bidder-numbers:${spreadsheetId}`, () =>
@@ -74,16 +74,15 @@ export default function createReceiptsRouter() {
 
 
   // Emailing resolves each bidder's PayPal invoice (ROADMAP.md H2), so,
-  // like /generate, these routes need `paypalIsSandbox` - and default to
-  // sandbox unless the client's Config toggle explicitly says false.
+  // like /generate, these routes need a PayPalService.
   router.post("/email-all", async (req, res, next) => {
-    const { spreadsheetId, itemsSpreadsheetId, paypalIsSandbox, idempotencyKey } = req.body;
+    const { spreadsheetId, itemsSpreadsheetId, idempotencyKey } = req.body;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
 
     try {
       const outcome = await withIdempotency("receipts/email-all", idempotencyKey, async () => {
         const client = getAuthenticatedClient(req.session.tokens);
-        const paypal = new PayPalService({ isSandbox: paypalIsSandbox !== false });
+        const paypal = new PayPalService({ isSandbox: await getPaypalIsSandbox() });
         const result = await processAllEmails(client, spreadsheetId, itemsSpreadsheetId, paypal);
         return { success: true, ...result };
       });
@@ -94,12 +93,12 @@ export default function createReceiptsRouter() {
   });
 
   router.post("/email-only", async (req, res, next) => {
-    const { bidderId, spreadsheetId, itemsSpreadsheetId, paypalIsSandbox } = req.body;
+    const { bidderId, spreadsheetId, itemsSpreadsheetId } = req.body;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
 
     try {
       const client = getAuthenticatedClient(req.session.tokens);
-      const paypal = new PayPalService({ isSandbox: paypalIsSandbox !== false });
+      const paypal = new PayPalService({ isSandbox: await getPaypalIsSandbox() });
       const result = await processEmail(client, spreadsheetId, String(bidderId), itemsSpreadsheetId, paypal);
 
       if (result.success === false) return res.status(400).json({ error: result.error });

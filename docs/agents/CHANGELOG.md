@@ -6,6 +6,28 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Fixed
 
+- **ROADMAP.md M1/M2/M3/M5/M6/M7 (2026-10-21 code audit): security hardening and operational fixes.**
+  - **M1: unauthenticated endpoints.**
+    - Removed `POST /log`. Nothing in the client called it, and it printed up to 5 MB of anyone's JSON into the server logs.
+    - `POST /api/bug-reports` (still open, so a broken session can be reported):
+      - `type` must be one of the dialog's three values, and `timestamp` is re-serialized as ISO 8601 or replaced with the server time.
+      - The Report ID, timestamp and type columns now go through `sanitizeForSheetFormula` like the rest.
+      - Every text field is capped at 50,000 characters and console activity at 200 entries.
+      - Requests without a session are limited to 5 per IP per 10 minutes (429 after that) and can't attach a screenshot.
+    - In production the fallback for a failed Sheet save is now one structured Cloud Logging entry (`jsonPayload.bugReport`, screenshot left out) instead of a file on Cloud Run's in-memory disk, which was lost whenever an instance recycled. Local development still writes `bug-reports/*.md`. The response's `storage` is `"log"` in that case.
+  - **M2: OAuth login CSRF.** `/auth/url` stores a random one-time `state` in the session cookie and sends it to Google. `/auth/callback` rejects (403) any callback whose `state` is missing, wrong, or already used, before it exchanges the code. The domain gate now also requires the userinfo `hd` (Workspace domain) claim to be `orns.org` and the email to be verified, not just an `@orns.org` suffix.
+  - **M3: PayPal sandbox/live is decided server-side.** New `server/services/sharedConfig.ts` (`getPaypalIsSandbox`) reads `paypalIsSandbox` from Firestore `settings/global` with a 30-second cache. Receipt generate/generate-all/email-only/email-all and checkout use it, so they always agree with the sweeper. The client no longer sends the flag, and a body value is ignored. If Firestore can't be read and no value has been read before, the request fails with an explicit error instead of guessing an environment. A failed refresh keeps the last value read.
+  - **M5: no automatic retry of POSTs.** `server/services/google.ts` dropped `POST` from the global retry list, so a 5xx on `values.append`, `spreadsheets.batchUpdate`, Gmail send or Apps Script run is no longer repeated (if Google had already applied it, the retry added a duplicate row or email). Calls that are safe to repeat opt back in with `IDEMPOTENT_POST_RETRY` (`server/utils/googleRetry.ts`): `values.batchUpdate` when closing the auction, the transaction rollback's `values.clear`, and the clear-range route.
+  - **M6: Apps Script runs the deployed version.** `scripts.run` now sends `devMode: false` unless `APPS_SCRIPT_DEV_MODE=true` (`server/utils/appsScriptMode.ts`). `devMode: true` only applied for the script's owner, so the owner ran the editor's latest saved code while everyone else ran the deployed version. **A .gs change now goes live only after a new version of that script's API-executable deployment.**
+  - **M7: dependencies.** Removed unused `nodemailer`, `express-session` and `session-file-store` (and their `@types`); moved `msw` and `shadcn` to `devDependencies`; ran `npm audit fix`; and added `overrides` for `qs` (^6.16.1) and the client Firebase SDK's `@grpc/grpc-js` (^1.14.6). `npm audit --omit=dev` went from 34 vulnerabilities (2 critical) to 0. Seven high-severity findings remain, all dev-only (`braces` via the `shadcn` CLI, no fix published).
+  - Tests: new `sharedConfig.test.ts` and `googleRetry.test.ts`. New cases in:
+    - `auth.test.ts`: state missing, wrong, or replayed; `hd` missing.
+    - `bugReportRoutes.test.ts`: type validation, timestamp/ID columns, field caps, rate limit, anonymous screenshot dropped, production log fallback.
+    - `receipts.test.ts`: the body's sandbox flag is ignored.
+    - `production.test.ts`: `devMode`.
+
+    `server/test/setup.ts` mocks `sharedConfig` to sandbox for every test. Backend 511 -> 530, total 1147 -> 1166.
+
 - **Bidder-Numbers columns L-N now always have header labels.** Column L (the PayPal-pending timestamp) never had one, and M/N were only labeled by an Email All run. One header list now lives in `server/utils/bidderNumbersHeaders.ts`: A-K plus `PayPal Pending Since`, `Receipt Emailed At`, `Receipt Emailed Invoice`. Building the tab writes all 14. On an existing tab, `ensureTrackingHeaders` fills in any blank L1/M1/N1 whenever checkout defers to PayPal or a receipt is emailed (single or batch), keeping any header someone already typed. The header write is best-effort and never blocks a checkout or email. Five new tests in `bidderNumbersHeaders.test.ts`. Totals 1142 -> 1147 (511 backend / 636 frontend).
 
 - **ROADMAP.md H2/H3 (2026-10-21 code audit): receipt emails linked stale invoices, re-sent on every batch run, and were built from unescaped sheet text.**

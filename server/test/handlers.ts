@@ -256,7 +256,7 @@ export const handlers = [
   // app handler above uses v3. Defaults to an @orns.org email;
   // auth.test.ts overrides this per-test to exercise the rejection path.
   http.get('https://www.googleapis.com/oauth2/v2/userinfo', () => {
-    return HttpResponse.json({ email: 'test@orns.org', name: 'Test User' });
+    return HttpResponse.json({ email: 'test@orns.org', name: 'Test User', hd: 'orns.org', verified_email: true });
   }),
 
   // PayPal sandbox handlers - default success responses so any test that

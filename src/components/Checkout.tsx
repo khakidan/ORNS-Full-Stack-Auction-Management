@@ -30,7 +30,6 @@ export default function Checkout() {
   const bidManagementSheet = config.bidManagementSheet;
   const bidderNumbersSheet = config.bidderNumbersSheet;
   const folderId = config.receiptFolderId;
-  const paypalIsSandbox = config.paypalIsSandbox;
 
   const state = useCheckoutState({
     bidders,
@@ -43,7 +42,6 @@ export default function Checkout() {
     bidManagementSheet,
     bidderNumbersSheet,
     folderId,
-    paypalIsSandbox,
   });
 
   return (
