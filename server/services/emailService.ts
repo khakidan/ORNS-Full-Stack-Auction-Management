@@ -5,6 +5,7 @@ import { ensureTrackingHeaders } from "../utils/bidderNumbersHeaders";
 import { PayPalService } from "./paypalService";
 import { attachInvoice, buildBidderReceipt, BidderReceiptWithInvoice, DEFAULT_SHEET_NAMES, SheetNames } from "./receiptDataService";
 import { quoteSheetName } from "../utils/rangeUtils";
+import { isValidEmailAddress } from "../utils/emailAddress";
 
 /**
  * Bidder-Numbers columns M/N record each receipt email: when it was sent,
@@ -102,10 +103,7 @@ function encodeHeaderText(value: string): string {
   return /^[\x20-\x7e]*$/.test(clean) ? clean : `=?UTF-8?B?${Buffer.from(clean, "utf-8").toString("base64")}?=`;
 }
 
-/** One plain address: no whitespace, no separators that could add recipients, no header syntax. */
-export function isValidEmailAddress(address: string): boolean {
-  return /^[^\s@,;<>"()]+@[^\s@,;<>"()]+\.[^\s@,;<>"()]+$/.test(address);
-}
+export { isValidEmailAddress };
 
 export function createRawEmail(to: string, subject: string, htmlBody: string, fromName?: string, fromEmail?: string): string {
   // A plain-ASCII display name is quoted; an RFC 2047-encoded one must

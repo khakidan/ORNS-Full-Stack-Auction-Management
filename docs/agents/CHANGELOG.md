@@ -6,24 +6,33 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Fixed
 
-- **ROADMAP.md L1-L7, L9 (2026-10-21 code audit): low-severity fixes.** L8 is still open; see `ROADMAP.md`.
+- **ROADMAP.md L1-L9 (2026-10-21 code audit): low-severity fixes.**
   - **L1: receipts and emails use the configured tab names.** Receipt generate/generate-all, email-only/email-all, and checkout's create-an-invoice path now read and write the Config's `bidderNumbersSheet`/`bidManagementSheet` (sent in the request body, as checkout already did) instead of hardcoded `'Bidder-Numbers'`/`'Bid-Management'`. A missing name falls back to the default. Names are quoted for A1 notation by the new `quoteSheetName` (`server/utils/rangeUtils.ts`), so a name with an apostrophe works. Sheet setup/sync and the Apps Scripts still create and use the default names, so renaming the tabs is still not supported end to end.
   - **L2: checkout treats `MARKED_AS_PAID` as paid**, like the sweeper. Both now use `isPaidInvoiceStatus` (`paypalService.ts`).
-  - **L3: a failed cash/check recording on PayPal is no longer silent.** If PayPal rejects or errors on `recordOfflinePayment`, checkout still marks the bidder paid (the money is in hand), but the response carries a `warning` that the checkout screen shows. The warning says the invoice is still open and payable, so staff should mark it paid in the PayPal dashboard. The recorded amount stays the invoice's own total (Column K): recording only the cash subtotal would leave the invoice part-paid, still asking the bidder for the surcharge line.
+  - **L3: cash/check payers no longer show a PayPal balance, and failures aren't silent.**
+    - Checkout first takes the card-surcharge line off the bidder's invoice, using new `PayPalService.removeSurchargeLine`. That's a full-replace `PUT` with `send_to_recipient=false&send_to_invoicer=false`, so nobody is emailed.
+    - It then records the payment at the fee-free total, which leaves no balance. Before, the payment was recorded at the surcharge-inclusive Column K total, so PayPal's ledger overstated cash by the fee.
+    - If the surcharge can't be removed, the payment is recorded at the full invoice total (the old behavior), which still closes the invoice.
+    - If PayPal already shows the invoice paid, no cash is recorded and staff are warned about a possible double payment.
+    - If recording fails (an error or a `false` return), the bidder is still marked paid (the money is in hand). The response carries a `warning`, shown on the checkout screen, saying the invoice is still payable online.
+    - Column K is deliberately left at the original total. A later receipt run compares it against the expected total to reuse the invoice; changing it would make that run cancel this invoice and send a new one.
   - **L4: check-in checks its inputs.** `check-in-with-bid` returns 400 for a non-numeric `bidValue`, and for a bidder missing from Bidder-Numbers. Before, it added the ticket bid and reported `checkedIn: true` without checking anyone in. Nothing is written in either case.
   - **L5: the 5-second Sheets read cache is per user.** Keys include a hash of the session's Google token, so one user's cached read is never served to another user who may not have access to that spreadsheet.
   - **L6: error text only for signed-in staff.** The central error handler still returns `message` to signed-in users, because several failures tell staff what to fix by hand. Requests without a session get only `{error: "Internal Server Error"}`, unless body-parser marked the error safe to show (e.g. 413).
   - **L7: Drive folder IDs are validated** (letters, digits, `-`, `_`) before being put into the Drive `q` query. Anything else returns 400.
+  - **L8: invoices for bidders with no usable email go to `web-admin@orns.org`** (`FALLBACK_INVOICE_EMAIL`, `receiptDataService.ts`), still in the bidder's name, so staff get the invoice email and its payment link. Before, they went to a fake `no-reply@example.com`. "Usable" is the same `isValidEmailAddress` check the receipt emails use, now in `server/utils/emailAddress.ts`.
   - **L9: security headers on every response** (`server/middleware/securityHeaders.ts`): `Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and HSTS on the deployed HTTPS build. The CSP doesn't restrict scripts, styles or connections; an allow-list would need testing against Google Fonts, Firebase and Vite.
   - Tests: new `securityHeaders.test.ts`. New cases in:
     - `receiptDataService.test.ts`: renamed tabs, including one with an apostrophe.
-    - `checkoutMarkPaid.test.ts`: `MARKED_AS_PAID`; PayPal recording throws, returns false, or succeeds.
+    - `checkoutMarkPaid.test.ts`: `MARKED_AS_PAID`; surcharge removed and cash recorded at the fee-free total; fallback to the full total; invoice already paid; PayPal recording throws, returns false, or succeeds.
+    - `paypalService.test.ts`: `removeSurchargeLine` (PUT body and query, already paid, no fee line, rejected update).
+    - `receiptDataService.test.ts` (L8): no email and unusable email go to `web-admin@orns.org`; a real email is used as is.
     - `tickets.test.ts`: unknown bidder, non-numeric `bidValue`.
     - `proxyRoutes.test.ts`: per-user cache, Drive ID injection.
     - `middleware.test.ts`: anonymous error body.
     - `Checkout.test.tsx`: tab names sent; warning toast.
 
-    Each new backend case fails on the old code. Backend 533 -> 545, frontend 637 -> 638, total 1170 -> 1183.
+    Each new backend case fails on the old code. Backend 533 -> 554, frontend 637 -> 638, total 1170 -> 1192.
 
 - **ROADMAP.md M4: the PayPal sweeper runs from Cloud Scheduler instead of an in-process timer.** The `setInterval` in `server.ts` needed Cloud Run's instance-based billing (and realistically a minimum of 1 instance) to fire reliably, which costs money all year for an app used one night a year.
   - New `POST /internal/paypal-sweep` (`server/routes/schedulerRoutes.ts`, no session) runs one sweep when the `X-Sweeper-Secret` header matches `SWEEPER_TRIGGER_SECRET`. It returns 401 on a wrong secret, and 404 when the variable is unset, which is the local default.

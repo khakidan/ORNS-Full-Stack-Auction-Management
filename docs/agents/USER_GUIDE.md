@@ -38,10 +38,12 @@ This application is designed to streamline the operation of live and online char
 3. Review the items they have won.
 4. If a bidder has an invalid/missing email, the **Email Receipt** button will be disabled for them.
 5. Use the **Mark Paid** button once payment is received.
+   - **Cash or check:** the app takes the card processing fee off the bidder's PayPal invoice and records the payment, so PayPal shows it paid in full with nothing left owing. If a yellow warning appears instead, follow what it says (usually: mark the invoice paid in the PayPal dashboard).
 6. Use **Print Receipt** or **Email Receipt** to provide the bidder with transaction details.
 
 ## Troubleshooting / Quick Fixes
 
 - **"Item #:" vs "Walk-In Ticket" Error**: If an item shows "Walk-In Ticket" instead of an ID, contact the technical administrator immediately to fix the spreadsheet row mapping.
 - **Missing Email Receipt Option**: If the button is disabled, the bidder does not have a valid email address on file. Please update the bidder's information in the **Bidders** tab first.
+- **PayPal invoices for bidders with no email**: these go to **web-admin@orns.org** (still in the bidder's name), so staff have the payment link if the bidder needs it.
 - **Sync Issues**: If data is not appearing in the Google Sheets, verify the spreadsheet IDs in **Config Settings**.

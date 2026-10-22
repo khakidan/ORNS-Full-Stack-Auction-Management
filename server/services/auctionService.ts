@@ -273,27 +273,45 @@ async function checkoutMarkPaidLocked(
     );
 
     // Closes the bidder's PayPal invoice so they can't also pay it online.
-    // Recorded at the invoice's own total (Column K, which includes the
-    // card surcharge line) rather than the cash subtotal: a smaller amount
-    // would leave the invoice part-paid, still asking the bidder for the
-    // surcharge. The sheet, not PayPal, is the record of what was paid.
+    // A cash/check payer doesn't owe the card surcharge, so that line comes
+    // off the invoice first and the payment is recorded at what's left -
+    // leaving no balance (ROADMAP.md L3). If the surcharge can't be removed,
+    // the payment is recorded at the invoice's full total (Column K)
+    // instead, which still closes it. Column K is left as is: it's what a
+    // later receipt run compares against to reuse this invoice, so changing
+    // it would make that run cancel this invoice and send a new one.
     //
     // A failure doesn't block checkout - the cash/check is in hand - but
-    // it's no longer silent (ROADMAP.md L3): the invoice is still open and
-    // payable, so staff are told to close it by hand.
+    // it's never silent: staff get a `warning` saying what to fix by hand.
     if (invoiceId) {
-      let recorded = false;
-      let reason = "PayPal rejected the request";
+      let amount = parseFloat(invoicedAmountCell) || 0;
+      let paidOnlineStatus: string | null = null;
       try {
-        recorded = await paypal.recordOfflinePayment(invoiceId, label, parseFloat(invoicedAmountCell) || 0);
+        const adjusted = await paypal.removeSurchargeLine(invoiceId);
+        if (isPaidInvoiceStatus(adjusted.status)) paidOnlineStatus = adjusted.status;
+        else amount = adjusted.total;
       } catch (e: any) {
-        reason = e?.message || String(e);
+        console.warn(`[checkout] Couldn't remove the card surcharge from invoice ${invoiceId}; recording the full invoice amount instead: ${e?.message || e}`);
       }
-      if (!recorded) {
-        console.warn(`[checkout] Couldn't record bidder ${bidderId}'s ${label.toLowerCase()} payment on PayPal invoice ${invoiceId}: ${reason}`);
+
+      if (paidOnlineStatus) {
         warning =
-          `Bidder ${bidderId} is marked paid (${label}), but PayPal didn't record the payment on invoice ${invoiceId}, so it can still be paid online. ` +
-          `Mark it paid in the PayPal dashboard.`;
+          `Bidder ${bidderId} is marked paid (${label}), but PayPal shows invoice ${invoiceId} as already paid (${paidOnlineStatus}). ` +
+          `Check for a double payment before taking the ${label.toLowerCase()}.`;
+      } else {
+        let recorded = false;
+        let reason = "PayPal rejected the request";
+        try {
+          recorded = await paypal.recordOfflinePayment(invoiceId, label, amount);
+        } catch (e: any) {
+          reason = e?.message || String(e);
+        }
+        if (!recorded) {
+          console.warn(`[checkout] Couldn't record bidder ${bidderId}'s ${label.toLowerCase()} payment on PayPal invoice ${invoiceId}: ${reason}`);
+          warning =
+            `Bidder ${bidderId} is marked paid (${label}), but PayPal didn't record the payment on invoice ${invoiceId}, so it can still be paid online. ` +
+            `Mark it paid in the PayPal dashboard.`;
+        }
       }
     }
   } else if (method === "credit_card") {

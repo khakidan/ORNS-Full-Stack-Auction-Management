@@ -252,6 +252,41 @@ describe("resolveInvoiceUrl", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["no email address", ""],
+    ["an unusable email address", "n/a"],
+  ])("sends the invoice to web-admin@orns.org for a bidder with %s (ROADMAP.md L8)", async (_label, email) => {
+    const responses = [
+      { status: 200, text: async () => "", json: async () => ({ access_token: "tok" }) },
+      { status: 201, text: async () => JSON.stringify({ id: "INV2-NEW" }) },
+      { status: 200, text: async () => JSON.stringify({ links: [{ rel: "payer-action", href: "https://www.sandbox.paypal.com/invoice/p/#INV2-NEW" }] }) },
+    ];
+    let i = 0;
+    const fetcher = vi.fn(() => Promise.resolve(responses[i++] as any));
+
+    await resolveInvoiceUrl(newSandboxPaypal({ fetcher }), { ...RECEIPT_50, email }, "101", null);
+
+    const draft = JSON.parse((fetcher.mock.calls[1] as any[])[1].body);
+    expect(draft.primary_recipients[0].billing_info.email_address).toBe("web-admin@orns.org");
+    // Still the bidder's name, so staff can tell whose invoice it is.
+    expect(draft.primary_recipients[0].billing_info.name.given_name).toBe(RECEIPT_50.firstName);
+  });
+
+  it("sends the invoice to the bidder's own address when they have one", async () => {
+    const responses = [
+      { status: 200, text: async () => "", json: async () => ({ access_token: "tok" }) },
+      { status: 201, text: async () => JSON.stringify({ id: "INV2-NEW" }) },
+      { status: 200, text: async () => "{}" },
+    ];
+    let i = 0;
+    const fetcher = vi.fn(() => Promise.resolve(responses[i++] as any));
+
+    await resolveInvoiceUrl(newSandboxPaypal({ fetcher }), { ...RECEIPT_50, email: " alice@example.com " }, "101", null);
+
+    const draft = JSON.parse((fetcher.mock.calls[1] as any[])[1].body);
+    expect(draft.primary_recipients[0].billing_info.email_address).toBe("alice@example.com");
+  });
+
   it("cancels a stale invoice and creates a fresh one when the amount no longer matches", async () => {
     const responses = [
       { status: 200, text: async () => "", json: async () => ({ access_token: "tok" }) }, // cancel's token fetch

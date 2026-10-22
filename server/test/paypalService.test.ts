@@ -307,3 +307,78 @@ describe("PayPalService.getInvoiceStatus", () => {
     await expect(paypal.getInvoiceStatus("")).rejects.toThrow(/Invoice ID is required/);
   });
 });
+
+describe("PayPalService.removeSurchargeLine (ROADMAP.md L3 - cash/check payers don't owe the surcharge)", () => {
+  const INVOICE = {
+    id: "INV2-AAAA",
+    status: "UNPAID",
+    detail: { currency_code: "USD", reference: "Bidder #101" },
+    primary_recipients: [{ billing_info: { email_address: "alice@example.com" } }],
+    items: [
+      { name: "Weekend Cabin", quantity: "1", unit_amount: { currency_code: "USD", value: "60.00" } },
+      { name: "Gift Basket", quantity: "1", unit_amount: { currency_code: "USD", value: "40.00" } },
+      { name: "Merchant Processing Surcharge Fee", quantity: "1", unit_amount: { currency_code: "USD", value: "3.98" } },
+    ],
+    amount: { currency_code: "USD", value: "103.98" },
+    due_amount: { currency_code: "USD", value: "103.98" },
+    links: [{ rel: "self", href: "https://api-m.sandbox.paypal.com/v2/invoicing/invoices/INV2-AAAA" }],
+  };
+
+  it("drops the surcharge line with a full-replace PUT that emails nobody, and returns the fee-free total", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(200, INVOICE))
+      .mockResolvedValueOnce(mockFetchResponse(200, { ...INVOICE, items: INVOICE.items.slice(0, 2) }));
+    const paypal = newService({ fetcher });
+
+    const result = await paypal.removeSurchargeLine("INV2-AAAA");
+
+    expect(result).toEqual({ status: "UNPAID", total: 100, removed: true });
+    const [url, init] = fetcher.mock.calls[2];
+    expect(url).toBe("https://api-m.sandbox.paypal.com/v2/invoicing/invoices/INV2-AAAA?send_to_recipient=false&send_to_invoicer=false");
+    expect(init.method).toBe("PUT");
+    const body = JSON.parse(init.body);
+    expect(body.items.map((i: any) => i.name)).toEqual(["Weekend Cabin", "Gift Basket"]);
+    // PayPal recomputes these from the lines; sending the old ones back would conflict.
+    expect(body).not.toHaveProperty("amount");
+    expect(body).not.toHaveProperty("due_amount");
+    expect(body).not.toHaveProperty("links");
+    // Everything else is sent back unchanged (PUT clears what's left out).
+    expect(body.primary_recipients).toEqual(INVOICE.primary_recipients);
+    expect(body.detail).toEqual(INVOICE.detail);
+  });
+
+  it("changes nothing on an invoice that's already paid", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(200, { ...INVOICE, status: "PAID" }));
+    const paypal = newService({ fetcher });
+
+    const result = await paypal.removeSurchargeLine("INV2-AAAA");
+
+    expect(result).toEqual({ status: "PAID", total: 103.98, removed: false });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("changes nothing when there's no surcharge line (already removed)", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(200, { ...INVOICE, items: INVOICE.items.slice(0, 2), amount: { value: "100.00" } }));
+    const paypal = newService({ fetcher });
+
+    const result = await paypal.removeSurchargeLine("INV2-AAAA");
+
+    expect(result).toEqual({ status: "UNPAID", total: 100, removed: false });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws when PayPal rejects the update", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(200, INVOICE))
+      .mockResolvedValueOnce(mockFetchResponse(422, { name: "UNPROCESSABLE_ENTITY" }));
+    const paypal = newService({ fetcher });
+
+    await expect(paypal.removeSurchargeLine("INV2-AAAA")).rejects.toThrow(/update failed \(422\)/);
+  });
+});

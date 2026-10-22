@@ -2,6 +2,15 @@ import { google } from "googleapis";
 import { PayPalService, PayPalBidderInfo, PayPalLineItem } from "./paypalService";
 import { calculatePayPalSurcharge } from "../utils/financeUtils";
 import { quoteSheetName } from "../utils/rangeUtils";
+import { isValidEmailAddress } from "../utils/emailAddress";
+
+/**
+ * Who a PayPal invoice goes to when the bidder has no usable email address
+ * (ROADMAP.md L8). PayPal needs a recipient address; this one is ORNS's
+ * own, so staff get the invoice email and its payment link and can pass
+ * it on. Used to be a fake no-reply@example.com nobody could read.
+ */
+export const FALLBACK_INVOICE_EMAIL = "web-admin@orns.org";
 
 /**
  * Single shared implementation of "resolve a bidder's winning items and
@@ -304,8 +313,9 @@ export async function resolveInvoiceUrl(
     }
   }
 
+  const bidderEmail = String(receipt.email || "").trim();
   const bidderInfo: PayPalBidderInfo = {
-    email: receipt.email || "no-reply@example.com",
+    email: isValidEmailAddress(bidderEmail) ? bidderEmail : FALLBACK_INVOICE_EMAIL,
     firstName: receipt.firstName,
     lastName: receipt.lastName,
     id: bidderId,

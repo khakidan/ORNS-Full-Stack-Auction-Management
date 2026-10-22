@@ -20,6 +20,7 @@ import { getAuthenticatedClient } from "../services/oauth";
 
 const mockExtractInvoiceIdFromUrl = vi.fn();
 const mockRecordOfflinePayment = vi.fn();
+const mockRemoveSurchargeLine = vi.fn();
 const mockGetInvoiceStatus = vi.fn();
 
 vi.mock("../services/paypalService", async (importOriginal) => ({
@@ -31,6 +32,7 @@ vi.mock("../services/paypalService", async (importOriginal) => ({
     return {
       extractInvoiceIdFromUrl: mockExtractInvoiceIdFromUrl,
       recordOfflinePayment: mockRecordOfflinePayment,
+      removeSurchargeLine: mockRemoveSurchargeLine,
       getInvoiceStatus: mockGetInvoiceStatus,
     };
   }),
@@ -98,10 +100,13 @@ function baseParams(overrides: Record<string, any> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   resetHandlersState();
+  // By default the surcharge comes off cleanly; individual tests override.
+  mockRemoveSurchargeLine.mockReset();
+  mockRemoveSurchargeLine.mockImplementation(async () => ({ status: "UNPAID", total: 100, removed: true }));
 });
 
 describe("checkoutMarkPaid - offline payment methods (cash/check)", () => {
-  it("marks the bidder paid/checked-out and records the offline payment on PayPal", async () => {
+  it("marks the bidder paid/checked-out, takes the surcharge off the invoice, and records the cash at the fee-free total (ROADMAP.md L3)", async () => {
     const row = makeBidderRow({ 9: "https://www.paypal.com/invoice/p/#INV2-AAAA-BBBB-CCCC-DDDD", 10: 104.12 });
     const { getUpdates } = mockBidderNumbers(row);
     mockExtractInvoiceIdFromUrl.mockReturnValue("INV2-AAAA-BBBB-CCCC-DDDD");
@@ -111,7 +116,11 @@ describe("checkoutMarkPaid - offline payment methods (cash/check)", () => {
 
     expect(result.success).toBe(true);
     expect(result.deferred).toBeFalsy();
-    expect(mockRecordOfflinePayment).toHaveBeenCalledWith("INV2-AAAA-BBBB-CCCC-DDDD", "Cash", 104.12);
+    expect(result.warning).toBeUndefined();
+    expect(mockRemoveSurchargeLine).toHaveBeenCalledWith("INV2-AAAA-BBBB-CCCC-DDDD");
+    expect(mockRecordOfflinePayment).toHaveBeenCalledWith("INV2-AAAA-BBBB-CCCC-DDDD", "Cash", 100);
+    // Column K is left alone, so a later receipt run still reuses this invoice.
+    expect(getUpdates().some((u) => u.range.includes("K2"))).toBe(false);
 
     const updates = getUpdates();
     const giUpdate = updates.find((u) => u.range.includes("G2:I2"));
@@ -128,7 +137,7 @@ describe("checkoutMarkPaid - offline payment methods (cash/check)", () => {
 
     await checkoutMarkPaid(fakeClient, baseParams({ paymentMethod: "check" }));
 
-    expect(mockRecordOfflinePayment).toHaveBeenCalledWith("INV2-X", "Check", 50);
+    expect(mockRecordOfflinePayment).toHaveBeenCalledWith("INV2-X", "Check", 100);
     const giUpdate = getUpdates().find((u) => u.range.includes("G2:I2"));
     expect(giUpdate?.values).toEqual([[true, true, "Check"]]);
   });
@@ -159,6 +168,35 @@ describe("checkoutMarkPaid - offline payment methods (cash/check)", () => {
 
     expect(result.success).toBe(true);
     expect(result.warning).toMatch(/marked paid \(Check\).*Mark it paid in the PayPal dashboard/);
+  });
+
+  it("falls back to recording the full invoice amount when the surcharge can't be removed", async () => {
+    const row = makeBidderRow({ 9: "https://www.paypal.com/invoice/p/#INV2-X", 10: 104.12 });
+    mockBidderNumbers(row);
+    mockExtractInvoiceIdFromUrl.mockReturnValue("INV2-X");
+    mockRemoveSurchargeLine.mockRejectedValue(new Error("PayPal invoice update failed (422)"));
+    mockRecordOfflinePayment.mockResolvedValue(true);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = await checkoutMarkPaid(fakeClient, baseParams({ paymentMethod: "cash" }));
+
+    expect(result.success).toBe(true);
+    expect(mockRecordOfflinePayment).toHaveBeenCalledWith("INV2-X", "Cash", 104.12);
+    expect(result.warning).toBeUndefined();
+  });
+
+  it("doesn't record cash on an invoice PayPal shows as already paid, and warns about a possible double payment", async () => {
+    const row = makeBidderRow({ 9: "https://www.paypal.com/invoice/p/#INV2-X", 10: 104.12 });
+    const { getUpdates } = mockBidderNumbers(row);
+    mockExtractInvoiceIdFromUrl.mockReturnValue("INV2-X");
+    mockRemoveSurchargeLine.mockResolvedValue({ status: "PAID", total: 104.12, removed: false });
+
+    const result = await checkoutMarkPaid(fakeClient, baseParams({ paymentMethod: "cash" }));
+
+    expect(result.success).toBe(true);
+    expect(mockRecordOfflinePayment).not.toHaveBeenCalled();
+    expect(result.warning).toMatch(/already paid \(PAID\).*double payment/);
+    expect(getUpdates().find((u) => u.range.includes("G2:I2"))?.values).toEqual([[true, true, "Cash"]]);
   });
 
   it("gives no warning when PayPal records the payment", async () => {
