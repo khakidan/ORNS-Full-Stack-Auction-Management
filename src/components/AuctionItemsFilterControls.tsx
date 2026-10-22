@@ -118,7 +118,7 @@ export function AuctionItemsFilterControls({
           if (option) onSortConfigChange(option.config);
         }}
       >
-        <SelectTrigger className="h-10 w-60 shrink-0">
+        <SelectTrigger className="h-10 w-52 shrink-0">
           <ArrowUpDown className="w-3.5 h-3.5 mr-2 opacity-70" />
           <SelectValue placeholder="Sort by">{(value: string) => SORT_LABELS[value] ?? value}</SelectValue>
         </SelectTrigger>

@@ -81,16 +81,19 @@ describe("AuctionItemsFilterControls - Sort by trigger width", () => {
   // pattern) - fixed here too for consistency, since this component's
   // own longest label ("Item # (Low to High)"/"Item # (High to Low)",
   // 21 characters) plus its icon hits the same width shortfall. Sized to
-  // w-60 rather than a larger jump, per the Bidders.tsx fix's lesson:
-  // widening the trigger more than the longest label actually needs
-  // pushes the whole filter row's total width past what fits without
-  // horizontal scrolling.
+  // w-52 (208px), not larger, per the Bidders.tsx fix's lesson: widening
+  // the trigger more than the longest label needs pushes the whole filter
+  // row's total width past what fits on the search box's row. (Was w-60;
+  // trimmed so the bar fits on one row at a 1470px-wide window. Measured
+  // in a real browser at w-52: the longest label still leaves 16px before
+  // the dropdown arrow, and no sort label is clipped.)
   it("is wide enough to fit the sort option labels without clipping", () => {
     renderControls();
 
     const sortValue = screen.getByText("Item # (Low to High)");
     const trigger = sortValue.closest('[data-slot="select-trigger"]');
-    expect(trigger?.className).toContain("w-60");
+    expect(trigger?.className).toContain("w-52");
     expect(trigger?.className).not.toContain("w-50");
+    expect(trigger?.className).not.toContain("w-60");
   });
 });
