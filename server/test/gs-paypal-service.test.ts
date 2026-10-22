@@ -1,5 +1,5 @@
 /**
- * Tests the REAL source of scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_PayPalService.gs
+ * Tests the REAL source of scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/not-deployed/Class_PayPalService.gs
  * (the Google Apps Script bound to the live Bid-Management spreadsheet,
  * loaded via helpers/loadGasClass - not a Node reimplementation that could
  * drift from it) using an injected fetcher in place of UrlFetchApp.
@@ -13,7 +13,7 @@ import { loadGasClass } from "./helpers/loadGasClass";
 import { calculatePayPalSurcharge as calculatePayPalSurchargeNode } from "../utils/financeUtils";
 
 const PayPalService = loadGasClass<any>(
-  "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_PayPalService.gs",
+  "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/not-deployed/Class_PayPalService.gs",
   "PayPalService"
 );
 

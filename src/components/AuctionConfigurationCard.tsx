@@ -98,33 +98,14 @@ export default function AuctionConfigurationCard({ config, setConfig, isOpen, on
 
           <div className="space-y-4 border rounded-lg p-4 bg-slate-50/50">
             <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Google Apps Script Workflows</h3>
-            <div className="space-y-2">
-              <Label htmlFor="auctionItemsScriptId">1. Auction Item Data Entry Script ID</Label>
-              <Input
-                id="auctionItemsScriptId"
-                placeholder="Paste script URL or ID"
-                value={config.auctionItemsScriptId}
-                onChange={(e) => setConfig({ ...config, auctionItemsScriptId: extractId(e.target.value) })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="auctionTicketsScriptId">2. Auction Tickets Script ID</Label>
-              <Input
-                id="auctionTicketsScriptId"
-                placeholder="Paste script URL or ID"
-                value={config.auctionTicketsScriptId}
-                onChange={(e) => setConfig({ ...config, auctionTicketsScriptId: extractId(e.target.value) })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="bidManagementScriptId">3. Bid Management Script ID</Label>
-              <Input
-                id="bidManagementScriptId"
-                placeholder="Paste script URL or ID"
-                value={config.bidManagementScriptId}
-                onChange={(e) => setConfig({ ...config, bidManagementScriptId: extractId(e.target.value) })}
-              />
-            </div>
+            {/* No Script ID boxes: the server runs the three scripts by the
+                IDs in its own environment (SCRIPT_ID_*), never these. The
+                boxes used to be here and changed nothing. */}
+            <p className="text-sm text-muted-foreground">
+              The app runs the Item Entry, Tickets and Bid Management scripts using Script IDs set on the server
+              (the Cloud Run settings <code>SCRIPT_ID_ITEM_ENTRY</code>, <code>SCRIPT_ID_TICKETS</code> and{" "}
+              <code>SCRIPT_ID_BID_MANAGEMENT</code>). They can't be changed here.
+            </p>
           </div>
 
           {/* Hidden Fields kept for state management */}

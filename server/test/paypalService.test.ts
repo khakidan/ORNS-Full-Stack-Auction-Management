@@ -1,6 +1,6 @@
 /**
  * Tests server/services/paypalService.ts - the Node port of
- * scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_PayPalService.gs
+ * scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/not-deployed/Class_PayPalService.gs
  * (see server/test/gs-paypal-service.test.ts for the GAS reference-copy's
  * own tests, which this mirrors method-for-method). See
  * docs/agents/refactor-opportunities.md's Code Hardening item #2, Step 1.

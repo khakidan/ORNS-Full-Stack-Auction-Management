@@ -116,7 +116,7 @@ describe("ConfigSettings", () => {
     expect(screen.getByText("Save Configuration")).toBeInTheDocument();
   });
 
-  it("expanding Auction Configuration reveals all spreadsheet and script ID fields", () => {
+  it("expanding Auction Configuration reveals all spreadsheet ID fields", () => {
     render(<ConfigSettings />);
     // Click the CardTitle text — bubbles up to CardHeader onClick
     fireEvent.click(screen.getByText("Auction Configuration"));
@@ -124,11 +124,16 @@ describe("ConfigSettings", () => {
     expect(screen.getByLabelText("1. Auction Item Data Entry Spreadsheet ID")).toBeInTheDocument();
     expect(screen.getByLabelText("2. Auction Tickets Spreadsheet ID")).toBeInTheDocument();
     expect(screen.getByLabelText("3. Bid Management Spreadsheet ID")).toBeInTheDocument();
-    expect(screen.getByLabelText("1. Auction Item Data Entry Script ID")).toBeInTheDocument();
-    expect(screen.getByLabelText("2. Auction Tickets Script ID")).toBeInTheDocument();
-    expect(screen.getByLabelText("3. Bid Management Script ID")).toBeInTheDocument();
     expect(screen.getByLabelText("Bug Reports Spreadsheet ID")).toBeInTheDocument();
     expect(screen.getByLabelText("Bug Reports Screenshots Folder ID")).toBeInTheDocument();
+  });
+
+  it("has no Script ID boxes - the server uses its own SCRIPT_ID_* settings, so editing them here changed nothing", () => {
+    render(<ConfigSettings />);
+    fireEvent.click(screen.getByText("Auction Configuration"));
+
+    expect(screen.queryByLabelText(/Script ID/)).not.toBeInTheDocument();
+    expect(screen.getByText(/They can't be changed here/)).toBeInTheDocument();
   });
 
   it("fields display current config values from useConfig", () => {

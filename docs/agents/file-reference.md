@@ -78,7 +78,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │
 │   └── test/                  # Vitest + supertest + MSW backend suite (helpers/ incl. session.ts for signed test cookies, handlers.ts, setup.ts)
 │
-├── scripts/GoogleAppsScriptsCode/   # Apps Script sources, one folder per bound spreadsheet
+├── scripts/GoogleAppsScriptsCode/   # Apps Script sources, one folder per bound spreadsheet (each with appsscript.json + .clasp.json; BidManagementSpreadsheet/not-deployed/ is reference-only, never pushed)
 │   ├── BidManagementSpreadsheet/    # Receipt docs (Node supplies the data)
 │   ├── ItemsSpreadsheet/            # Catalog, bid sheets, labels, slides, table tents
 │   └── TicketsSpreadsheet/          # Bidder label docs

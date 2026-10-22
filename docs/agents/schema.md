@@ -75,15 +75,20 @@ Firestore is utilized to synchronize system configuration, active operational pa
       "forPrintFolderId": "string (Google Drive folder ID)",
       "ornsLogoId": "string (Google Drive file ID)",
       "ticketPrice": "string (default '35')",
-      "auctionItemsScriptId": "string (Apps Script deployment ID)",
-      "auctionTicketsScriptId": "string (Apps Script deployment ID)",
-      "bidManagementScriptId": "string (Apps Script deployment ID)",
+      "auctionItemsScriptId": "string (unused - see below)",
+      "auctionTicketsScriptId": "string (unused - see below)",
+      "bidManagementScriptId": "string (unused - see below)",
       "bugReportsSpreadsheetId": "string (Google Sheet ID - see 'Bug-Reports' sheet above)",
       "bugReportsFolderId": "string (Google Drive folder ID for report screenshots, optional)",
       "updatedAt": "timestamp (server-set on save)",
       "updatedBy": "string (email of the saving admin)"
     }
     ```
+*   The three `*ScriptId` fields are never read: the server runs the
+    Apps Scripts by its Cloud Run settings `SCRIPT_ID_ITEM_ENTRY`,
+    `SCRIPT_ID_TICKETS` and `SCRIPT_ID_BID_MANAGEMENT`, and the Settings
+    page no longer shows boxes for them. They stay in the document only
+    because `firestore.rules` requires exactly these 17 keys.
 *   On load, `ConfigContext.tsx` mirrors every field into `localStorage`
     (plus two legacy keys, `spreadsheetId` and `googleScriptId`) for
     components not yet reading from context directly. `saveConfig()`

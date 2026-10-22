@@ -72,6 +72,12 @@ export interface Config {
   forPrintFolderId: string;
   ornsLogoId: string;
   ticketPrice: string;
+  /**
+   * Unused: the server runs the scripts by its SCRIPT_ID_* environment
+   * settings. Kept (and saved through unchanged) only because
+   * firestore.rules requires exactly these keys in settings/global;
+   * dropping them means deploying new rules alongside.
+   */
   auctionItemsScriptId: string;
   auctionTicketsScriptId: string;
   bidManagementScriptId: string;

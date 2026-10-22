@@ -7,7 +7,7 @@ import { withLock } from "../utils/asyncLock";
 
 /**
  * Node-side port of
- * scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/PayPalSweeper.gs's
+ * scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/not-deployed/PayPalSweeper.gs's
  * `checkPendingPayPalInvoices` (Code Hardening item #2, Step 4) - a
  * standing background service, not "data Node fetches on request" like
  * Steps 1-3, so it needs its own credential and its own scheduling

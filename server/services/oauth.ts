@@ -1,13 +1,23 @@
 import express from "express";
 import { google } from "googleapis";
 
+/**
+ * What staff are asked to allow at sign-in.
+ *
+ * Running an Apps Script (scripts.run) needs every scope in that script's
+ * appsscript.json `oauthScopes` - one missing and Google refuses the run
+ * with "The caller does not have permission". oauth.test.ts checks this
+ * list covers all three scripts' manifests.
+ *
+ * No `script.projects`: it lets the app read and edit the scripts' own
+ * code, and nothing here does that (removed 2026-10-22).
+ */
 export const SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/drive",
   "https://www.googleapis.com/auth/documents",
   "https://www.googleapis.com/auth/presentations",
   "https://www.googleapis.com/auth/gmail.send",
-  "https://www.googleapis.com/auth/script.projects",
   "https://www.googleapis.com/auth/script.external_request",
   "openid",
   "https://www.googleapis.com/auth/userinfo.email"
