@@ -11,7 +11,7 @@ The documentation has been componentized for high maintainability under `/docs/a
 To keep developer directives clean, maintainable, and modular, the monolithic Agent instructions have been componentized. Please refer to the corresponding subfiles below for detailed requirements and specifications:
 
 1.  **[App Overview & High-Level Stack (README.md)](./docs/agents/README.md)**
-    *   Introductory context on Oakridge Neighborhood School (ORNS) operations.
+    *   Introductory context on Orchard Ridge Nursery School (ORNS) operations.
     *   Tech stack (React, Vite, Express, Sheets API, Firestore, Google Cloud Run).
     *   Bootstrap guides and environment setup parameters.
 

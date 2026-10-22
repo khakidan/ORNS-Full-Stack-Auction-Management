@@ -46,6 +46,7 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Fixed
 
+- **School name corrected to Orchard Ridge Nursery School** in `AGENTS.md`, `docs/agents/README.md` and the app's install description in `vite.config.ts` (the PWA manifest text), which still said "Oakridge Neighborhood School". The root `README.md` was fixed in PR #8.
 - **Apps Script hardening, round 2 (2026-10-22 review items 1-3).**
   - **No PayPal code in the live Bid-Management script.** `API_PAYPAL_TESTS.gs` could create and send real PayPal invoices, and `testCronJobSweeper` ran the old checker against the real Bidder-Numbers sheet, from the script editor's Run button. They, the old `Class_PayPalService.gs` / `PayPalSweeper.gs` (replaced by `paypalService.ts` / `paypalSweeperJob.ts`) and their two in-editor test files moved to `BidManagementSpreadsheet/not-deployed/`, which `clasp push` skips (`skipSubdirectories`). The PayPal credentials were deleted from the script's Script Properties by hand. `gs-push-order.test.ts` now fails if a deployed file contains PayPal code or a project would push subfolders. **Needs a Bid-Management redeploy** to take effect.
   - **Settings page: Script ID boxes removed.** The server runs the scripts by its `SCRIPT_ID_*` Cloud Run settings and never read the three boxes, so changing them did nothing. A note now says where the IDs live. The three fields stay in `settings/global` (saved through unchanged), because `firestore.rules` requires exactly those 17 keys.

@@ -34,7 +34,7 @@ export default defineConfig(({ mode }) => {
         manifest: {
           name: 'ORNS Charity Auction Manager',
           short_name: 'ORNS Auction',
-          description: 'Manages live and silent charity auctions for Oakridge Neighborhood School - guest check-in, bidding, checkout, and receipts.',
+          description: 'Manages live and silent charity auctions for Orchard Ridge Nursery School - guest check-in, bidding, checkout, and receipts.',
           theme_color: '#e31b23',
           background_color: '#f8fafc',
           display: 'standalone',
