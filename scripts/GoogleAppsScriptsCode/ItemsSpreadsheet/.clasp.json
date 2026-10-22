@@ -7,5 +7,6 @@
   "jsonExtensions": [
     ".json"
   ],
-  "skipSubdirectories": true
+  "skipSubdirectories": true,
+  "deploymentId": "AKfycbwbX93q7jmZpYz8CnqJPIQdYHireyrJcq5IQIsHko7_LguWhwJY6rP8jkoYH2NjfsvgTw"
 }
