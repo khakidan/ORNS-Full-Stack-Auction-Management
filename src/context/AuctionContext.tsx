@@ -24,7 +24,7 @@ interface AuctionContextType {
   setAttendees: React.Dispatch<React.SetStateAction<Attendee[]>>;
   addAttendee: (sheet: string, data: string[]) => Promise<void>;
   removeAttendee: (attendee: Attendee) => Promise<void>;
-  recordWinningBid: (bidderId: string, itemId: string, price: number) => Promise<void>;
+  recordWinningBid: (bidderId: string, itemId: string, price: number) => Promise<string | void>;
   isAuctionClosed: boolean;
   closeAuction: () => Promise<void>;
 }
@@ -47,7 +47,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   // AuctionItem[] shape the old useItemsData did.
   const itemsData = useAuctionItems(config.auctionItemsSpreadsheetId);
   const attendeesData = useAttendeesData(ticketsSpreadsheetId);
-  const winnersData = useWinnersData(spreadsheetId, biddersData.bidders, itemsData.items, config.bidManagementSheet, config.bidderNumbersSheet);
+  const winnersData = useWinnersData(spreadsheetId, biddersData.bidders, itemsData.items, config.bidManagementSheet, config.bidderNumbersSheet, config.auctionItemsSpreadsheetId);
   const auctionStatusData = useAuctionStatusData(spreadsheetId, config.bidManagementSheet, config.bidderNumbersSheet);
 
   const { fetchBidders, setLoading } = biddersData;

@@ -11,6 +11,22 @@ vi.mock('../services/sharedConfig', () => ({
   _resetSharedConfigForTesting: () => {},
 }))
 
+// Durable idempotency records (idempotencyStore.ts, Milestone A) live in
+// Firestore. Tests get an in-memory stand-in, cleared after every test so
+// one test's records can't leak into the next; idempotencyStore.test.ts
+// covers the real module via vi.importActual.
+vi.mock('../services/idempotencyStore', () => {
+  const records = new Map<string, unknown>()
+  return {
+    DURABLE_TTL_MS: 24 * 60 * 60 * 1000,
+    getStoredResult: vi.fn(async (fullKey: string) => (records.has(fullKey) ? { result: records.get(fullKey) } : undefined)),
+    storeResult: vi.fn(async (fullKey: string, result: unknown) => { records.set(fullKey, result) }),
+    _clearForTesting: () => records.clear(),
+  }
+})
+import * as durableStore from '../services/idempotencyStore'
+afterEach(() => (durableStore as any)._clearForTesting())
+
 export const server = setupServer(...handlers)
 
 // Start server before all tests

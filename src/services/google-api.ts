@@ -1,4 +1,5 @@
 import { SweeperStatus, PaypalSweepOutcome } from "@/types";
+import { newRequestId, reportDone, reportRetry } from "@/lib/syncStatus";
 
 export const getBaseUrl = () => {
   return "";
@@ -7,8 +8,28 @@ export const getBaseUrl = () => {
 const MAX_RETRIES = 4;
 const BASE_DELAY = 1000;
 
+/**
+ * Thrown when a request never got a usable answer: the network failed, or
+ * the server kept answering 429/5xx through every retry. Distinct from a
+ * Response with a 4xx status, which fetchWithRetry returns as-is - that's
+ * the server answering "no", while this means it couldn't be reached.
+ * The bid outbox (src/lib/bidOutbox.ts) keeps a bid for later on this
+ * error and rolls back on a 4xx.
+ */
+export class ServerUnreachableError extends Error {
+  readonly cause: unknown;
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = "ServerUnreachableError";
+    this.cause = cause;
+  }
+}
+
 export async function fetchWithRetry(url: string | URL | Request, options: RequestInit = {}, retries = MAX_RETRIES): Promise<Response> {
   let attempt = 0;
+  // Retries are reported to the sync banner (src/lib/syncStatus.ts) instead
+  // of only the console, so staff can see Google is slow (Milestone A).
+  const requestId = newRequestId();
 
   // Authentication rides on the orns_session cookie, which the browser
   // sends automatically on these same-origin requests - no auth header
@@ -16,26 +37,30 @@ export async function fetchWithRetry(url: string | URL | Request, options: Reque
   while (attempt < retries) {
     try {
       const response = await fetch(url, options);
-      
+
       if (response.status === 429 || (response.status >= 500 && response.status < 600)) {
         const errorText = await response.clone().text().catch(() => "");
         throw new Error(`Transient API Error (${response.status}): ${errorText}`);
       }
-      
+
+      reportDone(requestId, true);
       return response;
     } catch (error: any) {
       if (attempt === retries - 1) {
-        throw error;
+        reportDone(requestId, false);
+        throw new ServerUnreachableError(error);
       }
-      
+
       const delay = BASE_DELAY * Math.pow(2, attempt) + Math.random() * 500;
       console.warn(`[Retry Matrix] Request failed. Retrying in ${Math.round(delay)}ms... (Attempt ${attempt + 1}/${retries})`);
-      
+      reportRetry(requestId, attempt + 2, retries);
+
       await new Promise(resolve => setTimeout(resolve, delay));
       attempt++;
     }
   }
-  throw new Error("Maximum retries exceeded");
+  reportDone(requestId, false);
+  throw new ServerUnreachableError(new Error("Maximum retries exceeded"));
 }
 
 

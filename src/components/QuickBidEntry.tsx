@@ -5,7 +5,8 @@ import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/LoadingButton";
 import { StatusStatePlaceholder } from "@/components/ui/StatusStatePlaceholder";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, Clock, Gavel, Repeat, Search, User, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Gavel, Repeat, Search, User, XCircle } from "lucide-react";
+import { OutboxEntry, useBidOutbox } from "@/lib/bidOutbox";
 import { useQuickBidEntryState } from "@/hooks/useQuickBidEntryState";
 import { AuctionItem, Bidder } from "@/types";
 
@@ -13,7 +14,7 @@ interface QuickBidEntryProps {
   items: AuctionItem[];
   bidders: Bidder[];
   winners: Record<string, string>;
-  recordWinningBid: (bidderId: string, itemId: string, price: number) => Promise<void>;
+  recordWinningBid: (bidderId: string, itemId: string, price: number) => Promise<string | void>;
 }
 
 function timeAgo(timestamp: number): string {
@@ -28,6 +29,9 @@ function timeAgo(timestamp: number): string {
 
 export function QuickBidEntry({ items, bidders, winners, recordWinningBid }: QuickBidEntryProps) {
   const state = useQuickBidEntryState({ items, bidders, winners, recordWinningBid });
+  // Bids from this feed that are still saved on the device, by key (Milestone A).
+  const outbox = useBidOutbox();
+  const pending = new Map<string, OutboxEntry>(outbox.entries.map(e => [e.body.idempotencyKey, e]));
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6 items-start">
@@ -146,7 +150,9 @@ export function QuickBidEntry({ items, bidders, winners, recordWinningBid }: Qui
             />
           ) : (
             <div className="max-h-130 overflow-y-auto">
-              {state.feed.map(entry => (
+              {state.feed.map(entry => {
+                const saved = entry.idempotencyKey ? pending.get(entry.idempotencyKey) : undefined;
+                return (
                 <div
                   key={entry.id}
                   className={cn(
@@ -169,15 +175,26 @@ export function QuickBidEntry({ items, bidders, winners, recordWinningBid }: Qui
                     <div className="text-xs text-muted-foreground">
                       {entry.bidderName} &middot; {timeAgo(entry.timestamp)}
                     </div>
+                    {saved && saved.status !== "needsReview" && (
+                      <div className="text-xs text-amber-700">Saved on this device &middot; sends when back online</div>
+                    )}
+                    {saved?.status === "needsReview" && (
+                      <div className="text-xs text-orns-red">Not recorded: {saved.problem}</div>
+                    )}
                   </div>
                   <div className="font-bold text-sm tabular-nums">${entry.price.toFixed(2)}</div>
-                  {entry.outcome === "recorded" ? (
-                    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
-                  ) : (
+                  {entry.outcome !== "recorded" ? (
                     <XCircle className="w-4 h-4 text-orns-red shrink-0" />
+                  ) : saved?.status === "needsReview" ? (
+                    <AlertCircle className="w-4 h-4 text-orns-red shrink-0" aria-label="Needs review" />
+                  ) : saved ? (
+                    <Clock className="w-4 h-4 text-amber-600 shrink-0" aria-label="Saved on this device" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>

@@ -23,6 +23,8 @@ import Checkout from "./components/Checkout";
 import Receipts from "./components/Receipts";
 import { BugReportButton } from "./components/BugReportButton";
 import { useAuction } from "./context/AuctionContext";
+import { SyncStatusBanner, SavedBidsSidebarBadge } from "./components/SyncStatusBanner";
+import { useOutboxReplay } from "./hooks/useOutboxReplay";
 
 const ConfigSettings = lazy(() => import("./components/ConfigSettings"));
 const AuctionTicketsWorkflow = lazy(() => import("./components/AuctionTicketsWorkflow"));
@@ -98,6 +100,8 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  // Sends winning bids saved on this device while offline (Milestone A).
+  useOutboxReplay(authenticated === true);
 
   // Sync state to URL and localStorage
   useEffect(() => {
@@ -314,6 +318,7 @@ export default function App() {
         </div>
 
         <div className="p-3 border-t shrink-0 flex flex-col items-center">
+          <SavedBidsSidebarBadge expanded={isSidebarOpen || isMobileMenuOpen} />
           <Button 
             variant="ghost" 
             className={cn("justify-start gap-3 text-muted-foreground hover:text-destructive", (isSidebarOpen || isMobileMenuOpen) ? "w-full" : "w-10 px-0 justify-center")}
@@ -329,6 +334,7 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         <div className="p-4 md:p-10 max-w-7xl mx-auto w-full flex-1 min-w-0">
+          <SyncStatusBanner onSignIn={handleLogin} />
           <AnimatePresence mode="wait">
             <motion.div
               key={activeWorkflow}

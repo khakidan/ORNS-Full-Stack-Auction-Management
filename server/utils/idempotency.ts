@@ -15,10 +15,12 @@
  * different routes never returns one route's cached response from the
  * other.
  */
+import { getStoredResult, storeResult } from "../services/idempotencyStore";
+
 const TTL_MS = 60 * 60 * 1000; // 1 hour
 
 const completed = new Map<string, { timestamp: number; result: unknown }>();
-const inFlight = new Map<string, Promise<unknown>>();
+const inFlight = new Map<string, Promise<{ result: unknown }>>();
 
 // Drop completed entries past the TTL (in-flight entries clean themselves up).
 setInterval(() => {
@@ -39,8 +41,22 @@ export interface IdempotentOutcome<T> {
 /**
  * Runs `fn` at most once per (`scope`, `key`) within the TTL. Without a
  * usable key (missing, empty, or not a string), `fn` simply runs.
+ *
+ * `durable: true` also remembers the result in Firestore for 24 hours
+ * (services/idempotencyStore.ts), so a request resent after a Cloud Run
+ * restart - or long after it was made, from a device that was offline -
+ * still gets the first result instead of running again. Used by
+ * record-winning-bid (ROADMAP.md Milestone A). The Firestore lookup runs
+ * inside the in-flight promise, so two copies arriving together still run
+ * `fn` once. If Firestore is unreachable, this behaves like the in-memory
+ * version.
  */
-export async function withIdempotency<T>(scope: string, key: unknown, fn: () => Promise<T>): Promise<IdempotentOutcome<T>> {
+export async function withIdempotency<T>(
+  scope: string,
+  key: unknown,
+  fn: () => Promise<T>,
+  opts: { durable?: boolean } = {}
+): Promise<IdempotentOutcome<T>> {
   if (typeof key !== "string" || key === "") {
     return { result: await fn(), duplicated: false };
   }
@@ -56,15 +72,34 @@ export async function withIdempotency<T>(scope: string, key: unknown, fn: () => 
   const running = inFlight.get(fullKey);
   if (running) {
     console.log(`[Idempotency] Request already in progress, waiting for it: ${fullKey}`);
-    return { result: (await running) as T, duplicated: true };
+    const outcome = (await running) as { result: T };
+    return { result: outcome.result, duplicated: true };
   }
 
-  const run = fn();
+  const run = (async (): Promise<{ result: T; fromStore: boolean }> => {
+    if (opts.durable) {
+      const stored = await getStoredResult(fullKey).catch((e: any) => {
+        console.warn(`[Idempotency] Couldn't read the durable record for ${fullKey}; relying on memory only:`, e?.message || e);
+        return undefined;
+      });
+      if (stored) {
+        console.log(`[Idempotency] Request already processed (durable record): ${fullKey}`);
+        return { result: stored.result as T, fromStore: true };
+      }
+    }
+    const result = await fn();
+    if (opts.durable) {
+      await storeResult(fullKey, result).catch((e: any) => {
+        console.warn(`[Idempotency] Couldn't save the durable record for ${fullKey}:`, e?.message || e);
+      });
+    }
+    return { result, fromStore: false };
+  })();
   inFlight.set(fullKey, run);
   try {
-    const result = await run;
+    const { result, fromStore } = await run;
     completed.set(fullKey, { timestamp: Date.now(), result });
-    return { result, duplicated: false };
+    return { result, duplicated: fromStore };
   } finally {
     inFlight.delete(fullKey);
   }

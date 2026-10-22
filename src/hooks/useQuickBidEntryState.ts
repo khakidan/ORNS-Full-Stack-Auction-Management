@@ -11,13 +11,15 @@ export interface QuickEntryFeedRow {
   price: number;
   timestamp: number;
   outcome: "recorded" | "blocked-duplicate";
+  /** The bid's idempotency key - the feed looks it up in the outbox to show "saved on this device". */
+  idempotencyKey?: string;
 }
 
 interface UseQuickBidEntryStateArgs {
   items: AuctionItem[];
   bidders: Bidder[];
   winners: Record<string, string>;
-  recordWinningBid: (bidderId: string, itemId: string, price: number) => Promise<void>;
+  recordWinningBid: (bidderId: string, itemId: string, price: number) => Promise<string | void>;
 }
 
 /**
@@ -103,7 +105,7 @@ export function useQuickBidEntryState({ items, bidders, winners, recordWinningBi
 
     setSubmitting(true);
     try {
-      await recordWinningBid(bidderId, itemId, parseFloat(price));
+      const idempotencyKey = await recordWinningBid(bidderId, itemId, parseFloat(price));
 
       setFeed(prev => [{
         id: crypto.randomUUID(),
@@ -114,6 +116,7 @@ export function useQuickBidEntryState({ items, bidders, winners, recordWinningBi
         price: parseFloat(price) || 0,
         timestamp: Date.now(),
         outcome: "recorded",
+        idempotencyKey: idempotencyKey || undefined,
       }, ...prev]);
 
       toast.success(`Bid recorded for ${selectedBidder.firstName} — ${selectedItem.name}`);

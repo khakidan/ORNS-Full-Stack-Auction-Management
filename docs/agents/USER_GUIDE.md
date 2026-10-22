@@ -47,3 +47,8 @@ This application is designed to streamline the operation of live and online char
 - **Missing Email Receipt Option**: If the button is disabled, the bidder does not have a valid email address on file. Please update the bidder's information in the **Bidders** tab first.
 - **PayPal invoices for bidders with no email**: these go to **web-admin@orns.org** (still in the bidder's name), so staff have the payment link if the bidder needs it.
 - **Sync Issues**: If data is not appearing in the Google Sheets, verify the spreadsheet IDs in **Config Settings**.
+- **Connection banner**: A banner at the top of the page appears when Google Sheets is slow or the internet connection drops.
+  - **Winning bids aren't lost.** A bid that can't be sent is marked **Saved on this device** in Bid Entry, and sends on its own once the connection is back. Keep entering bids, and keep that tab open. Closing it with bids waiting shows a "Leave site?" warning; the bids stay saved on that device and send the next time the app is opened there.
+  - **Only winning bids are saved for later.** Checkout, receipts and emails need a working connection. If the banner says you're offline, wait before using them.
+  - **"Couldn't be recorded"**: a saved bid the server refused when it was resent, usually because another device recorded a winner for the same item meanwhile. Click **Review** to see why, then **Try again** or **Remove** it (removing only clears the list; re-enter the bid if it should still count).
+  - **"Your sign-in has expired"**: click **Sign in again**; the saved bids send afterwards.

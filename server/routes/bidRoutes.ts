@@ -23,6 +23,7 @@ export default function createBidRouter() {
       spreadsheetId, 
       bidManagementSheet, 
       bidderNumbersSheet,
+      itemsSpreadsheetId,
       idempotencyKey 
     } = req.body;
 
@@ -53,15 +54,21 @@ export default function createBidRouter() {
           price: numericPrice,
           spreadsheetId,
           bidManagementSheet,
-          bidderNumbersSheet
+          bidderNumbersSheet,
+          itemsSpreadsheetId: typeof itemsSpreadsheetId === "string" && itemsSpreadsheetId ? itemsSpreadsheetId : undefined
         });
 
         clearCacheForSpreadsheet(spreadsheetId);
         return result;
-      });
+        // Durable: a bid saved on a device while offline can be resent
+        // hours later, after Cloud Run has restarted (Milestone A).
+      }, { durable: true });
       res.json(idempotentBody(outcome));
     } catch (error: any) {
       console.error("[Route Error] record-winning-bid:", error);
+      if (error.code === "conflict") {
+        return res.status(409).json({ error: error.message });
+      }
       if (error.message.includes("not found")) {
         return res.status(400).json({ error: error.message });
       }

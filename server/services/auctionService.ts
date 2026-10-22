@@ -7,6 +7,7 @@ import { withLock } from "../utils/asyncLock";
 import { ensureTrackingHeaders } from "../utils/bidderNumbersHeaders";
 import { PayPalService, isPaidInvoiceStatus } from "./paypalService";
 import { buildBidderReceiptWithInvoice, DEFAULT_SHEET_NAMES } from "./receiptDataService";
+import { findExistingWins, isRepeatableItem, WinningBidConflictError } from "../utils/winningBidChecks";
 
 export interface RecordWinningBidParams {
   bidderId: string;
@@ -15,11 +16,18 @@ export interface RecordWinningBidParams {
   spreadsheetId: string;
   bidManagementSheet: string;
   bidderNumbersSheet: string;
+  /**
+   * The Items spreadsheet, for the one-winner check (Milestone A). Without
+   * it the check is skipped, as it was before - older clients don't send it.
+   */
+  itemsSpreadsheetId?: string;
 }
 
 export interface WinningBidResult {
   success: boolean;
   followUpAdded: boolean;
+  /** This exact bid (same bidder, same price) was already in the sheet, so nothing was written. */
+  alreadyRecorded?: boolean;
 }
 
 export interface CheckoutParams {
@@ -89,7 +97,8 @@ async function recordWinningBidLocked(
     price,
     spreadsheetId,
     bidManagementSheet,
-    bidderNumbersSheet
+    bidderNumbersSheet,
+    itemsSpreadsheetId
   } = params;
 
   // 1. Get Bidder Info to check checkout status
@@ -123,6 +132,35 @@ async function recordWinningBidLocked(
     }
   }
   if (colIndex === -1) throw new Error("Bidder column not found in Bid Management sheet");
+
+  // One winner per item unless the item allows several (Milestone A). Bid
+  // Entry checks this too, but a bid resent from a device that was offline
+  // can't see what other devices recorded meanwhile. Safe to check then
+  // write: this whole function runs under the bidder-numbers lock.
+  const existingWins = findExistingWins(values, itemId);
+  if (existingWins.length > 0 && itemsSpreadsheetId) {
+    let repeatable: boolean | undefined;
+    try {
+      const itemsRes = await sheets.spreadsheets.values.get({ spreadsheetId: itemsSpreadsheetId, range: "'Auction-Items'!A:M" });
+      repeatable = isRepeatableItem(itemsRes.data.values || [], itemId);
+    } catch (e: any) {
+      // Don't stop bid entry because the Items sheet couldn't be read; this
+      // is the same as before the check existed.
+      console.warn(`[recordWinningBid] Couldn't read the Items sheet to check item ${itemId}; skipping the one-winner check:`, e?.message || e);
+    }
+    if (repeatable === false) {
+      const sameBid = existingWins.find((w) => w.bidderId === String(bidderId).trim() && Math.abs(w.price - price) < 0.005);
+      if (sameBid) {
+        // This bid is already in the sheet - most likely a resend whose
+        // first attempt succeeded but whose answer never arrived. Report
+        // success without writing it a second time.
+        return { success: true, followUpAdded: false, alreadyRecorded: true };
+      }
+      throw new WinningBidConflictError(
+        `Item #${itemId} already has a winning bid (bidder ${existingWins[0].bidderId}, $${existingWins[0].price.toFixed(2)}), so this bid wasn't recorded.`
+      );
+    }
+  }
 
   // 3. Find Empty Row for Bid
   let rowIndex = -1;

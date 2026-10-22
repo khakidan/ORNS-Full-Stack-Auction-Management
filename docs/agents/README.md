@@ -177,7 +177,26 @@ run is a few seconds of Cloud Run CPU.
 The service account also needs Firestore access (it already has it if
 the PayPal sweeper status card works): the server reads the PayPal
 sandbox/live setting from `settings/global` on every PayPal-touching
-request, and refuses to make PayPal calls if it can't.
+request, and refuses to make PayPal calls if it can't. It also writes
+each winning bid's idempotency key to the `idempotency` collection for
+24 hours, so a bid saved on a device while offline and resent later is
+never recorded twice (`server/services/idempotencyStore.ts`). If
+Firestore can't be reached, bids still record; they're just protected
+by the in-memory map alone.
+
+**Optional: let Firestore delete old idempotency records.** Each record
+is a tiny document that's never read after 24 hours. To have Firestore
+delete them on its own, add a TTL policy in **Google Cloud Console** (the
+Firebase console has no TTL screen):
+Firestore -> select the database
+`ai-studio-8ae64d57-94f3-4e97-b086-1f1495b79131` (the app's named
+database - `firestoreDatabaseId` in `firebase-applet-config.json` - not
+`(default)`) -> **Time-to-live (TTL)** -> Create policy -> collection
+group `idempotency`, timestamp field `expireAt`. The policy can be
+created before the collection exists. Deletion happens within about a
+day of `expireAt`, which is why the server also ignores expired records
+itself. Without the policy the records simply accumulate (a few hundred
+a year).
 
 **Apps Script changes deploy separately.** The server calls each Apps
 Script project's *deployed* API-executable version (`devMode: false`), not

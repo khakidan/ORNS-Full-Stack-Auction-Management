@@ -11,7 +11,7 @@ interface BatchBidEntryProps {
   items: AuctionItem[];
   bidders: Bidder[];
   winners: Record<string, string>;
-  recordWinningBid: (bidderId: string, itemId: string, price: number) => Promise<void>;
+  recordWinningBid: (bidderId: string, itemId: string, price: number) => Promise<string | void>;
 }
 
 const STATUS_ROW_CLASS: Record<string, string> = {
