@@ -1,6 +1,16 @@
 import { google } from "googleapis";
 import { PayPalService, PayPalBidderInfo, PayPalLineItem } from "./paypalService";
 import { calculatePayPalSurcharge } from "../utils/financeUtils";
+import { quoteSheetName } from "../utils/rangeUtils";
+import { isValidEmailAddress } from "../utils/emailAddress";
+
+/**
+ * Who a PayPal invoice goes to when the bidder has no usable email address
+ * (ROADMAP.md L8). PayPal needs a recipient address; this one is ORNS's
+ * own, so staff get the invoice email and its payment link and can pass
+ * it on. Used to be a fake no-reply@example.com nobody could read.
+ */
+export const FALLBACK_INVOICE_EMAIL = "web-admin@orns.org";
 
 /**
  * Single shared implementation of "resolve a bidder's winning items and
@@ -18,6 +28,28 @@ import { calculatePayPalSurcharge } from "../utils/financeUtils";
  * all; it just consumes the `paymentUrl`/`adjustedTotal` Node attaches to
  * each receipt.
  */
+
+/**
+ * The Bid-Management spreadsheet's two tab names - Config's
+ * `bidderNumbersSheet`/`bidManagementSheet`, the same names checkout and
+ * the sweeper use (ROADMAP.md L1). Routes take them from the request body
+ * the way checkout does (`sheetNamesFromBody`) and fall back to the
+ * defaults.
+ */
+export interface SheetNames {
+  bidderNumbers: string;
+  bidManagement: string;
+}
+
+export const DEFAULT_SHEET_NAMES: SheetNames = { bidderNumbers: "Bidder-Numbers", bidManagement: "Bid-Management" };
+
+export function sheetNamesFromBody(body: any): SheetNames {
+  const pick = (value: unknown, fallback: string) => (typeof value === "string" && value.trim() ? value.trim() : fallback);
+  return {
+    bidderNumbers: pick(body?.bidderNumbersSheet, DEFAULT_SHEET_NAMES.bidderNumbers),
+    bidManagement: pick(body?.bidManagementSheet, DEFAULT_SHEET_NAMES.bidManagement),
+  };
+}
 
 export interface BidderReceiptItems {
   itemsWon: string[];
@@ -127,11 +159,12 @@ export async function buildBidderReceipt(
   client: any,
   spreadsheetId: string,
   itemsSpreadsheetId: string,
-  bidderId: string
+  bidderId: string,
+  sheetNames: SheetNames = DEFAULT_SHEET_NAMES
 ): Promise<{ success: true; receipt: BidderReceiptData } | { success: false; error: string }> {
   const sheets = google.sheets({ version: "v4", auth: client });
-  const bMgmt = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bid-Management'!A1:ZZ1000" });
-  const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });
+  const bMgmt = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${quoteSheetName(sheetNames.bidManagement)}!A1:ZZ1000` });
+  const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${quoteSheetName(sheetNames.bidderNumbers)}!A:L` });
   const aucItems = await sheets.spreadsheets.values.get({ spreadsheetId: itemsSpreadsheetId, range: "'Auction-Items'!A:Z" });
 
   const numData = bNum.data.values || [];
@@ -148,7 +181,7 @@ export async function buildBidderReceipt(
       break;
     }
   }
-  if (!found) return { success: false, error: `Bidder ID ${bidderId} not found in the Bidder-Numbers sheet.` };
+  if (!found) return { success: false, error: `Bidder ID ${bidderId} not found in the ${sheetNames.bidderNumbers} sheet.` };
 
   const mgmtData = bMgmt.data.values || [];
   const colIndex = findBidderColumn(mgmtData, bidderId);
@@ -177,11 +210,12 @@ export async function buildBidderReceipt(
 export async function buildAllBidderReceipts(
   client: any,
   spreadsheetId: string,
-  itemsSpreadsheetId: string
+  itemsSpreadsheetId: string,
+  sheetNames: SheetNames = DEFAULT_SHEET_NAMES
 ): Promise<BidderReceiptData[]> {
   const sheets = google.sheets({ version: "v4", auth: client });
-  const bMgmt = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bid-Management'!A1:ZZ1000" });
-  const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });
+  const bMgmt = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${quoteSheetName(sheetNames.bidManagement)}!A1:ZZ1000` });
+  const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${quoteSheetName(sheetNames.bidderNumbers)}!A:L` });
   const aucItems = await sheets.spreadsheets.values.get({ spreadsheetId: itemsSpreadsheetId, range: "'Auction-Items'!A:Z" });
 
   const mgmtData = bMgmt.data.values || [];
@@ -279,8 +313,9 @@ export async function resolveInvoiceUrl(
     }
   }
 
+  const bidderEmail = String(receipt.email || "").trim();
   const bidderInfo: PayPalBidderInfo = {
-    email: receipt.email || "no-reply@example.com",
+    email: isValidEmailAddress(bidderEmail) ? bidderEmail : FALLBACK_INVOICE_EMAIL,
     firstName: receipt.firstName,
     lastName: receipt.lastName,
     id: bidderId,
@@ -307,12 +342,13 @@ export async function buildBidderReceiptWithInvoice(
   spreadsheetId: string,
   itemsSpreadsheetId: string,
   bidderId: string,
-  paypal: PayPalService
+  paypal: PayPalService,
+  sheetNames: SheetNames = DEFAULT_SHEET_NAMES
 ): Promise<{ success: true; receipt: BidderReceiptWithInvoice } | { success: false; error: string }> {
-  const receiptResult = await buildBidderReceipt(client, spreadsheetId, itemsSpreadsheetId, bidderId);
+  const receiptResult = await buildBidderReceipt(client, spreadsheetId, itemsSpreadsheetId, bidderId, sheetNames);
   if (receiptResult.success === false) return receiptResult;
 
-  const attached = await attachInvoice(client, spreadsheetId, receiptResult.receipt, paypal);
+  const attached = await attachInvoice(client, spreadsheetId, receiptResult.receipt, paypal, sheetNames);
   if (attached.success === false) return attached;
   return { success: true, receipt: attached.receipt };
 }
@@ -331,19 +367,20 @@ export async function attachInvoice(
   client: any,
   spreadsheetId: string,
   receipt: BidderReceiptData,
-  paypal: PayPalService
+  paypal: PayPalService,
+  sheetNames: SheetNames = DEFAULT_SHEET_NAMES
 ): Promise<{ success: true; receipt: BidderReceiptWithInvoice; rowIndex: number } | { success: false; error: string }> {
   const sheets = google.sheets({ version: "v4", auth: client });
-  const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });
+  const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${quoteSheetName(sheetNames.bidderNumbers)}!A:L` });
   const existing = findExistingInvoice(bNum.data.values || [], receipt.bidId);
   if (!existing) {
-    return { success: false, error: `Bidder ID ${receipt.bidId} not found in the Bidder-Numbers sheet.` };
+    return { success: false, error: `Bidder ID ${receipt.bidId} not found in the ${sheetNames.bidderNumbers} sheet.` };
   }
 
   const { paymentUrl, totalAmount, changed } = await resolveInvoiceUrl(paypal, receipt, receipt.bidId, existing);
 
   if (changed) {
-    await persistInvoice(sheets, spreadsheetId, existing.rowIndex, paymentUrl, totalAmount);
+    await persistInvoice(sheets, spreadsheetId, sheetNames.bidderNumbers, existing.rowIndex, paymentUrl, totalAmount);
   }
 
   return { success: true, receipt: { ...receipt, paymentUrl, adjustedTotal: totalAmount }, rowIndex: existing.rowIndex };
@@ -353,13 +390,14 @@ export async function attachInvoice(
 async function persistInvoice(
   sheets: ReturnType<typeof google.sheets>,
   spreadsheetId: string,
+  bidderNumbersSheet: string,
   rowIndex: number,
   paymentUrl: string,
   totalAmount: number
 ): Promise<void> {
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `'Bidder-Numbers'!J${rowIndex}:K${rowIndex}`,
+    range: `${quoteSheetName(bidderNumbersSheet)}!J${rowIndex}:K${rowIndex}`,
     valueInputOption: "RAW",
     requestBody: { values: [[paymentUrl, totalAmount]] },
   });
@@ -391,13 +429,17 @@ export async function buildAllBidderReceiptsWithInvoices(
   spreadsheetId: string,
   itemsSpreadsheetId: string,
   paypal: PayPalService,
-  /** Only these bidders get an invoice (and a result) - e.g. email-all skips bidders with no email address. */
-  include: (receipt: BidderReceiptData) => boolean = () => true
+  opts: {
+    /** Only these bidders get an invoice (and a result) - e.g. email-all skips bidders with no email address. */
+    include?: (receipt: BidderReceiptData) => boolean;
+    sheetNames?: SheetNames;
+  } = {}
 ): Promise<BidderReceiptWithInvoice[]> {
-  const receipts = (await buildAllBidderReceipts(client, spreadsheetId, itemsSpreadsheetId)).filter(include);
+  const { include = () => true, sheetNames = DEFAULT_SHEET_NAMES } = opts;
+  const receipts = (await buildAllBidderReceipts(client, spreadsheetId, itemsSpreadsheetId, sheetNames)).filter(include);
 
   const sheets = google.sheets({ version: "v4", auth: client });
-  const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Bidder-Numbers'!A:L" });
+  const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${quoteSheetName(sheetNames.bidderNumbers)}!A:L` });
   const bidderNumbersRows = bNum.data.values || [];
 
   const results: BidderReceiptWithInvoice[] = [];
@@ -420,10 +462,10 @@ export async function buildAllBidderReceiptsWithInvoices(
     const { paymentUrl, totalAmount, changed } = resolved;
     if (changed) {
       try {
-        await persistInvoice(sheets, spreadsheetId, existing.rowIndex, paymentUrl, totalAmount);
+        await persistInvoice(sheets, spreadsheetId, sheetNames.bidderNumbers, existing.rowIndex, paymentUrl, totalAmount);
       } catch (e: any) {
         throw new Error(
-          `Stopped generating receipts: PayPal invoice ${paymentUrl} was sent to bidder ${receipt.bidId} but could not be saved to Bidder-Numbers row ${existing.rowIndex} (J/K). ` +
+          `Stopped generating receipts: PayPal invoice ${paymentUrl} was sent to bidder ${receipt.bidId} but could not be saved to ${sheetNames.bidderNumbers} row ${existing.rowIndex} (J/K). ` +
           `Enter it there by hand before re-running, or a duplicate invoice will be sent. Cause: ${e.message || e}`
         );
       }

@@ -68,6 +68,56 @@ describe("Proxy Route Integration Tests", () => {
     });
   });
 
+  describe("GET /api/drive/files/:folderId - query injection (ROADMAP.md L7)", () => {
+    it("rejects a folder ID that isn't a plain Drive ID, without querying Drive", async () => {
+      let driveCalled = false;
+      server.use(
+        http.get("https://www.googleapis.com/drive/v3/files", () => {
+          driveCalled = true;
+          return HttpResponse.json({ files: [] });
+        })
+      );
+
+      const response = await request(app)
+        .get(`/api/drive/files/${encodeURIComponent("x' in parents or name contains '")}`)
+        .set(authHeader);
+
+      expect(response.status).toBe(400);
+      expect(driveCalled).toBe(false);
+    });
+  });
+
+  describe("GET /api/sheets/:spreadsheetId/:range - cache is per user (ROADMAP.md L5)", () => {
+    it("doesn't serve one user's cached read to another user", async () => {
+      const otherUserHeader = authCookieHeader({ access_token: "other-access-token", refresh_token: "other-refresh-token", expiry_date: Date.now() + 3600000 });
+      const tokensSeen: string[] = [];
+      server.use(
+        http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ request }) => {
+          const auth = request.headers.get("authorization") || "";
+          tokensSeen.push(auth);
+          if (auth.includes("other-access-token")) {
+            return HttpResponse.json({ error: { code: 403, message: "The caller does not have permission" } }, { status: 403 });
+          }
+          return HttpResponse.json({ range: "Secret!A1:B2", values: [["salary", "100"]] });
+        })
+      );
+
+      const first = await request(app).get("/api/sheets/private-sheet-L5/Secret!A1:B2").set(authHeader);
+      expect(first.status).toBe(200);
+      expect(first.body.values).toEqual([["salary", "100"]]);
+
+      // Within the 5s TTL, a different user asks for the same range.
+      const second = await request(app).get("/api/sheets/private-sheet-L5/Secret!A1:B2").set(otherUserHeader);
+      expect(second.body.values).toBeUndefined();
+      expect(tokensSeen).toHaveLength(2);
+
+      // The first user still gets their cached copy.
+      const third = await request(app).get("/api/sheets/private-sheet-L5/Secret!A1:B2").set(authHeader);
+      expect(third.body.values).toEqual([["salary", "100"]]);
+      expect(tokensSeen).toHaveLength(2);
+    });
+  });
+
   describe("POST /api/sheets/:spreadsheetId/:range", () => {
     it("Happy path — writes values to the given range, returns success", async () => {
       const response = await request(app)

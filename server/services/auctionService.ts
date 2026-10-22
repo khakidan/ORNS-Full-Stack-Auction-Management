@@ -5,8 +5,8 @@ import { getColumnLetter } from "../utils/columnUtils";
 import { executeGoogleSheetsTransaction, SheetOp } from "../services/sheetsService";
 import { withLock } from "../utils/asyncLock";
 import { ensureTrackingHeaders } from "../utils/bidderNumbersHeaders";
-import { PayPalService } from "./paypalService";
-import { buildBidderReceiptWithInvoice } from "./receiptDataService";
+import { PayPalService, isPaidInvoiceStatus } from "./paypalService";
+import { buildBidderReceiptWithInvoice, DEFAULT_SHEET_NAMES } from "./receiptDataService";
 
 export interface RecordWinningBidParams {
   bidderId: string;
@@ -28,6 +28,8 @@ export interface CheckoutParams {
   itemsSpreadsheetId?: string;
   ticketsSpreadsheetId?: string;
   bidderNumbersSheet: string;
+  /** Only needed when checkout has to create the bidder's invoice; defaults to "Bid-Management". */
+  bidManagementSheet?: string;
   paymentMethod: string;
   paypalIsSandbox?: boolean;
   attendeeInfo?: {
@@ -40,6 +42,8 @@ export interface CheckoutResult {
   success: boolean;
   attendeeUpdated: boolean;
   deferred?: boolean;
+  /** Set when the payment was recorded but staff still need to act - shown to them as a warning. */
+  warning?: string;
 }
 
 export interface CloseAuctionParams {
@@ -220,6 +224,7 @@ async function checkoutMarkPaidLocked(
     itemsSpreadsheetId,
     ticketsSpreadsheetId,
     bidderNumbersSheet,
+    bidManagementSheet,
     paymentMethod,
     paypalIsSandbox,
     attendeeInfo
@@ -257,6 +262,7 @@ async function checkoutMarkPaidLocked(
   const invoiceId = paypal.extractInvoiceIdFromUrl(invoiceUrlCell);
 
   let deferred = false;
+  let warning: string | undefined;
   const paymentOps: SheetOp[] = [];
 
   if (method === "cash" || method === "check") {
@@ -266,10 +272,47 @@ async function checkoutMarkPaidLocked(
       { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!L${sheetRow}`, newValues: [[""]] }
     );
 
-    try {
-      if (invoiceId) await paypal.recordOfflinePayment(invoiceId, label, parseFloat(invoicedAmountCell) || 0);
-    } catch (e: any) {
-      console.warn("PayPal physical payment recording bypassed/failed: " + e.message);
+    // Closes the bidder's PayPal invoice so they can't also pay it online.
+    // A cash/check payer doesn't owe the card surcharge, so that line comes
+    // off the invoice first and the payment is recorded at what's left -
+    // leaving no balance (ROADMAP.md L3). If the surcharge can't be removed,
+    // the payment is recorded at the invoice's full total (Column K)
+    // instead, which still closes it. Column K is left as is: it's what a
+    // later receipt run compares against to reuse this invoice, so changing
+    // it would make that run cancel this invoice and send a new one.
+    //
+    // A failure doesn't block checkout - the cash/check is in hand - but
+    // it's never silent: staff get a `warning` saying what to fix by hand.
+    if (invoiceId) {
+      let amount = parseFloat(invoicedAmountCell) || 0;
+      let paidOnlineStatus: string | null = null;
+      try {
+        const adjusted = await paypal.removeSurchargeLine(invoiceId);
+        if (isPaidInvoiceStatus(adjusted.status)) paidOnlineStatus = adjusted.status;
+        else amount = adjusted.total;
+      } catch (e: any) {
+        console.warn(`[checkout] Couldn't remove the card surcharge from invoice ${invoiceId}; recording the full invoice amount instead: ${e?.message || e}`);
+      }
+
+      if (paidOnlineStatus) {
+        warning =
+          `Bidder ${bidderId} is marked paid (${label}), but PayPal shows invoice ${invoiceId} as already paid (${paidOnlineStatus}). ` +
+          `Check for a double payment before taking the ${label.toLowerCase()}.`;
+      } else {
+        let recorded = false;
+        let reason = "PayPal rejected the request";
+        try {
+          recorded = await paypal.recordOfflinePayment(invoiceId, label, amount);
+        } catch (e: any) {
+          reason = e?.message || String(e);
+        }
+        if (!recorded) {
+          console.warn(`[checkout] Couldn't record bidder ${bidderId}'s ${label.toLowerCase()} payment on PayPal invoice ${invoiceId}: ${reason}`);
+          warning =
+            `Bidder ${bidderId} is marked paid (${label}), but PayPal didn't record the payment on invoice ${invoiceId}, so it can still be paid online. ` +
+            `Mark it paid in the PayPal dashboard.`;
+        }
+      }
     }
   } else if (method === "credit_card") {
     let liveStatus = "UNPAID";
@@ -291,7 +334,10 @@ async function checkoutMarkPaidLocked(
         if (!itemsSpreadsheetId) {
           throw new Error("Auction Items Spreadsheet ID is required to create a PayPal invoice.");
         }
-        const invoiceResult = await buildBidderReceiptWithInvoice(auth, spreadsheetId, itemsSpreadsheetId, bidderId, paypal);
+        const invoiceResult = await buildBidderReceiptWithInvoice(auth, spreadsheetId, itemsSpreadsheetId, bidderId, paypal, {
+          bidderNumbers: bidderNumbersSheet,
+          bidManagement: bidManagementSheet || DEFAULT_SHEET_NAMES.bidManagement,
+        });
         if (invoiceResult.success === false) {
           throw new Error(invoiceResult.error);
         }
@@ -300,7 +346,7 @@ async function checkoutMarkPaidLocked(
       throw new Error("Credit Card validation processing error: " + err.message);
     }
 
-    if (liveStatus === "PAID") {
+    if (isPaidInvoiceStatus(liveStatus)) {
       paymentOps.push(
         { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!G${sheetRow}:I${sheetRow}`, newValues: [[true, true, "Credit Card / PayPal"]] },
         { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!L${sheetRow}`, newValues: [[""]] }
@@ -337,7 +383,7 @@ async function checkoutMarkPaidLocked(
     attendeeUpdated = true;
   }
 
-  return { success: true, attendeeUpdated, deferred };
+  return { success: true, attendeeUpdated, deferred, ...(warning ? { warning } : {}) };
 }
 
 /**

@@ -320,13 +320,17 @@ async function checkInBidderWithBidLocked(
   const colLetter = getColumnLetter(colIndex);
   const nextColLetter = getColumnLetter(colIndex + 1);
 
-  // 3. Find Bidder Row in Bidder Numbers to mark checked-in
+  // 3. Find Bidder Row in Bidder Numbers to mark checked-in. A bidder
+  // missing here fails the whole check-in before anything is written
+  // (ROADMAP.md L4) - it used to add the ticket bid anyway and report
+  // `checkedIn: true` without checking anyone in.
   const bidderSearch = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: `'${bidderNumbersSheet}'!A:A`,
   });
   const biddersRows = bidderSearch.data.values || [];
-  const bidderRowIndex = biddersRows.findIndex((row: any) => row[0]?.toString() === bidderId) + 1;
+  const bidderRowIndex = biddersRows.findIndex((row: any, i: number) => i > 0 && row[0]?.toString().trim() === String(bidderId).trim()) + 1;
+  if (bidderRowIndex < 2) throw new Error(`Bidder ${bidderId} not found in ${bidderNumbersSheet}`);
 
   const operations: SheetOp[] = [
     {
@@ -334,17 +338,14 @@ async function checkInBidderWithBidLocked(
       spreadsheetId,
       range: `'${bidManagementSheet}'!${colLetter}${rowIndex}:${nextColLetter}${rowIndex}`,
       newValues: [[AUCTION_TICKETS_ITEM_ID, bidValue]]
-    }
-  ];
-
-  if (bidderRowIndex > 1) {
-    operations.push({
+    },
+    {
       type: 'UPDATE',
       spreadsheetId,
       range: `'${bidderNumbersSheet}'!E${bidderRowIndex}`,
       newValues: [[true]]
-    });
-  }
+    }
+  ];
 
   await executeGoogleSheetsTransaction(sheets, operations);
 

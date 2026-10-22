@@ -3,7 +3,7 @@ import { IDEMPOTENT_POST_RETRY } from '../utils/googleRetry';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
 import { performSheetSync } from '../services/syncService';
-import { sheetCache, CACHE_TTL, clearCacheForSpreadsheet } from '../utils/sheetCache';
+import { sheetCache, CACHE_TTL, clearCacheForSpreadsheet, sheetCacheKey } from '../utils/sheetCache';
 import { normalizeRange } from '../utils/rangeUtils';
 import {
   addItem,
@@ -269,7 +269,7 @@ export default function createDataRouter() {
     const { spreadsheetId, range } = req.params;
     const decodedRange = decodeURIComponent(range);
     const normalizedRange = normalizeRange(decodedRange);
-    const cacheKey = `${spreadsheetId}:${normalizedRange}`;
+    const cacheKey = sheetCacheKey(spreadsheetId, req.session?.tokens, normalizedRange);
     const cached = sheetCache.get(cacheKey);
 
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
@@ -412,6 +412,11 @@ export default function createDataRouter() {
       
       if (!req.params.folderId || req.params.folderId === "undefined" || req.params.folderId === "null" || req.params.folderId === "") {
         return res.json([]);
+      }
+      // Drive IDs are only letters, digits, - and _. Anything else would be
+      // spliced into the `q` query below as query syntax (ROADMAP.md L7).
+      if (!/^[A-Za-z0-9_-]+$/.test(req.params.folderId)) {
+        return res.status(400).json({ error: "That isn't a valid Drive folder ID. Please check the folder ID in Settings." });
       }
 
       const query = `'${req.params.folderId}' in parents and trashed = false`;

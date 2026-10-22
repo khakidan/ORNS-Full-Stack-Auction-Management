@@ -15,6 +15,7 @@ interface UseCheckoutPaymentFlowArgs {
   itemsSpreadsheetId: string;
   ticketsSpreadsheetId: string;
   bidderNumbersSheet: string;
+  bidManagementSheet: string;
 }
 
 /**
@@ -37,6 +38,7 @@ export function useCheckoutPaymentFlow({
   itemsSpreadsheetId,
   ticketsSpreadsheetId,
   bidderNumbersSheet,
+  bidManagementSheet,
 }: UseCheckoutPaymentFlowArgs) {
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [winnerToPay, setWinnerToPay] = useState<WinnerRecord | null>(null);
@@ -129,6 +131,7 @@ export function useCheckoutPaymentFlow({
         itemsSpreadsheetId,
         ticketsSpreadsheetId,
         bidderNumbersSheet,
+        bidManagementSheet,
         attendeeInfo: attendee && attendee.sheet === 'tickets' ? { sheet: attendee.sheet, rowIndex: attendee.rowIndex } : null,
         paymentMethod: mappedMethod,
         amount: winner.total,
@@ -152,6 +155,10 @@ export function useCheckoutPaymentFlow({
           toast.success(`${bidderName} marked as Paid (${method})`);
           setWinners(prev => prev.map(w => w.bidderId === winner.bidderId ? { ...w, paymentPending: false, paid: true } : w));
         }
+        // The payment is recorded in the sheet, but something staff must
+        // act on still went wrong - e.g. PayPal didn't take the cash/check
+        // payment, so the bidder's invoice is still open and payable.
+        if (data.warning) toast.warning(data.warning, { duration: 15000 });
 
         fetchAllData(); // Refresh all data to ensure sync
       })

@@ -35,6 +35,28 @@ export interface PayPalInvoiceResult {
 
 import { calculatePayPalSurcharge } from "../utils/financeUtils";
 
+/**
+ * Invoice statuses that mean the bidder owes nothing more: PAID (paid
+ * through PayPal) and MARKED_AS_PAID (a payment recorded by hand, e.g. in
+ * the PayPal dashboard). Checkout and the sweeper both use this, so they
+ * never disagree about whether an invoice is settled (ROADMAP.md L2).
+ */
+export function isPaidInvoiceStatus(status: string): boolean {
+  return status === "PAID" || status === "MARKED_AS_PAID";
+}
+
+/** The invoice line createAndSendInvoice adds for the card surcharge. */
+export const SURCHARGE_LINE_NAME = "Merchant Processing Surcharge Fee";
+
+export interface RemoveSurchargeResult {
+  /** The invoice's status when it was read (before any change). */
+  status: string;
+  /** The invoice's total after the surcharge line is gone - what a cash/check payment should be recorded at. */
+  total: number;
+  /** False when there was no surcharge line to remove (nothing was changed). */
+  removed: boolean;
+}
+
 export class PayPalService {
   private fetcher: typeof fetch;
   private clientId: string;
@@ -141,7 +163,7 @@ export class PayPalService {
     }));
 
     invoiceItems.push({
-      name: "Merchant Processing Surcharge Fee",
+      name: SURCHARGE_LINE_NAME,
       quantity: "1",
       unit_amount: { currency_code: "USD", value: feeData.surcharge.toFixed(2) },
     });
@@ -237,6 +259,58 @@ export class PayPalService {
         send_to_recipient: false,
       }),
     });
+  }
+
+  /**
+   * Takes the card-surcharge line off an invoice, for a bidder paying by
+   * cash or check - they don't owe the surcharge, so the invoice should
+   * total just their winning bids, and recording that amount leaves no
+   * balance (ROADMAP.md L3).
+   *
+   * PayPal's update is a full replace (PUT): the current invoice is read,
+   * the surcharge line dropped, and the whole invoice sent back. Fields
+   * PayPal computes itself (totals, amount due, links, payments) are left
+   * out so it recalculates them from the remaining lines. Neither the
+   * bidder nor the merchant is emailed about the change.
+   *
+   * Does nothing to an invoice that's already paid (the caller decides
+   * what to do) or that has no surcharge line.
+   */
+  async removeSurchargeLine(invoiceId: string): Promise<RemoveSurchargeResult> {
+    if (!invoiceId) throw new Error("Invoice ID is required to remove the surcharge.");
+    const token = await this.getAccessToken_();
+    const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+    const url = `${this.baseUrl}/v2/invoicing/invoices/${invoiceId}`;
+
+    const getResponse = await this.fetcher(url, { method: "GET", headers });
+    const getText = await getResponse.text();
+    if (getResponse.status !== 200) {
+      throw new Error(`PayPal invoice lookup failed (${getResponse.status}): ${getText}`);
+    }
+    const invoice = JSON.parse(getText);
+    const status = String(invoice.status || "");
+    const items: any[] = Array.isArray(invoice.items) ? invoice.items : [];
+    const lineTotal = (lines: any[]) =>
+      Math.round(lines.reduce((sum, item) => sum + (parseFloat(item?.unit_amount?.value) || 0) * (parseFloat(item?.quantity) || 1), 0) * 100) / 100;
+
+    const kept = items.filter((item) => item?.name !== SURCHARGE_LINE_NAME);
+    if (isPaidInvoiceStatus(status) || kept.length === items.length) {
+      return { status, total: parseFloat(invoice.amount?.value) || lineTotal(items), removed: false };
+    }
+    if (kept.length === 0) {
+      throw new Error(`Invoice ${invoiceId} has no lines besides the surcharge; left unchanged.`);
+    }
+
+    const { links, amount, due_amount, payments, refunds, ...rest } = invoice;
+    const putResponse = await this.fetcher(`${url}?send_to_recipient=false&send_to_invoicer=false`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ ...rest, items: kept }),
+    });
+    if (putResponse.status !== 200) {
+      throw new Error(`PayPal invoice update failed (${putResponse.status}): ${await putResponse.text()}`);
+    }
+    return { status, total: lineTotal(kept), removed: true };
   }
 
   /**

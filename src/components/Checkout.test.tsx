@@ -18,7 +18,10 @@ vi.mock("@/context/ConfigContext", () => ({
       bidManagementSpreadsheetId: "mock-spreadsheet-id",
       auctionItemsSpreadsheetId: "mock-items-spreadsheet-id",
       receiptFolderId: "mock-folder-id",
+      // A renamed Bidder-Numbers tab, so the receipt tests below show the configured names
+      // (not hardcoded defaults) reach the server (ROADMAP.md L1).
       bidManagementSheet: "Bid-Management",
+      bidderNumbersSheet: "Bidders 2026",
       paypalIsSandbox: false
     }
   })
@@ -141,7 +144,13 @@ describe("Checkout", () => {
       })
     );
     const printBody = JSON.parse(vi.mocked(fetchWithRetry).mock.calls[0][1]!.body as string);
-    expect(printBody).toEqual({ spreadsheetId: "mock-spreadsheet-id", receiptFolderId: "mock-folder-id", itemsSpreadsheetId: "mock-items-spreadsheet-id" });
+    expect(printBody).toEqual({
+      spreadsheetId: "mock-spreadsheet-id",
+      receiptFolderId: "mock-folder-id",
+      itemsSpreadsheetId: "mock-items-spreadsheet-id",
+      bidderNumbersSheet: "Bidders 2026",
+      bidManagementSheet: "Bid-Management",
+    });
   });
 
   it("Email All Winners button calls the correct endpoint", async () => {
@@ -174,6 +183,8 @@ describe("Checkout", () => {
     expect(emailBody).toEqual({
       spreadsheetId: "mock-spreadsheet-id",
       itemsSpreadsheetId: "mock-items-spreadsheet-id",
+      bidderNumbersSheet: "Bidders 2026",
+      bidManagementSheet: "Bid-Management",
       idempotencyKey: expect.any(String)
     });
   });
@@ -349,6 +360,26 @@ describe("Checkout", () => {
         // ambiguous match.
         expect(screen.getAllByText("Paid").length).toBe(2);
       });
+    });
+
+    it("still shows Paid, plus the server's warning, when PayPal couldn't record a cash payment (ROADMAP.md L3)", async () => {
+      const warning = "Bidder 101 is marked paid (Cash), but PayPal didn't record the payment on invoice INV2-X, so it can still be paid online. Mark it paid in the PayPal dashboard.";
+      vi.mocked(fetchWithRetry).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, warning }),
+      } as Response);
+
+      render(<Checkout />);
+      await screen.findByText("Jane Doe");
+      await userEvent.click(screen.getAllByText("Checkout")[0]);
+      await screen.findByText("Select Payment Method");
+      await userEvent.click(screen.getByText("Cash"));
+      await userEvent.click(screen.getByText("Confirm Payment"));
+
+      await waitFor(() => expect(screen.getAllByText("Paid").length).toBe(2));
+      const { toast } = await import("sonner");
+      expect(toast.warning).toHaveBeenCalledWith(warning, expect.anything());
     });
 
     it("shows Pending Verification (not Paid) when the server defers a credit-card checkout to the PayPal sweeper", async () => {

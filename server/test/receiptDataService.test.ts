@@ -252,6 +252,41 @@ describe("resolveInvoiceUrl", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["no email address", ""],
+    ["an unusable email address", "n/a"],
+  ])("sends the invoice to web-admin@orns.org for a bidder with %s (ROADMAP.md L8)", async (_label, email) => {
+    const responses = [
+      { status: 200, text: async () => "", json: async () => ({ access_token: "tok" }) },
+      { status: 201, text: async () => JSON.stringify({ id: "INV2-NEW" }) },
+      { status: 200, text: async () => JSON.stringify({ links: [{ rel: "payer-action", href: "https://www.sandbox.paypal.com/invoice/p/#INV2-NEW" }] }) },
+    ];
+    let i = 0;
+    const fetcher = vi.fn(() => Promise.resolve(responses[i++] as any));
+
+    await resolveInvoiceUrl(newSandboxPaypal({ fetcher }), { ...RECEIPT_50, email }, "101", null);
+
+    const draft = JSON.parse((fetcher.mock.calls[1] as any[])[1].body);
+    expect(draft.primary_recipients[0].billing_info.email_address).toBe("web-admin@orns.org");
+    // Still the bidder's name, so staff can tell whose invoice it is.
+    expect(draft.primary_recipients[0].billing_info.name.given_name).toBe(RECEIPT_50.firstName);
+  });
+
+  it("sends the invoice to the bidder's own address when they have one", async () => {
+    const responses = [
+      { status: 200, text: async () => "", json: async () => ({ access_token: "tok" }) },
+      { status: 201, text: async () => JSON.stringify({ id: "INV2-NEW" }) },
+      { status: 200, text: async () => "{}" },
+    ];
+    let i = 0;
+    const fetcher = vi.fn(() => Promise.resolve(responses[i++] as any));
+
+    await resolveInvoiceUrl(newSandboxPaypal({ fetcher }), { ...RECEIPT_50, email: " alice@example.com " }, "101", null);
+
+    const draft = JSON.parse((fetcher.mock.calls[1] as any[])[1].body);
+    expect(draft.primary_recipients[0].billing_info.email_address).toBe("alice@example.com");
+  });
+
   it("cancels a stale invoice and creates a fresh one when the amount no longer matches", async () => {
     const responses = [
       { status: 200, text: async () => "", json: async () => ({ access_token: "tok" }) }, // cancel's token fetch
@@ -374,6 +409,34 @@ describe("buildBidderReceiptWithInvoice", () => {
     expect(result.success).toBe(true);
     if (result.success) expect(result.receipt.paymentUrl).toBe("https://www.sandbox.paypal.com/invoice/p/#INV2-REUSE");
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("reads and writes the configured tab names, not the defaults (ROADMAP.md L1)", async () => {
+    const requestedRanges: string[] = [];
+    let capturedUpdateRange = "";
+    server.use(
+      http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ params }) => {
+        const range = decodeURIComponent(String(params.range));
+        requestedRanges.push(range);
+        if (range.startsWith("'Bids 2026'!")) return HttpResponse.json({ values: BID_MANAGEMENT_ROWS });
+        if (range.startsWith("'Dan''s Bidders'!")) return HttpResponse.json({ values: BIDDER_NUMBERS_ROWS });
+        if (range.includes("Auction-Items")) return HttpResponse.json({ values: AUCTION_ITEMS_ROWS });
+        return HttpResponse.json({ values: [] });
+      }),
+      http.put("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ params }) => {
+        capturedUpdateRange = decodeURIComponent(String(params.range));
+        return HttpResponse.json({ updatedRows: 1 });
+      })
+    );
+
+    const result = await buildBidderReceiptWithInvoice(fakeClient, "bm-id", "items-id", "101", newSandboxPaypal(), {
+      bidderNumbers: "Dan's Bidders",
+      bidManagement: "Bids 2026",
+    });
+
+    expect(result.success).toBe(true);
+    expect(capturedUpdateRange).toBe("'Dan''s Bidders'!J2:K2");
+    expect(requestedRanges.some((r) => r.includes("Bidder-Numbers") || r.includes("Bid-Management"))).toBe(false);
   });
 
   it("propagates the underlying buildBidderReceipt error without ever touching PayPal", async () => {

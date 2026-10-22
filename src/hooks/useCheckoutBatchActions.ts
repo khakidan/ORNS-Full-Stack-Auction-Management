@@ -6,6 +6,8 @@ interface UseCheckoutBatchActionsArgs {
   spreadsheetId: string;
   itemsSpreadsheetId: string;
   folderId: string;
+  bidderNumbersSheet: string;
+  bidManagementSheet: string;
 }
 
 /**
@@ -28,7 +30,7 @@ function formatEmailAllSummary(data: { sentCount?: number; alreadySentCount?: nu
  * useCheckoutState.ts (was 416 lines) so that container stays focused on
  * composing the split-out pieces.
  */
-export function useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, folderId }: UseCheckoutBatchActionsArgs) {
+export function useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, folderId, bidderNumbersSheet, bidManagementSheet }: UseCheckoutBatchActionsArgs) {
   const [isPrintingAll, setIsPrintingAll] = useState(false);
   const [isEmailingAll, setIsEmailingAll] = useState(false);
   const [showPrintConfirm, setShowPrintConfirm] = useState(false);
@@ -43,7 +45,7 @@ export function useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, fol
       const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/generate-all`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ spreadsheetId, itemsSpreadsheetId, receiptFolderId: folderId }),
+        body: JSON.stringify({ spreadsheetId, itemsSpreadsheetId, bidderNumbersSheet, bidManagementSheet, receiptFolderId: folderId }),
         credentials: "include"
       });
 
@@ -70,7 +72,7 @@ export function useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, fol
         // idempotencyKey: fetchWithRetry re-sends this same body on a
         // timeout/5xx, and the server joins that retry to the run already
         // in progress instead of starting a second one.
-        body: JSON.stringify({ spreadsheetId, itemsSpreadsheetId, idempotencyKey: window.crypto.randomUUID() }),
+        body: JSON.stringify({ spreadsheetId, itemsSpreadsheetId, bidderNumbersSheet, bidManagementSheet, idempotencyKey: window.crypto.randomUUID() }),
         credentials: "include"
       });
 

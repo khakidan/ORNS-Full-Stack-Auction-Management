@@ -1,3 +1,8 @@
+/** A sheet (tab) name quoted for A1 notation: `Bidder-Numbers` -> `'Bidder-Numbers'`. */
+export function quoteSheetName(name: string): string {
+  return `'${name.replace(/'/g, "''")}'`;
+}
+
 /**
  * Normalizes a Google Sheets range string to ensure the sheet name is single-quoted.
  * This is crucial for sheet names containing special characters like hyphens (e.g. 'Auction-Items'!A:Z).

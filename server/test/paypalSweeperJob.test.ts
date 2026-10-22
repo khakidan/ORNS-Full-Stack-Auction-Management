@@ -15,7 +15,8 @@ const mockExtractInvoiceIdFromUrl = vi.fn();
 const mockGetInvoiceStatus = vi.fn();
 let lastPayPalServiceCtorArgs: any = null;
 
-vi.mock("../services/paypalService", () => ({
+vi.mock("../services/paypalService", async (importOriginal) => ({
+  isPaidInvoiceStatus: (await importOriginal<typeof import("../services/paypalService")>()).isPaidInvoiceStatus,
   PayPalService: vi.fn().mockImplementation(function (this: any, args: any) {
     lastPayPalServiceCtorArgs = args;
     return {
