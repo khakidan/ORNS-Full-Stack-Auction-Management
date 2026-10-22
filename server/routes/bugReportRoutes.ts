@@ -3,6 +3,7 @@ import { google } from "googleapis";
 import { getAuthenticatedClient } from "../services/oauth";
 import { appendBugReportToSheet, buildReportFilename, deleteScreenshotFromDrive, findReportRow, listOpenBugReports, logReportFallback, markReportResolved, uploadScreenshotToDrive, writeLocalReportFallback } from "../services/bugReportService";
 import { requireAuth } from "../middleware/requireAuth";
+import { notifyAdminOfBugReport } from "../services/adminNotifications";
 import { BugReportPayload, BugReportType } from "../../src/types";
 
 const BUG_REPORT_TYPES: BugReportType[] = ["Bug", "UI Issue", "Workflow Issue"];
@@ -86,6 +87,18 @@ export default function createBugReportRouter() {
       screenshotBase64: signedIn && typeof screenshotBase64 === "string" && screenshotBase64 ? screenshotBase64 : null,
     };
 
+    // Emails web-admin@orns.org once the report is saved (anywhere), so a
+    // report can't arrive unnoticed. Never lets a notification problem
+    // fail or re-run the save.
+    const respondSaved = async (body: Record<string, unknown>) => {
+      try {
+        await notifyAdminOfBugReport(report, req.session?.tokens);
+      } catch (e: any) {
+        console.error("[BugReport] Notification step failed:", e?.message || e);
+      }
+      return res.json(body);
+    };
+
     try {
       if (!bugReportsSpreadsheetId) {
         throw new Error("No Bug Reports spreadsheet configured");
@@ -102,7 +115,7 @@ export default function createBugReportRouter() {
       }
 
       await appendBugReportToSheet(sheets, bugReportsSpreadsheetId, report, reportId, screenshotLink);
-      return res.json({ success: true, storage: "sheet" });
+      return await respondSaved({ success: true, storage: "sheet" });
     } catch (error: any) {
       console.error("[BugReport] Sheet save failed, falling back:", error?.message || error);
       try {
@@ -110,10 +123,10 @@ export default function createBugReportRouter() {
         // recycle, so production falls back to Cloud Logging instead.
         if (process.env.NODE_ENV === "production") {
           logReportFallback(report);
-          return res.json({ success: true, storage: "log" });
+          return await respondSaved({ success: true, storage: "log" });
         }
         const { filePath } = await writeLocalReportFallback(report);
-        return res.json({ success: true, storage: "local", filePath });
+        return await respondSaved({ success: true, storage: "local", filePath });
       } catch (fallbackError: any) {
         console.error("[BugReport] Fallback also failed:", fallbackError);
         return res.status(500).json({ error: "Failed to save bug report" });

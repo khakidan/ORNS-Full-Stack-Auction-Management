@@ -6,6 +6,14 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Added
 
+- **"New Auction Bug Submitted" email to web-admin@orns.org on every saved bug report.** Anyone can submit a report without signing in, and the report only lands in a sheet (or, if that fails, the logs), so one could go unseen.
+  - `server/services/adminNotifications.ts` sends it after the report is saved (in the sheet, the production log fallback, or the local file), from `bugReportRoutes.ts`. The email has the title, type, page, time, whether the sender was signed in, and the first 1,500 characters of the description (all HTML-escaped; the subject is fixed). It points to Bug Reports in the app.
+  - **Sent as the most recent staff sign-in**: an anonymous report has no Google session, so it uses the stored refresh token the PayPal sweeper already keeps (`system/paypalSweeperAuth`; its scopes include `gmail.send`), then falls back to the submitter's own session. If neither exists, or Gmail refuses, the report is still saved and the failure is logged.
+  - **Limit**: at most 10 emails per 10 minutes across all reports (in memory, like the other limiters). Reports over it are still saved; the next email that goes out says how many it skipped.
+  - Awaited before the response (8-second cap), not run afterwards: Cloud Run throttles CPU once the response is sent.
+  - Tests: `adminNotifications.test.ts` (recipient and subject, sender choice and fallbacks, failure, timeout, limit and skipped-count note, HTML escaping); new cases in `bugReportRoutes.test.ts` (signed-in, anonymous, log fallback, none for refused reports, save survives a failed email).
+  - Backend 617 -> 635, total 1303 -> 1321.
+
 - **Apps Script version check and deploy tooling (2026-10-22 review item 4).**
   - Each Apps Script project has a `Version.gs` holding a fingerprint of all its other deployed files (`scripts/apps-script/fingerprint.mjs`), and an `apiGetVersion()` that reports it.
   - `npm run gas:stamp` rewrites the fingerprints and `server/generated/appsScriptVersions.ts`; `npm run gas:deploy` pushes from the repo folders, creates a version and points each deployment at it (deployment IDs now in each `.clasp.json`); `npm run gas:check` downloads each deployed version and diffs it with the repo. clasp 3.4.1 runs through `npx`: as a devDependency its own `google-auth-library` broke the app's googleapis types.

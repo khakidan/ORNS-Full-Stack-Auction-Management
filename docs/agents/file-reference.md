@@ -27,6 +27,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── bundleRoutes.ts    # Gemini name/description suggestions; bundle process/restore
 │   │   ├── dataRoutes.ts      # Bidder sync, PayPal sweeper status/run-now, _Settings, auction item CRUD, generic Sheets/Drive proxies, attendee field updates
 │   │   ├── health.ts          # GET /api/health
+│   │   ├── bugReportRoutes.ts # POST /api/bug-reports (open) emails the admin via services/adminNotifications.ts; list/resolve are admin-only
 │   │   ├── productionRoutes.ts# Apps Script document generators (item docs/labels/slides, bidder labels)
 │   │   ├── appsScriptRoutes.ts# GET /api/apps-script/versions - live Version.gs fingerprints vs. expected
 │   │   ├── receiptRoutes.ts   # Receipt generation (single/all) and receipt emails (single/all)

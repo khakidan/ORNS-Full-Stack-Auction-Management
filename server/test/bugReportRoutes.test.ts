@@ -16,6 +16,15 @@ import { server } from "./setup";
 import { resetHandlersState, appendCallCount, lastAppendedRow } from "./handlers";
 import { authCookieHeader } from "./helpers/session";
 import { _resetBugReportRateLimitForTesting } from "../routes/bugReportRoutes";
+import { _resetAdminNotificationsForTesting } from "../services/adminNotifications";
+import { getAuthenticatedClient } from "../services/oauth";
+
+// The stored background sign-in lives in Firestore; tests never reach it.
+vi.mock("../services/paypalSweeperJob", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../services/paypalSweeperJob")>()),
+  getSweeperAuthClient: vi.fn(),
+}));
+import { getSweeperAuthClient } from "../services/paypalSweeperJob";
 
 const mockTokens = {
   access_token: "bug-report-mock-token",
@@ -50,6 +59,8 @@ describe("POST /api/bug-reports", () => {
   beforeEach(() => {
     resetHandlersState();
     _resetBugReportRateLimitForTesting();
+    _resetAdminNotificationsForTesting();
+    vi.mocked(getSweeperAuthClient).mockResolvedValue(null);
   });
 
   afterEach(async () => {
@@ -408,5 +419,113 @@ describe("POST /api/bug-reports/resolve", () => {
 
     expect(res.status).toBe(200);
     expect(deleteCalled).toBe(false);
+  });
+});
+
+describe("POST /api/bug-reports - 'New Auction Bug Submitted' email to web-admin@orns.org", () => {
+  /** Records each Gmail send as [recipient, subject]. */
+  function captureEmails() {
+    const emails: { to: string; subject: string; body: string }[] = [];
+    server.use(
+      http.post("https://gmail.googleapis.com/gmail/v1/users/:userId/messages/send", async ({ request }) => {
+        const body: any = await request.json();
+        const text = Buffer.from(body.raw.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+        emails.push({ to: /^To: (.*)$/m.exec(text)?.[1] ?? "", subject: /^Subject: (.*)$/m.exec(text)?.[1] ?? "", body: text });
+        return HttpResponse.json({ id: "m1" });
+      })
+    );
+    return emails;
+  }
+
+  beforeEach(() => {
+    resetHandlersState();
+    _resetBugReportRateLimitForTesting();
+    _resetAdminNotificationsForTesting();
+    vi.mocked(getSweeperAuthClient).mockResolvedValue(getAuthenticatedClient({ access_token: "background-token", expiry_date: Date.now() + 3600000 }));
+  });
+
+  afterEach(async () => {
+    const files = await listBugReportFiles();
+    await Promise.all(files.map((f) => fs.rm(path.join(BUG_REPORTS_DIR, f), { force: true })));
+  });
+
+  it("emails the administrator when a signed-in user's report is saved to the sheet", async () => {
+    const emails = captureEmails();
+
+    const res = await request(app).post("/api/bug-reports").set(authHeader).send({ ...validBody, bugReportsSpreadsheetId: "sheet-abc" });
+
+    expect(res.body).toMatchObject({ success: true, storage: "sheet" });
+    expect(emails).toHaveLength(1);
+    expect(emails[0]).toMatchObject({ to: "web-admin@orns.org", subject: "New Auction Bug Submitted" });
+    expect(emails[0].body).toContain("Checkout button does nothing");
+  });
+
+  it("emails the administrator for a report from someone who isn't signed in, so it can't go unnoticed", async () => {
+    const emails = captureEmails();
+
+    const res = await request(app).post("/api/bug-reports").send(validBody);
+
+    expect(res.status).toBe(200);
+    expect(emails).toHaveLength(1);
+    expect(emails[0].subject).toBe("New Auction Bug Submitted");
+    expect(emails[0].body).toContain("Someone who was not signed in");
+  });
+
+  it("emails when the report falls back to the logs in production", async () => {
+    const emails = captureEmails();
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await request(app).post("/api/bug-reports").send(validBody);
+      expect(res.body).toMatchObject({ success: true, storage: "log" });
+      expect(emails).toHaveLength(1);
+    } finally {
+      process.env.NODE_ENV = previous;
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("doesn't email for a report that is refused (missing fields, bad type, rate limit)", async () => {
+    const emails = captureEmails();
+
+    await request(app).post("/api/bug-reports").send({ title: "Only a title" });
+    await request(app).post("/api/bug-reports").send({ ...validBody, type: "Nope" });
+    for (let i = 0; i < 5; i++) await request(app).post("/api/bug-reports").send(validBody);
+    const emailsBeforeLimited = emails.length;
+    const limited = await request(app).post("/api/bug-reports").send(validBody);
+
+    expect(limited.status).toBe(429);
+    expect(emails).toHaveLength(emailsBeforeLimited);
+    expect(emailsBeforeLimited).toBe(5);
+  });
+
+  it("still saves and answers success when the email can't be sent", async () => {
+    server.use(
+      http.post("https://gmail.googleapis.com/gmail/v1/users/:userId/messages/send", () =>
+        HttpResponse.json({ error: { message: "Gmail is down" } }, { status: 500 })
+      )
+    );
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await request(app).post("/api/bug-reports").set(authHeader).send({ ...validBody, bugReportsSpreadsheetId: "sheet-abc" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, storage: "sheet" });
+    expect(appendCallCount).toBe(1);
+    errorSpy.mockRestore();
+  });
+
+  it("still saves when no sign-in is available to send with (nobody has signed in yet)", async () => {
+    vi.mocked(getSweeperAuthClient).mockResolvedValue(null);
+    const emails = captureEmails();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const res = await request(app).post("/api/bug-reports").send(validBody);
+
+    expect(res.status).toBe(200);
+    expect(emails).toHaveLength(0);
+    expect(warnSpy.mock.calls.some((c) => String(c[0]).includes("No Google sign-in available"))).toBe(true);
+    warnSpy.mockRestore();
   });
 });
