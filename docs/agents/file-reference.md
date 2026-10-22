@@ -28,6 +28,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── dataRoutes.ts      # Bidder sync, PayPal sweeper status/run-now, _Settings, auction item CRUD, generic Sheets/Drive proxies, attendee field updates
 │   │   ├── health.ts          # GET /api/health
 │   │   ├── productionRoutes.ts# Apps Script document generators (item docs/labels/slides, bidder labels)
+│   │   ├── appsScriptRoutes.ts# GET /api/apps-script/versions - live Version.gs fingerprints vs. expected
 │   │   ├── receiptRoutes.ts   # Receipt generation (single/all) and receipt emails (single/all)
 │   │   ├── schedulerRoutes.ts # POST /internal/paypal-sweep (Cloud Scheduler, shared-secret header)
 │   │   └── setupRoutes.ts     # NDJSON-streamed new-auction setup
@@ -78,6 +79,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │
 │   └── test/                  # Vitest + supertest + MSW backend suite (helpers/ incl. session.ts for signed test cookies, handlers.ts, setup.ts)
 │
+├── scripts/apps-script/            # cli.mjs (npm run gas:stamp/deploy/check) + fingerprint.mjs
 ├── scripts/GoogleAppsScriptsCode/   # Apps Script sources, one folder per bound spreadsheet (each with appsscript.json + .clasp.json; BidManagementSpreadsheet/not-deployed/ is reference-only, never pushed)
 │   ├── BidManagementSpreadsheet/    # Receipt docs (Node supplies the data)
 │   ├── ItemsSpreadsheet/            # Catalog, bid sheets, labels, slides, table tents

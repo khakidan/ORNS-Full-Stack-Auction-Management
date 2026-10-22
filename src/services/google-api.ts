@@ -206,6 +206,22 @@ export async function runPaypalSweepNow(): Promise<PaypalSweepOutcome> {
   return res.json();
 }
 
+export interface AppsScriptVersionStatus {
+  label: string;
+  expected: string;
+  live: string | null;
+  status: "ok" | "outdated" | "error";
+  error?: string;
+}
+
+/** Asks each live Apps Script for its Version.gs fingerprint (read-only). */
+export async function getAppsScriptVersions(): Promise<AppsScriptVersionStatus[]> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/apps-script/versions`, { credentials: "include" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(errorTextFrom(data, "Failed to check the Apps Script versions"));
+  return data.scripts;
+}
+
 export async function clearSheetData(spreadsheetId: string, range: string) {
   if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
     throw new Error("Invalid Spreadsheet ID");

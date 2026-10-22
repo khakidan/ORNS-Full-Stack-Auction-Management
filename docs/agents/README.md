@@ -103,6 +103,7 @@ All core operations are managed via npm scripts declared in `package.json`:
 *   `npm run start`: Runs the compiled server (`node dist/server.cjs`). This is the production entry point on Cloud Run; locally, run it after `npm run build` with `NODE_ENV=production` to try the production build.
 *   `npm run lint`: Static type checks (`tsc --noEmit`).
 *   `npm run test`: Runs the complete test suite with Vitest.
+*   `npm run gas:stamp` / `gas:deploy` / `gas:check`: Apps Script tooling (`scripts/apps-script/cli.mjs`) - see "Deploying the Apps Scripts" under Deployment.
 *   `npm run test:quiet`: Same as `npm run test`, with `NODE_OPTIONS=--no-experimental-webstorage` - required on Node 22+, where Node's own built-in Web Storage global can leave jsdom's `window.localStorage` undefined (`ConfigContext.tsx` reads it at module load). Uses inline `VAR=value` shell syntax, which needs a POSIX shell (bash/zsh/Git Bash).
 
 ---
@@ -138,6 +139,16 @@ Workflow:
 1.  Do work on a branch, never directly on `main`.
 2.  Run the tests (`npm run test:quiet`, `npm run lint`) and try the change locally (`npm run dev`).
 3.  Merge to `main` (via a GitHub pull request) only when it's ready to go live - the merge is the deploy, live within a few minutes.
+
+### Deploying the Apps Scripts
+
+The three Apps Script projects (`scripts/GoogleAppsScriptsCode/<project>/`) do **not** deploy with the app. Each folder's `.clasp.json` holds the project's `scriptId` and the `deploymentId` the app runs (`SCRIPT_ID_*` on Cloud Run). After changing any file in one:
+
+1.  `npm run gas:stamp` - updates each project's `Version.gs` fingerprint and `server/generated/appsScriptVersions.ts`. Commit both (a test fails until you do).
+2.  `npm run gas:deploy` (or `npm run gas:deploy BidManagementSpreadsheet`) - pushes from the repo folder, creates a version, and points the deployment at it. Needs clasp signed in once: `npx @google/clasp@3.4.1 login`, as an account that owns the scripts.
+3.  `npm run gas:check` - downloads each deployed version and compares it file by file with the repo.
+
+The Settings page's **Apps Script Versions** card shows whether each live script reports the fingerprint the running app expects. "Out of date" right after a merge usually just means step 2 hasn't been run yet.
 
 Production configuration (all the environment variables above, with
 production values) is set on the `orns-auction-manager-gh` service in

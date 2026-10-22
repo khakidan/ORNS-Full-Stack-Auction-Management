@@ -50,6 +50,7 @@ This application is designed to streamline the operation of live and online char
 - **PayPal invoices for bidders with no email**: these go to **web-admin@orns.org** (still in the bidder's name), so staff have the payment link if the bidder needs it.
 - **"No answer from the server" when creating a document or receipt**: the document may still have been made. Check the folder before clicking again, so you don't get two copies.
 - **"Already being created" / "already printing"**: someone (or an earlier click) started the same document and it hasn't finished. Wait for it, then check the folder.
+- **Documents, labels or receipts suddenly failing**: on the **Config Settings** page, click **Check Script Versions**. Any script marked "Out of date" or "Couldn't check" needs the technical administrator.
 - **Sync Issues**: If data is not appearing in the Google Sheets, verify the spreadsheet IDs in **Config Settings**.
 - **Connection banner**: A banner at the top of the page appears when Google Sheets is slow or the internet connection drops.
   - **Winning bids aren't lost.** A bid that can't be sent is marked **Saved on this device** in Bid Entry, and sends on its own once the connection is back. Keep entering bids, and keep that tab open. Closing it with bids waiting shows a "Leave site?" warning; the bids stay saved on that device and send the next time the app is opened there.

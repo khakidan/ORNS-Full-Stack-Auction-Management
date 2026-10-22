@@ -6,6 +6,13 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Added
 
+- **Apps Script version check and deploy tooling (2026-10-22 review item 4).**
+  - Each Apps Script project has a `Version.gs` holding a fingerprint of all its other deployed files (`scripts/apps-script/fingerprint.mjs`), and an `apiGetVersion()` that reports it.
+  - `npm run gas:stamp` rewrites the fingerprints and `server/generated/appsScriptVersions.ts`; `npm run gas:deploy` pushes from the repo folders, creates a version and points each deployment at it (deployment IDs now in each `.clasp.json`); `npm run gas:check` downloads each deployed version and diffs it with the repo. clasp 3.4.1 runs through `npx`: as a devDependency its own `google-auth-library` broke the app's googleapis types.
+  - Found while deploying: clasp 3.4.1 treats a push whose only change is a deleted file as "already up to date" and sends nothing - Bid-Management version 30 kept the PayPal files PR #6 moved out. Because the fingerprint changes on any change, `gas:deploy` always sends real changes.
+  - Settings page: an **Apps Script Versions** card (`AppsScriptVersionsCard.tsx`, `GET /api/apps-script/versions`) asks each live script for its fingerprint on a click and shows Up to date / Out of date / Couldn't check. It can't see a live edit that left `Version.gs` alone; `gas:check` can.
+  - Tests: `appsScriptVersions.test.ts` (stamps current; fails after an unstamped edit), `appsScriptRoutes.test.ts`, `AppsScriptVersionsCard.test.tsx`. Backend 602 -> 617, frontend 683 -> 686, total 1285 -> 1303.
+
 - **ROADMAP.md Milestone A: Sync & Retry Resiliency.** Staff now see when Google Sheets is slow or the connection is gone. A winning bid that can't be sent stays on screen and sends itself once the connection is back, instead of being undone. Choices confirmed by the user on the proposal page: queue winning bids only; banner on every page; warn before closing a tab with bids waiting; ship the server safety along with it.
   - **Connection banner** (`src/components/SyncStatusBanner.tsx`, above every page in `App.tsx`). It shows one message at a time, most important first:
     - saved bids the server refused

@@ -10,6 +10,7 @@ import createSetupRouter from './routes/setupRoutes';
 import createBidRouter from './routes/bidRoutes';
 import createDataRouter from './routes/dataRoutes';
 import createProductionRouter from './routes/productionRoutes';
+import createAppsScriptRouter from './routes/appsScriptRoutes';
 import createBugReportRouter from './routes/bugReportRoutes';
 import createSchedulerRouter from './routes/schedulerRoutes';
 
@@ -89,6 +90,7 @@ app.use(authRoutes);
 app.use("/api/receipts", createReceiptsRouter());
 app.use("/api/auction", createSetupRouter());
 app.use("/api/production", createProductionRouter());
+app.use("/api/apps-script", createAppsScriptRouter());
 app.use("/api/bundle", createBundleRouter());
 // Mounted before the generic "/api"-prefixed, requireAuth-gated routers
 // below - bidRoutes.ts/dataRoutes.ts's `router.use(requireAuth)` matches
