@@ -63,6 +63,40 @@ export async function fetchWithRetry(url: string | URL | Request, options: Reque
   throw new ServerUnreachableError(new Error("Maximum retries exceeded"));
 }
 
+/**
+ * Sends a POST exactly once - no automatic retries, unlike fetchWithRetry.
+ *
+ * For requests that create something and aren't safe to repeat, such as
+ * the Apps Script document and receipt runs: a timeout or server error
+ * there often means the script is still running (or already finished),
+ * so resending it made duplicate files. Returns the Response whatever its
+ * status; throws ServerUnreachableError only if nothing came back at all.
+ */
+export async function postOnce(url: string, body: unknown): Promise<Response> {
+  try {
+    return await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      credentials: "include",
+    });
+  } catch (error) {
+    throw new ServerUnreachableError(error);
+  }
+}
+
+/**
+ * The most useful error text from a failed response's JSON body. The
+ * server's error handler sends { error: "Internal Server Error", message },
+ * so `message` (the real reason) wins when present.
+ */
+export function errorTextFrom(data: any, fallback: string): string {
+  return data?.message || data?.error || fallback;
+}
+
+/** What to show when a document request got no answer at all. */
+export const NO_ANSWER_MESSAGE =
+  "No answer from the server. The document may still be created - check the folder before trying again.";
 
 export async function getAuthUrl() {
   const res = await fetchWithRetry(`${getBaseUrl()}/auth/url`, { credentials: "include" });

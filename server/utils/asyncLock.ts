@@ -38,6 +38,35 @@ export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T>
   }
 }
 
+/** Thrown by runIfIdle when the same job is already running. */
+export class AlreadyRunningError extends Error {
+  constructor(message = "This is already running. Wait for it to finish, then check the folder before trying again.") {
+    super(message);
+    this.name = "AlreadyRunningError";
+  }
+}
+
+const running = new Set<string>();
+
+/**
+ * Runs `fn` only if no other call with the same key is running; otherwise
+ * throws AlreadyRunningError at once instead of queueing behind it.
+ *
+ * For work that isn't safe to repeat, such as an Apps Script run that
+ * creates a document: a second click or a retried request while the
+ * first is still going would make a second copy, so it's turned away
+ * rather than run after the first one finishes (which withLock would do).
+ */
+export async function runIfIdle<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  if (running.has(key)) throw new AlreadyRunningError();
+  running.add(key);
+  try {
+    return await fn();
+  } finally {
+    running.delete(key);
+  }
+}
+
 /** Test-only: the number of keys currently held in the lock map, to verify cleanup actually happens rather than leaking an entry per key forever. */
 export function _getLockMapSizeForTesting(): number {
   return locks.size;

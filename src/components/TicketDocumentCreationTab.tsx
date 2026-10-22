@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { PlaySquare } from "lucide-react";
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
+import { errorTextFrom, getBaseUrl, NO_ANSWER_MESSAGE, postOnce, ServerUnreachableError } from "@/services/google-api";
 import { useForPrintFolderFiles } from "@/hooks/useForPrintFolderFiles";
 import { DocumentCreationPanel } from "@/components/DocumentCreationPanel";
 import { FolderFilesCard } from "@/components/FolderFilesCard";
@@ -33,18 +33,16 @@ export default function TicketDocumentCreationTab() {
 
       const endpoint = "/api/production/tickets/bidder-labels";
 
-      const res = await fetchWithRetry(`${getBaseUrl()}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderId: forPrintFolderId, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId: spreadsheetId })
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      // Sent once, never retried: each run creates a new file, so a retry
+      // after a timeout made duplicates.
+      const res = await postOnce(`${getBaseUrl()}${endpoint}`, { folderId: forPrintFolderId, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId: spreadsheetId });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(errorTextFrom(data, `Failed with status ${res.status}`));
 
       toast.success(`${label} completed!`, { id: functionName });
       setTimeout(fetchFiles, 3000);
     } catch (e: any) {
-      toast.error(`Error: ${e.message}`, { id: functionName });
+      toast.error(e instanceof ServerUnreachableError ? NO_ANSWER_MESSAGE : `Error: ${e.message}`, { id: functionName });
     }
   };
 

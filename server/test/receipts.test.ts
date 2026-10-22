@@ -13,7 +13,7 @@ import { app } from "../app";
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
 import { resetHandlersState, appsScriptCallCount,
-         productionScriptCallLog } from "./handlers";
+         productionScriptCallLog, lastAppsScriptParams } from "./handlers";
 import { calculatePayPalSurcharge } from "../utils/financeUtils";
 import { authCookieHeader } from "./helpers/session";
 
@@ -91,7 +91,7 @@ describe('Receipt Generate workflow', () => {
     expect(productionScriptCallLog).toContain('apiCreateIndividualReceipt');
   });
 
-  it('Concurrent requests for the same bidder create only one PayPal invoice (ROADMAP.md H1)', async () => {
+  it('A second request for the same bidder while the first runs is turned away, and only one PayPal invoice is made (ROADMAP.md H1)', async () => {
     // Bidder-Numbers with no invoice yet, backed by state so the first
     // request's J/K write is visible to the second request's read.
     const bidderRow = ['42', 'John', 'Doe', 'john@example.com', 'TRUE', '', '', '', '', '', ''];
@@ -131,9 +131,48 @@ describe('Receipt Generate workflow', () => {
       .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
     const [first, second] = await Promise.all([send(), send()]);
 
-    expect(first.status).toBe(200);
-    expect(second.status).toBe(200);
+    // The second would make a duplicate receipt PDF, so it gets 409
+    // instead of running after the first.
+    expect([first.status, second.status].sort()).toEqual([200, 409]);
     expect(invoicesCreated).toBe(1);
+    expect(appsScriptCallCount).toBe(1);
+
+    // Once the first has finished, the bidder's receipt can be made again.
+    expect((await send()).status).toBe(200);
+  });
+
+  it("The script reporting its own failure returns 400 with its reason, not a 200 'success'", async () => {
+    server.use(
+      http.post('https://script.googleapis.com/v1/scripts/:scriptId\\:run', () =>
+        HttpResponse.json({ response: { result: { success: false, error: 'Exception: Document is missing' } } })
+      )
+    );
+
+    const response = await request(app)
+      .post('/api/receipts/generate')
+      .set(authHeader)
+      .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('Exception: Document is missing');
+  });
+
+  it("A failed script run reports the script's real error, not the generic 'ScriptError'", async () => {
+    server.use(
+      http.post('https://script.googleapis.com/v1/scripts/:scriptId\\:run', () =>
+        HttpResponse.json({
+          error: { code: 3, message: 'ScriptError', details: [{ errorMessage: 'Exceeded maximum execution time' }] }
+        })
+      )
+    );
+
+    const response = await request(app)
+      .post('/api/receipts/generate')
+      .set(authHeader)
+      .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe('Exceeded maximum execution time');
   });
 
   it('Happy path — Node-resolved receipt data is forwarded to Apps Script', async () => {
@@ -246,9 +285,119 @@ describe('Receipt Generate-All workflow', () => {
       .send({ spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
 
     expect(response.status).toBe(200);
-    expect(response.body.success).toBe(true);
+    expect(response.body).toMatchObject({ success: true, part: 1, totalParts: 1, bidderCount: 1, fileName: 'Receipts - Part 1 of 1 (Doe)' });
     expect(appsScriptCallCount).toBe(1);
     expect(productionScriptCallLog).toContain('apiCreateAllReceipts');
+    // One named PDF for this part (the 3rd parameter).
+    expect(lastAppsScriptParams[2]).toBe('Receipts - Part 1 of 1 (Doe)');
+  });
+
+  describe('printing in parts', () => {
+    // 30 bidders, each winning one item: two parts (25 + 5).
+    const BIDDERS = Array.from({ length: 30 }, (_, i) => {
+      const n = String(i + 1).padStart(2, '0');
+      return { id: String(100 + i), first: `First${n}`, last: `Last${n}`, item: String(800 + i) };
+    });
+    const manyBiddersHandler = http.get(
+      'https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range',
+      ({ request }) => {
+        const range = decodeURIComponent(new URL(request.url).pathname.split('/').pop() || '');
+        if (range.includes('Bid-Management')) {
+          return HttpResponse.json({
+            values: [
+              BIDDERS.flatMap((b) => [b.id, 'Price']),
+              BIDDERS.flatMap(() => ['', '']),
+              BIDDERS.flatMap(() => ['', '']),
+              BIDDERS.flatMap((b) => [b.item, '10']),
+            ]
+          });
+        }
+        if (range.includes('Bidder-Numbers')) {
+          return HttpResponse.json({ values: [['ID', 'First Name', 'Last Name', 'Email'], ...BIDDERS.map((b) => [b.id, b.first, b.last, ''])] });
+        }
+        if (range.includes('Auction-Items')) {
+          return HttpResponse.json({ values: [['Item Number', 'Category', 'Item Name'], ...BIDDERS.map((b) => [b.item, 'Food', `Item ${b.item}`])] });
+        }
+        return HttpResponse.json({ values: [] });
+      }
+    );
+
+    const printPart = (part?: number) => request(app)
+      .post('/api/receipts/generate-all')
+      .set(authHeader)
+      .send({ spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id', ...(part === undefined ? {} : { part }) });
+
+    beforeEach(() => {
+      server.use(manyBiddersHandler);
+    });
+
+    it('sends at most 25 bidders per part, each part to its own named PDF', async () => {
+      const first = await printPart(1);
+      expect(first.status).toBe(200);
+      expect(first.body).toMatchObject({ part: 1, totalParts: 2, bidderCount: 30, fileName: 'Receipts - Part 1 of 2 (Last01 - Last25)' });
+      expect(lastAppsScriptParams[1]).toHaveLength(25);
+      expect(lastAppsScriptParams[1][0].lastName).toBe('Last01');
+
+      const second = await printPart(2);
+      expect(second.status).toBe(200);
+      expect(second.body).toMatchObject({ part: 2, totalParts: 2, fileName: 'Receipts - Part 2 of 2 (Last26 - Last30)' });
+      expect(lastAppsScriptParams[1].map((r: any) => r.lastName)).toEqual(['Last26', 'Last27', 'Last28', 'Last29', 'Last30']);
+      expect(appsScriptCallCount).toBe(2);
+    });
+
+    it('defaults to part 1 when no part is given', async () => {
+      const response = await printPart();
+      expect(response.body).toMatchObject({ part: 1, totalParts: 2 });
+    });
+
+    it('rejects a part past the last one, without running the script', async () => {
+      const response = await printPart(3);
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('There are only 2 part(s) to print.');
+      expect(appsScriptCallCount).toBe(0);
+    });
+
+    it('rejects a part that is not a whole number from 1', async () => {
+      expect((await printPart(0)).status).toBe(400);
+      expect(appsScriptCallCount).toBe(0);
+    });
+
+    it('turns away a second print while one is running', async () => {
+      // A slow script run, so the second request arrives mid-run.
+      server.use(
+        http.post('https://script.googleapis.com/v1/scripts/:scriptId\\:run', async () => {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          return HttpResponse.json({ response: { result: { success: true } } });
+        })
+      );
+      const [a, b] = await Promise.all([printPart(1), printPart(1)]);
+      expect([a.status, b.status].sort()).toEqual([200, 409]);
+    });
+
+    it("stops with the script's reason when a part fails", async () => {
+      server.use(
+        http.post('https://script.googleapis.com/v1/scripts/:scriptId\\:run', () =>
+          HttpResponse.json({ response: { result: { success: false, error: 'Exception: Service Documents failed' } } })
+        )
+      );
+      const response = await printPart(1);
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('Exception: Service Documents failed');
+    });
+  });
+
+  it('No bidder has won anything — nothing to print, script not run', async () => {
+    server.use(
+      http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', () => HttpResponse.json({ values: [] }))
+    );
+    const response = await request(app)
+      .post('/api/receipts/generate-all')
+      .set(authHeader)
+      .send({ spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ success: true, totalParts: 0 });
+    expect(appsScriptCallCount).toBe(0);
   });
 
   it('Auth failure', async () => {

@@ -194,7 +194,7 @@ describe("apiCreateIndividualReceipt / apiCreateAllReceipts declare every parame
     expect(apiCreateIndividualReceipt.length).toBe(3);
   });
 
-  it("apiCreateAllReceipts declares both parameters (folderID, receipts)", () => {
+  it("apiCreateAllReceipts declares all 3 parameters (folderID, receipts, fileName)", () => {
     const { apiCreateAllReceipts } = loadGasClasses(
       [
         "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GlobalVariables.gs",
@@ -202,6 +202,7 @@ describe("apiCreateIndividualReceipt / apiCreateAllReceipts declare every parame
       ],
       ["apiCreateAllReceipts"]
     );
-    expect(apiCreateAllReceipts.length).toBe(2);
+    // fileName: Node prints receipts in parts, one named PDF per part.
+    expect(apiCreateAllReceipts.length).toBe(3);
   });
 });

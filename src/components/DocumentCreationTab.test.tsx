@@ -16,15 +16,22 @@ vi.mock("sonner", () => ({
   },
 }));
 
-vi.mock("@/services/google-api", () => ({
+// The real errorTextFrom/ServerUnreachableError/NO_ANSWER_MESSAGE are
+// kept; only the two network calls are mocked. Document runs go through
+// postOnce (sent once, never retried); fetchWithRetry is only the folder
+// file list here.
+vi.mock("@/services/google-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/services/google-api")>()),
   fetchWithRetry: vi.fn(),
+  postOnce: vi.fn(),
   getBaseUrl: vi.fn(() => "http://localhost:3000"),
 }));
 
-import { fetchWithRetry } from "@/services/google-api";
+import { fetchWithRetry, postOnce, ServerUnreachableError, NO_ANSWER_MESSAGE } from "@/services/google-api";
 import { toast } from "sonner";
 
 const mockedFetchWithRetry = vi.mocked(fetchWithRetry);
+const mockedPostOnce = vi.mocked(postOnce);
 
 let mockConfig = {
   auctionItemsSpreadsheetId: "test-items-spreadsheet-id",
@@ -140,12 +147,7 @@ describe("DocumentCreationTab", () => {
     ["Create Live Auction Slideshow", "/api/production/item-entry/slideshow", "apiCreateSlideshow", "Create Slideshow"],
   ])("'%s' POSTs to %s with the configured folderId and spreadsheetId", async (buttonText, endpoint, funcName, toastLabel) => {
     // The generation call itself resolves with a plain success body.
-    mockedFetchWithRetry.mockImplementation(async (url: any) => {
-      if (typeof url === "string" && url.includes(endpoint)) {
-        return { ok: true, status: 200, json: async () => ({ success: true }) } as Response;
-      }
-      return emptyFilesResponse;
-    });
+    mockedPostOnce.mockResolvedValue({ ok: true, status: 200, json: async () => ({ success: true }) } as Response);
     const user = userEvent.setup();
 
     await act(async () => {
@@ -156,12 +158,10 @@ describe("DocumentCreationTab", () => {
       await user.click(screen.getByText(buttonText));
     });
 
-    expect(fetchWithRetry).toHaveBeenCalledWith(
+    expect(postOnce).toHaveBeenCalledTimes(1);
+    expect(postOnce).toHaveBeenCalledWith(
       expect.stringContaining(endpoint),
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ folderId: mockConfig.forPrintFolderId, spreadsheetId: mockConfig.auctionItemsSpreadsheetId }),
-      })
+      { folderId: mockConfig.forPrintFolderId, spreadsheetId: mockConfig.auctionItemsSpreadsheetId }
     );
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith(`${toastLabel} completed!`, { id: funcName });
@@ -169,12 +169,7 @@ describe("DocumentCreationTab", () => {
   });
 
   it("shows an error toast (not a crash) when generation fails server-side", async () => {
-    mockedFetchWithRetry.mockImplementation(async (url: any) => {
-      if (typeof url === "string" && url.includes("/bundling-doc")) {
-        return { ok: false, status: 400, json: async () => ({ success: false, error: "Auction-Items sheet is empty" }) } as Response;
-      }
-      return emptyFilesResponse;
-    });
+    mockedPostOnce.mockResolvedValue({ ok: false, status: 400, json: async () => ({ success: false, error: "Auction-Items sheet is empty" }) } as Response);
     const user = userEvent.setup();
 
     await act(async () => {
@@ -187,6 +182,42 @@ describe("DocumentCreationTab", () => {
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith("Error: Auction-Items sheet is empty", { id: "apiCreateBundlingDoc" });
+    });
+  });
+
+  it("shows the script's real reason from a 500, not 'Internal Server Error'", async () => {
+    mockedPostOnce.mockResolvedValue({
+      ok: false, status: 500,
+      json: async () => ({ error: "Internal Server Error", message: "Exceeded maximum execution time" }),
+    } as Response);
+    const user = userEvent.setup();
+
+    await act(async () => {
+      render(<DocumentCreationTab />);
+    });
+    await act(async () => {
+      await user.click(screen.getByText("Create Bundling Meeting Doc"));
+    });
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("Error: Exceeded maximum execution time", { id: "apiCreateBundlingDoc" });
+    });
+    expect(postOnce).toHaveBeenCalledTimes(1);
+  });
+
+  it("says to check the folder before retrying when the server can't be reached", async () => {
+    mockedPostOnce.mockRejectedValue(new ServerUnreachableError(new TypeError("Failed to fetch")));
+    const user = userEvent.setup();
+
+    await act(async () => {
+      render(<DocumentCreationTab />);
+    });
+    await act(async () => {
+      await user.click(screen.getByText("Create Bundling Meeting Doc"));
+    });
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(NO_ANSWER_MESSAGE, { id: "apiCreateBundlingDoc" });
     });
   });
 
@@ -205,5 +236,6 @@ describe("DocumentCreationTab", () => {
 
     expect(toast.error).toHaveBeenCalledWith("Please correctly configure the Auction Items Spreadsheet ID in Settings.");
     expect(mockedFetchWithRetry.mock.calls.length).toBe(callsBeforeClick);
+    expect(postOnce).not.toHaveBeenCalled();
   });
 });

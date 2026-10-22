@@ -1,5 +1,5 @@
 import { google, script_v1 } from "googleapis";
-import { appsScriptDevMode } from "../utils/appsScriptMode";
+import { runAppsScript } from "../utils/appsScriptRun";
 import { OAuth2Client } from "google-auth-library";
 import { withLock } from "../utils/asyncLock";
 import { ensureTrackingHeaders } from "../utils/bidderNumbersHeaders";
@@ -8,34 +8,40 @@ import { EMAILED_INVOICE_INDEX, getSenderEmail, isValidEmailAddress, recordRecei
 import { BidderReceiptData, buildAllBidderReceiptsWithInvoices, DEFAULT_SHEET_NAMES, findExistingInvoice, SheetNames } from "./receiptDataService";
 import { quoteSheetName } from "../utils/rangeUtils";
 
+/**
+ * Both return the script's result as-is - check `isAppsScriptFailure`,
+ * since the bridge functions report their own errors as
+ * `{ success: false, error }` rather than failing the run.
+ */
 export async function createIndividualReceipt(script: script_v1.Script, scriptId: string, bidderId: string, receiptData: BidderReceiptData) {
-    const response = await script.scripts.run({
-        scriptId,
-        requestBody: {
-          function: "apiCreateIndividualReceipt",
-          // folderID (2nd position) has never actually been wired through
-          // from Node - kept as an explicit null so receiptData lands in
-          // the same 3rd position Class_GoogleAIStudio.gs's function
-          // signature expects, rather than silently shifting it.
-          parameters: [String(bidderId), null, receiptData],
-          devMode: appsScriptDevMode(),
-        },
-      });
-      if (response.data.error) throw new Error(response.data.error.message);
-      return response.data.response?.result;
+    // folderID (2nd position) has never actually been wired through from
+    // Node - kept as an explicit null so receiptData lands in the same 3rd
+    // position Class_GoogleAIStudio.gs's function signature expects,
+    // rather than silently shifting it.
+    return runAppsScript(script, scriptId, "apiCreateIndividualReceipt", [String(bidderId), null, receiptData]);
 }
 
-export async function createAllReceipts(script: script_v1.Script, scriptId: string, receipts: BidderReceiptData[]) {
-    const response = await script.scripts.run({
-        scriptId,
-        requestBody: {
-          function: "apiCreateAllReceipts",
-          parameters: [null, receipts],
-          devMode: appsScriptDevMode(),
-        },
-      });
-      if (response.data.error) throw new Error(response.data.error.message);
-      return response.data.response?.result;
+/**
+ * Bidders per "Print all receipts" request. Each part is its own Apps
+ * Script run and its own PDF, so no single run gets near Apps Script's
+ * 6-minute limit - a run cut off there leaves a half-written PDF.
+ */
+export const RECEIPTS_PER_PART = 25;
+
+/**
+ * Writes `receipts` into one PDF named `fileName`. (Without a file name,
+ * the script makes its old "1st Half"/"2nd Half" pair instead.)
+ */
+export async function createAllReceipts(script: script_v1.Script, scriptId: string, receipts: BidderReceiptData[], fileName?: string) {
+    return runAppsScript(script, scriptId, "apiCreateAllReceipts", fileName ? [null, receipts, fileName] : [null, receipts]);
+}
+
+/** e.g. "Receipts - Part 2 of 4 (Garcia - Lopez)" */
+export function receiptPartFileName(part: number, totalParts: number, receipts: BidderReceiptData[]): string {
+    const first = receipts[0]?.lastName || "";
+    const last = receipts[receipts.length - 1]?.lastName || "";
+    const range = first && last ? ` (${first === last ? first : `${first} - ${last}`})` : "";
+    return `Receipts - Part ${part} of ${totalParts}${range}`;
 }
 
 export interface EmailAllResult {
