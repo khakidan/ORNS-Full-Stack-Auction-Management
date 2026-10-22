@@ -1,6 +1,6 @@
 /**
  * Tests server/services/paypalSweeperJob.ts - the Node port of
- * scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/PayPalSweeper.gs's
+ * scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/not-deployed/PayPalSweeper.gs's
  * `checkPendingPayPalInvoices` (Code Hardening item #2, Step 4).
  * `firebaseAdmin.ts` and `paypalService.ts` are fully module-mocked so
  * these tests never touch real Firestore or PayPal - only the Sheets API

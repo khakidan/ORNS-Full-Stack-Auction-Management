@@ -44,6 +44,21 @@ describe("appsScriptOrder", () => {
   });
 });
 
+describe.each(PROJECTS)("%s deployed files", (project) => {
+  it("never pushes subfolders (not-deployed/ holds reference code that must stay out of the live script)", () => {
+    const config = JSON.parse(fs.readFileSync(path.join(ROOT, project, ".clasp.json"), "utf8"));
+    expect(config.skipSubdirectories).toBe(true);
+  });
+
+  it("contains no PayPal code - the app's server handles PayPal, and a script copy could be run by hand from the editor", () => {
+    const files = fs.readdirSync(path.join(ROOT, project)).filter((f) => f.endsWith(".gs"));
+    for (const file of files) {
+      const source = fs.readFileSync(path.join(ROOT, project, file), "utf8");
+      expect(source, file).not.toMatch(/api-m(\.sandbox)?\.paypal\.com|new PayPalService\s*\(|function checkPendingPayPalInvoices/);
+    }
+  });
+});
+
 describe.each(PROJECTS)("%s load order", (project) => {
   it("loads every file without using a class before its file has run", () => {
     const files = fs.readdirSync(path.join(ROOT, project)).filter((f) => f.endsWith(".gs"));

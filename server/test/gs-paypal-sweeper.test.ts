@@ -1,5 +1,5 @@
 /**
- * Tests the REAL source of scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/PayPalSweeper.gs's
+ * Tests the REAL source of scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/not-deployed/PayPalSweeper.gs's
  * `checkPendingPayPalInvoices` - the time-driven trigger (confirmed live,
  * every 5 minutes) that reconciles "PayPal Verification Pending" rows.
  * Loaded via helpers/loadGasClass, not a Node reimplementation.
@@ -13,7 +13,7 @@ import { loadGasClasses } from "./helpers/loadGasClass";
 import { FakeSpreadsheet } from "./helpers/fakeSheet";
 
 const { checkPendingPayPalInvoices } = loadGasClasses(
-  ["scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/PayPalSweeper.gs"],
+  ["scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/not-deployed/PayPalSweeper.gs"],
   ["checkPendingPayPalInvoices"]
 );
 

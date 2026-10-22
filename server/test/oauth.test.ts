@@ -1,5 +1,7 @@
+import fs from "fs";
+import path from "path";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { getOAuthClient } from "../services/oauth";
+import { getOAuthClient, SCOPES } from "../services/oauth";
 
 /**
  * getOAuthClient builds the OAuth redirect_uri from APP_URL alone, never
@@ -110,3 +112,21 @@ describe("getOAuthClient", () => {
   });
 });
 
+
+describe("SCOPES", () => {
+  const MANIFESTS = ["BidManagementSpreadsheet", "ItemsSpreadsheet", "TicketsSpreadsheet"].map((project) => ({
+    project,
+    manifest: JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../scripts/GoogleAppsScriptsCode", project, "appsscript.json"), "utf8")),
+  }));
+
+  it.each(MANIFESTS)("covers every scope the $project script asks for (else scripts.run is refused with 403)", ({ manifest }) => {
+    expect(manifest.oauthScopes.length).toBeGreaterThan(0);
+    for (const scope of manifest.oauthScopes) {
+      expect(SCOPES).toContain(scope);
+    }
+  });
+
+  it("doesn't ask for permission to edit the scripts' code", () => {
+    expect(SCOPES).not.toContain("https://www.googleapis.com/auth/script.projects");
+  });
+});
