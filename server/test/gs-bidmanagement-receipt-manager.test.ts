@@ -92,7 +92,7 @@ describe("Receipt.fromData", () => {
 describe("GoogleAIStudio.createIndividualReceipt - validation before ReceiptManager is ever touched", () => {
   const { GoogleAIStudio } = loadGasClasses(
     [
-      "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GlobalVariables.gs",
+      "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/00_Class_GlobalVariables.gs",
       "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GoogleAIStudio.gs",
     ],
     ["GoogleAIStudio"]
@@ -143,7 +143,7 @@ describe("apiCreateIndividualReceipt / apiCreateAllReceipts bridge functions", (
     // error.
     const { apiCreateIndividualReceipt } = loadGasClasses(
       [
-        "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GlobalVariables.gs",
+        "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/00_Class_GlobalVariables.gs",
         "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GoogleAIStudio.gs",
       ],
       ["apiCreateIndividualReceipt"]
@@ -156,7 +156,7 @@ describe("apiCreateIndividualReceipt / apiCreateAllReceipts bridge functions", (
   it("apiCreateAllReceipts converts a thrown error to { success: false, error }", () => {
     const { apiCreateAllReceipts } = loadGasClasses(
       [
-        "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GlobalVariables.gs",
+        "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/00_Class_GlobalVariables.gs",
         "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GoogleAIStudio.gs",
       ],
       ["apiCreateAllReceipts"]
@@ -186,7 +186,7 @@ describe("apiCreateIndividualReceipt / apiCreateAllReceipts declare every parame
   it("apiCreateIndividualReceipt declares all 3 parameters (bidderId, folderID, receiptData)", () => {
     const { apiCreateIndividualReceipt } = loadGasClasses(
       [
-        "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GlobalVariables.gs",
+        "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/00_Class_GlobalVariables.gs",
         "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GoogleAIStudio.gs",
       ],
       ["apiCreateIndividualReceipt"]
@@ -197,7 +197,7 @@ describe("apiCreateIndividualReceipt / apiCreateAllReceipts declare every parame
   it("apiCreateAllReceipts declares all 3 parameters (folderID, receipts, fileName)", () => {
     const { apiCreateAllReceipts } = loadGasClasses(
       [
-        "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GlobalVariables.gs",
+        "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/00_Class_GlobalVariables.gs",
         "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GoogleAIStudio.gs",
       ],
       ["apiCreateAllReceipts"]

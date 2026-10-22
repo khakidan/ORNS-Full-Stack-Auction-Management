@@ -7,12 +7,5 @@
   "jsonExtensions": [
     ".json"
   ],
-  "filePushOrder": [
-    "Class_GlobalVariables.gs",
-    "Class_GlobalStyles.gs",
-    "Class_DriveService.gs",
-    "Class_DocService.gs",
-    "Class_SlidesService.gs"
-  ],
   "skipSubdirectories": true
 }

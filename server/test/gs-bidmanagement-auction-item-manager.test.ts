@@ -27,7 +27,7 @@ import { FakeSpreadsheet } from "./helpers/fakeSheet";
 
 const { AuctionItemManager } = loadGasClasses(
   [
-    "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GlobalVariables.gs",
+    "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/00_Class_GlobalVariables.gs",
     "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_AuctionItemManager.gs",
   ],
   ["AuctionItemManager"]

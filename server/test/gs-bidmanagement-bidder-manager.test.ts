@@ -32,7 +32,7 @@ import { FakeSpreadsheet } from "./helpers/fakeSheet";
 
 const { BidderManager } = loadGasClasses(
   [
-    "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_GlobalVariables.gs",
+    "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/00_Class_GlobalVariables.gs",
     "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_UIStrings.gs",
     "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_UIManager.gs",
     "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_BidderManager.gs",

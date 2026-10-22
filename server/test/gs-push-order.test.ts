@@ -1,18 +1,20 @@
 /**
  * Every Apps Script project must load without a ReferenceError in the
- * order `clasp push` uploads its files.
+ * order Apps Script stores its files.
  *
  * Apps Script runs a project's files top to bottom in that order, so
- * `class ReceiptManager extends GlobalVariables` fails if
- * Class_GlobalVariables.gs comes later. That happened on 2026-10-22:
- * the files were pushed alphabetically, and every function in the
- * Bid-Management script failed with "GlobalVariables is not defined".
- * Each folder's .clasp.json now lists base classes in `filePushOrder`.
+ * `class ReceiptManager extends GlobalVariables` fails if the file
+ * defining GlobalVariables comes later. Files uploaded through the Apps
+ * Script API (`clasp push`) are stored sorted by name, ignoring case,
+ * whatever order they're sent in (`filePushOrder` in .clasp.json did not
+ * help) - confirmed on 2026-10-22 with projects.getContent, after every
+ * function in all three scripts failed with "GlobalVariables is not
+ * defined" / "DocService is not defined". So the base classes' files are
+ * named to sort first: 00_Class_GlobalVariables, 01_Class_GlobalStyles,
+ * 02_Class_DriveService, 03_Class_DocService / 03_Class_SlidesService.
  *
- * This loads each project's real .gs files the way clasp orders them
- * (filePushOrder first, then the rest alphabetically - see clasp's
- * build/src/core/files.js) and the way Apps Script runs them (each file
- * its own script, sharing one global scope).
+ * This loads each project's real .gs files in that sorted order, each
+ * file its own script sharing one global scope, as Apps Script runs them.
  */
 import fs from "fs";
 import path from "path";
@@ -22,28 +24,32 @@ import { describe, it, expect } from "vitest";
 const ROOT = path.resolve(__dirname, "../../scripts/GoogleAppsScriptsCode");
 const PROJECTS = ["BidManagementSpreadsheet", "ItemsSpreadsheet", "TicketsSpreadsheet"];
 
-function pushOrder(project: string): string[] {
-  const dir = path.join(ROOT, project);
-  const config = JSON.parse(fs.readFileSync(path.join(dir, ".clasp.json"), "utf8"));
-  const order: string[] = config.filePushOrder ?? [];
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".gs"));
-  const rest = files.filter((f) => !order.includes(f)).sort((a, b) => a.localeCompare(b));
-  return [...order, ...rest];
+/** Apps Script's stored order: by name without extension, ignoring case. */
+export function appsScriptOrder(fileNames: string[]): string[] {
+  const key = (f: string) => f.replace(/\.gs$/, "").toLowerCase();
+  return [...fileNames].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
 }
 
-describe.each(PROJECTS)("%s push order", (project) => {
-  it("lists only files that exist", () => {
-    const dir = path.join(ROOT, project);
-    const config = JSON.parse(fs.readFileSync(path.join(dir, ".clasp.json"), "utf8"));
-    for (const file of config.filePushOrder) {
-      expect(fs.existsSync(path.join(dir, file)), file).toBe(true);
-    }
+describe("appsScriptOrder", () => {
+  it("matches the order Apps Script stored a real push in (Tickets v9)", () => {
+    const sent = ["Class_GlobalVariables", "Class_GlobalStyles", "Class_DriveService", "Class_DocService", "Class_Bidder", "Class_BidderLabelsDoc", "Class_GoogleAIStudio", "Class_TemplateManager", "menu"];
+    expect(appsScriptOrder(sent)).toEqual([
+      "Class_Bidder", "Class_BidderLabelsDoc", "Class_DocService", "Class_DriveService", "Class_GlobalStyles",
+      "Class_GlobalVariables", "Class_GoogleAIStudio", "Class_TemplateManager", "menu",
+    ]);
   });
 
+  it("ignores case, as in Bid-Management v28 (API_PAYPAL_TESTS before AuctionItemManager_UnitTests)", () => {
+    expect(appsScriptOrder(["AuctionItemManager_UnitTests", "API_PAYPAL_TESTS"])).toEqual(["API_PAYPAL_TESTS", "AuctionItemManager_UnitTests"]);
+  });
+});
+
+describe.each(PROJECTS)("%s load order", (project) => {
   it("loads every file without using a class before its file has run", () => {
+    const files = fs.readdirSync(path.join(ROOT, project)).filter((f) => f.endsWith(".gs"));
     // Only what top-level code needs; nothing here runs a function body.
     const context = vm.createContext({ console });
-    for (const file of pushOrder(project)) {
+    for (const file of appsScriptOrder(files)) {
       const source = fs.readFileSync(path.join(ROOT, project, file), "utf8");
       expect(() => new vm.Script(source, { filename: file }).runInContext(context), file).not.toThrow();
     }
