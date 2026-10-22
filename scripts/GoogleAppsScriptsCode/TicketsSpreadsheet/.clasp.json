@@ -1,0 +1,17 @@
+{
+  "scriptId": "1sJGA_qe4VJVDW_7Qt_bjjXZpGHvWPnCPrdTsjkgNRKY_OsrYdUZjSoVV",
+  "rootDir": "",
+  "scriptExtensions": [
+    ".gs"
+  ],
+  "jsonExtensions": [
+    ".json"
+  ],
+  "filePushOrder": [
+    "Class_GlobalVariables.gs",
+    "Class_GlobalStyles.gs",
+    "Class_DriveService.gs",
+    "Class_DocService.gs"
+  ],
+  "skipSubdirectories": true
+}
