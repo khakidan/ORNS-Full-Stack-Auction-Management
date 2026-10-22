@@ -186,10 +186,17 @@ by the in-memory map alone.
 
 **Optional: let Firestore delete old idempotency records.** Each record
 is a tiny document that's never read after 24 hours. To have Firestore
-delete them on its own: Firebase console -> Firestore -> **TTL** ->
-Create policy -> collection group `idempotency`, timestamp field
-`expireAt`. Without the policy they simply accumulate (a few hundred a
-year).
+delete them on its own, add a TTL policy in **Google Cloud Console** (the
+Firebase console has no TTL screen):
+Firestore -> select the database
+`ai-studio-8ae64d57-94f3-4e97-b086-1f1495b79131` (the app's named
+database - `firestoreDatabaseId` in `firebase-applet-config.json` - not
+`(default)`) -> **Time-to-live (TTL)** -> Create policy -> collection
+group `idempotency`, timestamp field `expireAt`. The policy can be
+created before the collection exists. Deletion happens within about a
+day of `expireAt`, which is why the server also ignores expired records
+itself. Without the policy the records simply accumulate (a few hundred
+a year).
 
 **Apps Script changes deploy separately.** The server calls each Apps
 Script project's *deployed* API-executable version (`devMode: false`), not
