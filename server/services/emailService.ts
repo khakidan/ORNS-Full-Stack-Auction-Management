@@ -18,7 +18,7 @@ const EMAILED_INVOICE_COL = "N";
 export const EMAILED_INVOICE_INDEX = 13; // 0-based index of column N
 
 /** Escapes text for an HTML body or a double-quoted attribute. */
-function escapeHtml(value: unknown): string {
+export function escapeHtml(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 }
 

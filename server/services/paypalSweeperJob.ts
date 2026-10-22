@@ -44,7 +44,7 @@ export async function persistSweeperCredential(refreshToken: string, updatedBy: 
   });
 }
 
-async function getSweeperAuthClient(): Promise<OAuth2Client | null> {
+export async function getSweeperAuthClient(): Promise<OAuth2Client | null> {
   try {
     const db = getAdminFirestore();
     const snap = await db.collection(SWEEPER_CREDENTIAL_COLLECTION).doc(SWEEPER_CREDENTIAL_DOC).get();
