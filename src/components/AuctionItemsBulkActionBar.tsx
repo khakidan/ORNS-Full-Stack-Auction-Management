@@ -46,7 +46,7 @@ export function AuctionItemsBulkActionBar({
             </Button>
 
             <Select onValueChange={onSetCategory}>
-              <SelectTrigger className="h-9 w-35 text-xs">
+              <SelectTrigger className="h-8 w-35 text-xs">
                 <SelectValue placeholder="Set Category" />
               </SelectTrigger>
               <SelectContent>
@@ -59,7 +59,7 @@ export function AuctionItemsBulkActionBar({
             </Select>
 
             <Select onValueChange={onSetItemType}>
-              <SelectTrigger className="h-9 w-32.5 text-xs">
+              <SelectTrigger className="h-8 w-32.5 text-xs">
                 <SelectValue placeholder="Set Type" />
               </SelectTrigger>
               <SelectContent>

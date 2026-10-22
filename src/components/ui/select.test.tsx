@@ -42,6 +42,52 @@ function renderSelect() {
   );
 }
 
+/**
+ * User-reported bug: "the filter dropdowns aren't centered in the filter
+ * bar". Every filter dropdown passed `h-10` to match the 40px search box
+ * and buttons beside it, but the trigger's own height was
+ * `data-[size=default]:h-8` - an attribute selector, which beats any plain
+ * `h-*` utility in CSS - so `h-10` never applied. The dropdowns stayed
+ * 32px tall and sat at the top of the 40px row. Measured in a real
+ * browser (Playwright, 1470px wide): the dropdowns' vertical centre was
+ * 72px vs 76px for the search box before the fix, 76px for all after.
+ * jsdom has no layout engine, so this pins the class string, the same
+ * exception used for the popup width below.
+ */
+describe("SelectTrigger height", () => {
+  const renderTrigger = (props: { className?: string; size?: "sm" | "default" }) =>
+    render(
+      <Select defaultValue="a">
+        <SelectTrigger {...props}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="a">A</SelectItem>
+        </SelectContent>
+      </Select>
+    );
+
+  it("is 32px (h-8) by default", () => {
+    renderTrigger({});
+    const trigger = document.querySelector('[data-slot="select-trigger"]');
+    expect(trigger).toHaveClass("h-8");
+  });
+
+  it("lets a height passed by the caller replace the default, rather than losing to it", () => {
+    renderTrigger({ className: "h-10 w-45" });
+    const trigger = document.querySelector('[data-slot="select-trigger"]');
+    expect(trigger).toHaveClass("h-10");
+    expect(trigger).not.toHaveClass("h-8");
+    // The old data-attribute form can't be overridden by a plain h-* class.
+    expect(trigger?.className).not.toMatch(/data-\[size=default\]:h-8/);
+  });
+
+  it("keeps the smaller size for size=sm", () => {
+    renderTrigger({ size: "sm" });
+    expect(document.querySelector('[data-slot="select-trigger"]')?.className).toContain("data-[size=sm]:h-7");
+  });
+});
+
 describe("SelectContent popup width", () => {
   it("sizes the popup to its own content (w-max), not a fixed bind to the trigger's width", () => {
     renderSelect();
