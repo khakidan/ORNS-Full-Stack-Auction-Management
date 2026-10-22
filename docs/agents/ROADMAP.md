@@ -55,11 +55,6 @@ Nothing outstanding - L1-L9 are all fixed (see `CHANGELOG.md`).
 
 ## Feature Milestones (Staging)
 
-### Milestone A: Sync & Retry Resiliency
-
-- Implement visual indicator banners within the frontend configuration header when Google Sheets syncing transactions are retrying in the background.
-- Introduce client-side offline queues that buffer bid logs temporarily in local storage during brief network drops, then replay them with idempotency keys upon restoration.
-
 ### Milestone B: Advanced Reporting Dashboards
 
 - Expand the analytics engine within `/src/components/Dashboard.tsx` to visualize bid distributions over time, total funds raised by category, and real-time checkout percentages via D3 charts.

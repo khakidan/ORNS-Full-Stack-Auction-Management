@@ -15,7 +15,7 @@ interface UseBatchBidEntryStateArgs {
   items: AuctionItem[];
   bidders: Bidder[];
   winners: Record<string, string>;
-  recordWinningBid: (bidderId: string, itemId: string, price: number) => Promise<void>;
+  recordWinningBid: (bidderId: string, itemId: string, price: number) => Promise<string | void>;
 }
 
 function makeEmptyRow(): BatchRow {

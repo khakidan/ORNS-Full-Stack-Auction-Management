@@ -107,3 +107,70 @@ describe("withIdempotency", () => {
     expect(idempotentBody({ result: { success: true }, duplicated: true })).toEqual({ success: true, duplicated: true });
   });
 });
+
+/**
+ * `durable: true` (Milestone A): a winning bid saved on a device while
+ * offline can be resent hours later, after Cloud Run has restarted and the
+ * in-memory map is empty. setup.ts swaps the Firestore store for an
+ * in-memory stand-in.
+ */
+describe("withIdempotency - durable", () => {
+  let mod: typeof import("../utils/idempotency");
+  let store: typeof import("../services/idempotencyStore");
+
+  beforeEach(async () => {
+    vi.resetModules();
+    mod = await import("../utils/idempotency");
+    store = await import("../services/idempotencyStore");
+    vi.mocked(store.getStoredResult).mockClear();
+    vi.mocked(store.storeResult).mockClear();
+  });
+
+  it("returns the first result after the in-memory map is lost, without running again", async () => {
+    const fn = vi.fn().mockResolvedValue({ success: true });
+    await mod.withIdempotency("auction/record-winning-bid", "k1", fn, { durable: true });
+
+    mod._resetIdempotencyForTesting(); // a restart
+
+    const again = await mod.withIdempotency("auction/record-winning-bid", "k1", fn, { durable: true });
+    expect(again).toEqual({ result: { success: true }, duplicated: true });
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("still runs once when two copies arrive together", async () => {
+    let release!: () => void;
+    const fn = vi.fn(() => new Promise<{ ok: true }>((r) => { release = () => r({ ok: true }); }));
+
+    const a = mod.withIdempotency("s", "k2", fn, { durable: true });
+    const b = mod.withIdempotency("s", "k2", fn, { durable: true });
+    await vi.waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
+    release();
+
+    expect((await a).duplicated).toBe(false);
+    expect((await b).duplicated).toBe(true);
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to memory alone when Firestore can't be read or written", async () => {
+    vi.mocked(store.getStoredResult).mockRejectedValueOnce(new Error("UNAVAILABLE"));
+    vi.mocked(store.storeResult).mockRejectedValueOnce(new Error("UNAVAILABLE"));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fn = vi.fn().mockResolvedValue({ success: true });
+
+    const first = await mod.withIdempotency("s", "k3", fn, { durable: true });
+    const second = await mod.withIdempotency("s", "k3", fn, { durable: true });
+
+    expect(first).toEqual({ result: { success: true }, duplicated: false });
+    expect(second.duplicated).toBe(true);
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("doesn't touch Firestore without the option, and doesn't store a failed run", async () => {
+    await mod.withIdempotency("s", "k4", async () => ({ ok: true }));
+    expect(store.getStoredResult).not.toHaveBeenCalled();
+    expect(store.storeResult).not.toHaveBeenCalled();
+
+    await expect(mod.withIdempotency("s", "k5", async () => { throw new Error("boom"); }, { durable: true })).rejects.toThrow("boom");
+    expect(store.storeResult).not.toHaveBeenCalled();
+  });
+});

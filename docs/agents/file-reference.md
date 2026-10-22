@@ -47,6 +47,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── emailService.ts          # Receipt email HTML/MIME + Gmail send
 │   │   ├── firebaseAdmin.ts         # Admin Firestore (sweeper credential/status, settings/global reads)
 │   │   ├── genai.ts                 # Gemini SDK client
+│   │   ├── idempotencyStore.ts      # Durable (Firestore, 24 h) idempotency records for record-winning-bid
 │   │   ├── google.ts                # googleapis global retry config (no POST retries)
 │   │   ├── itemDataService.ts       # Valid, sorted item list for Apps Script doc generators
 │   │   ├── itemService.ts           # Auction item add/update/delete/bulk-update + resequencing
@@ -67,11 +68,12 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── columnUtils.ts     # Column index -> letter
 │   │   ├── financeUtils.ts    # calculatePayPalSurcharge (the only surcharge implementation)
 │   │   ├── googleRetry.ts     # IDEMPOTENT_POST_RETRY opt-in for safe-to-repeat POSTs
-│   │   ├── idempotency.ts     # In-memory idempotency-key cache
+│   │   ├── idempotency.ts     # Idempotency-key cache (in memory; `durable` adds Firestore)
 │   │   ├── minRaiseHelpers.ts # Minimum-raise tiers
 │   │   ├── rangeUtils.ts      # A1 range sheet-name quoting
 │   │   ├── sheetCache.ts      # 5-second Sheets read cache, keyed per user
-│   │   └── validateEnv.ts     # Boot-time required env var check
+│   │   ├── validateEnv.ts     # Boot-time required env var check
+│   │   └── winningBidChecks.ts # One-winner-per-item check for record-winning-bid
 │   │
 │   └── test/                  # Vitest + supertest + MSW backend suite (helpers/ incl. session.ts for signed test cookies, handlers.ts, setup.ts)
 │
@@ -88,9 +90,11 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
     ├── context/               # AuctionContext, AuthContext, ConfigContext
     ├── services/
     │   ├── firebase.ts        # Lazy Firebase app/auth/Firestore init
-    │   └── google-api.ts      # fetchWithRetry + every API call to the Express server
-    ├── hooks/                 # One hook per view/state concern (useCheckoutState, useGoogleAuth, ...)
-    ├── lib/                   # Pure parsing/validation/formatting helpers, error buffer, screenshot capture
-    └── components/            # Views (Dashboard, Bidders, Items, Checkout, Receipts, ConfigSettings, BidEntry, ...) and their sub-components
+    │   └── google-api.ts      # fetchWithRetry (reports retries; throws ServerUnreachableError) + every API call to the Express server
+    ├── hooks/                 # One hook per view/state concern (useCheckoutState, useGoogleAuth, ...); useOutboxReplay sends saved bids
+    ├── lib/                   # Pure parsing/validation/formatting helpers, error buffer, screenshot capture;
+    │                          #   bidOutbox.ts (winning bids saved on the device while offline), syncStatus.ts (retry state)
+    └── components/            # Views (Dashboard, Bidders, Items, Checkout, Receipts, ConfigSettings, BidEntry, ...) and their sub-components;
+                               #   SyncStatusBanner.tsx (connection banner above every page + sidebar waiting count)
         └── ui/                # Primitives: button, card, select, dialog, table, ... plus IconButton, LoadingButton, ConfirmationDialog, ListPageCard
 ```

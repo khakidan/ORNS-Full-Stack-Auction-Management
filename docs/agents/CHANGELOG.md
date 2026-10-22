@@ -4,6 +4,39 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ## [Unreleased]
 
+### Added
+
+- **ROADMAP.md Milestone A: Sync & Retry Resiliency.** Staff now see when Google Sheets is slow or the connection is gone. A winning bid that can't be sent stays on screen and sends itself once the connection is back, instead of being undone. Choices confirmed by the user on the proposal page: queue winning bids only; banner on every page; warn before closing a tab with bids waiting; ship the server safety along with it.
+  - **Connection banner** (`src/components/SyncStatusBanner.tsx`, above every page in `App.tsx`). It shows one message at a time, most important first:
+    - saved bids the server refused
+    - sign-in expired
+    - offline
+    - sending saved bids (n of m)
+    - saved bids waiting
+    - Google retrying (attempt n of 4)
+    - a brief "all sent" / "responding again"
+
+    It is a polite live region. The sidebar shows the waiting count.
+  - **Retry reporting**: `fetchWithRetry` (`src/services/google-api.ts`) reports each retry and recovery to `src/lib/syncStatus.ts` instead of only the console. When every attempt fails it throws `ServerUnreachableError`, so callers can tell "couldn't reach the server" from a 4xx (still returned as a Response).
+  - **Saved-bids outbox** (`src/lib/bidOutbox.ts`, replayed by `src/hooks/useOutboxReplay.ts`):
+    - **When a bid is saved:** `useWinnersData.recordWinningBid` keeps the bid in `localStorage` instead of rolling it back when the browser is offline, the server can't be reached after the retries, or the session has expired (401). A 4xx is still undone as before.
+    - **When saved bids send:** on sign-in, coming back online, the tab becoming visible, and every 30 seconds while any are waiting. They go one at a time, oldest first, each with its original idempotency key. One tab sends at a time (Web Locks).
+    - **When the server refuses a resend:** the bid moves to a review list in the banner, with the server's reason and **Try again** / **Remove**.
+    - **Across reloads:** saved bids count as won in the winners list, so the same item can't be entered twice. Quick Entry's This Session feed marks them "Saved on this device".
+    - **Closing the tab** with bids waiting shows the browser's "Leave site?" prompt.
+    - `recordWinningBid` now resolves with the bid's idempotency key.
+  - **Server safety** (`record-winning-bid`):
+    - **Durable keys:** keys are kept for 24 hours in Firestore (`idempotency` collection, `server/services/idempotencyStore.ts`, via `withIdempotency(..., { durable: true })`). A resend after a Cloud Run restart or scale-to-zero returns the first result instead of recording the bid again. The Firestore lookup runs inside the in-flight promise, so concurrent copies still run once. If Firestore is unreachable, it falls back to memory.
+    - **One winner per item:** the route refuses a second winner for a one-winner item with **409** (`server/utils/winningBidChecks.ts`). It reads the item's "Allow Multiple Winners" flag from the Items sheet only when the item already has a winner. Before, only Bid Entry's screen checked this.
+    - **Same bid already recorded:** the same bidder at the same price is treated as already recorded (a resend whose first answer was lost) and nothing is written.
+    - **When the check is skipped:** with no `itemsSpreadsheetId` in the request (older clients) or an unreadable Items sheet, the check is skipped, as before.
+  - Not queued, by design: checkout, receipts, invoices, emails and closing the auction (see `patterns.md`).
+  - Optional setup: a Firestore TTL policy on `idempotency.expireAt` (README "Deployment").
+  - Tests:
+    - New: `bidOutbox.test.ts`, `syncStatus.test.ts`, `SyncStatusBanner.test.tsx`, `useOutboxReplay.test.ts`, `idempotencyStore.test.ts`, `winningBidChecks.test.ts`.
+    - New cases in: `useWinnersData.test.ts` (saved instead of undone, offline, 401, 409 still undone, reload overlay), `google-api.test.ts` (retry reporting, `ServerUnreachableError`), `idempotency.test.ts` (durable), `bid-management.test.ts` (409, already recorded, repeatable, check skipped, resend after restart; the three behavior cases fail on the old code), and `BidEntry.test.tsx` (feed marker).
+    - Backend 554 -> 573, frontend 638 -> 672, total 1192 -> 1245.
+
 ### Fixed
 
 - **ROADMAP.md L1-L9 (2026-10-21 code audit): low-severity fixes.**

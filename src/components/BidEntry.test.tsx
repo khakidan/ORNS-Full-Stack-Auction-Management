@@ -6,6 +6,8 @@ import userEvent from "@testing-library/user-event";
 import BidEntry from "./BidEntry";
 import { fetchWithRetry } from "@/services/google-api";
 import { toast } from "sonner";
+import { act } from "@testing-library/react";
+import { addToOutbox, removeFromOutbox, _resetOutboxForTesting } from "@/lib/bidOutbox";
 
 vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn(),
@@ -220,5 +222,27 @@ describe("BidEntry", () => {
 
     expect(screen.getByText("Transcribe a Stack")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("e.g. 1301")).not.toBeInTheDocument();
+  });
+
+  // Milestone A: a bid saved on the device is marked in the This Session feed.
+  it("marks a bid in This Session as saved on this device until it's sent", async () => {
+    _resetOutboxForTesting();
+    mockRecordWinningBid.mockImplementationOnce(async (bidderId: string, itemId: string, price: number) => {
+      addToOutbox(
+        { bidderId, itemId, price, spreadsheetId: "ss", bidManagementSheet: "Bid-Management", bidderNumbersSheet: "Bidder-Numbers", idempotencyKey: "quick-1" },
+        { bidderName: "Test Bidder", itemName: "Sample Item" }
+      );
+      return "quick-1" as any;
+    });
+    render(<BidEntry />);
+
+    await userEvent.type(screen.getByPlaceholderText("e.g. 1301"), "1301");
+    await userEvent.type(screen.getByPlaceholderText("e.g. 142"), "142");
+    await userEvent.type(screen.getByPlaceholderText("150.00"), "150");
+    await userEvent.click(screen.getByText("Record Winning Bid"));
+
+    expect(await screen.findByText(/Saved on this device/)).toBeInTheDocument();
+    act(() => removeFromOutbox("quick-1"));
+    expect(screen.queryByText(/Saved on this device/)).not.toBeInTheDocument();
   });
 });

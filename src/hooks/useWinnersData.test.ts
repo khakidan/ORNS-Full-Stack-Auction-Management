@@ -25,6 +25,7 @@ vi.mock("@/services/google-api", () => ({
   getSheetData: vi.fn(),
   fetchWithRetry: vi.fn(),
   getBaseUrl: vi.fn(() => "http://localhost:3000"),
+  ServerUnreachableError: class ServerUnreachableError extends Error {},
 }));
 
 vi.mock("sonner", () => ({
@@ -36,8 +37,9 @@ vi.mock("sonner", () => ({
   },
 }));
 
-import { getSheetData, fetchWithRetry } from "@/services/google-api";
+import { getSheetData, fetchWithRetry, ServerUnreachableError } from "@/services/google-api";
 import { toast } from "sonner";
+import { addToOutbox, getOutboxState, _resetOutboxForTesting } from "@/lib/bidOutbox";
 
 const mockedGetSheetData = vi.mocked(getSheetData);
 const mockedFetchWithRetry = vi.mocked(fetchWithRetry);
@@ -257,8 +259,8 @@ describe("useWinnersData.recordWinningBid", () => {
     const bidders = [makeBidder({ id: "101", firstName: "Alice", lastName: "One" }), makeBidder({ id: "102", firstName: "Bob", lastName: "Two" })];
     const { result } = renderHook(() => useWinnersData("ss-id", bidders, [], "Bid-Management", "Bidder-Numbers"));
 
-    let firstCall: Promise<void>;
-    let secondCall: Promise<void>;
+    let firstCall: Promise<string>;
+    let secondCall: Promise<string>;
     act(() => {
       firstCall = result.current.recordWinningBid("101", "item1", 50);
       secondCall = result.current.recordWinningBid("102", "item2", 75);
@@ -282,5 +284,93 @@ describe("useWinnersData.recordWinningBid", () => {
     // Bid #1's win must still be there - only bid #2's should be undone.
     expect(result.current.winners).toEqual({ item1: "Alice One" });
     expect(result.current.totalRaised).toBe(50);
+  });
+});
+
+/**
+ * Milestone A: a bid that can't reach the server is saved on the device
+ * (src/lib/bidOutbox.ts) instead of being undone.
+ */
+describe("useWinnersData - saving bids that can't be sent", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    _resetOutboxForTesting();
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+  });
+
+  const bidders = [makeBidder({ id: "101", firstName: "Alice", lastName: "One" })];
+  const items = [makeItem({ id: "item1", name: "Vintage Wine Basket" })];
+
+  it("keeps the bid on screen and saves it, with the same key it was sent with, when the server can't be reached", async () => {
+    mockedFetchWithRetry.mockRejectedValue(new (ServerUnreachableError as any)("Failed to fetch"));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { result } = renderHook(() => useWinnersData("ss-id", bidders, items, "Bid-Management", "Bidder-Numbers", "items-id"));
+
+    let key = "";
+    await act(async () => {
+      key = await result.current.recordWinningBid("101", "item1", 50);
+    });
+
+    expect(result.current.winners).toEqual({ item1: "Alice One" });
+    expect(toast.error).not.toHaveBeenCalled();
+    const [entry] = getOutboxState().entries;
+    expect(entry).toMatchObject({ status: "waiting", bidderName: "Alice One", itemName: "Vintage Wine Basket" });
+    expect(entry.body.idempotencyKey).toBe(key);
+    expect(JSON.parse((fetchWithRetry as any).mock.calls[0][1].body)).toEqual(entry.body);
+    expect(entry.body.itemsSpreadsheetId).toBe("items-id");
+  });
+
+  it("saves it straight away, without trying, when the browser knows it's offline", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    const { result } = renderHook(() => useWinnersData("ss-id", bidders, items, "Bid-Management", "Bidder-Numbers"));
+
+    await act(async () => {
+      await result.current.recordWinningBid("101", "item1", 50);
+    });
+
+    expect(fetchWithRetry).not.toHaveBeenCalled();
+    expect(getOutboxState().entries).toHaveLength(1);
+    expect(result.current.totalRaised).toBe(50);
+  });
+
+  it("saves it and asks for a fresh sign-in when the session has expired (401)", async () => {
+    mockedFetchWithRetry.mockResolvedValue({ ok: false, status: 401, json: async () => ({}) } as Response);
+    const { result } = renderHook(() => useWinnersData("ss-id", bidders, items, "Bid-Management", "Bidder-Numbers"));
+
+    await act(async () => {
+      await result.current.recordWinningBid("101", "item1", 50);
+    });
+
+    expect(getOutboxState().entries).toHaveLength(1);
+    expect(getOutboxState().needsSignIn).toBe(true);
+    expect(result.current.winners).toEqual({ item1: "Alice One" });
+  });
+
+  it("still undoes a bid the server refuses (409), and saves nothing", async () => {
+    mockedFetchWithRetry.mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: "already won" }) } as Response);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = renderHook(() => useWinnersData("ss-id", bidders, items, "Bid-Management", "Bidder-Numbers"));
+
+    await act(async () => {
+      await result.current.recordWinningBid("101", "item1", 50);
+    });
+
+    expect(result.current.winners).toEqual({});
+    expect(getOutboxState().entries).toEqual([]);
+    expect(toast.error).toHaveBeenCalled();
+  });
+
+  it("counts saved bids as won after a reload, so the item can't be entered twice", async () => {
+    addToOutbox({ bidderId: "101", itemId: "item9", price: 40, spreadsheetId: "ss-id", bidManagementSheet: "Bid-Management", bidderNumbersSheet: "Bidder-Numbers", idempotencyKey: "k" }, { bidderName: "Alice One", itemName: "Quilt" });
+    addToOutbox({ bidderId: "101", itemId: "other", price: 99, spreadsheetId: "last-years-sheet", bidManagementSheet: "Bid-Management", bidderNumbersSheet: "Bidder-Numbers", idempotencyKey: "k2" }, { bidderName: "Alice One", itemName: "Old" });
+    mockedGetSheetData.mockResolvedValue({ values: [BID_GRID_HEADER, ROW1, ROW2, ["item1", "$50.00", "", ""]] });
+    const { result } = renderHook(() => useWinnersData("ss-id", bidders, items, "Bid-Management", "Bidder-Numbers"));
+
+    await act(async () => {
+      await result.current.fetchWinners();
+    });
+
+    expect(result.current.winners).toEqual({ item1: "Alice One", item9: "Alice One" });
+    expect(result.current.totalRaised).toBe(90);
   });
 });

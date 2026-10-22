@@ -12,6 +12,7 @@ import { http, HttpResponse } from "msw";
 import { resetHandlersState, lastBulkWritePayload, updateCallCount,
          appendCallCount, lastAppendedRow,
          valuesBatchUpdateRequests } from "./handlers";
+import { _resetIdempotencyForTesting } from "../utils/idempotency";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -181,6 +182,120 @@ describe("bidRoutes - /api/auction/record-winning-bid", () => {
         expect.arrayContaining([validBody.itemId, 150.5])
       ])
     );
+  });
+});
+
+describe("bidRoutes - /api/auction/record-winning-bid - one winner per item and durable resends (Milestone A)", () => {
+  const body = {
+    bidderId: "1002",
+    itemId: "I01",
+    price: 100,
+    spreadsheetId: "ss-id",
+    itemsSpreadsheetId: "items-id",
+    bidManagementSheet: "Bid-Management",
+    bidderNumbersSheet: "Bidder-Numbers",
+  };
+
+  /** Bidder 1001 already won I01 at $100. `repeatable` is I01's Items-sheet flag. */
+  function mockSheets(opts: { repeatable?: boolean; itemsFail?: boolean } = {}) {
+    const writes: string[] = [];
+    let itemsReads = 0;
+    server.use(
+      http.get("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ params }) => {
+        const range = decodeURIComponent(String(params.range));
+        if (range.includes("Bidder-Numbers")) {
+          return HttpResponse.json({ values: [["ID", "Name", "", "", "", "", "Checked Out"], ["1001", "A", "", "", "", "", false], ["1002", "B", "", "", "", "", false]] });
+        }
+        if (range.includes("Bid-Management")) {
+          return HttpResponse.json({ values: [["1001", "Price", "1002", "Price"], ["Total", "", "", ""], ["", "", "", ""], ["I01", "$100.00", "", ""]] });
+        }
+        if (range.includes("Auction-Items")) {
+          itemsReads++;
+          if (opts.itemsFail) return HttpResponse.json({ error: { code: 403, message: "no access" } }, { status: 403 });
+          return HttpResponse.json({ values: [["Item Number", "Category", "Item Name", "", "", "", "", "", "", "", "", "", "Allow Multiple Winners"], ["I01", "Trips", "Cabin", "", "", "", "", "", "", "", "", "", opts.repeatable ? true : false]] });
+        }
+        return HttpResponse.json({ values: [] });
+      }),
+      http.put("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", ({ params }) => {
+        writes.push(decodeURIComponent(String(params.range)));
+        return HttpResponse.json({ updatedRows: 1 });
+      })
+    );
+    return { writes, itemsReads: () => itemsReads };
+  }
+
+  it("refuses a second winner for a one-winner item with 409, writing nothing", async () => {
+    const { writes } = mockSheets({ repeatable: false });
+
+    const response = await request(app).post("/api/auction/record-winning-bid").set(authHeader)
+      .send({ ...body, idempotencyKey: crypto.randomUUID() });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("Item #I01 already has a winning bid (bidder 1001, $100.00), so this bid wasn't recorded.");
+    expect(writes).toEqual([]);
+  });
+
+  it("treats the same bidder at the same price as already recorded - a resend whose first answer was lost - and writes nothing", async () => {
+    const { writes } = mockSheets({ repeatable: false });
+
+    const response = await request(app).post("/api/auction/record-winning-bid").set(authHeader)
+      .send({ ...body, bidderId: "1001", idempotencyKey: crypto.randomUUID() });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ success: true, alreadyRecorded: true });
+    expect(writes).toEqual([]);
+  });
+
+  it("records another winner when the item allows multiple winners", async () => {
+    const { writes } = mockSheets({ repeatable: true });
+
+    const response = await request(app).post("/api/auction/record-winning-bid").set(authHeader)
+      .send({ ...body, idempotencyKey: crypto.randomUUID() });
+
+    expect(response.status).toBe(200);
+    expect(writes.some((r) => r.includes("Bid-Management"))).toBe(true);
+  });
+
+  it("doesn't read the Items sheet when the item has no winner yet", async () => {
+    const { itemsReads } = mockSheets({ repeatable: false });
+
+    const response = await request(app).post("/api/auction/record-winning-bid").set(authHeader)
+      .send({ ...body, itemId: "I02", idempotencyKey: crypto.randomUUID() });
+
+    expect(response.status).toBe(200);
+    expect(itemsReads()).toBe(0);
+  });
+
+  it("skips the check (as before) when the request has no itemsSpreadsheetId, or the Items sheet can't be read", async () => {
+    const { itemsSpreadsheetId: _omit, ...noItems } = body;
+    mockSheets({ repeatable: false });
+    const withoutId = await request(app).post("/api/auction/record-winning-bid").set(authHeader)
+      .send({ ...noItems, idempotencyKey: crypto.randomUUID() });
+    expect(withoutId.status).toBe(200);
+
+    mockSheets({ itemsFail: true });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const unreadable = await request(app).post("/api/auction/record-winning-bid").set(authHeader)
+      .send({ ...body, idempotencyKey: crypto.randomUUID() });
+    expect(unreadable.status).toBe(200);
+  });
+
+  it("answers a resend after a server restart from the durable record, without recording the bid again", async () => {
+    const { writes } = mockSheets({ repeatable: false });
+    const key = crypto.randomUUID();
+    const first = await request(app).post("/api/auction/record-winning-bid").set(authHeader)
+      .send({ ...body, itemId: "I02", idempotencyKey: key });
+    expect(first.status).toBe(200);
+    const writesAfterFirst = writes.length;
+
+    // A restart (or Cloud Run scaling to zero) empties the in-memory map.
+    _resetIdempotencyForTesting();
+
+    const resend = await request(app).post("/api/auction/record-winning-bid").set(authHeader)
+      .send({ ...body, itemId: "I02", idempotencyKey: key });
+    expect(resend.status).toBe(200);
+    expect(resend.body.duplicated).toBe(true);
+    expect(writes.length).toBe(writesAfterFirst);
   });
 });
 
