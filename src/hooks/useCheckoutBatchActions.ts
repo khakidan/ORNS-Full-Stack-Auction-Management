@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
+import { errorTextFrom, fetchWithRetry, getBaseUrl, NO_ANSWER_MESSAGE, postOnce, ServerUnreachableError } from "@/services/google-api";
 
 interface UseCheckoutBatchActionsArgs {
   spreadsheetId: string;
@@ -36,25 +36,48 @@ export function useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, fol
   const [showPrintConfirm, setShowPrintConfirm] = useState(false);
   const [showEmailConfirm, setShowEmailConfirm] = useState(false);
 
+  /**
+   * Prints every winner's receipt in parts (one PDF per part, see the
+   * server's /generate-all), asking for part 1, 2, ... in turn and showing
+   * progress. Each request is sent once, never retried - a retry after a
+   * timeout started a second copy of the whole batch. Stops at the first
+   * part that fails and says which parts were made.
+   */
   const startBatchPrint = async () => {
     setShowPrintConfirm(false);
+    const toastId = "batch-print";
+    let done = 0;
+    let totalParts = 1;
     try {
       setIsPrintingAll(true);
 
-      console.log("[Checkout] Starting batch print...");
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/generate-all`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ spreadsheetId, itemsSpreadsheetId, bidderNumbersSheet, bidManagementSheet, receiptFolderId: folderId }),
-        credentials: "include"
-      });
+      for (let part = 1; part <= totalParts; part++) {
+        toast.loading(totalParts > 1 ? `Printing receipts: part ${part} of ${totalParts}...` : "Printing receipts...", { id: toastId });
+        const res = await postOnce(`${getBaseUrl()}/api/receipts/generate-all`, {
+          spreadsheetId, itemsSpreadsheetId, bidderNumbersSheet, bidManagementSheet, receiptFolderId: folderId, part
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.success === false) throw new Error(errorTextFrom(data, "Batch generation failed"));
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Batch generation failed");
-      toast.success("Batch receipt generation started! Check your Receipts folder in a few minutes.");
+        if (data.totalParts === 0) {
+          toast.info("No bidders have winning items yet, so there are no receipts to print.", { id: toastId });
+          return;
+        }
+        totalParts = data.totalParts;
+        done = part;
+      }
+
+      toast.success(
+        totalParts === 1
+          ? "Receipts printed. They're in your Receipts folder."
+          : `All ${totalParts} parts of the receipts printed. They're in your Receipts folder.`,
+        { id: toastId }
+      );
     } catch (error: any) {
       console.error("[Checkout] Batch print error:", error);
-      toast.error(error.message || "An unexpected error occurred during batch printing");
+      const reason = error instanceof ServerUnreachableError ? NO_ANSWER_MESSAGE : (error.message || "An unexpected error occurred during batch printing");
+      const progress = done > 0 ? ` Parts 1-${done} of ${totalParts} were printed; part ${done + 1} was not.` : "";
+      toast.error(`${reason}${progress}`, { id: toastId, duration: Infinity });
     } finally {
       setIsPrintingAll(false);
     }

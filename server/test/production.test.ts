@@ -386,3 +386,46 @@ describe("Document and Presentation Creation workflow", () => {
     });
   });
 });
+describe("Document runs - no duplicates, real error text", () => {
+  beforeEach(() => {
+    process.env.SCRIPT_ID_ITEM_ENTRY = "dummy-item-script-id";
+  });
+
+  afterEach(() => {
+    resetHandlersState();
+    server.resetHandlers();
+  });
+
+  const createCatalog = () => request(app)
+    .post("/api/production/item-entry/catalog")
+    .set(authHeader)
+    .send({ folderId: "test-folder-id", spreadsheetId: "test-items-ss-id" });
+
+  it("turns away a second request for the same document while the first is running", async () => {
+    server.use(
+      http.post("https://script.googleapis.com/v1/scripts/:scriptId\\:run", async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return HttpResponse.json({ response: { result: { success: true } } });
+      })
+    );
+
+    const [a, b] = await Promise.all([createCatalog(), createCatalog()]);
+
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+    const turnedAway = a.status === 409 ? a : b;
+    expect(turnedAway.body.error).toContain("already being created");
+  });
+
+  it("reports the script's real error when the run itself fails", async () => {
+    server.use(
+      http.post("https://script.googleapis.com/v1/scripts/:scriptId\\:run", () =>
+        HttpResponse.json({ error: { code: 3, message: "ScriptError", details: [{ errorMessage: "Exceeded maximum execution time" }] } })
+      )
+    );
+
+    const response = await createCatalog();
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe("Exceeded maximum execution time");
+  });
+});

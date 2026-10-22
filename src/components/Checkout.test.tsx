@@ -3,10 +3,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Checkout from "./Checkout";
-import { fetchWithRetry, getBaseUrl, getSheetData } from "@/services/google-api";
+import { toast } from "sonner";
+import { fetchWithRetry, getBaseUrl, getSheetData, postOnce } from "@/services/google-api";
 
-vi.mock("@/services/google-api", () => ({
+vi.mock("@/services/google-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/services/google-api")>()),
   fetchWithRetry: vi.fn(),
+  postOnce: vi.fn(),
   getBaseUrl: vi.fn(() => "http://localhost:3000"),
   getSheetData: vi.fn(),
   updateSheetData: vi.fn()
@@ -52,7 +55,8 @@ vi.mock("sonner", () => ({
     success: vi.fn(),
     error: vi.fn(),
     warning: vi.fn(),
-    info: vi.fn()
+    info: vi.fn(),
+    loading: vi.fn()
   }
 }));
 
@@ -120,10 +124,10 @@ describe("Checkout", () => {
   });
 
   it("Print All Receipts button calls the correct endpoint", async () => {
-    vi.mocked(fetchWithRetry).mockResolvedValueOnce({
+    vi.mocked(postOnce).mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => ({})
+      json: async () => ({ success: true, part: 1, totalParts: 1, bidderCount: 2 })
     } as Response);
 
     render(<Checkout />);
@@ -136,20 +140,72 @@ describe("Checkout", () => {
     const confirmBtn = await screen.findByText("Yes, Print");
     await userEvent.click(confirmBtn);
 
-    expect(fetchWithRetry).toHaveBeenCalledWith(
-      expect.stringContaining("/receipts/generate-all"),
-      expect.objectContaining({
-        method: "POST",
-        body: expect.stringContaining('"spreadsheetId":"mock-spreadsheet-id"')
-      })
-    );
-    const printBody = JSON.parse(vi.mocked(fetchWithRetry).mock.calls[0][1]!.body as string);
-    expect(printBody).toEqual({
+    // Sent once (postOnce, never retried), asking for part 1.
+    expect(postOnce).toHaveBeenCalledTimes(1);
+    expect(postOnce).toHaveBeenCalledWith(expect.stringContaining("/receipts/generate-all"), {
       spreadsheetId: "mock-spreadsheet-id",
       receiptFolderId: "mock-folder-id",
       itemsSpreadsheetId: "mock-items-spreadsheet-id",
       bidderNumbersSheet: "Bidders 2026",
       bidManagementSheet: "Bid-Management",
+      part: 1,
+    });
+  });
+
+  describe("Print All Receipts in parts", () => {
+    const partResponse = (part: number, totalParts: number) => ({
+      ok: true, status: 200, json: async () => ({ success: true, part, totalParts, bidderCount: 60 })
+    } as Response);
+
+    const printAll = async () => {
+      render(<Checkout />);
+      await screen.findByText("Jane Doe");
+      await userEvent.click(screen.getByText("Print All Receipts"));
+      await userEvent.click(await screen.findByText("Yes, Print"));
+    };
+
+    it("asks for every part in turn and reports when all are printed", async () => {
+      vi.mocked(postOnce)
+        .mockResolvedValueOnce(partResponse(1, 3))
+        .mockResolvedValueOnce(partResponse(2, 3))
+        .mockResolvedValueOnce(partResponse(3, 3));
+
+      await printAll();
+
+      await waitFor(() => expect(toast.success).toHaveBeenCalledWith(
+        "All 3 parts of the receipts printed. They're in your Receipts folder.", { id: "batch-print" }
+      ));
+      expect(vi.mocked(postOnce).mock.calls.map(([, body]: any) => body.part)).toEqual([1, 2, 3]);
+    });
+
+    it("stops at the first failed part and says which parts were printed", async () => {
+      vi.mocked(postOnce)
+        .mockResolvedValueOnce(partResponse(1, 3))
+        .mockResolvedValueOnce({
+          ok: false, status: 500,
+          json: async () => ({ error: "Internal Server Error", message: "Exceeded maximum execution time" })
+        } as Response);
+
+      await printAll();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+        "Exceeded maximum execution time Parts 1-1 of 3 were printed; part 2 was not.",
+        { id: "batch-print", duration: Infinity }
+      ));
+      expect(postOnce).toHaveBeenCalledTimes(2);
+      expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it("says there is nothing to print when no bidder has won anything", async () => {
+      vi.mocked(postOnce).mockResolvedValueOnce({
+        ok: true, status: 200, json: async () => ({ success: true, part: 0, totalParts: 0, bidderCount: 0 })
+      } as Response);
+
+      await printAll();
+
+      await waitFor(() => expect(toast.info).toHaveBeenCalledWith(
+        "No bidders have winning items yet, so there are no receipts to print.", { id: "batch-print" }
+      ));
     });
   });
 
@@ -195,6 +251,11 @@ describe("Checkout", () => {
       status: 200,
       json: async () => ({})
     } as Response);
+    vi.mocked(postOnce).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, subtotal: 50 })
+    } as Response);
 
     render(<Checkout />);
     await screen.findByText("Jane Doe");
@@ -212,12 +273,10 @@ describe("Checkout", () => {
 
     await userEvent.click(janePrintBtn);
 
-    expect(fetchWithRetry).toHaveBeenCalledWith(
+    // Sent once (postOnce, never retried) - a retry made a second PDF.
+    expect(postOnce).toHaveBeenCalledWith(
       expect.stringContaining("/receipts/generate"),
-      expect.objectContaining({
-        method: "POST",
-        body: expect.stringContaining('"bidderId":"101"')
-      })
+      expect.objectContaining({ bidderId: "101" })
     );
 
     const allEmailBtns = screen.getAllByText("Email Receipt");
@@ -234,6 +293,21 @@ describe("Checkout", () => {
     );
     const emailOnlyCall = vi.mocked(fetchWithRetry).mock.calls.find(([url]) => String(url).includes("/receipts/email-only"))!;
     expect(JSON.parse(emailOnlyCall[1]!.body as string)).not.toHaveProperty("paypalIsSandbox");
+  });
+
+  it("A receipt the script failed to make shows an error, not 'Receipt Doc created!'", async () => {
+    vi.mocked(postOnce).mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: "Exception: Document is missing" })
+    } as Response);
+
+    render(<Checkout />);
+    await screen.findByText("Jane Doe");
+    await userEvent.click(screen.getAllByText("Print Receipt")[0]);
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Exception: Document is missing"));
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("Empty state — no winners yet", async () => {

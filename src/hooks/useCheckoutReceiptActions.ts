@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
+import { errorTextFrom, fetchWithRetry, getBaseUrl, NO_ANSWER_MESSAGE, postOnce, ServerUnreachableError } from "@/services/google-api";
 import type { WinnerRecord } from "./useCheckoutState";
 
 interface UseCheckoutReceiptActionsArgs {
@@ -50,26 +50,22 @@ export function useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, f
   const handlePrintReceipt = async (winner: WinnerRecord) => {
     setProcessingId(`${winner.bidderId}-print`);
     try {
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bidderId: winner.bidderId,
-          spreadsheetId,
-          itemsSpreadsheetId,
-          bidderNumbersSheet,
-          bidManagementSheet,
-          receiptFolderId: folderId
-        }),
-        credentials: "include"
+      // Sent once, never retried: a retry after a timeout made a second
+      // copy of the receipt PDF.
+      const res = await postOnce(`${getBaseUrl()}/api/receipts/generate`, {
+        bidderId: winner.bidderId,
+        spreadsheetId,
+        itemsSpreadsheetId,
+        bidderNumbersSheet,
+        bidManagementSheet,
+        receiptFolderId: folderId
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to generate Google Doc");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(errorTextFrom(data, "Failed to generate Google Doc"));
       }
 
-      const data = await res.json();
       toast.success(`Receipt Doc created! Subtotal: $${data.subtotal}`);
       if (data.paymentUrl) {
         console.log(`Payment URL: ${data.paymentUrl}`);
@@ -78,7 +74,7 @@ export function useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, f
         window.open(`https://docs.google.com/document/d/${data.docId}/edit`, '_blank');
       }
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(error instanceof ServerUnreachableError ? NO_ANSWER_MESSAGE : error.message);
     } finally {
       setProcessingId(null);
     }

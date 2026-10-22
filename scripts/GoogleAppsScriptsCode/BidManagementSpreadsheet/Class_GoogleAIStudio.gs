@@ -26,10 +26,20 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
      *   this class looking it up - see
      *   docs/agents/refactor-opportunities.md's Code Hardening item #2 /
      *   CHANGELOG.md.
+     * @param {string|null} [fileName]  When given, all of `receipts` go into
+     *   one PDF with this name. Node prints receipts in parts this way
+     *   (e.g. "Receipts - Part 2 of 4 (Garcia - Lopez)") so no single run
+     *   nears Apps Script's 6-minute limit. Without it, the old
+     *   "1st Half"/"2nd Half" pair is made.
      * @returns {{success: boolean, error?: string}}
      */
-    createAllReceipts ( folderID = null, receipts = [] ) {
+    createAllReceipts ( folderID = null, receipts = [], fileName = null ) {
         const mgr = new ReceiptManager( folderID ); // ← folderID threaded to ReceiptManager
+
+        if ( fileName ) {
+            mgr.processBatch_( fileName, receipts, 0, receipts.length );
+            return { success: true };
+        }
 
         const totalRows = receipts.length;
         const midPoint = Math.ceil( totalRows / 2 );
@@ -92,14 +102,14 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
     }
 }
 
-function apiCreateAllReceipts ( folderID, receipts ) {
+function apiCreateAllReceipts ( folderID, receipts, fileName ) {
     try {
         // BUG FIX: this bridge function used to drop `receipts` entirely -
         // it never forwarded it to createAllReceipts, so every real batch
         // call from Node (which always sends a receipts array as the 2nd
         // Apps Script parameter) silently ran with an empty list. See
         // docs/agents/CHANGELOG.md.
-        return new GoogleAIStudio().createAllReceipts( folderID, receipts );
+        return new GoogleAIStudio().createAllReceipts( folderID, receipts, fileName );
     } catch ( e ) {
         return { success: false, error: e.toString() };
     }

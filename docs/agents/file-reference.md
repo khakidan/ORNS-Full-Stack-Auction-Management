@@ -62,7 +62,8 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │
 │   ├── utils/
 │   │   ├── appsScriptMode.ts  # APPS_SCRIPT_DEV_MODE -> scripts.run devMode
-│   │   ├── asyncLock.ts       # In-process per-key mutex (withLock)
+│   │   ├── appsScriptRun.ts   # runAppsScript (scripts.run with the real error text) + isAppsScriptFailure
+│   │   ├── asyncLock.ts       # In-process per-key mutex (withLock) + runIfIdle (409 instead of a second run)
 │   │   ├── bidderNumbersHeaders.ts # Bidder-Numbers A-N header row; labels L1:N1
 │   │   ├── categoryHelpers.ts # Category ID bases and resequencing
 │   │   ├── columnUtils.ts     # Column index -> letter
@@ -90,7 +91,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
     ├── context/               # AuctionContext, AuthContext, ConfigContext
     ├── services/
     │   ├── firebase.ts        # Lazy Firebase app/auth/Firestore init
-    │   └── google-api.ts      # fetchWithRetry (reports retries; throws ServerUnreachableError) + every API call to the Express server
+    │   └── google-api.ts      # fetchWithRetry (reports retries; throws ServerUnreachableError), postOnce (no retries, for Apps Script runs) + every API call to the Express server
     ├── hooks/                 # One hook per view/state concern (useCheckoutState, useGoogleAuth, ...); useOutboxReplay sends saved bids
     ├── lib/                   # Pure parsing/validation/formatting helpers, error buffer, screenshot capture;
     │                          #   bidOutbox.ts (winning bids saved on the device while offline), syncStatus.ts (retry state)

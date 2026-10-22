@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { withLock, _getLockMapSizeForTesting } from "../utils/asyncLock";
+import { AlreadyRunningError, runIfIdle, withLock, _getLockMapSizeForTesting } from "../utils/asyncLock";
 
 /** A promise plus its externally-callable resolve, for precisely controlling ordering in tests. */
 function deferred<T = void>() {
@@ -105,5 +105,30 @@ describe("withLock", () => {
     const before = _getLockMapSizeForTesting();
     await withLock("key-f", async () => {});
     expect(_getLockMapSizeForTesting()).toBe(before);
+  });
+});
+
+describe("runIfIdle", () => {
+  it("turns away a second call with the same key while the first is running", async () => {
+    let finish!: () => void;
+    const first = runIfIdle("idle-a", () => new Promise<string>((resolve) => { finish = () => resolve("first"); }));
+
+    await expect(runIfIdle("idle-a", async () => "second")).rejects.toBeInstanceOf(AlreadyRunningError);
+
+    finish();
+    await expect(first).resolves.toBe("first");
+  });
+
+  it("runs again once the first call has finished, even if it threw", async () => {
+    await expect(runIfIdle("idle-b", async () => { throw new Error("boom"); })).rejects.toThrow("boom");
+    await expect(runIfIdle("idle-b", async () => "again")).resolves.toBe("again");
+  });
+
+  it("never blocks a different key", async () => {
+    let finish!: () => void;
+    const first = runIfIdle("idle-c", () => new Promise<void>((resolve) => { finish = resolve; }));
+    await expect(runIfIdle("idle-d", async () => "other")).resolves.toBe("other");
+    finish();
+    await first;
   });
 });

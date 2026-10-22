@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { appsScriptDevMode } from '../utils/appsScriptMode';
+import { isAppsScriptFailure, runAppsScript } from '../utils/appsScriptRun';
+import { AlreadyRunningError, runIfIdle } from '../utils/asyncLock';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
 import { requireAuth } from '../middleware/requireAuth';
@@ -21,31 +22,23 @@ export default function createProductionRouter() {
     if (!scriptId) return res.status(400).json({ error: "Missing Target Environment Script ID" });
 
     try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const script = google.script({ version: "v1", auth: client });
+      // One run of each document at a time: every run creates a new file,
+      // so a double-click or a resent request would make a duplicate.
+      await runIfIdle(`apps-script:${scriptId}:${functionName}`, async () => {
+        const client = getAuthenticatedClient(req.session.tokens);
+        const script = google.script({ version: "v1", auth: client });
 
-      console.log(`[Production API] Executing ${functionName} on Script ID ${scriptId}`);
+        console.log(`[Production API] Executing ${functionName} on Script ID ${scriptId}`);
 
-      const response = await script.scripts.run({
-        scriptId,
-        requestBody: {
-          function: functionName,
-          parameters,
-          devMode: appsScriptDevMode(),
-        },
-      });
-
-      if (response.data.error) {
-        throw new Error(response.data.error.details?.[0]?.errorMessage || response.data.error.message || "Apps Script Execution Error");
-      }
-
-      const result: any = response.data.response?.result;
-      if (result && result.success === false) {
+        const result = await runAppsScript(script, scriptId, functionName, parameters);
+        if (isAppsScriptFailure(result)) {
           return res.status(400).json(result);
-      }
-      
-      res.json(result || { success: true });
+        }
+
+        res.json(result || { success: true });
+      });
     } catch (error: any) {
+      if (error instanceof AlreadyRunningError) return res.status(409).json({ error: "This document is already being created. Wait for it to finish, then check the folder." });
       console.error(`[Production API Error] ${functionName}:`, error);
       next(error);
     }
