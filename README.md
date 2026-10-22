@@ -1,6 +1,6 @@
 # ORNS Charity Auction Manager
 
-Web app for running Oakridge Neighborhood School's charity auction: guest check-in, bidder numbers, item entry and bundling, live bid entry, checkout with PayPal invoicing, and receipts. React + Vite on the front end, Express on the back end, Google Sheets as the datastore, Firestore for shared settings.
+Web app for running Orchard Ridge Nursery School's charity auction: guest check-in, bidder numbers, item entry and bundling, live bid entry, checkout with PayPal invoicing, and receipts. React + Vite on the front end, Express on the back end, Google Sheets as the datastore, Firestore for shared settings.
 
 Live at **<https://orns-auction-manager.cloud.run>**.
 
