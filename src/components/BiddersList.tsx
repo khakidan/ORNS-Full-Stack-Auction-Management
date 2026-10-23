@@ -20,7 +20,7 @@ interface BiddersListProps {
 
 /**
  * Row-based replacement for the old <table>-based BiddersTable.tsx (see
- * refactor-opportunities.md's "UI / Layout Tweaks" item), matching
+ * CHANGELOG.md's "UI / Layout Tweaks" item), matching
  * AttendeesList.tsx's plain-div-list pattern - a flexible row can show
  * more per bidder without the awkward narrow-column squeeze a <table>
  * forces. Column-header sorting moved to a "Sort by" control in

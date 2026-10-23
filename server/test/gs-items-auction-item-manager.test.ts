@@ -9,7 +9,7 @@
  * `Class_AuctionItemManager.gs` (this file used to also test its
  * `getValidSortedItems`) is deleted - Node now resolves the valid/sorted
  * item list itself (see server/test/itemDataService.test.ts) and hands
- * it to GAS as a parameter. See docs/agents/refactor-opportunities.md's
+ * it to GAS as a parameter. See docs/agents/CHANGELOG.md's
  * Code Hardening item #3 / CHANGELOG.md.
  *
  * IMPORTANT: this only tests this repo's reference copy. Fixes here don't

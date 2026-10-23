@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  *
- * useAuctionItemsTableState.ts was split (refactor-opportunities.md: it
+ * useAuctionItemsTableState.ts was split (CHANGELOG.md: it
  * was 437 lines, past this codebase's own "over 400 is almost certainly
  * doing too much" line) into five pieces - useAuctionItemsFilterSort.ts,
  * useAuctionItemUpdate.ts, useAuctionItemsBulkEdit.ts,

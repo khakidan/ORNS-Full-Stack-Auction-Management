@@ -6,7 +6,7 @@ import { Box, Gift, Layers } from "lucide-react";
  * Auction Items Database (AuctionItemRow.tsx). Extracted so a category or
  * itemType always gets the same badge color regardless of which page is
  * showing it, rather than two independently-maintained copies drifting
- * apart. See docs/agents/refactor-opportunities.md's "UI / Layout Tweaks"
+ * apart. See docs/agents/CHANGELOG.md's "UI / Layout Tweaks"
  * item / CHANGELOG.md.
  */
 

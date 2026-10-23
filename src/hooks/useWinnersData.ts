@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { fetchWithRetry, getBaseUrl, getSheetData, ServerUnreachableError } from "@/services/google-api";
-import { parseBidGrid } from "@/lib/bidGridParsing";
+import { parseBidGrid, BidGridWin } from "@/lib/bidGridParsing";
 import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { addToOutbox, getOutboxState, markNeedsSignIn, onOutboxSettled, RecordWinningBidBody } from "@/lib/bidOutbox";
 import { AuctionItem, Bidder } from "@/types";
@@ -17,12 +17,17 @@ export function useWinnersData(
 ) {
   const [winners, setWinners] = useState<Record<string, string>>({});
   const [totalRaised, setTotalRaised] = useState(0);
+  // The sheet's wins as parsed (no unsent outbox bids) - Checkout builds
+  // its per-bidder list from these instead of reading the grid again.
+  const [bidGridWins, setBidGridWins] = useState<BidGridWin[]>([]);
 
-  const fetchWinners = useCallback(async () => {
-    if (!spreadsheetId || bidders.length === 0) return;
+  /** Re-reads the bid grid. Resolves false if the read failed. */
+  const fetchWinners = useCallback(async (): Promise<boolean> => {
+    if (!spreadsheetId || bidders.length === 0) return true;
     try {
       const data = await getSheetData(spreadsheetId, `${bidManagementSheet}!A:ZZ`);
       const wins = parseBidGrid(data?.values);
+      setBidGridWins(wins);
 
       // Bidder cache for faster lookup
       const bidderCache = new Map(bidders.map(b => [b.id, b]));
@@ -46,8 +51,10 @@ export function useWinnersData(
 
       setWinners(newWinners);
       setTotalRaised(total);
+      return true;
     } catch (e) {
       console.error("Error fetching winners:", e);
+      return false;
     }
   }, [spreadsheetId, bidders, bidManagementSheet]);
 
@@ -172,7 +179,7 @@ export function useWinnersData(
     return idempotencyKey;
   };
 
-  return { winners, totalRaised, fetchWinners, recordWinningBid };
+  return { winners, totalRaised, bidGridWins, fetchWinners, recordWinningBid };
 }
 
 /**

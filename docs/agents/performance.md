@@ -1,17 +1,10 @@
 # Performance Standards
 
 > **Status: written for this codebase's actual current state**, verified
-> against `vite.config.ts`, `package.json`, and `src/App.tsx` on
-> 2026-09-02. [`style_guide.md`](./style_guide.md) currently states a
-> "critical path bundle size under 103 kB" target - **that number could
-> not be verified**: `npm run build` fails in this environment because
-> `node_modules` isn't installed at the project root (Vite's config
-> imports `@tailwindcss/vite` / `@vitejs/plugin-react`, both resolved
-> from a different `node_modules` on this machine). Don't repeat the
-> 103 kB figure as a confirmed fact until someone runs `npm install &&
-> npm run build` in a properly set-up environment and reads Vite's real
-> per-chunk `gzip:` output - same principle as this doc's own rule below:
-> measure, don't guess.
+> against `vite.config.ts`, `package.json`, and `src/App.tsx`. Real
+> per-chunk sizes (from `npm run build`'s `gzip:` output) live in
+> [`style_guide.md`](./style_guide.md)'s bundle table - re-measure there
+> rather than repeating an old number.
 
 This project follows: **Measure first. Optimize second.**
 
@@ -95,12 +88,13 @@ search-filtered table over hundreds of rows in `Bidders.tsx` or
 
 ## Component Boundaries
 
-The oversized top-level views (`AuctionItemsTab.tsx`, `Bidders.tsx`,
-`Checkout.tsx`, `ConfigSettings.tsx`, `Dashboard.tsx`) are also a
-rendering-performance concern, not just a maintainability one: a single
-969-line component re-renders as one unit on any state change inside it.
-Splitting them (log it in `ROADMAP.md`'s audit backlog if pursued) has a real
-rendering-performance benefit alongside the readability one.
+The top-level views (`AuctionItemsTab.tsx`, `Bidders.tsx`,
+`Checkout.tsx`, `ConfigSettings.tsx`, `Dashboard.tsx`) used to be
+oversized (one was 969 lines) and re-rendered as one unit on any state
+change inside them. They've since been split into state hooks plus
+smaller presentational pieces and are now 57-208 lines each. Keep new
+work on that pattern: a screen's state in a `use...State` hook, its
+rows/cards/dialogs as their own components.
 
 ---
 
@@ -131,7 +125,7 @@ Framer Motion) for route/state transitions, per `README.md`. Prefer
 
 Before merging:
 - Did bundle size increase significantly? (measure with a real
-  `npm run build`, not the stale 103 kB figure)
+  `npm run build`, compared against `style_guide.md`'s table)
 - Was a new dependency added, and does it belong in `vite.config.ts`'s
   manual chunk map?
 - Is lazy loading appropriate for the new surface, matching the existing

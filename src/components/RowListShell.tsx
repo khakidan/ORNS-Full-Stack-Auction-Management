@@ -15,7 +15,7 @@ interface RowListShellProps<T> {
 /**
  * Shared loading-skeleton/empty-state/row-list shell for this app's
  * flexible-row lists (the div-row replacement for the old <table>-based
- * lists - see refactor-opportunities.md's "UI / Layout Tweaks" history).
+ * lists - see CHANGELOG.md's "UI / Layout Tweaks" history).
  * Consolidates markup that had drifted back into duplication across
  * ItemsList.tsx/BiddersList.tsx/AttendeesList.tsx/AuctionItemsList.tsx -
  * the same class of duplication DataTableWrapper.tsx already solved for

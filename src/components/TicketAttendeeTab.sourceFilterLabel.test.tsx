@@ -4,7 +4,7 @@
  * component-standards.md documents that SelectValue with no children
  * renders the raw stored value, not the matching SelectItem's label -
  * this component's Source filter select had exactly that gap (logged in
- * refactor-opportunities.md after being found while confirming the
+ * CHANGELOG.md after being found while confirming the
  * sibling AddAttendeeDialog.tsx/BiddersFilterControls.tsx bug). The
  * main TicketAttendeeTab.test.tsx mocks @/components/ui/select
  * wholesale (as a native <select>, for reliable userEvent testing of

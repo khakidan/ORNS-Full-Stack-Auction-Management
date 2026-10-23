@@ -20,7 +20,7 @@
  * would have made a scoped rollback affect both new entries instead of
  * just the failed one - now includes a random suffix too.
  *
- * Also added a real `loading` state (refactor-opportunities.md): this
+ * Also added a real `loading` state (CHANGELOG.md): this
  * hook previously tracked no loading state of its own at all -
  * TicketAttendeeTab.tsx's Refresh button and table spinner were wired to
  * useBiddersData.ts's `loading` from context instead, so they never

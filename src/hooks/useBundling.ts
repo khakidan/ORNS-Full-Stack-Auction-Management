@@ -86,18 +86,8 @@ export function useBundling(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: selectedItems })
       });
+      // A Gemini failure arrives as a 5xx, which fetchWithRetry throws on.
       const data = await res.json();
-      
-      if (data.fallback) {
-        toast.error("AI generation failed. Please enter a bundle name manually.");
-        setAiSuggestions([
-          "The Ultimate Collection",
-          "Deluxe Surprise Package",
-          "Premium Gala Bundle"
-        ]);
-        return;
-      }
-      
       if (data.error) throw new Error(data.error);
       setAiSuggestions(data.suggestions || []);
     } catch (e: any) {
@@ -117,16 +107,6 @@ export function useBundling(
         body: JSON.stringify({ items: selectedItems })
       });
       const data = await res.json();
-      
-      if (data.fallback) {
-        toast.error("AI generation failed. Please write a description manually.");
-        setBundleDetails(prev => ({ 
-          ...prev, 
-          description: "An exclusive item collection bundled together for this special event. Don't miss out!" 
-        }));
-        return;
-      }
-      
       if (data.error) throw new Error(data.error);
       setBundleDetails(prev => ({ ...prev, description: data.description }));
       toast.success("AI description generated!");

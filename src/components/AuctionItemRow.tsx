@@ -1,7 +1,7 @@
 import { motion } from "motion/react";
-import { Heart, Loader2, Package, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { Heart, Package, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/LoadingButton";
 import { IconButton } from "@/components/ui/IconButton";
 import { Badge } from "@/components/ui/badge";
 import { AuctionItem } from "@/types";
@@ -23,7 +23,7 @@ interface AuctionItemRowProps {
 
 /**
  * Redesigned to match ItemRow.tsx's row-based visual language (see
- * refactor-opportunities.md's "UI / Layout Tweaks" item - the user asked
+ * CHANGELOG.md's "UI / Layout Tweaks" item - the user asked
  * to bring the read-only Bid Management "Items" tab's layout here too),
  * replacing the old <table> row with 9 separate per-field EditableCell
  * inline editors. All the same editing/delete/bundle functionality is
@@ -106,20 +106,18 @@ export function AuctionItemRow({
         )}
 
         {isBundled && !isAuctionClosed && (
-          <Button
+          <LoadingButton
             size="sm"
             variant="outline"
             className="h-7 text-xxs gap-1 px-2 border-purple-200 text-purple-700 hover:bg-purple-100 hover:text-purple-800 transition-colors w-fit mt-0.5"
+            loading={isExecutingRestore && restoreBundleId === item.bundleId}
             disabled={isExecutingRestore}
+            icon={<RotateCcw className="w-3 h-3" />}
+            loaderClassName="w-3 h-3"
             onClick={() => onRestoreBundle(item.bundleId)}
           >
-            {isExecutingRestore && restoreBundleId === item.bundleId ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <RotateCcw className="w-3 h-3" />
-            )}
             Restore Items
-          </Button>
+          </LoadingButton>
         )}
       </div>
 

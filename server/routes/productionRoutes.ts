@@ -56,7 +56,7 @@ export default function createProductionRouter() {
    * GAS - purely for architectural consistency with the rest of this
    * app's GAS projects (Code Hardening item #3), the same "Node resolves
    * data, GAS only turns it into an artifact" shape already used for
-   * receipts and bidder labels. See docs/agents/refactor-opportunities.md
+   * receipts and bidder labels. See docs/agents/CHANGELOG.md
    * / CHANGELOG.md.
    */
   const handleItemEntryDoc = async (
@@ -132,7 +132,7 @@ export default function createProductionRouter() {
     // scripts/GoogleAppsScriptsCode/TicketsSpreadsheet/Class_BidderManager.gs,
     // which the .gs source's own comment admitted had to "stay
     // byte-for-byte identical" to this file's matching logic - see
-    // refactor-opportunities.md).
+    // CHANGELOG.md).
     let bidders: { name: string; number: string }[] = [];
     if (bidManagementSpreadsheetId) {
       try {

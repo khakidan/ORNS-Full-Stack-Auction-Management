@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  *
- * Rewritten for the row-based redesign (see refactor-opportunities.md's
+ * Rewritten for the row-based redesign (see CHANGELOG.md's
  * "UI / Layout Tweaks" item and CHANGELOG.md) - AuctionItemRow.tsx is no
  * longer a <table> row, so this no longer wraps it in <table>/<tbody>,
  * and the old per-field EditableCell inline editors are gone in favor of

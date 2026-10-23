@@ -7,7 +7,7 @@ import { parseItemRows } from "../../src/lib/itemParsing";
  * scripts/GoogleAppsScriptsCode/ItemsSpreadsheet/Class_AuctionItemManager.gs's
  * `getValidSortedItems` (Code Hardening item #3) - purely for
  * architectural consistency with the rest of this app's GAS projects,
- * not a bug fix (see docs/agents/refactor-opportunities.md). Reuses
+ * not a bug fix (see docs/agents/CHANGELOG.md). Reuses
  * `src/lib/itemParsing.ts`'s existing header-aware row parsing rather
  * than re-encoding the Auction-Items schema a second time.
  */

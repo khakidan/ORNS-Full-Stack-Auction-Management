@@ -1,8 +1,13 @@
-import { Cell, Legend, Pie, PieChart, Tooltip } from "recharts";
+import { lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { AttendanceSlice } from "@/components/AttendancePie";
+
+// Lazy so recharts stays out of the first page load (style_guide.md's
+// bundle table); the card keeps its size while the pie loads.
+const AttendancePie = lazy(() => import("@/components/AttendancePie"));
 
 interface AttendanceChartProps {
-  bidderStats: { name: string; value: number; fill: string }[];
+  bidderStats: AttendanceSlice[];
 }
 
 export function AttendanceChart({ bidderStats }: AttendanceChartProps) {
@@ -12,23 +17,9 @@ export function AttendanceChart({ bidderStats }: AttendanceChartProps) {
         <CardTitle>Attendance Overview</CardTitle>
       </CardHeader>
       <CardContent className="h-80 w-full flex items-center justify-center p-0">
-        <PieChart width={280} height={280}>
-          <Pie
-            data={bidderStats}
-            cx="50%"
-            cy="45%"
-            innerRadius={65}
-            outerRadius={95}
-            paddingAngle={5}
-            dataKey="value"
-          >
-            {bidderStats.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.fill} />
-            ))}
-          </Pie>
-          <Tooltip />
-          <Legend verticalAlign="bottom" height={36} />
-        </PieChart>
+        <Suspense fallback={null}>
+          <AttendancePie bidderStats={bidderStats} />
+        </Suspense>
       </CardContent>
     </Card>
   );

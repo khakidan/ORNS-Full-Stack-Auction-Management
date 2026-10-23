@@ -13,7 +13,7 @@ interface IconButtonProps extends Omit<ComponentProps<typeof Button>, "size" | "
  * and `aria-label` required at the type level, so an icon-only button
  * can't ship without an accessible label the way a plain
  * `<Button size="icon">` could (see component-standards.md and the
- * accessibility finding in refactor-opportunities.md this component
+ * accessibility finding in CHANGELOG.md this component
  * replaces).
  */
 export function IconButton({ icon, size = "icon", ...props }: IconButtonProps) {

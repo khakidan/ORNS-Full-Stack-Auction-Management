@@ -1,7 +1,7 @@
 /**
  * Concurrency regression guard for itemService.ts/bundleService.ts's
  * Auction-Items-mutating functions - found in a hardening audit (see
- * docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+ * docs/agents/CHANGELOG.md's Code Hardening item #1 /
  * CHANGELOG.md). Each of addItem/deleteItem/updateItem/bulkUpdateItems/
  * processBundle/restoreBundle reads the full 'Auction-Items'!A:L range,
  * mutates the in-memory 2D array, then overwrites the whole range - none

@@ -20,7 +20,7 @@ interface RefreshableListCardProps {
  * skeleton around a DataTableWrapper body, instead of using
  * ListPageCard.tsx (built for the four search-and-list pages, but not
  * this "list + refresh button, no search/filter" shape). See
- * refactor-opportunities.md's 2026-09-07 audit.
+ * CHANGELOG.md's 2026-09-07 audit.
  */
 export function RefreshableListCard({ icon, title, description, loading, onRefresh, children }: RefreshableListCardProps) {
   return (

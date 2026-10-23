@@ -2,7 +2,7 @@
  * Node port of scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/not-deployed/Class_PayPalService.gs -
  * a straight structural port (same methods, same request shapes), swapping
  * `UrlFetchApp.fetch` for Node's `fetch` and Script Properties for env vars.
- * See docs/agents/refactor-opportunities.md's Code Hardening item #2, Step 1.
+ * See docs/agents/CHANGELOG.md's Code Hardening item #2, Step 1.
  *
  * Deliberately NOT ported: `calculatePayPalSurcharge` - `financeUtils.ts`
  * already has an identical copy; that stays the one implementation.

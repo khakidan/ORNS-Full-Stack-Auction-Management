@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  *
  * Regression guard for the "no client-side error boundary anywhere"
- * finding from the hardening audit (docs/agents/refactor-opportunities.md's
+ * finding from the hardening audit (docs/agents/CHANGELOG.md's
  * Code Hardening item #1 / CHANGELOG.md) - before this, a render-time
  * exception anywhere in the tree white-screened the entire app with no
  * recovery path.

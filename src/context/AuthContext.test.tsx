@@ -5,7 +5,7 @@
  * thoroughly tested directly) in a single, app-wide Provider so
  * App.tsx and AuctionContext.tsx share one live instance instead of each
  * mounting their own copy of the auth-status-check/postMessage-listener/
- * poll flow - see refactor-opportunities.md and CHANGELOG.md for why.
+ * poll flow - see CHANGELOG.md for why.
  * useGoogleAuth.ts itself is mocked here since its own real behavior is
  * already covered by useGoogleAuth.test.ts - this file only pins the
  * Provider/useAuth wiring: the hook's return value passes through

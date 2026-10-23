@@ -21,7 +21,7 @@ interface WorkflowTabsShellProps {
    * Vertical alignment of the header row's two halves. AuctionItemsWorkflow.tsx
    * used "end" and AuctionTicketsWorkflow.tsx used "center" before this
    * extraction, with no evidence either was a deliberate choice rather
-   * than copy-paste drift (see refactor-opportunities.md's 2026-09-07
+   * than copy-paste drift (see CHANGELOG.md's 2026-09-07
    * audit) - kept configurable, defaulting to "end", so extracting this
    * shell doesn't silently change either page's exact appearance.
    */

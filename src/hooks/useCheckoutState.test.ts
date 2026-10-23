@@ -8,7 +8,7 @@
  * whole-snapshot rollback bug already fixed in useWinnersData.ts,
  * useAttendeesData.ts, useAuctionItemsTableState.ts, and
  * useBiddersData.ts this session) and handleRefresh's stuck-spinner
- * bug (refactor-opportunities.md: fetchingWinners(true) is never reset
+ * bug (CHANGELOG.md: fetchingWinners(true) is never reset
  * when loadWinners early-returns without a spreadsheetId, or when
  * fetchAllData itself throws before loadWinners is ever called) - full
  * hook coverage (loadWinners's own happy path, the receipt/email
@@ -19,6 +19,7 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useCheckoutState } from "./useCheckoutState";
 import { Bidder, AuctionItem } from "@/types";
+import type { BidGridWin } from "@/lib/bidGridParsing";
 
 vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn(),
@@ -58,19 +59,15 @@ function makeBidder(overrides: Partial<Bidder> = {}): Bidder {
 const ITEM1: AuctionItem = { id: "item1", name: "Art Class", category: "", description: "", value: "", openingBid: "", minRaise: "", donor: "", itemType: "", status: "", bundleId: "", bundledDateTime: "", rowIndex: 2 };
 const ITEM2: AuctionItem = { id: "item2", name: "Pizza Party", category: "", description: "", value: "", openingBid: "", minRaise: "", donor: "", itemType: "", status: "", bundleId: "", bundledDateTime: "", rowIndex: 3 };
 
-// Column-pair bid grid: header holds bidder IDs in pairs, data starts row 3.
-const BID_GRID_HEADER = ["101", "", "102", ""];
-const ROW1 = ["Header", "Details", "Header", "Details"];
-const ROW2 = ["More", "Stuff", "More", "Stuff"];
+// The bid grid as AuctionContext's useWinnersData parsed it.
+const GRID_WINS: BidGridWin[] = [
+  { bidderId: "101", itemId: "item1", price: 50 },
+  { bidderId: "102", itemId: "item2", price: 75 },
+];
 
 function mockLoadWinnersData() {
   mockedGetSheetData.mockImplementation((_id: string, range: string) => {
     if (range.startsWith("Special-Winners")) return Promise.resolve({ values: [] });
-    if (range.includes("Bid-Management")) {
-      return Promise.resolve({
-        values: [BID_GRID_HEADER, ROW1, ROW2, ["item1", "$50.00", "item2", "$75.00"]],
-      });
-    }
     return Promise.resolve({ values: [] });
   });
 }
@@ -84,6 +81,8 @@ function renderWithTwoWinners(overrides: { spreadsheetId?: string; fetchAllData?
       bidders,
       items: ITEMS,
       attendees: [],
+      bidGridWins: GRID_WINS,
+      fetchWinners: vi.fn(async () => true),
       fetchAllData: overrides.fetchAllData ?? vi.fn(),
       spreadsheetId: overrides.spreadsheetId ?? "ss-id",
       itemsSpreadsheetId: "items-ss-id",
@@ -202,6 +201,8 @@ describe("useCheckoutState.filteredWinners", () => {
         bidders,
         items: ITEMS,
         attendees: [],
+        bidGridWins: GRID_WINS,
+        fetchWinners: vi.fn(async () => true),
         fetchAllData: vi.fn(),
         spreadsheetId: "ss-id",
         itemsSpreadsheetId: "items-ss-id",
@@ -239,6 +240,8 @@ describe("useCheckoutState.statusFilter", () => {
         bidders,
         items: ITEMS,
         attendees: [],
+        bidGridWins: GRID_WINS,
+        fetchWinners: vi.fn(async () => true),
         fetchAllData: vi.fn(),
         spreadsheetId: "ss-id",
         itemsSpreadsheetId: "items-ss-id",
@@ -297,6 +300,8 @@ describe("useCheckoutState.stats", () => {
         bidders,
         items: ITEMS,
         attendees: [],
+        bidGridWins: GRID_WINS,
+        fetchWinners: vi.fn(async () => true),
         fetchAllData: vi.fn(),
         spreadsheetId: "ss-id",
         itemsSpreadsheetId: "items-ss-id",
@@ -353,5 +358,87 @@ describe("useCheckoutState.handleRefresh", () => {
     });
 
     expect(result.current.fetchingWinners).toBe(false);
+  });
+});
+
+describe("useCheckoutState's bid-grid reads (ROADMAP.md R16)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLoadWinnersData();
+  });
+
+  it("asks for one fresh grid read when Checkout opens, never reads the grid itself, and doesn't re-read when the bidders change", async () => {
+    const fetchWinners = vi.fn(async () => true);
+    const props = {
+      bidders: [makeBidder({ id: "101" }), makeBidder({ id: "102", firstName: "Bob", lastName: "Two" })],
+      items: ITEMS,
+      attendees: [],
+      bidGridWins: GRID_WINS,
+      fetchWinners,
+      fetchAllData: vi.fn(),
+      spreadsheetId: "ss-id",
+      itemsSpreadsheetId: "items-ss-id",
+      ticketsSpreadsheetId: "",
+      bidManagementSheet: "Bid-Management",
+      bidderNumbersSheet: "Bidder-Numbers",
+      folderId: "folder-id",
+    };
+    const { result, rerender } = renderHook((p) => useCheckoutState(p), { initialProps: props });
+    await waitFor(() => expect(result.current.winners).toHaveLength(2));
+    expect(fetchWinners).toHaveBeenCalledTimes(1);
+
+    rerender({ ...props, bidders: [...props.bidders, makeBidder({ id: "103" })] });
+    await waitFor(() => expect(result.current.fetchingWinners).toBe(false));
+
+    expect(fetchWinners).toHaveBeenCalledTimes(1);
+    expect(mockedGetSheetData.mock.calls.map(([, range]) => range)).toEqual(["Special-Winners!A2:B3"]);
+  });
+
+  it("rebuilds the list when the context's grid changes", async () => {
+    const props = {
+      bidders: [makeBidder({ id: "101" }), makeBidder({ id: "102", firstName: "Bob", lastName: "Two" })],
+      items: ITEMS,
+      attendees: [],
+      bidGridWins: GRID_WINS,
+      fetchWinners: vi.fn(async () => true),
+      fetchAllData: vi.fn(),
+      spreadsheetId: "ss-id",
+      itemsSpreadsheetId: "items-ss-id",
+      ticketsSpreadsheetId: "",
+      bidManagementSheet: "Bid-Management",
+      bidderNumbersSheet: "Bidder-Numbers",
+      folderId: "folder-id",
+    };
+    const { result, rerender } = renderHook((p) => useCheckoutState(p), { initialProps: props });
+    await waitFor(() => expect(result.current.winners).toHaveLength(2));
+
+    rerender({ ...props, bidGridWins: [...GRID_WINS, { bidderId: "101", itemId: "item2", price: 20 }] });
+
+    await waitFor(() => expect(result.current.winners.find(w => w.bidderId === "101")?.total).toBe(70));
+  });
+
+  it("says so when the grid read fails", async () => {
+    const { toast } = await import("sonner");
+    // Hoisted: a new array on every render would rebuild the list forever.
+    const bidders = [makeBidder()];
+    const noWins: BidGridWin[] = [];
+    const { result } = renderHook(() =>
+      useCheckoutState({
+        bidders,
+        items: ITEMS,
+        attendees: [],
+        bidGridWins: noWins,
+        fetchWinners: vi.fn(async () => false),
+        fetchAllData: vi.fn(),
+        spreadsheetId: "ss-id",
+        itemsSpreadsheetId: "items-ss-id",
+        ticketsSpreadsheetId: "",
+        bidManagementSheet: "Bid-Management",
+        bidderNumbersSheet: "Bidder-Numbers",
+        folderId: "folder-id",
+      })
+    );
+    await waitFor(() => expect(result.current.fetchingWinners).toBe(false));
+    expect(toast.error).toHaveBeenCalledWith("Failed to load winners");
   });
 });

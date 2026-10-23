@@ -8,7 +8,7 @@
  * already established for useBiddersData.ts/useBundling.ts.
  *
  * recordWinningBid's rollback is the exact "whole stale snapshot" bug
- * flagged in refactor-opportunities.md: it used to restore the entire
+ * flagged in CHANGELOG.md: it used to restore the entire
  * captured winners map/total on failure, so two bids recorded in quick
  * succession (before a re-render) both capture the same baseline - if
  * the second fails, its rollback erased the first bid's already-

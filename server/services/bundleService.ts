@@ -112,7 +112,7 @@ function calculateMinRaise(value: number, tiers: { minRange: number; minRaise: n
  * addItem/deleteItem/updateItem/bulkUpdateItems, since this also reads the
  * full 'Auction-Items'!A:L range, mutates it in memory, then overwrites
  * the whole range. Found in a hardening audit - see
- * docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+ * docs/agents/CHANGELOG.md's Code Hardening item #1 /
  * CHANGELOG.md.
  */
 export async function processBundle(

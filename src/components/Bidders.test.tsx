@@ -59,7 +59,7 @@ vi.mock("@/components/ui/alert-dialog", () => ({
   AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
   // Forward onClick - a prior version of this mock dropped it entirely,
   // which would silently no-op any test that clicks a confirm/cancel
-  // button in a dialog built on these primitives (see refactor-opportunities.md).
+  // button in a dialog built on these primitives (see CHANGELOG.md).
   AlertDialogCancel: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
   AlertDialogAction: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
 }));

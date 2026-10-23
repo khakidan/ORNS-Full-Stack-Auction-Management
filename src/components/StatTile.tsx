@@ -15,7 +15,7 @@ interface StatTileProps {
  * CheckoutStatsRow.tsx - CheckoutStatsRow.tsx's own docblock previously
  * said it was written to match DashboardStatsRow.tsx's "exact pattern"
  * on purpose, i.e. duplicated rather than shared (see
- * refactor-opportunities.md's 2026-09-07 audit). `value`/`subtext`
+ * CHANGELOG.md's 2026-09-07 audit). `value`/`subtext`
  * accept any ReactNode, not just text, since a couple of tiles
  * (Checkout Status's "N Pending / of M Present" row, Total Raised's
  * plain currency string) need more than a single string.

@@ -202,7 +202,7 @@ describe('Receipt Generate workflow', () => {
     expect(requestBody.function).toBe("apiCreateIndividualReceipt");
     // Node resolves the receipt itself now (see receiptDataService.ts)
     // instead of Class_ReceiptManager.gs looking it up a second,
-    // independent way - see refactor-opportunities.md's Code Hardening
+    // independent way - see CHANGELOG.md's Code Hardening
     // item #2 / CHANGELOG.md. folderID (2nd position) is still never
     // wired through from Node. No `emailReceipt` parameter any more -
     // Step 5 deleted the GAS-side email path it gated, which nothing

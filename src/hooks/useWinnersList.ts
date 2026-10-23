@@ -1,26 +1,61 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { getSheetData } from "@/services/google-api";
-import { parseBidGrid } from "@/lib/bidGridParsing";
+import type { BidGridWin } from "@/lib/bidGridParsing";
 import { Bidder, AuctionItem } from "@/types";
 import type { CheckoutStatusFilter, WinnerRecord } from "./useCheckoutState";
 
 interface UseWinnersListArgs {
   bidders: Bidder[];
   items: AuctionItem[];
+  /** The Bid-Management grid's wins, read once by AuctionContext's useWinnersData. */
+  bidGridWins: BidGridWin[];
+  /** Re-reads that grid (updating `bidGridWins`); resolves false if the read failed. */
+  fetchWinners: () => Promise<boolean>;
   fetchAllData: () => Promise<void>;
   spreadsheetId: string;
-  bidManagementSheet: string;
+}
+
+/** Groups the grid's wins by bidder, with names, totals and payment state. */
+function buildWinnerRecords(wins: BidGridWin[], bidders: Bidder[], items: AuctionItem[]): WinnerRecord[] {
+  const byBidder = new Map<string, { id: string; name: string; price: number }[]>();
+  for (const win of wins) {
+    const itemInfo = items.find(it => it.id === win.itemId);
+    const wonItems = byBidder.get(win.bidderId) ?? [];
+    wonItems.push({ id: win.itemId, name: itemInfo?.name || "Unknown Item", price: win.price });
+    byBidder.set(win.bidderId, wonItems);
+  }
+
+  const itemsList: WinnerRecord[] = [];
+  for (const [bidderId, wonItems] of byBidder) {
+    const bidderInfo = bidders.find(b => b.id === bidderId);
+    itemsList.push({
+      bidderId,
+      name: bidderInfo ? `${bidderInfo.firstName} ${bidderInfo.lastName}` : `Bidder ${bidderId}`,
+      total: wonItems.reduce((sum, it) => sum + it.price, 0),
+      items: wonItems,
+      paid: bidderInfo?.paid || false,
+      paymentPending: !!bidderInfo?.checkoutTimestamp && !bidderInfo?.paid,
+      paymentMethod: bidderInfo?.paymentMethod || ""
+    });
+  }
+  return itemsList;
 }
 
 /**
  * Loads and filters the checkout screen's per-bidder winners list: the
- * Bid-Management bid-grid parse, the Special-Winners high-value-alert
- * lookup, search/status filtering, and the refresh flow. Split out of
- * useCheckoutState.ts (was 416 lines) so that container stays focused on
- * composing the split-out pieces.
+ * per-bidder grouping of the bid grid, the Special-Winners
+ * high-value-alert lookup, search/status filtering, and the refresh flow.
+ * Split out of useCheckoutState.ts (was 416 lines) so that container
+ * stays focused on composing the split-out pieces.
+ *
+ * The bid grid itself comes from AuctionContext (ROADMAP.md R16) - this
+ * hook used to read Bid-Management `A:ZZ` again every time the bidders
+ * changed, right alongside the context's own read. It still asks for one
+ * fresh read when Checkout opens, since a bid entered on this device
+ * since the last read isn't in the context's grid yet.
  */
-export function useWinnersList({ bidders, items, fetchAllData, spreadsheetId, bidManagementSheet }: UseWinnersListArgs) {
+export function useWinnersList({ bidders, items, bidGridWins, fetchWinners, fetchAllData, spreadsheetId }: UseWinnersListArgs) {
   const [winners, setWinners] = useState<WinnerRecord[]>([]);
   const [fetchingWinners, setFetchingWinners] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -48,39 +83,14 @@ export function useWinnersList({ bidders, items, fetchAllData, spreadsheetId, bi
         })));
       }
 
-      const sheetName = bidManagementSheet;
-      const data = await getSheetData(spreadsheetId, `${sheetName}!A:ZZ`);
-      const wins = parseBidGrid(data?.values);
-
-      const byBidder = new Map<string, { id: string; name: string; price: number }[]>();
-      for (const win of wins) {
-        const itemInfo = items.find(it => it.id === win.itemId);
-        const wonItems = byBidder.get(win.bidderId) ?? [];
-        wonItems.push({ id: win.itemId, name: itemInfo?.name || "Unknown Item", price: win.price });
-        byBidder.set(win.bidderId, wonItems);
-      }
-
-      const itemsList: WinnerRecord[] = [];
-      for (const [bidderId, wonItems] of byBidder) {
-        const bidderInfo = bidders.find(b => b.id === bidderId);
-        itemsList.push({
-          bidderId,
-          name: bidderInfo ? `${bidderInfo.firstName} ${bidderInfo.lastName}` : `Bidder ${bidderId}`,
-          total: wonItems.reduce((sum, it) => sum + it.price, 0),
-          items: wonItems,
-          paid: bidderInfo?.paid || false,
-          paymentPending: !!bidderInfo?.checkoutTimestamp && !bidderInfo?.paid,
-          paymentMethod: bidderInfo?.paymentMethod || ""
-        });
-      }
-      setWinners(itemsList);
+      if (!(await fetchWinners())) toast.error("Failed to load winners");
     } catch (error) {
       console.error(error);
       toast.error("Failed to load winners");
     } finally {
       setFetchingWinners(false);
     }
-  }, [spreadsheetId, bidManagementSheet, items, bidders]);
+  }, [spreadsheetId, fetchWinners]);
 
   const handleRefresh = async () => {
     setFetchingWinners(true);
@@ -97,11 +107,21 @@ export function useWinnersList({ bidders, items, fetchAllData, spreadsheetId, bi
     }
   };
 
+  // One fresh read when Checkout opens (or the spreadsheet changes) -
+  // not on every bidders change, which AuctionContext already re-reads for.
+  const loadWinnersRef = useRef(loadWinners);
+  loadWinnersRef.current = loadWinners;
+  useEffect(() => {
+    loadWinnersRef.current();
+  }, [spreadsheetId]);
+
+  // Rebuilt in an effect, not derived, because useCheckoutPaymentFlow
+  // marks a winner paid optimistically through setWinners.
   useEffect(() => {
     if (bidders.length && items.length) {
-      loadWinners();
+      setWinners(buildWinnerRecords(bidGridWins, bidders, items));
     }
-  }, [bidders, items, loadWinners]);
+  }, [bidGridWins, bidders, items]);
 
   // Winner-level status - was previously also used to compute a
   // Pending/Completed tab split, but that split was strictly redundant

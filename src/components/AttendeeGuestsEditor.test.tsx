@@ -4,7 +4,7 @@
  * Dedicated unit coverage for the shared guest editor (previously only
  * exercised indirectly through AddAttendeeDialog.test.tsx/
  * EditAttendeeDialog.test.tsx, which never drove it up to its 3-guest
- * cap - see docs/agents/refactor-opportunities.md's 2026-09-07 audit).
+ * cap - see docs/agents/CHANGELOG.md's 2026-09-07 audit).
  */
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";

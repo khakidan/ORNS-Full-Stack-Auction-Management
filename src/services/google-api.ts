@@ -169,7 +169,7 @@ export async function deleteAuctionItem(spreadsheetId: string, rowIndex: number)
   // idempotencyKey generated once here, before fetchWithRetry's internal
   // retries reuse this same body - matches add-item/bulk-update-items'
   // existing convention. Found in a hardening audit - see
-  // docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+  // docs/agents/CHANGELOG.md's Code Hardening item #1 /
   // CHANGELOG.md.
   const res = await fetchWithRetry(`${getBaseUrl()}/api/auction/delete-item`, {
     method: "POST",

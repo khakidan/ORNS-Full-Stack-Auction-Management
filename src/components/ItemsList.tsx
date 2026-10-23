@@ -13,7 +13,7 @@ interface ItemsListProps {
 
 /**
  * Row-based replacement for the old <table>-based Auction Catalog (see
- * refactor-opportunities.md's "UI / Layout Tweaks" item), matching
+ * CHANGELOG.md's "UI / Layout Tweaks" item), matching
  * AttendeesList.tsx's plain-div-list pattern exactly (including no
  * enter/exit animation - the old table this replaces never animated
  * either, unlike BiddersList.tsx which preserved a pre-existing one).

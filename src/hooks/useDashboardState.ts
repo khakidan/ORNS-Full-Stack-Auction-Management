@@ -154,13 +154,13 @@ export function useDashboardState({ bidders, items, winners, spreadsheetId, isAu
   }, [bidders]);
 
   const bidderStats = [
-    { name: "Checked In", value: checkedInCount, fill: "#10b981" },
-    { name: "Checked Out", value: checkedOutCount, fill: "#0c63d5" },
+    { name: "Checked In", value: checkedInCount, fill: "var(--chart-1)" },
+    { name: "Checked Out", value: checkedOutCount, fill: "var(--chart-2)" },
     // Proxy bidders are neither checked in nor "absent" in the ordinary
     // sense (they never attend), so they're excluded here the same way
     // unattendedBidders already excludes them - otherwise this slice
     // double-counts proxies as missing attendees.
-    { name: "Not Present", value: totalBidders - checkedInCount - proxyBidders.length, fill: "#ef4444" },
+    { name: "Not Present", value: totalBidders - checkedInCount - proxyBidders.length, fill: "var(--chart-3)" },
   ];
 
   return {

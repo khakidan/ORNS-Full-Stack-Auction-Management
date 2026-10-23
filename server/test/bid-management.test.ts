@@ -153,7 +153,7 @@ describe("bidRoutes - /api/auction/record-winning-bid", () => {
   // price used to get stored as-is, and receiptDataService.ts's
   // resolveWonItems (`parseFloat(...) || 0`) would then silently treat it
   // as $0 - the item recorded as "won" but invoiced for nothing. See
-  // docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+  // docs/agents/CHANGELOG.md's Code Hardening item #1 /
   // CHANGELOG.md.
   it("returns 400 for a non-numeric price instead of silently recording it", async () => {
     setupBidMocks();

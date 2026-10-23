@@ -124,7 +124,7 @@ describe("AuctionItemsTab - Loading", () => {
   // While items are loading, the page now shows the filter bar and
   // RowListShell's skeleton rows inline (matching Items.tsx/Bidders.tsx's
   // convention) instead of replacing the whole page with a full-page
-  // spinner - see refactor-opportunities.md/CHANGELOG.md.
+  // spinner - see CHANGELOG.md.
   it("keeps the filter bar visible and shows skeleton rows instead of blanking the whole page", () => {
     vi.mocked(useAuctionItems).mockReturnValueOnce({
       ...defaultAuctionItemsReturn,
@@ -211,7 +211,7 @@ describe("AuctionItemsTab - Sort and Filter", () => {
 
     // The old clickable column-header sort was replaced by a "Sort by"
     // select once the table became a flexible row list - see
-    // refactor-opportunities.md's "UI / Layout Tweaks" item.
+    // CHANGELOG.md's "UI / Layout Tweaks" item.
     const selects = screen.getAllByTestId("mock-select");
     const sortSelect = selects[2];
 

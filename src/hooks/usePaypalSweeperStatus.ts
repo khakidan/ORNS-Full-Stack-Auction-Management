@@ -11,7 +11,7 @@ const POLL_INTERVAL_MS = 30000;
  * two manual-only steps from Code Hardening item #2 have actually
  * happened: an admin signing in once (credentialConfigured) and the
  * background job running reliably (lastRunAt/lastResult). See
- * docs/agents/refactor-opportunities.md.
+ * docs/agents/CHANGELOG.md.
  *
  * Polls every 30s (independent of the sweeper's own 5-minute interval) so
  * the card catches up reasonably quickly after a "Run Sweep Now" or a

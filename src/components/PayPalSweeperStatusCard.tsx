@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { LoadingButton } from "@/components/ui/LoadingButton";
 import { CheckCircle2, AlertTriangle, RefreshCw, Loader2, PauseCircle } from "lucide-react";
 import { usePaypalSweeperStatus } from "@/hooks/usePaypalSweeperStatus";
+import { cn } from "@/lib/utils";
 
 function formatTimestamp(iso: string | null): string {
   if (!iso) return "Never";
@@ -88,7 +89,7 @@ export default function PayPalSweeperStatusCard() {
 
         <div className="flex items-start justify-between gap-3">
           <span className="text-muted-foreground">Automatic schedule</span>
-          <span className={`text-right font-medium ${scheduleActive ? "text-emerald-700" : "text-slate-600"}`}>
+          <span className={cn("text-right font-medium", scheduleActive ? "text-emerald-700" : "text-slate-600")}>
             {scheduleActive ? "Active" : "Paused or not set up"}
             <span className="block text-xs text-muted-foreground font-normal">Last scheduled run: {formatTimestamp(lastScheduledRunAt)}</span>
           </span>

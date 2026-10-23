@@ -138,7 +138,7 @@ describe("Items - Ordering", () => {
 });
 
 // Regression guards for the "UI / Layout Tweaks" redesign - see
-// docs/agents/refactor-opportunities.md and CHANGELOG.md. The new
+// docs/agents/CHANGELOG.md. The new
 // row-based catalog surfaces fields (description, value/opening bid/min
 // raise, donor, bundle status) that the old 4-column <table> never
 // showed at all.

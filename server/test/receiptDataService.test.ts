@@ -6,7 +6,7 @@
  * unaffected by this refactor) and once in
  * scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_ReceiptManager.gs's
  * `findBidderColInBidSheet_`/`buildReceipt_` (for the printed/PDF receipt
- * and PayPal invoice, now removed - see refactor-opportunities.md's Code
+ * and PayPal invoice, now removed - see CHANGELOG.md's Code
  * Hardening item #2 / CHANGELOG.md).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";

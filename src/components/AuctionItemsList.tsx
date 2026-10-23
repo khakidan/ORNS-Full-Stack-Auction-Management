@@ -21,7 +21,7 @@ interface AuctionItemsListProps {
 
 /**
  * Row-based replacement for the old <table>-based AuctionItemsTable.tsx
- * (see refactor-opportunities.md's "UI / Layout Tweaks" item), matching
+ * (see CHANGELOG.md's "UI / Layout Tweaks" item), matching
  * ItemRow.tsx/ItemsList.tsx's pattern on the read-only Bid Management
  * Items tab. The old table's clickable-column-header sort moved to a
  * "Sort by" select in AuctionItemsFilterControls.tsx, since there's no table

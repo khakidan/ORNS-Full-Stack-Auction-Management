@@ -8,7 +8,7 @@
  * up on printed receipts or PayPal invoice line items. It now opens the
  * real Auction Items spreadsheet live by ID (`this.config['auctionImportSheetID']`,
  * already loaded from this spreadsheet's own _Settings tab) instead - see
- * docs/agents/refactor-opportunities.md's Code Hardening item #1 and
+ * docs/agents/CHANGELOG.md's Code Hardening item #1 and
  * CHANGELOG.md for the full history. Mirrors
  * scripts/GoogleAppsScriptsCode/TicketsSpreadsheet/Class_BidderManager.gs's
  * own earlier cross-spreadsheet-read precedent (hard error on a missing ID

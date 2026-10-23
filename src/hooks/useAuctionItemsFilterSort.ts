@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { parseDollar } from "@/lib/auctionItemPricing";
 import { AuctionItem } from "@/types";
 
@@ -11,6 +11,22 @@ export interface AuctionItemSortConfig {
   direction: "asc" | "desc";
 }
 
+/** `selection` minus any row not in `visible` (the same object if nothing goes). */
+function pruneToVisible(selection: BundlingSelection, visible: AuctionItem[]): BundlingSelection {
+  const visibleRowIndexes = new Set(visible.map(item => item.rowIndex));
+  let changed = false;
+  const pruned: BundlingSelection = {};
+  for (const key of Object.keys(selection)) {
+    const rowIndex = Number(key);
+    if (selection[rowIndex] && visibleRowIndexes.has(rowIndex)) {
+      pruned[rowIndex] = true;
+    } else if (selection[rowIndex]) {
+      changed = true;
+    }
+  }
+  return changed ? pruned : selection;
+}
+
 /**
  * Filtering, sorting, search, and row-selection state for the auction
  * items table. Split out of useAuctionItemsTableState.ts (was 437
@@ -19,19 +35,11 @@ export interface AuctionItemSortConfig {
  */
 export function useAuctionItemsFilterSort(items: AuctionItem[]) {
   const [sortConfig, setSortConfig] = useState<AuctionItemSortConfig>({ key: "id", direction: "asc" });
-  const [selectedRows, setSelectedRows] = useState<BundlingSelection>({});
+  // Every row the user has ticked, visible or not - see selectedRows below.
+  const [checkedRows, setCheckedRows] = useState<BundlingSelection>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedItemType, setSelectedItemType] = useState("all");
-
-  const selectedItemsCount = Object.values(selectedRows).filter(Boolean).length;
-
-  const toggleRow = (rowIndex: number) => {
-    setSelectedRows(prev => ({
-      ...prev,
-      [rowIndex]: !prev[rowIndex]
-    }));
-  };
 
   const sortedItems = useMemo(() => {
     let sortableItems = [...items];
@@ -79,38 +87,30 @@ export function useAuctionItemsFilterSort(items: AuctionItem[]) {
     return sortableItems;
   }, [items, sortConfig, searchTerm, selectedCategory, selectedItemType]);
 
-  // Prunes selectedRows whenever the filtered/sorted view narrows (search,
-  // category, or type filter changes), so a bundle action can't silently
-  // include an item that's no longer visible in the table. Widening the
-  // view back out (including via resetFilters) never removes a selected
-  // item's rowIndex from sortedItems, so nothing gets pruned in that
-  // direction - selections only survive as long as the item stays visible.
-  useEffect(() => {
-    const visibleRowIndexes = new Set(sortedItems.map(item => item.rowIndex));
-    setSelectedRows(prev => {
-      let changed = false;
-      const pruned: BundlingSelection = {};
-      for (const key of Object.keys(prev)) {
-        const rowIndex = Number(key);
-        if (prev[rowIndex] && visibleRowIndexes.has(rowIndex)) {
-          pruned[rowIndex] = true;
-        } else if (prev[rowIndex]) {
-          changed = true;
-        }
-      }
-      return changed ? pruned : prev;
-    });
-  }, [sortedItems]);
+  // The selection is only the ticked rows still in view (search,
+  // category, or type filter), so a bundle or bulk action can't silently
+  // include an item that's no longer visible in the table. A ticked row
+  // a filter hides comes back ticked when the filter is cleared. Derived
+  // during render rather than pruned in an effect (ROADMAP.md R15).
+  const selectedRows = useMemo(() => pruneToVisible(checkedRows, sortedItems), [checkedRows, sortedItems]);
+  const selectedItemsCount = Object.values(selectedRows).filter(Boolean).length;
+
+  const toggleRow = (rowIndex: number) => {
+    setCheckedRows(prev => ({
+      ...prev,
+      [rowIndex]: !prev[rowIndex]
+    }));
+  };
 
   const toggleAll = () => {
     if (selectedItemsCount === sortedItems.length && sortedItems.length > 0) {
-      setSelectedRows({});
+      setCheckedRows({});
     } else {
       const all: BundlingSelection = {};
       sortedItems.forEach(item => {
         all[item.rowIndex] = true;
       });
-      setSelectedRows(all);
+      setCheckedRows(all);
     }
   };
 
@@ -136,6 +136,6 @@ export function useAuctionItemsFilterSort(items: AuctionItem[]) {
     selectedItemsCount,
     toggleRow,
     toggleAll,
-    clearSelection: () => setSelectedRows({}),
+    clearSelection: () => setCheckedRows({}),
   };
 }

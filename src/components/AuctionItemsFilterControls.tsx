@@ -22,7 +22,7 @@ const itemTypeLabel = (value: string) => (value === "all" ? "All Types" : value)
 // Select - the old clickable-column-header sort (AuctionItemsTable.tsx's
 // SortIndicator) has nothing to attach to once the table becomes a
 // flexible row list (AuctionItemsList.tsx). See
-// docs/agents/refactor-opportunities.md's "UI / Layout Tweaks" item.
+// docs/agents/CHANGELOG.md's "UI / Layout Tweaks" item.
 const SORT_OPTIONS: { value: string; label: string; config: AuctionItemSortConfig }[] = [
   { value: "id-asc", label: "Item # (Low to High)", config: { key: "id", direction: "asc" } },
   { value: "id-desc", label: "Item # (High to Low)", config: { key: "id", direction: "desc" } },

@@ -7,14 +7,14 @@
  * matched `{name, number}[]` list built by Node
  * (server/services/syncService.ts's getBidderLabelList, called from
  * server/routes/productionRoutes.ts before this Apps Script function ever
- * runs) - see refactor-opportunities.md's Code Hardening item #5.
+ * runs) - see CHANGELOG.md's Code Hardening item #5.
  *
  * Deliberately NOT tested here: the full label-document generation itself
  * (BidderLabelsDoc/DocumentApp/DriveApp output, and the resulting
  * bidders.map(b => new Bidder(...)) conversion, which only runs once that
  * pipeline is reached) - same scoping call made for the Items-spreadsheet's
  * 8 document generators, see gs-items-google-ai-studio.test.ts and
- * refactor-opportunities.md. This file only pins the validate-before-
+ * CHANGELOG.md. This file only pins the validate-before-
  * construct ordering: an empty/missing bidders list must throw before
  * BidderLabelsDoc (not loaded here) is ever touched.
  *
