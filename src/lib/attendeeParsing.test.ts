@@ -7,10 +7,10 @@ import { parseAttendeeRows } from "./attendeeParsing";
 // currently happens to do:
 //   - server/services/syncService.ts's collectGuestInfo(7,8,9,10) /
 //     (11,12,13,14) / (15,16,17,18)
-//   - server/services/bidderService.ts's updateAttendeeField fieldMapping
+//   - src/lib/attendeeSheetColumns.ts's paymentColumnsForSheet
 //     (paymentStatus col U = index 20 for "tickets", R = index 17 otherwise)
-//     and registerWalkInBidder's Step F (paymentMethod=19, paymentStatus=20,
-//     totalPaid=21)
+//   - server/services/bidderService.ts's registerWalkInBidder Step F
+//     (paymentMethod=19, paymentStatus=20, totalPaid=21)
 //   - src/hooks/useTicketAttendeeState.ts's updateField guest-email columns
 //     (J/N/R = 9/13/17 for "tickets", J/M/P = 9/12/15 otherwise)
 // Full column map (0-indexed): A firstName, B lastName, C email, D phone,

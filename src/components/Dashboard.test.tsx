@@ -50,14 +50,18 @@ vi.mock("sonner", () => ({
 // Google API mock to prevent network requests
 vi.mock("@/services/google-api", () => ({
   getSheetData: vi.fn(() => Promise.resolve({ values: [] })),
-  updateSheetData: vi.fn(() => Promise.resolve({})),
-  appendSheetData: vi.fn(() => Promise.resolve({})),
+  fetchWithRetry: vi.fn(),
+  getBaseUrl: vi.fn(() => ""),
 }));
 
-import { getSheetData, updateSheetData, appendSheetData } from "@/services/google-api";
+import { getSheetData, fetchWithRetry } from "@/services/google-api";
 const mockedGetSheetData = vi.mocked(getSheetData);
-const mockedUpdateSheetData = vi.mocked(updateSheetData);
-const mockedAppendSheetData = vi.mocked(appendSheetData);
+const mockedFetchWithRetry = vi.mocked(fetchWithRetry);
+const savedOk = () => ({ ok: true, status: 200, json: async () => ({ success: true }) }) as Response;
+/** The JSON bodies sent to /api/auction/special-winner, in order. */
+const specialWinnerBodies = () => mockedFetchWithRetry.mock.calls
+  .filter(([url]) => String(url).includes("/api/auction/special-winner"))
+  .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
 import { toast } from "sonner";
 
 // Mock UI ScrollArea safely
@@ -237,8 +241,7 @@ describe("Dashboard - Special Winners & Follow-Up", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedGetSheetData.mockResolvedValue({ values: [] });
-    mockedUpdateSheetData.mockResolvedValue({});
-    mockedAppendSheetData.mockResolvedValue({});
+    mockedFetchWithRetry.mockResolvedValue(savedOk());
   });
 
   it("loads existing Special-Winners on mount and resolves the winner's name", async () => {
@@ -256,7 +259,7 @@ describe("Dashboard - Special Winners & Follow-Up", () => {
     expect(within(raffleField).getByText(/Winner:/)).toHaveTextContent("Winner: Bob Jones");
   });
 
-  it("saves a gift card winner who hasn't checked out: writes Special-Winners!B2 only, no Follow-Up row", async () => {
+  it("saves a gift card winner who hasn't checked out: asks the server for the gift card cell only, no Follow-Up row", async () => {
     mockSpecialWinners("1", ""); // Alice - checkedOut: false
     const user = userEvent.setup();
 
@@ -271,13 +274,14 @@ describe("Dashboard - Special Winners & Follow-Up", () => {
     });
 
     await waitFor(() => {
-      expect(updateSheetData).toHaveBeenCalledWith("test-spreadsheet-id", "Special-Winners!B2", [["1"]]);
+      expect(specialWinnerBodies()).toEqual([
+        { spreadsheetId: "test-spreadsheet-id", prize: "giftCard", bidderId: "1", addFollowUp: false, idempotencyKey: expect.any(String) },
+      ]);
     });
-    expect(appendSheetData).not.toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith("Updated $500 Amazon Gift Card winner");
   });
 
-  it("saves an already-checked-out gift card winner: also appends a Follow-Up row and warns, then refreshes the follow-up list", async () => {
+  it("saves an already-checked-out gift card winner: asks for a Follow-Up row too and warns, then refreshes the follow-up list", async () => {
     mockSpecialWinners("4", ""); // Diana - checkedOut: true
     const user = userEvent.setup();
 
@@ -294,13 +298,10 @@ describe("Dashboard - Special Winners & Follow-Up", () => {
     });
 
     await waitFor(() => {
-      expect(updateSheetData).toHaveBeenCalledWith("test-spreadsheet-id", "Special-Winners!B2", [["4"]]);
+      expect(specialWinnerBodies()).toEqual([
+        expect.objectContaining({ prize: "giftCard", bidderId: "4", addFollowUp: true }),
+      ]);
     });
-    expect(appendSheetData).toHaveBeenCalledWith(
-      "test-spreadsheet-id",
-      "Follow-Up!A:C",
-      [["4", "$500 Amazon Gift Card", ""]]
-    );
     expect(toast.warning).toHaveBeenCalledWith(
       "Checked Out Warning",
       expect.objectContaining({
@@ -328,13 +329,12 @@ describe("Dashboard - Special Winners & Follow-Up", () => {
     });
 
     expect(toast.error).toHaveBeenCalledWith("Bidder ID not found");
-    expect(updateSheetData).not.toHaveBeenCalled();
-    expect(appendSheetData).not.toHaveBeenCalled();
+    expect(mockedFetchWithRetry).not.toHaveBeenCalled();
   });
 
-  it("shows an error toast (not a crash) when the Special-Winners write itself fails", async () => {
+  it("shows an error toast (not a crash) when the server can't save the winner", async () => {
     mockSpecialWinners("1", "");
-    mockedUpdateSheetData.mockRejectedValue(new Error("Sheets API quota exceeded"));
+    mockedFetchWithRetry.mockRejectedValue(new Error("Sheets API quota exceeded"));
     const user = userEvent.setup();
 
     await act(async () => {
@@ -367,7 +367,7 @@ describe("Dashboard - Special Winners & Follow-Up", () => {
     });
 
     await waitFor(() => {
-      expect(updateSheetData).toHaveBeenCalledWith("test-spreadsheet-id", "Special-Winners!B3", [["2"]]);
+      expect(specialWinnerBodies()).toEqual([expect.objectContaining({ prize: "raffle", bidderId: "2", addFollowUp: false })]);
     });
     expect(toast.success).toHaveBeenCalledWith("Updated 50/50 Raffle winner");
   });

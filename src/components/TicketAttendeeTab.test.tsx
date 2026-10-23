@@ -369,9 +369,8 @@ describe('TicketAttendeeTab - Search', () => {
       expect(source).toBe('staff tickets');
       expect(row[0]).toBe('John');
       // Column order matches parseAttendeeRows' own unshifted pm/ps/tp
-      // columns (Q/R/S) for staff/sponsor sheets - confirmed against
-      // updateAttendeeField's fieldMapping, which independently maps
-      // paymentStatus to column R (index 17) for non-"tickets" sheets.
+      // columns (Q/R/S) for staff/sponsor sheets (attendeeSheetColumns.ts's
+      // paymentColumnsForSheet maps paymentStatus to R for them).
       expect(row[16]).toBe('Comp'); // payment method (auto-set)
       expect(row[17]).toBe('Paid'); // payment status (auto-set)
       expect(row[18]).toBe('$0');   // total paid

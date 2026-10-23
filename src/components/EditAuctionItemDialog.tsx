@@ -22,31 +22,23 @@ import {
 } from "@/components/ui/select";
 import { FormSection } from "@/components/FormSection";
 import { AuctionItem } from "@/types";
+import type { AuctionItemEditChange } from "@/hooks/useAuctionItemUpdate";
 
-export interface AuctionItemEditChange {
-  field: keyof AuctionItem;
-  colLetter: string;
-  value: string | boolean;
-}
-
-// The column each editable field lives in on the 'Auction-Items' sheet -
-// previously scattered across AuctionItemRow.tsx's 9 separate per-field
-// EditableCell onSave calls, now centralized here since this dialog is
-// the one place that needs the full map. "M" (allowMultipleWinners) was
-// added for the Bid Entry redesign's repeatable-item support - see
-// docs/agents/refactor-opportunities.md/CHANGELOG.md.
-const FIELD_COLUMNS: Partial<Record<keyof AuctionItem, string>> = {
-  id: "A",
-  category: "B",
-  name: "C",
-  description: "D",
-  value: "E",
-  openingBid: "F",
-  minRaise: "G",
-  donor: "H",
-  itemType: "I",
-  allowMultipleWinners: "M",
-};
+// Every field the dialog can change. The server maps each to its
+// 'Auction-Items' column (itemService.ts's ITEM_FIELD_MAPPING, plus column
+// M for allowMultipleWinners).
+const EDITABLE_FIELDS = [
+  "id",
+  "category",
+  "name",
+  "description",
+  "value",
+  "openingBid",
+  "minRaise",
+  "donor",
+  "itemType",
+  "allowMultipleWinners",
+] as const;
 
 type EditableFields = Pick<AuctionItem, "id" | "category" | "name" | "description" | "value" | "openingBid" | "minRaise" | "donor" | "itemType"> & {
   allowMultipleWinners: boolean;
@@ -94,10 +86,8 @@ const EMPTY_DRAFT: EditableFields = {
  * to live in AuctionItemRow.tsx with a single dialog covering every
  * editable field at once - mirrors EditAttendeeDialog.tsx's pattern on
  * the Attendee List exactly, per the user's explicit ask. On Save, only
- * the fields that actually changed are sent on to the caller (which
- * threads them through the existing useAuctionItemUpdate.ts's
- * `handleUpdate` per field - unchanged backend logic, just one form
- * instead of nine).
+ * the fields that actually changed are sent on to the caller, which saves
+ * them all in one request (useAuctionItemUpdate.ts's `saveItemChanges`).
  */
 export function EditAuctionItemDialog({ item, open, onOpenChange, categories, onSave, isSaving }: EditAuctionItemDialogProps) {
   const [draft, setDraft] = useState<EditableFields>(EMPTY_DRAFT);
@@ -110,15 +100,15 @@ export function EditAuctionItemDialog({ item, open, onOpenChange, categories, on
     if (!item) return;
 
     const changes: AuctionItemEditChange[] = [];
-    (Object.keys(FIELD_COLUMNS) as (keyof EditableFields)[]).forEach((field) => {
+    EDITABLE_FIELDS.forEach((field) => {
       if (field === "allowMultipleWinners") {
         if (draft.allowMultipleWinners !== !!item.allowMultipleWinners) {
-          changes.push({ field, colLetter: FIELD_COLUMNS[field]!, value: draft.allowMultipleWinners });
+          changes.push({ field, value: draft.allowMultipleWinners });
         }
         return;
       }
       if (draft[field] !== item[field]) {
-        changes.push({ field, colLetter: FIELD_COLUMNS[field]!, value: draft[field] });
+        changes.push({ field, value: draft[field] });
       }
     });
 

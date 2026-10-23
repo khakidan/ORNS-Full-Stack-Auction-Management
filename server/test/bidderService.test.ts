@@ -18,7 +18,8 @@
  * history/sanity-check discipline).
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { registerWalkInBidder, checkInBidderWithBid } from "../services/bidderService";
+import { registerWalkInBidder, checkInBidderWithBid, setBidderFlag } from "../services/bidderService";
+import { withLock } from "../utils/asyncLock";
 
 const SPREADSHEET_ID = "bm-spreadsheet-id";
 const BIDDER_NUMBERS_SHEET = "Bidder-Numbers";
@@ -196,5 +197,62 @@ describe("checkInBidderWithBid - concurrency (defense-in-depth)", () => {
     // finishes. Without it: 202 (ungated) would complete before 201's
     // gate is ever released.
     expect(callOrder).toEqual(["201-start", "201-end", "202-start", "202-end"]);
+  });
+});
+
+describe("setBidderFlag", () => {
+  function fakeSheets(ids: string[]) {
+    const writes: { range: string; values: any[][] }[] = [];
+    const sheets = {
+      spreadsheets: {
+        values: {
+          get: async () => ({ data: { values: [["ID"], ...ids.map((id) => [id])] } }),
+          update: async ({ range, requestBody }: any) => {
+            writes.push({ range, values: requestBody.values });
+            return { data: {} };
+          },
+        },
+      },
+    } as any;
+    return { sheets, writes };
+  }
+
+  it("ticks Checked In (column E) on the bidder's own row", async () => {
+    const { sheets, writes } = fakeSheets(["101", "102"]);
+    await setBidderFlag(sheets, { spreadsheetId: SPREADSHEET_ID, bidderNumbersSheet: BIDDER_NUMBERS_SHEET, bidderId: "102", flag: "checkedIn" });
+    expect(writes).toEqual([{ range: "'Bidder-Numbers'!E3", values: [[true]] }]);
+  });
+
+  it("ticks Proxy Bidder (column F)", async () => {
+    const { sheets, writes } = fakeSheets(["101"]);
+    await setBidderFlag(sheets, { spreadsheetId: SPREADSHEET_ID, bidderNumbersSheet: BIDDER_NUMBERS_SHEET, bidderId: "101", flag: "isProxy" });
+    expect(writes).toEqual([{ range: "'Bidder-Numbers'!F2", values: [[true]] }]);
+  });
+
+  it("writes nothing and says so when the bidder isn't in the sheet", async () => {
+    const { sheets, writes } = fakeSheets(["101"]);
+    await expect(
+      setBidderFlag(sheets, { spreadsheetId: SPREADSHEET_ID, bidderNumbersSheet: BIDDER_NUMBERS_SHEET, bidderId: "999", flag: "checkedIn" })
+    ).rejects.toThrow("Bidder 999 not found in Bidder-Numbers");
+    expect(writes).toHaveLength(0);
+  });
+
+  it("waits for the bidder-numbers lock, so it can't interleave with a walk-in registration on the same sheet", async () => {
+    const order: string[] = [];
+    let release: () => void;
+    const held = withLock(`bidder-numbers:${SPREADSHEET_ID}`, async () => {
+      order.push("other-writer-start");
+      await new Promise<void>((resolve) => { release = resolve; });
+      order.push("other-writer-end");
+    });
+    const { sheets } = fakeSheets(["101"]);
+    const flag = setBidderFlag(sheets, { spreadsheetId: SPREADSHEET_ID, bidderNumbersSheet: BIDDER_NUMBERS_SHEET, bidderId: "101", flag: "checkedIn" })
+      .then(() => order.push("set-flag-done"));
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(order).toEqual(["other-writer-start"]);
+    release!();
+    await Promise.all([held, flag]);
+    expect(order).toEqual(["other-writer-start", "other-writer-end", "set-flag-done"]);
   });
 });

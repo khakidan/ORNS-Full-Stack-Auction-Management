@@ -8,7 +8,7 @@ import { useDeleteAuctionItem } from "./useDeleteAuctionItem";
 
 /**
  * Owns all list-level state and mutation handlers for the auction items
- * table: filtering/sorting, row selection, single-cell edits, bulk edits,
+ * table: filtering/sorting, row selection, item edits, bulk edits,
  * add-item, and delete-item. Kept separate from AuctionItemsTab so that
  * component stays focused on composing/rendering the split-out pieces.
  *
@@ -30,7 +30,7 @@ export function useAuctionItemsTableState(
   fetchData: () => Promise<void> | void
 ) {
   const filterSort = useAuctionItemsFilterSort(items);
-  const { handleUpdate } = useAuctionItemUpdate(items, setItems, spreadsheetId, valueCalculations, fetchData);
+  const { saveItemChanges } = useAuctionItemUpdate(items, setItems, spreadsheetId, valueCalculations, fetchData);
   const bulkEdit = useAuctionItemsBulkEdit(items, setItems, spreadsheetId, filterSort.selectedRows, filterSort.clearSelection, fetchData);
   const addItem = useAddAuctionItem(items, setItems, spreadsheetId, fetchData);
   const deleteItem = useDeleteAuctionItem(items, setItems, spreadsheetId, fetchData);
@@ -55,8 +55,8 @@ export function useAuctionItemsTableState(
     toggleAll: filterSort.toggleAll,
     clearSelection: filterSort.clearSelection,
 
-    // Single-cell edits
-    handleUpdate,
+    // Edit dialog save
+    saveItemChanges,
 
     // Bulk edit
     isBulkEditing: bulkEdit.isBulkEditing,

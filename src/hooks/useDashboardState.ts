@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { getSheetData, updateSheetData, appendSheetData } from "@/services/google-api";
+import { fetchWithRetry, getBaseUrl, getSheetData } from "@/services/google-api";
 import { Bidder } from "@/types";
 
 interface UseDashboardStateArgs {
@@ -62,81 +62,64 @@ export function useDashboardState({ bidders, items, winners, spreadsheetId, isAu
     }
   }, [spreadsheetId, isAuctionClosed]);
 
-  const saveGiftCardWinner = async () => {
+  // The gift card and raffle saves differ only in which prize they are.
+  // The server writes Special-Winners (and a Follow-Up row for a winner
+  // who already checked out) under the same lock recordWinningBid uses.
+  const saveSpecialWinner = async (
+    prize: "giftCard" | "raffle",
+    prizeName: string,
+    winnerId: string,
+    setSaving: (saving: boolean) => void
+  ) => {
     if (!spreadsheetId) {
       toast.error("Spreadsheet ID not configured.");
       return;
     }
 
-    const bidder = bidders.find(b => b.id === giftCardWinnerId);
-    if (!bidder && giftCardWinnerId) {
+    const bidder = bidders.find(b => b.id === winnerId);
+    if (!bidder && winnerId) {
       toast.error("Bidder ID not found");
       return;
     }
 
     if (bidder?.checkedOut) {
       toast.warning("Checked Out Warning", {
-        description: `Warning: ${bidder.firstName} ${bidder.lastName} won "$500 Amazon Gift Card" but has already checked out.`,
+        description: `Warning: ${bidder.firstName} ${bidder.lastName} won "${prizeName}" but has already checked out.`,
         duration: Infinity,
         action: {
           label: "I have confirmed",
-          onClick: () => console.log("Confirmed checkout warning for gift card"),
+          onClick: () => console.log(`Confirmed checkout warning for ${prizeName}`),
         },
       });
     }
 
-    setSavingGiftCard(true);
+    setSaving(true);
     try {
-      await updateSheetData(spreadsheetId, "Special-Winners!B2", [[giftCardWinnerId]]);
-      if (bidder?.checkedOut) {
-        await appendSheetData(spreadsheetId, "Follow-Up!A:C", [[giftCardWinnerId, "$500 Amazon Gift Card", ""]]);
-        fetchFollowUpRecords();
-      }
-      toast.success("Updated $500 Amazon Gift Card winner");
-    } catch (err: any) {
-      toast.error("Failed to save winner: " + (err.message || "Unknown error"));
-    } finally {
-      setSavingGiftCard(false);
-    }
-  };
-
-  const saveRaffleWinner = async () => {
-    if (!spreadsheetId) {
-      toast.error("Spreadsheet ID not configured.");
-      return;
-    }
-
-    const bidder = bidders.find(b => b.id === raffleWinnerId);
-    if (!bidder && raffleWinnerId) {
-      toast.error("Bidder ID not found");
-      return;
-    }
-
-    if (bidder?.checkedOut) {
-      toast.warning("Checked Out Warning", {
-        description: `Warning: ${bidder.firstName} ${bidder.lastName} won "50/50 Raffle" but has already checked out.`,
-        duration: Infinity,
-        action: {
-          label: "I have confirmed",
-          onClick: () => console.log("Confirmed checkout warning for raffle"),
-        },
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/auction/special-winner`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          spreadsheetId,
+          prize,
+          bidderId: winnerId,
+          addFollowUp: !!bidder?.checkedOut,
+          // Made once here so a retried request can't add a second Follow-Up row.
+          idempotencyKey: window.crypto.randomUUID(),
+        }),
       });
-    }
-
-    setSavingRaffle(true);
-    try {
-      await updateSheetData(spreadsheetId, "Special-Winners!B3", [[raffleWinnerId]]);
-      if (bidder?.checkedOut) {
-        await appendSheetData(spreadsheetId, "Follow-Up!A:C", [[raffleWinnerId, "50/50 Raffle", ""]]);
-        fetchFollowUpRecords();
-      }
-      toast.success("Updated 50/50 Raffle winner");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || "The server didn't save the winner.");
+      if (bidder?.checkedOut) fetchFollowUpRecords();
+      toast.success(`Updated ${prizeName} winner`);
     } catch (err: any) {
       toast.error("Failed to save winner: " + (err.message || "Unknown error"));
     } finally {
-      setSavingRaffle(false);
+      setSaving(false);
     }
   };
+
+  const saveGiftCardWinner = () => saveSpecialWinner("giftCard", "$500 Amazon Gift Card", giftCardWinnerId, setSavingGiftCard);
+  const saveRaffleWinner = () => saveSpecialWinner("raffle", "50/50 Raffle", raffleWinnerId, setSavingRaffle);
 
   const getBidderName = (id: string) => {
     if (!id) return "";

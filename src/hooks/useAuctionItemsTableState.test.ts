@@ -37,7 +37,7 @@ vi.mock("sonner", () => ({
   },
 }));
 
-import { fetchWithRetry } from "@/services/google-api";
+import { fetchWithRetry, updateSheetData } from "@/services/google-api";
 
 const mockedFetchWithRetry = vi.mocked(fetchWithRetry);
 
@@ -95,19 +95,46 @@ describe("useAuctionItemsTableState.executeBulkUpdate", () => {
 
     // The real selection (both rows) must have been sent, not an empty
     // or stale one - this is the wiring the split could have broken.
-    expect(fetchWithRetry).toHaveBeenCalledWith(
-      expect.stringContaining("/api/auction/bulk-update-items"),
-      expect.objectContaining({
-        body: JSON.stringify({
-          spreadsheetId: "ss-id",
-          rowIndices: [2, 3],
-          field: "category",
-          value: "Live",
-        }),
-      })
-    );
+    const [url, init] = mockedFetchWithRetry.mock.calls[0];
+    expect(url).toContain("/api/auction/bulk-update-items");
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      spreadsheetId: "ss-id",
+      rowIndices: [2, 3],
+      field: "category",
+      value: "Live",
+      idempotencyKey: expect.any(String),
+    });
 
     await waitFor(() => expect(result.current.selectedItemsCount).toBe(0));
     expect(result.current.isBulkEditing).toBe(false);
+  });
+
+  it("sends a bulk item-type change through the same locked bulk route, not direct cell writes", async () => {
+    mockedFetchWithRetry.mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true }),
+    } as Response);
+
+    const items = [makeItem({ id: "101", rowIndex: 2 }), makeItem({ id: "102", rowIndex: 3 })];
+    const { result } = renderHook(() =>
+      useAuctionItemsTableState(items, vi.fn(), "ss-id", [], vi.fn())
+    );
+
+    act(() => {
+      result.current.toggleRow(3);
+      result.current.startBulkEdit("itemType", "Physical");
+    });
+    await act(async () => {
+      await result.current.executeBulkUpdate();
+    });
+
+    const [url, init] = mockedFetchWithRetry.mock.calls[0];
+    expect(url).toContain("/api/auction/bulk-update-items");
+    expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({
+      rowIndices: [3],
+      field: "itemType",
+      value: "Physical",
+    });
+    expect(updateSheetData).not.toHaveBeenCalled();
   });
 });

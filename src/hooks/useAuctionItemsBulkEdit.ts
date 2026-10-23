@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, updateSheetData, getBaseUrl } from "@/services/google-api";
-import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
+import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { AuctionItem } from "@/types";
 import { BundlingSelection } from "./useAuctionItemsFilterSort";
 
@@ -45,58 +44,39 @@ export function useAuctionItemsBulkEdit(
       selectedIndices.includes(item.rowIndex) ? { ...item, [bulkField]: bulkValue } : item
     ));
 
-    if (bulkField === 'category') {
-      try {
-        const response = await fetchWithRetry(`${getBaseUrl()}/api/auction/bulk-update-items`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            spreadsheetId,
-            rowIndices: selectedIndices,
-            field: bulkField,
-            value: bulkValue
-          })
-        });
-        const resData = await response.json();
-        if (resData.error) throw new Error(resData.error);
-        toast.success("Bulk categories updated and re-sequenced successfully!");
-        clearSelection();
-        setIsBulkEditing(false);
-        setBulkField(null);
-        setBulkValue("");
-        fetchData();
-      } catch (e: any) {
-        console.error("Bulk category update failed:", e);
-        setItems(previousItems);
-        toast.error("Failed to bulk update categories: " + e.message);
-      } finally {
-        setIsExecutingBulk(false);
-      }
-      return;
-    }
-
-    // Only 'itemType' can reach here - the 'category' branch above already returned.
-    const updatePromises = selectedIndices.map(idx =>
-      updateSheetData(spreadsheetId, `Auction-Items!I${idx}`, [[bulkValue]])
-    );
-
-    // Background sync
-    Promise.all(updatePromises)
-      .then(() => {
-        toast.success(`Updated ${bulkField} for ${selectedIndices.length} items`);
-        clearSelection();
-        setIsBulkEditing(false);
-        setBulkField(null);
-        setBulkValue("");
-      })
-      .catch(() => {
-        // Rollback
-        setItems(previousItems);
-        toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
-      })
-      .finally(() => {
-        setIsExecutingBulk(false);
+    // Both fields go through the server's locked bulk route (category also
+    // renumbers IDs there), never direct cell writes.
+    try {
+      const response = await fetchWithRetry(`${getBaseUrl()}/api/auction/bulk-update-items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          spreadsheetId,
+          rowIndices: selectedIndices,
+          field: bulkField,
+          value: bulkValue,
+          // Made once here so fetchWithRetry's retries reuse it and the
+          // server applies the change only once.
+          idempotencyKey: window.crypto.randomUUID(),
+        })
       });
+      const resData = await response.json().catch(() => ({}));
+      if (!response.ok || resData.error) throw new Error(resData.error || "The server didn't save the change.");
+      toast.success(bulkField === "category"
+        ? "Bulk categories updated and re-sequenced successfully!"
+        : `Updated item type for ${selectedIndices.length} items`);
+      clearSelection();
+      setIsBulkEditing(false);
+      setBulkField(null);
+      setBulkValue("");
+      if (bulkField === "category") fetchData();
+    } catch (e: any) {
+      console.error(`Bulk ${bulkField} update failed:`, e);
+      setItems(previousItems);
+      toast.error(`Failed to bulk update ${bulkField === "category" ? "categories" : "item types"}: ` + e.message);
+    } finally {
+      setIsExecutingBulk(false);
+    }
   };
 
   return {

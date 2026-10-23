@@ -10,10 +10,9 @@ import {
   deleteItem,
   updateItem,
   bulkUpdateItems,
-  ensureFollowUpSheet
+  ItemChangedError
 } from '../services/itemService';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
-import { updateAttendeeField } from '../services/bidderService';
 import { requireAuth } from '../middleware/requireAuth';
 import { withLock } from '../utils/asyncLock';
 import { getSweeperStatus, runPaypalSweep } from '../services/paypalSweeperJob';
@@ -23,6 +22,19 @@ export default function createDataRouter() {
   router.use(requireAuth);
 
   // Sheet API Cache is now imported from shared utils/sheetCache
+
+  // The generic write/append/clear passthrough below takes no lock, so it
+  // refuses the tabs that have their own locked routes (patterns.md's
+  // locking rule): writing them here could land between a locked
+  // read-modify-write and be lost, or overwrite it. Matched by the default
+  // tab names; the app itself never sends these here.
+  const LOCKED_SHEETS = new Set(["auction-items", "bidder-numbers", "bid-management", "special-winners", "follow-up", "paypal-follow-up"]);
+  const refuseLockedSheet = (range: string, res: Response): boolean => {
+    const sheetName = range.split("!")[0].trim().replace(/^'(.*)'$/, "$1").trim().toLowerCase();
+    if (!LOCKED_SHEETS.has(sheetName)) return false;
+    res.status(403).json({ error: `The ${range.split("!")[0]} sheet can only be changed through the app's own save actions.` });
+    return true;
+  };
 
   // Sync bidders via Node.js Google Sheets integration
   router.post("/bidders/sync", async (req: Request, res: Response, next: NextFunction) => {
@@ -210,28 +222,29 @@ export default function createDataRouter() {
     }
   });
 
-  // Update Auction Item Row & Manage Sequencing on Change
+  // Save one item's changed fields (locked) & resequence IDs on a category/status change
   router.post("/auction/update-item", async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, rowIndex, field, value } = req.body;
-    if (!spreadsheetId || !rowIndex || !field) {
+    const { spreadsheetId, rowIndex, changes, expectedName } = req.body;
+    if (!spreadsheetId || !Number.isInteger(rowIndex) || !changes || typeof changes !== "object" || Array.isArray(changes)) {
       return res.status(400).json({ error: "Missing required parameters" });
+    }
+    if (expectedName !== undefined && typeof expectedName !== "string") {
+      return res.status(400).json({ error: "expectedName must be text" });
     }
 
     try {
       const client = getAuthenticatedClient(req.session.tokens);
       const sheets = google.sheets({ version: "v4", auth: client });
 
-      const result = await updateItem(sheets, {
-        spreadsheetId,
-        rowIndex,
-        field,
-        value
-      });
+      const result = await updateItem(sheets, { spreadsheetId, rowIndex, changes, expectedName });
 
       res.json(result);
     } catch (error: any) {
       console.error("[Server Error] update-item:", error);
-      if (error.message?.includes("Invalid field")) {
+      if (error instanceof ItemChangedError) {
+        return res.status(409).json({ error: error.message });
+      }
+      if (error.message?.includes("Invalid field") || /^Row \d+ not found$/.test(error.message || "")) {
         return res.status(400).json({ error: error.message });
       }
       next(error);
@@ -316,10 +329,8 @@ export default function createDataRouter() {
       const sheets = google.sheets({ version: "v4", auth: client });
 
       const decodedRange = decodeURIComponent(range);
+      if (refuseLockedSheet(decodedRange, res)) return;
       const normalizedRange = normalizeRange(decodedRange);
-      const sheetName = decodedRange.split('!')[0];
-      
-      await ensureFollowUpSheet(sheets, spreadsheetId, sheetName);
 
       const result = await sheets.spreadsheets.values.update({
         spreadsheetId,
@@ -353,11 +364,9 @@ export default function createDataRouter() {
       const sheets = google.sheets({ version: "v4", auth: client });
 
       const decodedRange = decodeURIComponent(range);
+      if (refuseLockedSheet(decodedRange, res)) return;
       const normalizedRange = normalizeRange(decodedRange);
-      const sheetName = decodedRange.split('!')[0];
 
-      await ensureFollowUpSheet(sheets, spreadsheetId, sheetName);
-      
       const result = await sheets.spreadsheets.values.append({
         spreadsheetId,
         range: normalizedRange,
@@ -386,6 +395,7 @@ export default function createDataRouter() {
       const sheets = google.sheets({ version: "v4", auth: client });
 
       const decodedRange = decodeURIComponent(range);
+      if (refuseLockedSheet(decodedRange, res)) return;
       const normalizedRange = normalizeRange(decodedRange);
 
       const result = await sheets.spreadsheets.values.clear({
@@ -441,41 +451,6 @@ export default function createDataRouter() {
       next(error);
     }
   });
-
-  // Update Attendee Field Endpoints
-  const updateAttendeeHandler = async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, sheet, rowIndex, field, value } = req.body;
-    if (!spreadsheetId || !sheet || rowIndex === undefined || !field) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
-
-      const result = await updateAttendeeField(sheets, {
-        spreadsheetId,
-        sheet,
-        rowIndex: Number(rowIndex),
-        field,
-        value: value !== undefined ? String(value) : ""
-      });
-
-      // Clear Spreadsheet Cache
-      clearCacheForSpreadsheet(spreadsheetId);
-
-      res.json(result);
-    } catch (error: any) {
-      console.error("[Server Error] update-attendee:", error);
-      if (error.statusCode === 400 || error.message?.includes("Invalid field") || error.message?.includes("Row index")) {
-        return res.status(400).json({ error: error.message });
-      }
-      next(error);
-    }
-  };
-
-  router.post("/tickets/update-attendee", updateAttendeeHandler);
-  router.post("/tickets/update-attendee-field", updateAttendeeHandler);
 
   return router;
 }

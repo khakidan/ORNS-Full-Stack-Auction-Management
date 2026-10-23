@@ -1,15 +1,28 @@
 import { toast } from "sonner";
-import { fetchWithRetry, updateSheetData, getBaseUrl } from "@/services/google-api";
+import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { parseDollar, calculateAutoBids, ValueCalculationTier } from "@/lib/auctionItemPricing";
-import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { AuctionItem } from "@/types";
 
+export interface AuctionItemEditChange {
+  field: keyof AuctionItem;
+  value: string | boolean;
+}
+
+/** "", "$", "$," and "$, " all count as no amount entered yet. */
+function isBlankAmount(amount: string | undefined): boolean {
+  return !amount || ["", "$", "$,", "$, "].includes(amount.trim());
+}
+
 /**
- * Single-cell edit handler for the auction items table (`handleUpdate`),
- * including the value-edit auto-bid side effects (opening bid/min raise
- * auto-fill) and the category field's special resequencing endpoint.
- * Split out of useAuctionItemsTableState.ts (was 437 lines) so that
- * container stays focused on composing the split-out pieces.
+ * Save handler for the auction items table's Edit dialog
+ * (`saveItemChanges`), including the value-edit auto-bid side effect
+ * (filling a blank opening bid/min raise from the value).
+ *
+ * Every changed field goes to the server's locked /api/auction/update-item
+ * in one request - never a direct cell write - so an edit can't be lost
+ * to another staff member's add/delete/bundle rewriting the sheet at the
+ * same moment. The server also checks the row still holds this item (by
+ * name, since IDs renumber) and answers 409 if it doesn't.
  */
 export function useAuctionItemUpdate(
   items: AuctionItem[],
@@ -18,122 +31,66 @@ export function useAuctionItemUpdate(
   valueCalculations: ValueCalculationTier[],
   fetchData: () => Promise<void> | void
 ) {
-  const handleUpdate = async (rowIndex: number, field: keyof AuctionItem, colLetter: string, value: string | boolean) => {
-    if (!spreadsheetId) return;
+  const saveItemChanges = async (rowIndex: number, edits: AuctionItemEditChange[]) => {
+    if (!spreadsheetId || edits.length === 0) return;
 
     const targetItem = items.find(i => i.rowIndex === rowIndex);
     if (!targetItem) return;
 
-    // Captured per-field, not a whole-array snapshot - a rollback here must
-    // only revert what THIS call changed on THIS row. Restoring a captured
-    // full-array snapshot would also erase any other row's edit that
-    // happened to commit in the window between this optimistic update and
-    // its own failure.
-    const previousFieldValue = targetItem[field];
-    const previousOpeningBid = targetItem.openingBid;
-    const previousMinRaise = targetItem.minRaise;
+    const changes: Record<string, string | boolean> = {};
+    for (const { field, value } of edits) {
+      changes[field] = value;
+    }
 
+    if (typeof changes.value === "string" && changes.value) {
+      const parsedNum = parseDollar(changes.value);
+      if (parsedNum > 0) changes.value = `$${parsedNum.toFixed(2)}`;
+
+      const { opening, raise } = calculateAutoBids(changes.value, valueCalculations);
+      if (opening && !("openingBid" in changes) && isBlankAmount(targetItem.openingBid)) changes.openingBid = opening;
+      if (raise && !("minRaise" in changes) && isBlankAmount(targetItem.minRaise)) changes.minRaise = raise;
+    }
+
+    // Only the fields this save changed are rolled back on failure - not
+    // a whole-array snapshot, which would also erase another row's edit
+    // that committed in the meantime.
+    const changedFields = Object.keys(changes) as (keyof AuctionItem)[];
+    const previous = Object.fromEntries(changedFields.map(f => [f, targetItem[f]]));
     const rollbackThisRow = () => {
-      setItems(prev => prev.map(item => {
-        if (item.rowIndex !== rowIndex) return item;
-        const restored = { ...item, [field]: previousFieldValue };
-        if (updateOpening) restored.openingBid = previousOpeningBid;
-        if (updateRaise) restored.minRaise = previousMinRaise;
-        return restored;
-      }));
+      setItems(prev => prev.map(item => item.rowIndex === rowIndex ? { ...item, ...previous } : item));
     };
 
-    let finalValueToSave = value;
-    if (field === 'value' && typeof value === 'string' && value) {
-      const parsedNum = parseDollar(value);
-      if (parsedNum > 0) {
-        finalValueToSave = `$${parsedNum.toFixed(2)}`;
+    setItems(prev => prev.map(item => item.rowIndex === rowIndex ? ({ ...item, ...changes } as AuctionItem) : item));
+
+    try {
+      const response = await fetchWithRetry(`${getBaseUrl()}/api/auction/update-item`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spreadsheetId, rowIndex, changes, expectedName: targetItem.name }),
+      });
+      const resData = await response.json().catch(() => ({}));
+      if (!response.ok || resData.error) {
+        const error = new Error(resData.error || "The server didn't save the change.");
+        if (response.status === 409) {
+          rollbackThisRow();
+          toast.error(error.message);
+          fetchData();
+          return;
+        }
+        throw error;
       }
-    }
-
-    // Optimistic update
-    setItems((prev) =>
-      prev.map((item) =>
-        item.rowIndex === rowIndex ? { ...item, [field]: finalValueToSave } : item
-      )
-    );
-
-    let updateOpening = false;
-    let updateRaise = false;
-    let opening = "";
-    let raise = "";
-
-    if (field === 'value' && typeof finalValueToSave === 'string') {
-      const calculated = calculateAutoBids(finalValueToSave, valueCalculations);
-      opening = calculated.opening;
-      raise = calculated.raise;
-
-      const currentOpening = targetItem.openingBid;
-      const currentRaise = targetItem.minRaise;
-
-      const isOpeningEmpty = !currentOpening ||
-                             currentOpening.trim() === '' ||
-                             currentOpening.trim() === '$' ||
-                             currentOpening.trim() === '$,' ||
-                             currentOpening.trim() === '$, ';
-
-      const isRaiseEmpty = !currentRaise ||
-                           currentRaise.trim() === '' ||
-                           currentRaise.trim() === '$' ||
-                           currentRaise.trim() === '$,' ||
-                           currentRaise.trim() === '$, ';
-
-      if (opening && isOpeningEmpty) {
-        setItems(p => p.map(i => i.rowIndex === rowIndex ? { ...i, openingBid: opening } : i));
-        updateOpening = true;
-      }
-      if (raise && isRaiseEmpty) {
-        setItems(p => p.map(i => i.rowIndex === rowIndex ? { ...i, minRaise: raise } : i));
-        updateRaise = true;
-      }
-    }
-
-    if (field === 'category') {
-      try {
-        const response = await fetchWithRetry(`${getBaseUrl()}/api/auction/update-item`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            spreadsheetId,
-            rowIndex,
-            field,
-            value
-          })
-        });
-        const resData = await response.json();
-        if (resData.error) throw new Error(resData.error);
+      if ("category" in changes) {
         toast.success("Category updated and re-sequenced successfully!");
         fetchData();
-      } catch (e: any) {
-        console.error("Failed to sync category update", e);
-        rollbackThisRow();
-        toast.error("Failed to update category: " + e.message);
+      } else {
+        toast.success("Saved successfully");
       }
-      return;
+    } catch (e: any) {
+      console.error("Failed to save item changes", e);
+      rollbackThisRow();
+      toast.error("Failed to save changes: " + e.message);
     }
-
-    // Background sync
-    const syncOperations = [updateSheetData(spreadsheetId, `Auction-Items!${colLetter}${rowIndex}`, [[finalValueToSave]])];
-    if (updateOpening) {
-      syncOperations.push(updateSheetData(spreadsheetId, `Auction-Items!F${rowIndex}`, [[opening]]));
-    }
-    if (updateRaise) {
-      syncOperations.push(updateSheetData(spreadsheetId, `Auction-Items!G${rowIndex}`, [[raise]]));
-    }
-
-    Promise.all(syncOperations)
-      .then(() => toast.success('Saved successfully'))
-      .catch(e => {
-        console.error(e);
-        rollbackThisRow();
-        toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
-      });
   };
 
-  return { handleUpdate };
+  return { saveItemChanges };
 }

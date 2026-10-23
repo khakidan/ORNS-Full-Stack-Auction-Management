@@ -233,10 +233,9 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
 
       if (newEntry.source !== 'tickets') {
         // Column order here matches parseAttendeeRows' own unshifted
-        // pm/ps/tp columns (Q/R/S) for staff/sponsor sheets - confirmed
-        // against updateAttendeeField's fieldMapping, which independently
-        // maps paymentStatus to column R (index 17) for non-"tickets"
-        // sheets. Values match the parser's own hardcoded Comp/Paid/$0
+        // pm/ps/tp columns (Q/R/S) for staff/sponsor sheets - the same
+        // columns paymentColumnsForSheet (attendeeSheetColumns.ts) gives
+        // edits on those sheets. Values match the parser's own hardcoded Comp/Paid/$0
         // for these sheets (staff/sponsors get free tickets), so the raw
         // sheet stays consistent with what the app displays even though
         // parseAttendeeRows doesn't actually read these columns back for

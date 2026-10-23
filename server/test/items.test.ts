@@ -544,15 +544,16 @@ describe("Update Auction Item workflow", () => {
         .send({
           spreadsheetId,
           rowIndex: 2,
-          field,
-          value: "Test Value"
+          changes: { [field]: "Test Value" }
         });
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(lastBulkWritePayload).toBeDefined();
-      // Check if value is at correct colIdx for row 2 (which is index 1)
-      expect(lastBulkWritePayload[1][colIdx]).toBe("Test Value");
+      // A category/status change rewrites the whole range (IDs renumber);
+      // any other field rewrites only row 2.
+      const writtenRow = lastBulkWritePayload.length === 1 ? lastBulkWritePayload[0] : lastBulkWritePayload[1];
+      expect(writtenRow[colIdx]).toBe("Test Value");
     });
   });
 
@@ -562,8 +563,7 @@ describe("Update Auction Item workflow", () => {
       .send({
         spreadsheetId,
         rowIndex: 2,
-        field: "name",
-        value: "Test Value"
+        changes: { name: "Test Value" }
       });
 
     expect(response.status).toBe(401);
@@ -576,8 +576,7 @@ describe("Update Auction Item workflow", () => {
       .send({
         spreadsheetId,
         // Missing rowIndex
-        field: "name",
-        value: "Test Value"
+        changes: { name: "Test Value" }
       });
 
     expect(response.status).toBe(400);
@@ -590,8 +589,7 @@ describe("Update Auction Item workflow", () => {
       .send({
         spreadsheetId,
         rowIndex: 2,
-        field: "nonExistentField",
-        value: "Test"
+        changes: { nonExistentField: "Test" }
       });
 
     expect(response.status).toBe(400);
@@ -605,8 +603,7 @@ describe("Update Auction Item workflow", () => {
       .send({
         spreadsheetId,
         rowIndex: 2,
-        field: "category",
-        value: "Travel"
+        changes: { category: "Travel" }
       });
 
     expect(response.status).toBe(200);
@@ -616,6 +613,72 @@ describe("Update Auction Item workflow", () => {
     // Changed to Travel, so ID should be exactly 1101 (since base is 1100 and it's the 1st travel item)
     // ID is at index 0
     expect(lastBulkWritePayload[1][0]).toBe("1101");
+  });
+});
+
+describe("Update Auction Item - locked multi-field save", () => {
+  const spreadsheetId = "test-spreadsheet-id";
+  let writes: { range: string; values: any[][] }[] = [];
+
+  beforeEach(() => {
+    resetHandlersState();
+    writes = [];
+    server.use(
+      http.put("https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range", async ({ request }) => {
+        const url = new URL(request.url);
+        const body = await request.json() as any;
+        writes.push({ range: decodeURIComponent(url.pathname.split("/").pop() || ""), values: body.values });
+        return HttpResponse.json({ updatedRows: 1 });
+      })
+    );
+  });
+
+  afterEach(() => {
+    server.resetHandlers();
+    resetHandlersState();
+  });
+
+  it("saves several fields in one write to just that item's row", async () => {
+    const response = await request(app)
+      .post("/api/auction/update-item")
+      .set(authHeader)
+      .send({ spreadsheetId, rowIndex: 3, changes: { donor: "New Donor", value: "$200.00" }, expectedName: "Sushi Dinner" });
+
+    expect(response.status).toBe(200);
+    expect(writes).toHaveLength(1);
+    expect(writes[0].range).toBe("'Auction-Items'!A3:L3");
+    expect(writes[0].values).toEqual([["803", "Food", "Sushi Dinner", "A sushi dinner", "$200.00", "$67.50", "$10.00", "New Donor", "Certificate", "Active", "", ""]]);
+  });
+
+  it("writes Allow Multiple Winners to the item's own column M cell", async () => {
+    const response = await request(app)
+      .post("/api/auction/update-item")
+      .set(authHeader)
+      .send({ spreadsheetId, rowIndex: 2, changes: { allowMultipleWinners: true }, expectedName: "Pizza Night" });
+
+    expect(response.status).toBe(200);
+    expect(writes).toEqual([{ range: "'Auction-Items'!M2", values: [[true]] }]);
+  });
+
+  it("refuses with 409 and writes nothing when the row now holds a different item", async () => {
+    const response = await request(app)
+      .post("/api/auction/update-item")
+      .set(authHeader)
+      .send({ spreadsheetId, rowIndex: 2, changes: { donor: "New Donor" }, expectedName: "Sushi Dinner" });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toMatch(/changed since you opened it/);
+    expect(writes).toHaveLength(0);
+  });
+
+  it("returns 400 and writes nothing for a row that doesn't exist", async () => {
+    const response = await request(app)
+      .post("/api/auction/update-item")
+      .set(authHeader)
+      .send({ spreadsheetId, rowIndex: 50, changes: { donor: "New Donor" } });
+
+    expect(response.status).toBe(400);
+    expect(writes).toHaveLength(0);
   });
 });
 
