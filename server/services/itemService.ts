@@ -3,6 +3,7 @@ import { getCategoryBase, resequenceCategoryIds } from "../utils/categoryHelpers
 import { clearCacheForSpreadsheet } from "../utils/sheetCache";
 import { calculateMinRaiseAmount } from "../utils/minRaiseHelpers";
 import { withLock } from "../utils/asyncLock";
+import { ITEM_COL } from "../utils/sheetColumns";
 
 export interface AddItemParams {
   spreadsheetId: string;
@@ -205,10 +206,10 @@ async function deleteItemLocked(sheets: sheets_v4.Sheets, params: DeleteItemPara
   }
 
   const row = values[rowIndex - 1];
-  const category = row[1];
+  const category = row[ITEM_COL.category];
 
-  row[0] = "";
-  row[9] = "Deleted";
+  row[ITEM_COL.id] = "";
+  row[ITEM_COL.status] = "Deleted";
 
   if (category) {
     resequenceCategoryIds(values, new Set([category]), baseNumbers);
@@ -226,23 +227,9 @@ async function deleteItemLocked(sheets: sheets_v4.Sheets, params: DeleteItemPara
   return { success: true };
 }
 
-/**
- * Field mapping for item sheets.
- */
-const ITEM_FIELD_MAPPING: Record<string, number> = {
-  id: 0,
-  category: 1,
-  name: 2,
-  description: 3,
-  value: 4,
-  openingBid: 5,
-  minRaise: 6,
-  donor: 7,
-  itemType: 8,
-  status: 9,
-  bundleId: 10,
-  bundledDateTime: 11
-};
+/** Fields update-item / bulk-update-items can set, and their A-L column (allowMultipleWinners, in M, is handled separately). */
+const { allowMultipleWinners: _columnM, ...ITEM_FIELD_MAPPING } = ITEM_COL;
+const isItemField = (field: string): field is keyof typeof ITEM_FIELD_MAPPING => Object.hasOwn(ITEM_FIELD_MAPPING, field);
 
 /** Column M - outside the A:L range the other item writes read and rewrite. */
 const ALLOW_MULTIPLE_WINNERS_FIELD = "allowMultipleWinners";
@@ -266,7 +253,7 @@ async function updateItemLocked(sheets: sheets_v4.Sheets, params: UpdateItemPara
   const fields = Object.keys(changes);
   if (fields.length === 0) throw new Error("Invalid field: no changes given");
   for (const field of fields) {
-    if (field !== ALLOW_MULTIPLE_WINNERS_FIELD && ITEM_FIELD_MAPPING[field] === undefined) {
+    if (field !== ALLOW_MULTIPLE_WINNERS_FIELD && !isItemField(field)) {
       throw new Error(`Invalid field: ${field}`);
     }
   }
@@ -280,13 +267,13 @@ async function updateItemLocked(sheets: sheets_v4.Sheets, params: UpdateItemPara
   }
 
   const row = values[rowIndex - 1];
-  if (expectedName !== undefined && String(row[2] ?? "").trim() !== expectedName.trim()) {
+  if (expectedName !== undefined && String(row[ITEM_COL.name] ?? "").trim() !== expectedName.trim()) {
     throw new ItemChangedError();
   }
 
-  const oldCategory = row[1];
+  const oldCategory = row[ITEM_COL.category];
   for (const field of fields) {
-    if (field === ALLOW_MULTIPLE_WINNERS_FIELD) continue;
+    if (!isItemField(field)) continue;
     row[ITEM_FIELD_MAPPING[field]] = changes[field];
   }
 
@@ -295,7 +282,7 @@ async function updateItemLocked(sheets: sheets_v4.Sheets, params: UpdateItemPara
     if (oldCategory) affectedCategories.add(oldCategory);
     if (changes.category) affectedCategories.add(changes.category);
   } else if ("status" in changes) {
-    if (row[1]) affectedCategories.add(row[1]);
+    if (row[ITEM_COL.category]) affectedCategories.add(row[ITEM_COL.category]);
   }
 
   if (ALLOW_MULTIPLE_WINNERS_FIELD in changes) {
@@ -348,15 +335,15 @@ async function bulkUpdateItemsLocked(sheets: sheets_v4.Sheets, params: BulkUpdat
   const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:L" });
   const values = dataRes.data.values || [];
 
+  if (!isItemField(field)) throw new Error(`Invalid field: ${field}`);
   const colIdx = ITEM_FIELD_MAPPING[field];
-  if (colIdx === undefined) throw new Error(`Invalid field: ${field}`);
 
   const affectedCategories = new Set<string>();
 
   for (const rowIndex of rowIndices) {
     if (!values[rowIndex - 1]) continue;
     const row = values[rowIndex - 1];
-    const oldCategory = row[1];
+    const oldCategory = row[ITEM_COL.category];
     
     row[colIdx] = value;
 
@@ -364,7 +351,7 @@ async function bulkUpdateItemsLocked(sheets: sheets_v4.Sheets, params: BulkUpdat
       if (oldCategory) affectedCategories.add(oldCategory);
       if (value) affectedCategories.add(value);
     } else if (field === 'status') {
-      const category = row[1];
+      const category = row[ITEM_COL.category];
       if (category) affectedCategories.add(category);
     }
   }

@@ -67,6 +67,23 @@ function renderDialog(item: AuctionItem | null, overrides: Partial<Parameters<ty
   return { onSave, onOpenChange };
 }
 
+describe("EditAuctionItemDialog - labels", () => {
+  // FormField links each label to its box, so screen readers announce it
+  // and clicking the label focuses the box.
+  it("each text field can be found by its label", async () => {
+    renderDialog(makeItem());
+
+    expect(screen.getByLabelText("Name")).toHaveValue("Vintage Camera");
+    expect(screen.getByLabelText("Value")).toHaveValue("$100.00");
+    expect(screen.getByLabelText("Opening Bid")).toHaveValue("$45.00");
+    expect(screen.getByLabelText("Min Raise")).toHaveValue("$5.00");
+    expect(screen.getByLabelText("Donor")).toHaveValue("Donor A");
+
+    await userEvent.setup().click(screen.getByText("Donor"));
+    expect(screen.getByLabelText("Donor")).toHaveFocus();
+  });
+});
+
 describe("EditAuctionItemDialog - prefill", () => {
   it("prefills every editable field from the item", () => {
     renderDialog(makeItem());

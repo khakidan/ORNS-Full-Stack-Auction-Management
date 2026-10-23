@@ -6,6 +6,7 @@ import { getAuthenticatedClient } from '../services/oauth';
 import { requireAuth } from '../middleware/requireAuth';
 import { ensureBidderNumbersSheet, getBidderLabelList } from '../services/syncService';
 import { getValidSortedItems } from '../services/itemDataService';
+import { sheetsFor } from '../utils/googleClients';
 
 export default function createProductionRouter() {
   const router = Router();
@@ -68,8 +69,7 @@ export default function createProductionRouter() {
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
 
     try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
+      const sheets = sheetsFor(req);
       const items = await getValidSortedItems(sheets, spreadsheetId);
       await handleAppsScriptCall(req, res, next, functionName, process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || "", items]);
     } catch (error) {
@@ -136,9 +136,9 @@ export default function createProductionRouter() {
     let bidders: { name: string; number: string }[] = [];
     if (bidManagementSpreadsheetId) {
       try {
-        const client = getAuthenticatedClient(req.session.tokens);
-        await ensureBidderNumbersSheet(client, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId || "");
-        bidders = await getBidderLabelList(client, bidManagementSpreadsheetId);
+        const sheets = sheetsFor(req);
+        await ensureBidderNumbersSheet(sheets, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId || "");
+        bidders = await getBidderLabelList(sheets, bidManagementSpreadsheetId);
       } catch (error: any) {
         return res.status(400).json({ error: error.message });
       }

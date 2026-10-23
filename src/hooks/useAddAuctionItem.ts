@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { AuctionItem } from "@/types";
+import { postJson } from "@/services/apiClient";
 
 /**
  * The add-item dialog and its transactional add+resequence flow for the
@@ -47,24 +47,17 @@ export function useAddAuctionItem(
 
     try {
       // Call server endpoint to handle add + transactional resequencing
-      const response = await fetchWithRetry(`${getBaseUrl()}/api/auction/add-item`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          spreadsheetId,
-          category: newItem.category,
-          name: newItem.name,
-          description: newItem.description || "",
-          value: newItem.value || "",
-          donor: newItem.donor || "",
-          itemType: newItem.itemType || "",
-          allowMultipleWinners: !!newItem.allowMultipleWinners,
-          idempotencyKey: addItemIdempotencyKey
-        })
-      });
-
-      const resData = await response.json();
-      if (resData.error) throw new Error(resData.error);
+      const resData = await postJson("/api/auction/add-item", {
+        spreadsheetId,
+        category: newItem.category,
+        name: newItem.name,
+        description: newItem.description || "",
+        value: newItem.value || "",
+        donor: newItem.donor || "",
+        itemType: newItem.itemType || "",
+        allowMultipleWinners: !!newItem.allowMultipleWinners,
+        idempotencyKey: addItemIdempotencyKey
+      }, "Failed to add the item");
 
       const assignedId = resData.assigned_id;
       toast.success(`Item added and sequenced successfully with ID ${assignedId}`);

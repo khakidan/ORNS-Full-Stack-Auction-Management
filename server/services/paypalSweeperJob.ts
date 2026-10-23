@@ -4,6 +4,7 @@ import { getOAuthClient } from "./oauth";
 import { getAdminFirestore } from "./firebaseAdmin";
 import { PayPalService, isPaidInvoiceStatus } from "./paypalService";
 import { withLock } from "../utils/asyncLock";
+import { BIDDER_COL } from "../utils/sheetColumns";
 
 /**
  * Node-side port of
@@ -268,20 +269,20 @@ async function applySweepResultLocked(
   });
   const row = fresh.data.values?.[0] || [];
   const stillSamePendingRow =
-    String(row[0] ?? "") === String(snapshotRow[0] ?? "") &&
-    row[8] === PAYPAL_PENDING_LABEL &&
-    String(row[9] ?? "") === String(snapshotRow[9] ?? "");
+    String(row[BIDDER_COL.id] ?? "") === String(snapshotRow[BIDDER_COL.id] ?? "") &&
+    row[BIDDER_COL.paymentMethod] === PAYPAL_PENDING_LABEL &&
+    String(row[BIDDER_COL.invoiceUrl] ?? "") === String(snapshotRow[BIDDER_COL.invoiceUrl] ?? "");
   if (!stillSamePendingRow) {
-    console.log(`[PayPalSweeper] Row ${rowNumber} changed since the sweep started (now '${row[8] ?? ""}'); leaving it alone.`);
+    console.log(`[PayPalSweeper] Row ${rowNumber} changed since the sweep started (now '${row[BIDDER_COL.paymentMethod] ?? ""}'); leaving it alone.`);
     return "changed";
   }
 
-  const bidderId = row[0];
-  const firstName = row[1];
-  const lastName = row[2];
-  const invoiceUrlCell = row[9];
-  const amountDue = row[10];
-  const timestampStr = row[11];
+  const bidderId = row[BIDDER_COL.id];
+  const firstName = row[BIDDER_COL.firstName];
+  const lastName = row[BIDDER_COL.lastName];
+  const invoiceUrlCell = row[BIDDER_COL.invoiceUrl];
+  const amountDue = row[BIDDER_COL.invoicedAmount];
+  const timestampStr = row[BIDDER_COL.paypalPendingSince];
 
   if (isPaidInvoiceStatus(liveStatus)) {
     await sheets.spreadsheets.values.update({

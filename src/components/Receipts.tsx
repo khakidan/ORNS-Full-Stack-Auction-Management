@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import { DataTableWrapper } from "@/components/DataTableWrapper";
 import { ConfigErrorCard } from "@/components/ConfigErrorCard";
 import { RefreshableListCard } from "@/components/RefreshableListCard";
+import { isConfiguredId } from "@/lib/configuredId";
 
 interface DriveFile {
   id: string;
@@ -21,7 +22,7 @@ interface DriveFile {
 export default function Receipts() {
   const { config } = useConfig();
   const folderId = config.receiptFolderId;
-  const isInvalidId = !folderId || folderId === "undefined" || folderId === "null" || folderId.includes("PASTE");
+  const isInvalidId = !isConfiguredId(folderId);
 
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);

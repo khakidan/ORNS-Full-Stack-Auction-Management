@@ -10,9 +10,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/LoadingButton";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { FormSection } from "@/components/FormSection";
+import { FormField } from "@/components/FormField";
 import { AttendeeGuestsEditor, GuestDraft } from "@/components/AttendeeGuestsEditor";
 import { hasMoreGuestsThanTicketsPurchased } from "@/lib/attendeeValidation";
 import { Attendee } from "@/types";
@@ -103,30 +103,35 @@ export function EditAttendeeDialog({ attendee, open, onOpenChange, onSave, isSav
         <div className="flex flex-col gap-5 max-h-[65vh] overflow-y-auto pr-1">
           <FormSection title="Contact">
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">First name</Label>
-                <Input value={draft.firstName} onChange={e => setDraft({ ...draft, firstName: e.target.value })} />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Last name</Label>
-                <Input value={draft.lastName} onChange={e => setDraft({ ...draft, lastName: e.target.value })} />
-              </div>
+              <FormField label="First name">
+                {(id) => (
+                  <Input id={id} value={draft.firstName} onChange={e => setDraft({ ...draft, firstName: e.target.value })} />
+                )}
+              </FormField>
+              <FormField label="Last name">
+                {(id) => (
+                  <Input id={id} value={draft.lastName} onChange={e => setDraft({ ...draft, lastName: e.target.value })} />
+                )}
+              </FormField>
             </div>
-            <div className="mt-3">
-              <Label className="text-xs text-muted-foreground mb-1.5 block">Email</Label>
-              <Input value={draft.email} onChange={e => setDraft({ ...draft, email: e.target.value })} />
-            </div>
-            <div className="mt-3">
-              <Label className="text-xs text-muted-foreground mb-1.5 block">Phone</Label>
-              <Input value={draft.phone} onChange={e => setDraft({ ...draft, phone: e.target.value })} />
-            </div>
+            <FormField label="Email" className="mt-3">
+              {(id) => (
+                <Input id={id} value={draft.email} onChange={e => setDraft({ ...draft, email: e.target.value })} />
+              )}
+            </FormField>
+            <FormField label="Phone" className="mt-3">
+              {(id) => (
+                <Input id={id} value={draft.phone} onChange={e => setDraft({ ...draft, phone: e.target.value })} />
+              )}
+            </FormField>
           </FormSection>
 
           <FormSection title="Tickets">
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1.5 block">Tickets Purchased</Label>
-              <Input type="number" min="0" value={draft.ticketsPurchased} onChange={e => setDraft({ ...draft, ticketsPurchased: e.target.value })} />
-            </div>
+            <FormField label="Tickets Purchased">
+              {(id) => (
+                <Input id={id} type="number" min="0" value={draft.ticketsPurchased} onChange={e => setDraft({ ...draft, ticketsPurchased: e.target.value })} />
+              )}
+            </FormField>
           </FormSection>
 
           <FormSection title="Guests">
@@ -165,14 +170,16 @@ export function EditAttendeeDialog({ attendee, open, onOpenChange, onSave, isSav
             </div>
             {isGeneralTickets ? (
               <div className="grid grid-cols-2 gap-3 mt-3">
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1.5 block">Payment Method</Label>
-                  <Input value={draft.paymentMethod} onChange={e => setDraft({ ...draft, paymentMethod: e.target.value })} placeholder="Manual, Credit Card, ..." />
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1.5 block">Total Paid</Label>
-                  <Input value={draft.totalPaid} onChange={e => setDraft({ ...draft, totalPaid: e.target.value })} placeholder="$0" />
-                </div>
+                <FormField label="Payment Method">
+                  {(id) => (
+                    <Input id={id} value={draft.paymentMethod} onChange={e => setDraft({ ...draft, paymentMethod: e.target.value })} placeholder="Manual, Credit Card, ..." />
+                  )}
+                </FormField>
+                <FormField label="Total Paid">
+                  {(id) => (
+                    <Input id={id} value={draft.totalPaid} onChange={e => setDraft({ ...draft, totalPaid: e.target.value })} placeholder="$0" />
+                  )}
+                </FormField>
               </div>
             ) : (
               <p className="text-xs text-muted-foreground mt-3">Staff and Sponsor tickets are always marked Comp / Paid.</p>

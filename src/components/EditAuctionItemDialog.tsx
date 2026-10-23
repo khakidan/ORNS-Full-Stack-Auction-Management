@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FormSection } from "@/components/FormSection";
+import { FormField } from "@/components/FormField";
 import { AuctionItem } from "@/types";
 import type { AuctionItemEditChange } from "@/hooks/useAuctionItemUpdate";
 
@@ -131,70 +132,79 @@ export function EditAuctionItemDialog({ item, open, onOpenChange, categories, on
         <div className="flex flex-col gap-5 max-h-[65vh] overflow-y-auto pr-1">
           <FormSection title="Details">
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Item #</Label>
-                <Input value={draft.id} onChange={(e) => setDraft({ ...draft, id: e.target.value })} />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Category</Label>
-                <Select value={draft.category} onValueChange={(v) => setDraft({ ...draft, category: v })}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <FormField label="Item #">
+                {(id) => (
+                  <Input id={id} value={draft.id} onChange={(e) => setDraft({ ...draft, id: e.target.value })} />
+                )}
+              </FormField>
+              <FormField label="Category">
+                {(id) => (
+                  <Select value={draft.category} onValueChange={(v) => setDraft({ ...draft, category: v })}>
+                    <SelectTrigger id={id} className="w-full">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </FormField>
             </div>
-            <div className="mt-3">
-              <Label className="text-xs text-muted-foreground mb-1.5 block">Name</Label>
-              <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-            </div>
-            <div className="mt-3">
-              <Label className="text-xs text-muted-foreground mb-1.5 block">Description</Label>
-              <Textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
-            </div>
+            <FormField label="Name" className="mt-3">
+              {(id) => (
+                <Input id={id} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+              )}
+            </FormField>
+            <FormField label="Description" className="mt-3">
+              {(id) => (
+                <Textarea id={id} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+              )}
+            </FormField>
           </FormSection>
 
           <FormSection title="Pricing">
             <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Value</Label>
-                <Input value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Opening Bid</Label>
-                <Input value={draft.openingBid} onChange={(e) => setDraft({ ...draft, openingBid: e.target.value })} />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Min Raise</Label>
-                <Input value={draft.minRaise} onChange={(e) => setDraft({ ...draft, minRaise: e.target.value })} />
-              </div>
+              <FormField label="Value">
+                {(id) => (
+                  <Input id={id} value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} />
+                )}
+              </FormField>
+              <FormField label="Opening Bid">
+                {(id) => (
+                  <Input id={id} value={draft.openingBid} onChange={(e) => setDraft({ ...draft, openingBid: e.target.value })} />
+                )}
+              </FormField>
+              <FormField label="Min Raise">
+                {(id) => (
+                  <Input id={id} value={draft.minRaise} onChange={(e) => setDraft({ ...draft, minRaise: e.target.value })} />
+                )}
+              </FormField>
             </div>
           </FormSection>
 
           <FormSection title="Donor & Type">
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Donor</Label>
-                <Input value={draft.donor} onChange={(e) => setDraft({ ...draft, donor: e.target.value })} />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Type</Label>
-                <Select value={draft.itemType} onValueChange={(v) => setDraft({ ...draft, itemType: v })}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Physical Item">Physical Item</SelectItem>
-                    <SelectItem value="Certificate">Certificate</SelectItem>
-                    <SelectItem value="Both">Both</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <FormField label="Donor">
+                {(id) => (
+                  <Input id={id} value={draft.donor} onChange={(e) => setDraft({ ...draft, donor: e.target.value })} />
+                )}
+              </FormField>
+              <FormField label="Type">
+                {(id) => (
+                  <Select value={draft.itemType} onValueChange={(v) => setDraft({ ...draft, itemType: v })}>
+                    <SelectTrigger id={id} className="w-full">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Physical Item">Physical Item</SelectItem>
+                      <SelectItem value="Certificate">Certificate</SelectItem>
+                      <SelectItem value="Both">Both</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </FormField>
             </div>
             <div className="mt-3 flex items-center gap-2">
               <Checkbox

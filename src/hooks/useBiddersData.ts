@@ -1,9 +1,10 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl, getSheetData } from "@/services/google-api";
+import { getSheetData } from "@/services/google-api";
 import { parseBidderRows } from "@/lib/bidderParsing";
 import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { Bidder } from "@/types";
+import { postJson } from "@/services/apiClient";
 
 /**
  * Owns bidder list state and the check-in/proxy mutations. `loading`
@@ -55,13 +56,7 @@ export function useBiddersData(spreadsheetId: string, bidderNumbersSheet: string
 
     // 3. Save on the server
     try {
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/bidders/set-flag`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ spreadsheetId, bidderNumbersSheet, bidderId: bidder.id, flag: field }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.error) throw new Error(data.error || "The server didn't save the change.");
+      await postJson("/api/bidders/set-flag", { spreadsheetId, bidderNumbersSheet, bidderId: bidder.id, flag: field }, "The server didn't save the change.");
       toast.success(successMessage);
     } catch (e) {
       console.error(e);

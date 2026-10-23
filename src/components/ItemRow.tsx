@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { AuctionItem } from "@/types";
 import { cn } from "@/lib/utils";
 import { categoryBadgeClass, ITEM_TYPE_STYLES } from "@/lib/itemBadgeColors";
+import { RowIdTile } from "@/components/RowIdTile";
 
 interface ItemRowProps {
   item: AuctionItem;
@@ -41,16 +42,11 @@ export function ItemRow({ item, winnerName }: ItemRowProps) {
       data-testid={`item-row-${item.id}`}
       className="group/row flex items-start gap-4 px-5 py-4 border-b last:border-0 hover:bg-muted/50 transition-colors"
     >
-      <div className="w-13 shrink-0 flex flex-col items-center gap-0.5 pt-0.5">
-        <div className="w-10 h-10 rounded-md bg-secondary text-secondary-foreground flex items-center justify-center font-mono font-bold text-sm">
-          {item.id}
-        </div>
-        <span className="text-[10px] uppercase text-muted-foreground">Item</span>
-      </div>
+      <RowIdTile value={item.id} caption="Item" className="pt-0.5" />
 
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-semibold text-[15px]">{item.name}</span>
+          <span className="font-semibold text-row-title">{item.name}</span>
           {item.category && (
             <Badge variant="outline" className={cn("text-xs font-normal", categoryBadgeClass(item.category))}>
               {item.category}
@@ -88,7 +84,7 @@ export function ItemRow({ item, winnerName }: ItemRowProps) {
       </div>
 
       <div className="w-40 shrink-0 flex flex-col items-end gap-0.5 pt-0.5">
-        <span className="text-[10px] uppercase text-muted-foreground">Winner</span>
+        <span className="text-xxs uppercase text-muted-foreground">Winner</span>
         {winnerName ? (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 text-xs font-semibold max-w-full">
             <Trophy className="w-3 h-3 shrink-0" />

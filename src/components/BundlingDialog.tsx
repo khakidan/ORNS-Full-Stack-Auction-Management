@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { 
   Dialog, 
   DialogContent, 
@@ -51,6 +52,7 @@ export function BundlingDialog({
   executeBundle,
   isExecutingBundle
 }: BundlingDialogProps) {
+  const id = useId();
   return (
     <Dialog open={isBundling} onOpenChange={setIsBundling}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
@@ -66,8 +68,8 @@ export function BundlingDialog({
         <div className="grid gap-6 py-4">
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-sm font-bold flex items-center justify-between">
-                <span>Bundle Name *</span>
+              <div className="flex items-center justify-between">
+                <Label htmlFor={`${id}-name`} className="text-sm font-bold">Bundle Name *</Label>
                 <LoadingButton
                   variant="ghost"
                   size="sm"
@@ -79,7 +81,7 @@ export function BundlingDialog({
                 >
                   Ask Gemini for Ideas
                 </LoadingButton>
-              </Label>
+              </div>
               
               {aiSuggestions.length > 0 && (
                 <div className="bg-primary/5 p-3 rounded-lg border border-primary/20 space-y-2 mb-3">
@@ -99,7 +101,8 @@ export function BundlingDialog({
                 </div>
               )}
 
-              <Input 
+              <Input
+                id={`${id}-name`}
                 placeholder="e.g. The Ultimate Family Staycation Pack" 
                 value={bundleDetails.name || ""} 
                 onChange={(e) => setBundleDetails({...bundleDetails, name: e.target.value})}
@@ -108,17 +111,18 @@ export function BundlingDialog({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-sm font-bold">Category *</Label>
+                <Label htmlFor={`${id}-category`} className="text-sm font-bold">Category *</Label>
                 <Select value={bundleDetails.category} onValueChange={(val) => setBundleDetails({...bundleDetails, category: val})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id={`${id}-category`}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-bold">Total Value (Calculated)</Label>
-                <Input 
+                <Label htmlFor={`${id}-value`} className="text-sm font-bold">Total Value (Calculated)</Label>
+                <Input
+                  id={`${id}-value`}
                   value={bundleDetails.value || ""} 
                   onChange={(e) => setBundleDetails({...bundleDetails, value: e.target.value})}
                 />
@@ -126,8 +130,8 @@ export function BundlingDialog({
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-bold text-muted-foreground flex items-center justify-between">
-                <span>Description</span>
+              <div className="flex items-center justify-between">
+                <Label htmlFor={`${id}-description`} className="text-sm font-bold text-muted-foreground">Description</Label>
                 <LoadingButton
                   variant="ghost"
                   size="sm"
@@ -139,8 +143,9 @@ export function BundlingDialog({
                 >
                   Ask Gemini for Description
                 </LoadingButton>
-              </Label>
-              <Textarea 
+              </div>
+              <Textarea
+                id={`${id}-description`}
                 className="min-h-37.5 text-xs font-mono"
                 value={bundleDetails.description || ""} 
                 onChange={(e) => setBundleDetails({...bundleDetails, description: e.target.value})}
@@ -149,18 +154,18 @@ export function BundlingDialog({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-sm font-bold">Opening Bid</Label>
-                <Input value={bundleDetails.openingBid || ""} onChange={(e) => setBundleDetails({...bundleDetails, openingBid: e.target.value})} />
+                <Label htmlFor={`${id}-opening`} className="text-sm font-bold">Opening Bid</Label>
+                <Input id={`${id}-opening`} value={bundleDetails.openingBid || ""} onChange={(e) => setBundleDetails({...bundleDetails, openingBid: e.target.value})} />
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-bold">Min Raise</Label>
-                <Input value={bundleDetails.minRaise || ""} onChange={(e) => setBundleDetails({...bundleDetails, minRaise: e.target.value})} />
+                <Label htmlFor={`${id}-raise`} className="text-sm font-bold">Min Raise</Label>
+                <Input id={`${id}-raise`} value={bundleDetails.minRaise || ""} onChange={(e) => setBundleDetails({...bundleDetails, minRaise: e.target.value})} />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-bold">Donors (Combined)</Label>
-              <Input value={bundleDetails.donor || ""} onChange={(e) => setBundleDetails({...bundleDetails, donor: e.target.value})} />
+              <Label htmlFor={`${id}-donor`} className="text-sm font-bold">Donors (Combined)</Label>
+              <Input id={`${id}-donor`} value={bundleDetails.donor || ""} onChange={(e) => setBundleDetails({...bundleDetails, donor: e.target.value})} />
             </div>
           </div>
         </div>

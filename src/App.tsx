@@ -4,7 +4,6 @@
  */
 
 import { useState, useEffect, lazy, Suspense } from "react";
-import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { useConfig } from "@/context/ConfigContext";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -25,6 +24,7 @@ import { BugReportButton } from "./components/BugReportButton";
 import { useAuction } from "./context/AuctionContext";
 import { SyncStatusBanner, SavedBidsSidebarBadge } from "./components/SyncStatusBanner";
 import { useOutboxReplay } from "./hooks/useOutboxReplay";
+import { postJson } from "@/services/apiClient";
 
 const ConfigSettings = lazy(() => import("./components/ConfigSettings"));
 const AuctionTicketsWorkflow = lazy(() => import("./components/AuctionTicketsWorkflow"));
@@ -136,18 +136,10 @@ export default function App() {
     
     try {
       console.log("[Sync] Triggering native Node.js Google Sheets migration...");
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/bidders/sync`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          spreadsheetId,
-          auctionTicketSheetsID: config.auctionTicketsSpreadsheetId
-        }),
-        credentials: "include"
-      });
-      
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Failed to setup bid management app");
+      await postJson("/api/bidders/sync", {
+        spreadsheetId,
+        auctionTicketSheetsID: config.auctionTicketsSpreadsheetId
+      }, "Failed to setup bid management app");
       
       toast.success("Successfully synchronized and re-sequenced all bidders, imported ticket sales, and generated full bid sheets!", { id: toastId });
       

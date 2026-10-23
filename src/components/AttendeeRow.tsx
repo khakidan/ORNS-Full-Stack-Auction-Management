@@ -48,8 +48,8 @@ export function AttendeeRow({
     <div className="group/row flex items-start gap-4 px-5 py-4 border-b last:border-0 hover:bg-muted/50 transition-colors">
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-semibold text-[15px]">{a.firstName}</span>
-          <span className="font-semibold text-[15px]">{a.lastName}</span>
+          <span className="font-semibold text-row-title">{a.firstName}</span>
+          <span className="font-semibold text-row-title">{a.lastName}</span>
           <Badge variant="outline" className={cn("capitalize text-xs font-normal", SOURCE_BADGE_STYLES[a.sheet])}>
             {SOURCE_LABELS[a.sheet] || 'General'}
           </Badge>
@@ -76,7 +76,7 @@ export function AttendeeRow({
         </div>
         {a.guestsInfo.length > 0 ? (
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">Guests</span>
+            <span className="text-xxs font-semibold uppercase tracking-wide text-muted-foreground">Guests</span>
             {a.guestsInfo.map((g, idx) => (
               <span key={idx} className="inline-flex items-center gap-1.5 text-xs bg-muted rounded-full px-2.5 py-1">
                 {g.firstName} {g.lastName}
@@ -100,7 +100,7 @@ export function AttendeeRow({
         >
           {a.ticketsPurchased}
         </div>
-        <span className="text-[10px] uppercase text-muted-foreground">tix</span>
+        <span className="text-xxs uppercase text-muted-foreground">tix</span>
       </div>
 
       <div className="w-37.5 shrink-0 flex flex-col gap-1 pt-0.5">
@@ -120,7 +120,7 @@ export function AttendeeRow({
         {isPaid && a.totalPaid !== '$0' && (
           <span className="text-xs text-green-700 font-medium">Total: {a.totalPaid}</span>
         )}
-        <span className="text-[11px] text-muted-foreground">Source: {methodDisplay}</span>
+        <span className="text-xxs text-muted-foreground">Source: {methodDisplay}</span>
       </div>
 
       <div className="flex gap-1 shrink-0 pt-0.5 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 transition-opacity">

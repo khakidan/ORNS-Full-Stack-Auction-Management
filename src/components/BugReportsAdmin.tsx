@@ -14,6 +14,8 @@ import { ConfigErrorCard } from "@/components/ConfigErrorCard";
 import { RefreshableListCard } from "@/components/RefreshableListCard";
 import { BugReportDetailDialog } from "@/components/BugReportDetailDialog";
 import { BugReportListItem } from "@/types";
+import { postJson } from "@/services/apiClient";
+import { isConfiguredId } from "@/lib/configuredId";
 
 const TYPE_BADGE_CLASS: Record<string, string> = {
   "Bug": "bg-red-50 text-red-700 border-red-200",
@@ -24,7 +26,7 @@ const TYPE_BADGE_CLASS: Record<string, string> = {
 export default function BugReportsAdmin() {
   const { config } = useConfig();
   const spreadsheetId = config.bugReportsSpreadsheetId;
-  const isInvalidId = !spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE");
+  const isInvalidId = !isConfiguredId(spreadsheetId);
 
   const [reports, setReports] = useState<BugReportListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,16 +66,7 @@ export default function BugReportsAdmin() {
   const handleResolve = async (report: BugReportListItem) => {
     setResolvingId(report.reportId);
     try {
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/bug-reports/resolve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ spreadsheetId, reportId: report.reportId }),
-        credentials: "include"
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to mark report resolved");
-      }
+      await postJson("/api/bug-reports/resolve", { spreadsheetId, reportId: report.reportId }, "Failed to mark report resolved");
       setReports(prev => prev.filter(r => r.reportId !== report.reportId));
       toast.success(`Marked "${report.title}" as resolved`);
     } catch (error: any) {

@@ -3,6 +3,7 @@ import { genAI } from "../services/genai";
 import { getCategoryBase, resequenceCategoryIds } from "../utils/categoryHelpers";
 import { calculateMinRaiseAmount } from "../utils/minRaiseHelpers";
 import { withLock } from "../utils/asyncLock";
+import { ITEM_COL } from "../utils/sheetColumns";
 
 export interface SuggestNamesParams {
   items: Array<{ name: string; description?: string }>;
@@ -176,16 +177,16 @@ async function processBundleLocked(
   const targetSet = new Set(targetIds.map(id => id.toString()));
   for (let i = 1; i < values.length; i++) {
     const row = values[i] || [];
-    if (row[0] && targetSet.has(row[0].toString())) {
-      originalNames.push(row[2] || "Unknown");
-      totalValue += parseFloat((row[4] || "0").replace(/[^0-9.-]+/g, "")) || 0;
-      if (row[7]) originalDonors.push(row[7]);
-      if (row[8]) originalItemTypes.push(row[8]);
+    if (row[ITEM_COL.id] && targetSet.has(row[ITEM_COL.id].toString())) {
+      originalNames.push(row[ITEM_COL.name] || "Unknown");
+      totalValue += parseFloat((row[ITEM_COL.value] || "0").replace(/[^0-9.-]+/g, "")) || 0;
+      if (row[ITEM_COL.donor]) originalDonors.push(row[ITEM_COL.donor]);
+      if (row[ITEM_COL.itemType]) originalItemTypes.push(row[ITEM_COL.itemType]);
       
-      const origCategory = row[1];
+      const origCategory = row[ITEM_COL.category];
       if (origCategory) affectedCategories.add(origCategory);
       
-      row[0] = ""; row[9] = "Inactive"; row[10] = bundleEventToken; row[11] = ts;
+      row[ITEM_COL.id] = ""; row[ITEM_COL.status] = "Inactive"; row[ITEM_COL.bundleId] = bundleEventToken; row[ITEM_COL.bundledDateTime] = ts;
     }
   }
 
@@ -270,10 +271,10 @@ async function restoreBundleLocked(
   // 2. Deactivate bundle row
   for (let i = 1; i < values.length; i++) {
     const row = values[i] || [];
-    if (row[10]?.toString() === targetBundleToken?.toString() && row[9] === "Active") {
-      const cat = row[1];
+    if (row[ITEM_COL.bundleId]?.toString() === targetBundleToken?.toString() && row[ITEM_COL.status] === "Active") {
+      const cat = row[ITEM_COL.category];
       if (cat) affectedCategories.add(cat);
-      row[0] = ""; row[9] = "Inactive"; row[10] = ""; 
+      row[ITEM_COL.id] = ""; row[ITEM_COL.status] = "Inactive"; row[ITEM_COL.bundleId] = ""; 
       bundleRowFound = true; 
       break; 
     }
@@ -285,11 +286,11 @@ async function restoreBundleLocked(
   const originalNames: string[] = [];
   for (let i = 1; i < values.length; i++) {
     const row = values[i] || [];
-    if (row[10]?.toString() === targetBundleToken?.toString() && row[9] === "Inactive") {
-      const cat = row[1];
+    if (row[ITEM_COL.bundleId]?.toString() === targetBundleToken?.toString() && row[ITEM_COL.status] === "Inactive") {
+      const cat = row[ITEM_COL.category];
       if (cat) affectedCategories.add(cat);
-      if (row[2]) originalNames.push(row[2]);
-      row[9] = "Active"; row[10] = ""; row[11] = "";       
+      if (row[ITEM_COL.name]) originalNames.push(row[ITEM_COL.name]);
+      row[ITEM_COL.status] = "Active"; row[ITEM_COL.bundleId] = ""; row[ITEM_COL.bundledDateTime] = "";       
     }
   }
 
