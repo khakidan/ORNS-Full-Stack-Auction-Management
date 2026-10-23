@@ -5,7 +5,7 @@
  * (now-deleted) `recordPayment`/`apiRecordPayment` bridge. Mirrors
  * the deleted server/test/gs-google-ai-studio.test.ts's scenarios
  * exactly, since that file tested the GAS source this replaces. See
- * docs/agents/refactor-opportunities.md's Code Hardening item #2, Step 3
+ * docs/agents/CHANGELOG.md's Code Hardening item #2, Step 3
  * / CHANGELOG.md.
  *
  * PayPalService itself is fully mocked here (not exercised over the

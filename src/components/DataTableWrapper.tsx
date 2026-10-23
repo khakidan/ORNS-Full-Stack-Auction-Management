@@ -36,7 +36,7 @@ interface DataTableWrapperProps<T> {
  * Shared scrollable data-table shell: consistent header styling, animated
  * skeleton rows while loading, and a stylized empty-state row - the parts
  * that were previously hand-duplicated across Items.tsx, Bidders.tsx, and
- * Receipts.tsx (see refactor-opportunities.md). Column widths, header
+ * Receipts.tsx (see CHANGELOG.md). Column widths, header
  * content (including sort click handlers), and row rendering stay fully
  * caller-controlled via `header`/`renderRow`, since those are genuinely
  * different per screen.

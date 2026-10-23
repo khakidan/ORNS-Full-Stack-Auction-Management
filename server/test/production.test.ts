@@ -25,7 +25,7 @@ const authHeader = authCookieHeader(mockTokens);
 // Node now resolves the Items spreadsheet's valid/sorted item list itself
 // (itemDataService.ts's getValidSortedItems, the Node port of
 // Class_AuctionItemManager.gs's getValidSortedItems - see
-// docs/agents/refactor-opportunities.md's Code Hardening item #3) and
+// docs/agents/CHANGELOG.md's Code Hardening item #3) and
 // forwards it as a parameter to every item-entry Apps Script call. This is
 // exactly what parsing handlers.ts's default Auction-Items fixture (both
 // rows "Active", already ID-ascending) resolves to. itemDataService.ts

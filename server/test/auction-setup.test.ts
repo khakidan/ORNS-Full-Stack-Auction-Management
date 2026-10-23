@@ -102,7 +102,7 @@ describe("setupRoutes - /api/auction/setup-new", () => {
     // in this block overrides it with the two deletable tabs plus a
     // leftover "Auction-Items" tab (a stale copy a pre-fix Bid Management
     // spreadsheet might still have lying around - see
-    // docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+    // docs/agents/CHANGELOG.md's Code Hardening item #1 /
     // CHANGELOG.md, since performSheetSync no longer creates this sheet at
     // all) plus two tabs that must NOT be deleted (Auction-Status,
     // tickets), to pin the "only the right tabs, and no longer Auction-Items" behavior.

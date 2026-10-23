@@ -228,7 +228,7 @@ async function registerWalkInBidderLocked(
  * checking in the same bidder's initial ticket-payment bid within the
  * same read/write window could otherwise compute the same "first empty
  * row" and the second write would silently clobber the first. Found in
- * a hardening audit - see docs/agents/refactor-opportunities.md's Code
+ * a hardening audit - see docs/agents/CHANGELOG.md's Code
  * Hardening item #1 / CHANGELOG.md.
  */
 export async function checkInBidderWithBid(

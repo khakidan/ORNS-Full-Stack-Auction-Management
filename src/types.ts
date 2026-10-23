@@ -154,7 +154,7 @@ export type PaypalSweepOutcome =
  * steps from Code Hardening item #2 have actually happened: an admin
  * signing in once (credentialConfigured), and the background job running
  * reliably (lastRunAt/lastResult). See
- * docs/agents/refactor-opportunities.md.
+ * docs/agents/CHANGELOG.md.
  */
 export interface SweeperStatus {
   credentialConfigured: boolean;

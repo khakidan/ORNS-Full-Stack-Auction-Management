@@ -31,7 +31,7 @@ export default function createReceiptsRouter() {
         // Node resolves the bidder's winning items/total AND their PayPal
         // invoice itself now (see receiptDataService.ts) instead of
         // Class_ReceiptManager.gs doing either a second, independent way -
-        // see refactor-opportunities.md's Code Hardening item #2 /
+        // see CHANGELOG.md's Code Hardening item #2 /
         // CHANGELOG.md. Sandbox vs. live comes from Firestore, never the
         // request body (ROADMAP.md M3 - see sharedConfig.ts).
         const paypal = new PayPalService({ isSandbox: await getPaypalIsSandbox() });

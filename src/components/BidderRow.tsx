@@ -24,7 +24,7 @@ interface BidderRowProps {
 
 /**
  * Redesigned to match AttendeeRow.tsx's row-based visual language (see
- * refactor-opportunities.md's "UI / Layout Tweaks" item - the user
+ * CHANGELOG.md's "UI / Layout Tweaks" item - the user
  * specifically asked for the Attendee List's look here) instead of the
  * old cramped <table> row that packed two stacked status badges into one
  * narrow column. All the same information and actions are still here -

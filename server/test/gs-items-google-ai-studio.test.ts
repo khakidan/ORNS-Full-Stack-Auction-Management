@@ -10,7 +10,7 @@
  * server/test/itemDataService.test.ts and
  * server/test/gs-items-auction-item-manager.test.ts's `AuctionItem.fromData`
  * coverage) instead of lazily constructing an `AuctionItemManager` that
- * reads the sheet itself. See docs/agents/refactor-opportunities.md's
+ * reads the sheet itself. See docs/agents/CHANGELOG.md's
  * Code Hardening item #3 / CHANGELOG.md.
  *
  * Deliberately NOT tested here: the 8 `create*` methods' actual document
@@ -19,7 +19,7 @@
  * mocking those chained builder APIs (insertParagraph().setHeading()....)
  * for 7 different generators was judged not worth the effort versus the
  * safety it would buy - the same scoping call made for
- * BidManagementSpreadsheet's ReceiptDoc. See refactor-opportunities.md.
+ * BidManagementSpreadsheet's ReceiptDoc. See CHANGELOG.md.
  *
  * IMPORTANT: this only tests this repo's reference copy. Fixes here don't
  * take effect in the live spreadsheet until manually pasted into the Apps

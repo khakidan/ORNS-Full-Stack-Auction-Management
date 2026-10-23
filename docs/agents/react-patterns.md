@@ -15,117 +15,33 @@ only.
 
 ## Actual Project Layering
 
-This app does **not** have a `lib - services - hooks - components` split
-with a dedicated `src/services/` directory - there is no such directory.
 The real frontend layering is:
 
 ```text
-src/lib/        (mixed: some pure, some not - see below)
+src/lib/        (mostly pure helpers: parsing, pricing, formatting)
+src/services/   (network and SDK clients: google-api.ts, apiClient.ts, firebase.ts)
     ↓
-src/context/    (AuctionContext.tsx, ConfigContext.tsx)
+src/context/    (AuctionContext.tsx, ConfigContext.tsx, AuthContext.tsx)
     ↓
-src/hooks/      (useAuctionItems, useBundling, useGoogleAuth)
+src/hooks/      (data hooks like useAuctionItems/useWinnersData, and a
+                 use...State hook per screen)
     ↓
 src/components/
 ```
 
-`src/lib/` currently mixes concerns: `categoryHelpers.ts` (49 lines) is
-genuinely pure; `utils.ts` (7 lines, just `cn()`) is pure; but
-`google-api.ts` (163 lines) does real network work - `fetchWithRetry`
-reads `localStorage`, injects OAuth tokens into headers, and performs
-`fetch()` calls with retry/backoff - and `firebase.ts` (73 lines)
-initializes the Firestore/Auth SDK and holds live client references.
-Neither of the latter two is a "no React, no network, deterministic"
-pure module in the sense a generic `lib/` rule would want. This is a real
-architectural gap relative to the ideal layering, not a design decision
-to imitate in new code - new networked logic should go through a real
-service-style module (or at minimum be clearly separated from anything
-in `categoryHelpers.ts`-style pure code), and this split is worth
-formalizing - log it in `ROADMAP.md`'s audit backlog if pursued.
-
-The Express backend layering (`server/routes/` - `server/services/` -
-`server/middleware/`/`server/utils/`) is real and does follow the
-intended one-way dependency direction - see `patterns.md` and
-`file-reference.md`.
-
-### `src/context/`
-
-`AuctionContext.tsx` and `ConfigContext.tsx` hold shared application/
-config state. `AuctionContext.tsx` used to be large (532 lines) for a
-context provider, mixing several unrelated concerns - as of 2026-09-04
-it's a 118-line container composing split-out `src/hooks/use*Data.ts`
-hooks (`useBiddersData`, `useItemsData`, `useAttendeesData`,
-`useWinnersData`, `useAuctionStatusData`), the same container-hook
-pattern now used throughout `src/hooks/`.
-
-### `src/hooks/`
-
-`useAuctionItems.ts` (117 lines), `useBundling.ts` (249 lines),
-`useGoogleAuth.ts` (111 lines) coordinate service calls, loading state,
-and workflow logic, exposing a clean hook API to components - this part
-of the pattern is followed correctly.
-
-### `src/components/`
-
-Components display information and handle events. See
-`component-standards.md` for the component-level rules. Every top-level
-view that used to be oversized has since been split via the
-container-hook pattern - a thin `src/components/*.tsx` view composing a
-`src/hooks/use*State.ts` hook that owns the actual state/business logic.
-
----
-
-## Component Size
-
-Preferred: 50-150 lines. Acceptable: 150-250 lines. Over 250: consider
-refactoring. Over 400: almost certainly doing too much.
-
-As of 2026-09-04, no file under `src/components/` (excluding `ui/`)
-exceeds 250 lines - the largest is `BundlingDialog.tsx` at 182. The six
-files this section used to cite as real, current examples of "over
-400 lines" have all been split: `AuctionItemsTab.tsx` 969 → 181,
-`Bidders.tsx` 644 → 107, `Checkout.tsx` 644 → 143, `ConfigSettings.tsx`
-572 → 64, `Dashboard.tsx` 517 → 57, `TicketAttendeeTab.tsx` 446 → 120.
-Keep new components in the 50-250 line range from the start rather than
-letting this drift back - when a view starts mixing search/filter
-state, business logic, and rendering again, extract a `use*State.ts`
-hook the same way these six were split, before it grows past 250 lines.
-
----
-
-## Derived State
-
-Never store derived values in state - compute them in render. This is a
-general rule, not something specific to this app, but worth restating
-given how much of this app's UI is filtered/sorted table views (search
-term - filtered list should be computed each render, not synced into a
-second state variable via an effect).
-
----
-
-## useEffect
-
-Real `useEffect` usage in this codebase is already fairly disciplined -
-`grep` shows 1-3 effects per file across `Dashboard.tsx`,
-`AuctionItemsTab.tsx`, `Checkout.tsx`, `ConfigSettings.tsx`,
-`Receipts.tsx`, `TicketAttendeeTab.tsx`, `DocumentCreationTab.tsx`,
-`TicketDocumentCreationTab.tsx` - consistent with "only for real external
-synchronization." Keep new effects to genuine external-system
-synchronization (Google Sheets sync, Firestore listeners, browser APIs);
-don't add an effect to compute a derived value or respond to a state
-change that could be handled inline in render or in the event handler
-that caused it.
-
----
-
-## Memoization
-
-`useMemo`/`useCallback` are already used sparingly in this codebase - a
-handful of call sites in `AuctionItemsTab.tsx`, `Checkout.tsx`,
-`Dashboard.tsx`, and `useAuctionItems.ts`. Don't reach for them by
-default; this app's real usage pattern is closer to "only where there's
-an actual expensive computation or a memoized child," which is the
-correct target to keep matching.
+`src/lib/` is mostly pure: `categoryHelpers.ts`, `bidGridParsing.ts`,
+`auctionItemPricing.ts`, `utils.ts` (`cn()`) and most of the rest take
+data in and hand data back. The exceptions are deliberate:
+`bidOutbox.ts` (the offline bid outbox) keeps unsent bids in
+`localStorage` and resends them through `fetchWithRetry`, and
+`errorBuffer.ts` keeps recent console errors for bug reports. Other
+network and SDK code lives in `src/services/`:
+`google-api.ts` (`fetchWithRetry`, `getBaseUrl`, the Sheets/Drive
+helpers), `apiClient.ts` (`postJson` and `HttpError` for JSON POSTs to the
+backend) and `firebase.ts` (the lazily initialized Firestore/Auth SDK).
+Requests authenticate with the `orns_session` cookie
+(`credentials: "include"`) - the browser never holds OAuth tokens. New
+networked logic belongs in `src/services/`, not `src/lib/`.
 
 ---
 
@@ -133,8 +49,9 @@ correct target to keep matching.
 
 Components/hooks should never know API URLs, OAuth details, or database
 structure directly. In this app: `getBaseUrl()` and `fetchWithRetry()` in
-`src/lib/google-api.ts` are the one real chokepoint for talking to the
-Express backend - route through them (or a hook that wraps them) rather
+`src/services/google-api.ts` (plus `postJson` in `src/services/apiClient.ts`,
+built on them) are the one real chokepoint for talking to the Express
+backend - route through them (or a hook that wraps them) rather
 than calling `fetch()` directly from a component. The Express backend
 (`server/routes/`, OAuth + Google Sheets proxy) should only ever be
 reached this way from the frontend.
@@ -143,10 +60,10 @@ reached this way from the frontend.
 
 ## Testing
 
-25 test files exist today (`src/components/*.test.tsx` +
-`server/test/*.test.ts`), matching `README.md`'s count. See
-`testing-philosophy.md` (GOOD/SHALLOW/CIRCULAR/SMOKE ratings) and
-`testing-batches.md` (how to run the suite, and the current totals) -
+Tests sit next to the code they cover (`src/**/*.test.ts(x)`,
+`server/**/*.test.ts`). See `testing-philosophy.md`
+(GOOD/SHALLOW/CIRCULAR/SMOKE ratings) and `testing-batches.md` (how to
+run the suite, and the current totals) -
 those are the authoritative, already-correct docs for this app's testing
 rules; this document doesn't restate them.
 

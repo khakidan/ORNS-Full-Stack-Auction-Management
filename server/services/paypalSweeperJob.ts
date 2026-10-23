@@ -22,7 +22,7 @@ import { BIDDER_COL } from "../utils/sheetColumns";
  * (`system/paypalSweeperAuth`, admin-only - not covered by
  * firestore.rules, never client-writable) since this job has no request
  * of its own to draw session tokens from. See
- * docs/agents/refactor-opportunities.md's Code Hardening item #2, Step 4
+ * docs/agents/CHANGELOG.md's Code Hardening item #2, Step 4
  * / CHANGELOG.md.
  */
 
@@ -74,7 +74,7 @@ export type PaypalSweepOutcome = PaypalSweepResult | { skipped: string };
  * status card (Code Hardening item #2's two manual-only steps - "an admin
  * must sign in once" and "confirm the Node job is running reliably" - were
  * otherwise unverifiable from inside the app itself; see
- * docs/agents/refactor-opportunities.md). Also mirrored to Firestore
+ * docs/agents/CHANGELOG.md). Also mirrored to Firestore
  * (`system/paypalSweeperStatus`, written by `runPaypalSweep` below) so the
  * status card survives a Cloud Run redeploy instead of reporting "Never"
  * on every new revision even though the sweep has genuinely run before -
@@ -146,7 +146,7 @@ export async function getSweeperStatus(): Promise<SweeperStatus> {
  * "Amount"]`). The two used to collide on the same sheet name with
  * different headers - whichever wrote first "won" the header, and the
  * other's appends landed under the wrong columns. Found in a hardening
- * audit - see docs/agents/refactor-opportunities.md's Code Hardening item
+ * audit - see docs/agents/CHANGELOG.md's Code Hardening item
  * #1 / CHANGELOG.md.
  */
 const PAYPAL_FOLLOW_UP_SHEET = "PayPal-Follow-Up";

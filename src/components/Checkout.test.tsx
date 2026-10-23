@@ -40,15 +40,33 @@ const mockItems = [
   { id: "item2", name: "Pizza Party" }
 ];
 
-vi.mock("@/context/AuctionContext", () => ({
-  useAuction: () => ({
-    bidders: mockBidders,
-    items: mockItems,
-    loading: false,
-    fetchAllData: vi.fn(),
-    attendees: []
-  })
-}));
+// bidGridWins/fetchWinners stand in for AuctionContext's useWinnersData:
+// the same Bid-Management read and parse, so each test's getSheetData
+// mock still decides who won.
+vi.mock("@/context/AuctionContext", async () => {
+  const { useCallback, useState } = await vi.importActual<typeof import("react")>("react");
+  const { parseBidGrid } = await vi.importActual<typeof import("@/lib/bidGridParsing")>("@/lib/bidGridParsing");
+  const { getSheetData } = await import("@/services/google-api");
+  return {
+    useAuction: () => {
+      const [bidGridWins, setBidGridWins] = useState<ReturnType<typeof parseBidGrid>>([]);
+      const fetchWinners = useCallback(async () => {
+        const data = await getSheetData("test-spreadsheet-id", "Bid-Management!A:ZZ");
+        setBidGridWins(parseBidGrid(data?.values));
+        return true;
+      }, []);
+      return {
+        bidders: mockBidders,
+        items: mockItems,
+        loading: false,
+        fetchAllData: vi.fn(),
+        attendees: [],
+        bidGridWins,
+        fetchWinners,
+      };
+    },
+  };
+});
 
 vi.mock("sonner", () => ({
   toast: {

@@ -15,7 +15,7 @@ interface StatusStatePlaceholderProps {
  * Shared "nothing to show" block: centered muted icon, optional bold
  * heading, descriptive text, optional action. Consolidates what used to
  * be independently hand-written per screen for both empty results and
- * unconfigured-setting states (see refactor-opportunities.md). Does not
+ * unconfigured-setting states (see CHANGELOG.md). Does not
  * include its own Card wrapper - compose it inside <Card>/<CardContent>
  * (or a grid cell, via `className`) the same way the rest of this app
  * composes Card content.

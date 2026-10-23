@@ -180,7 +180,7 @@ describe("runPaypalSweep - resolving/escalating pending rows", () => {
     // (auctionService.ts's recordWinningBidLocked / Dashboard's
     // Post-Checkout Item Wins panel) - the two used to collide on the same
     // sheet name with incompatible schemas. See
-    // docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+    // docs/agents/CHANGELOG.md's Code Hardening item #1 /
     // CHANGELOG.md.
     expect(capturedAppendRange).toBe("PayPal-Follow-Up!A:F");
     const [, appendedBidderId, appendedName, appendedAmount, appendedUrl] = capturedAppend.values[0];
@@ -328,7 +328,7 @@ describe("runPaypalSweep - never overwrites a row staff changed mid-sweep (ROADM
 });
 
 // Drives the Configuration page's sweeper status card - see
-// docs/agents/refactor-opportunities.md's Code Hardening item #2 and
+// docs/agents/CHANGELOG.md's Code Hardening item #2 and
 // CHANGELOG.md.
 describe("getSweeperStatus", () => {
   it("reports the credential as not configured when no refresh token is stored", async () => {

@@ -1,4 +1,5 @@
 import { Bidder, AuctionItem, Attendee } from "@/types";
+import type { BidGridWin } from "@/lib/bidGridParsing";
 import { useWinnersList } from "./useWinnersList";
 import { useCheckoutReceiptActions } from "./useCheckoutReceiptActions";
 import { useCheckoutBatchActions } from "./useCheckoutBatchActions";
@@ -20,6 +21,8 @@ interface UseCheckoutStateArgs {
   bidders: Bidder[];
   items: AuctionItem[];
   attendees: Attendee[];
+  bidGridWins: BidGridWin[];
+  fetchWinners: () => Promise<boolean>;
   fetchAllData: () => Promise<void>;
   spreadsheetId: string;
   itemsSpreadsheetId: string;
@@ -50,6 +53,8 @@ export function useCheckoutState({
   bidders,
   items,
   attendees,
+  bidGridWins,
+  fetchWinners,
   fetchAllData,
   spreadsheetId,
   itemsSpreadsheetId,
@@ -58,7 +63,7 @@ export function useCheckoutState({
   bidderNumbersSheet,
   folderId,
 }: UseCheckoutStateArgs) {
-  const winnersList = useWinnersList({ bidders, items, fetchAllData, spreadsheetId, bidManagementSheet });
+  const winnersList = useWinnersList({ bidders, items, bidGridWins, fetchWinners, fetchAllData, spreadsheetId });
   const receiptActions = useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, folderId, bidderNumbersSheet, bidManagementSheet });
   const batchActions = useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, folderId, bidderNumbersSheet, bidManagementSheet });
   const paymentFlow = useCheckoutPaymentFlow({

@@ -3,7 +3,7 @@
  * scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/not-deployed/Class_PayPalService.gs
  * (see server/test/gs-paypal-service.test.ts for the GAS reference-copy's
  * own tests, which this mirrors method-for-method). See
- * docs/agents/refactor-opportunities.md's Code Hardening item #2, Step 1.
+ * docs/agents/CHANGELOG.md's Code Hardening item #2, Step 1.
  */
 import { describe, it, expect, vi } from "vitest";
 import { PayPalService } from "../services/paypalService";

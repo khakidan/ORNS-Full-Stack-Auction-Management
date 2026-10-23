@@ -12,7 +12,7 @@ interface ItemRowProps {
 
 /**
  * Redesigned to match AttendeeRow.tsx/BidderRow.tsx's row-based visual
- * language (see refactor-opportunities.md's "UI / Layout Tweaks" item)
+ * language (see CHANGELOG.md's "UI / Layout Tweaks" item)
  * instead of the old bare 4-column <table> row, which only ever surfaced
  * id/name/category/winner even though every item already carries a
  * description, value/opening bid/min raise, donor, item type, and bundle

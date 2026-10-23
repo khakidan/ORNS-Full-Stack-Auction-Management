@@ -2,6 +2,7 @@ import React, { createContext, useContext, useCallback, useEffect } from "react"
 import { useConfig } from "./ConfigContext";
 import { useAuth } from "./AuthContext";
 import { Bidder, AuctionItem, Attendee } from "@/types";
+import type { BidGridWin } from "@/lib/bidGridParsing";
 import { useBiddersData } from "@/hooks/useBiddersData";
 import { useAuctionItems } from "@/hooks/useAuctionItems";
 import { useAttendeesData } from "@/hooks/useAttendeesData";
@@ -14,6 +15,10 @@ interface AuctionContextType {
   attendees: Attendee[];
   winners: Record<string, string>;
   totalRaised: number;
+  /** The Bid-Management grid's wins, as last read (Checkout's source). */
+  bidGridWins: BidGridWin[];
+  /** Re-reads the Bid-Management grid; resolves false if the read failed. */
+  fetchWinners: () => Promise<boolean>;
   loading: boolean;
   attendeesLoading: boolean;
   fetchBidders: () => Promise<void>;
@@ -40,7 +45,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
 
   const biddersData = useBiddersData(spreadsheetId, config.bidderNumbersSheet);
   // Items live in the separate Auction Items spreadsheet, not a copy synced
-  // into Bid Management - see docs/agents/refactor-opportunities.md's Code
+  // into Bid Management - see docs/agents/CHANGELOG.md's Code
   // Hardening item #1 / CHANGELOG.md. useAuctionItems already implements
   // "fetch live, full-fidelity items from a spreadsheet ID" (it's what the
   // top-level Auction Items workflow uses too), and returns the same
@@ -93,6 +98,8 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     attendees: attendeesData.attendees,
     winners: winnersData.winners,
     totalRaised: winnersData.totalRaised,
+    bidGridWins: winnersData.bidGridWins,
+    fetchWinners: winnersData.fetchWinners,
     loading: biddersData.loading,
     attendeesLoading: attendeesData.loading,
     fetchBidders: biddersData.fetchBidders,

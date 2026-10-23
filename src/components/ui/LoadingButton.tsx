@@ -21,7 +21,7 @@ interface LoadingButtonProps extends Omit<ComponentProps<typeof Button>, "childr
  * Wraps Button to natively handle busy/submitting state: auto-disables
  * and shows a spinner in place of the idle icon, consolidating what used
  * to be independently hand-rolled `{loading ? <Loader2 .../> : ...}`
- * pairs at every call site (see refactor-opportunities.md).
+ * pairs at every call site (see CHANGELOG.md).
  */
 export function LoadingButton({
   loading,

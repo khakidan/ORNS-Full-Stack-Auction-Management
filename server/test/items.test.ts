@@ -728,7 +728,7 @@ describe("Delete Auction Item workflow", () => {
 
   // Regression guard for the hardening audit's finding: this route had no
   // idempotencyKey, unlike its add-item/bulk-update-items siblings. See
-  // docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+  // docs/agents/CHANGELOG.md's Code Hardening item #1 /
   // CHANGELOG.md.
   it("returns cached response for a duplicate idempotency key instead of deleting twice", async () => {
     const key = "delete-dup-key";
@@ -883,7 +883,7 @@ describe("Delete Auction Item workflow", () => {
 
     // Regression guard for the hardening audit's finding: this route had
     // neither withLock nor an idempotency key, unlike sibling mutating
-    // routes. See docs/agents/refactor-opportunities.md's Code Hardening
+    // routes. See docs/agents/CHANGELOG.md's Code Hardening
     // item #1 / CHANGELOG.md.
     it('returns cached response for a duplicate idempotency key instead of writing twice', async () => {
       server.use(
@@ -980,7 +980,7 @@ describe("Delete Auction Item workflow", () => {
 });
 
 // Drives the Configuration page's PayPal sweeper status card - see
-// docs/agents/refactor-opportunities.md's Code Hardening item #2 and
+// docs/agents/CHANGELOG.md's Code Hardening item #2 and
 // CHANGELOG.md.
 describe("PayPal Sweeper status routes", () => {
   beforeEach(() => {

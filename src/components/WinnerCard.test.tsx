@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  *
  * WinnerCard's "Checkout" button had a permanently-dead loading condition
- * (refactor-opportunities.md): `loading={processingId === \`${bidderId}-pay\`}`,
+ * (CHANGELOG.md): `loading={processingId === \`${bidderId}-pay\`}`,
  * but useCheckoutState.ts never writes a `-pay` suffix to `processingId`
  * anywhere - confirmed by grep before this fix. Rewired to a real
  * `payingBidderId` prop (Checkout.tsx now derives it from

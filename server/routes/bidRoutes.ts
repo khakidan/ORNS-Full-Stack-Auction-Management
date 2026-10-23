@@ -30,7 +30,7 @@ export default function createBidRouter() {
       return res.status(400).json({ error: "Missing required fields for recording winning bid." });
     }
 
-    // Found in a hardening audit (docs/agents/refactor-opportunities.md's
+    // Found in a hardening audit (docs/agents/CHANGELOG.md's
     // Code Hardening item #1 / CHANGELOG.md): the `!price` check above only
     // rejects falsy values, not non-numeric ones. A non-numeric price used
     // to get stored as-is, and receiptDataService.ts's resolveWonItems

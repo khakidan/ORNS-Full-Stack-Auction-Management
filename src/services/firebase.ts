@@ -24,8 +24,8 @@ let firebasePromise: Promise<FirebaseServices> | null = null;
  * Lazily initializes the Firebase SDK on first call and memoizes the
  * result. Keeps `firebase`/`@firebase/*` - the single largest vendor
  * chunk - out of the app's initial JS bundle, since cross-device config
- * sync isn't needed for first paint (see refactor-opportunities.md /
- * CHANGELOG.md). Re-exports only the named functions this app actually
+ * sync isn't needed for first paint (see CHANGELOG.md). Re-exports
+ * only the named functions this app actually
  * uses (rather than the whole `auth`/`firestore` module namespaces) so
  * Rollup can still tree-shake the rest of those SDKs out of this lazy
  * chunk too.

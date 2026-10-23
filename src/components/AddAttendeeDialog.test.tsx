@@ -4,7 +4,7 @@
  * component-standards.md documents that SelectValue with no children
  * renders the raw stored value, not the matching SelectItem's label -
  * this component's Source select had exactly that gap (flagged in
- * refactor-opportunities.md). Every other test touching this component
+ * CHANGELOG.md). Every other test touching this component
  * (TicketAttendeeTab.test.tsx) mocks @/components/ui/select wholesale,
  * so none of them could ever have caught this - the real @base-ui/react
  * Select is deliberately left unmocked here.

@@ -79,18 +79,9 @@ Nothing outstanding - R1-R4 are fixed (see `CHANGELOG.md`).
 
 Nothing outstanding - R5-R11 are fixed (see `CHANGELOG.md`).
 
-
 ### Small cleanups
 
-- **R12 - Tailwind guide fixes** (the arbitrary text sizes and `w-[1px]` were fixed with R7): Dashboard chart hex fills (`useDashboardState.ts`) -> chart tokens; template-literal `className` in `PayPalSweeperStatusCard.tsx` -> `cn()`; the "Auction Closed" note in DocumentCreationPanel uses a pulsing loader icon; AuctionItemRow's restore button hand-rolls a spinner instead of `LoadingButton`.
-- **R13 - Toasts follow the OS theme.** `src/components/ui/sonner.tsx` calls next-themes' `useTheme` with no ThemeProvider, so toasts go dark on dark-mode computers in a light-only app. Fix: `theme="light"`, drop next-themes.
-- **R14 - Unused UI files:** `src/components/ui/sheet.tsx`, `src/components/ui/separator.tsx`.
-- **R15 - Derived state in an effect:** `useAuctionItemsFilterSort.ts` trims the selection inside an effect; compute it during render instead.
-- **R16 - Duplicate read:** Checkout's `useWinnersList` reads Bid-Management `A:ZZ` again though `useWinnersData` already has it.
-- **R17 - Shallow test:** `useQuickBidEntryState.test.ts` asserts `recordWinningBid` was called but not with which bidder, item and price.
-- **R18 - Stale comments:** 92 code comments in 80 files cite the retired `refactor-opportunities.md`.
-- **R19 - Guide doc drift:** `react-patterns.md` (no `src/services`, google-api in `src/lib`, localStorage tokens, test count 25); `component-standards.md` (says `sheet.tsx` is used); `performance.md` (969-line components); `style_guide.md`'s bundle table (first load is now ~333 kB gzip JS, over the 300 kB warning; lazy-loading the Dashboard's chart library would save ~50 kB).
-- **R20 - Dead `fallback` branches:** `useBundling.ts`'s `getAiSuggestions` / `getAiDescriptionSuggestion` handle a `data.fallback` reply the server never sends (a Gemini failure arrives as a 500 and lands in the catch).
+Nothing outstanding - R12-R20 are fixed (see `CHANGELOG.md`).
 
 ---
 

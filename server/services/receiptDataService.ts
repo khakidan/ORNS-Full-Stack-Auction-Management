@@ -20,7 +20,7 @@ export const FALLBACK_INVOICE_EMAIL = "web-admin@orns.org";
  * emailService.ts (for the emailed receipt) and
  * scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/Class_ReceiptManager.gs's
  * `findBidderColInBidSheet_`/`buildReceipt_` (for the printed/PDF receipt
- * and the PayPal invoice). See docs/agents/refactor-opportunities.md's
+ * and the PayPal invoice). See docs/agents/CHANGELOG.md's
  * Code Hardening item #2 and CHANGELOG.md for the full history.
  *
  * `getOrCreateInvoiceUrl`'s invoice get-or-create logic (Code Hardening

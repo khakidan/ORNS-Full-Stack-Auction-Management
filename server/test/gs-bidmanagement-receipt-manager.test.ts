@@ -8,7 +8,7 @@
  * server/services/emailService.ts's own copy of the same logic); Node now
  * resolves it once (server/services/receiptDataService.ts) and passes the
  * finished data in as a parameter, reconstructed here via `Receipt.fromData`.
- * See docs/agents/refactor-opportunities.md's Code Hardening item #2 and
+ * See docs/agents/CHANGELOG.md's Code Hardening item #2 and
  * CHANGELOG.md for the full history.
  *
  * Deliberately NOT tested here: the full Doc-generation/PayPal-invoice

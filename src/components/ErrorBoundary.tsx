@@ -18,7 +18,7 @@ interface ErrorBoundaryState {
  * a `.map`/property access) white-screened the entire app with no
  * recovery path - including mid-checkout or mid-bidding at a live event,
  * where a crash is especially high-cost. Found in a hardening audit - see
- * docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+ * docs/agents/CHANGELOG.md's Code Hardening item #1 /
  * CHANGELOG.md.
  *
  * A class component because componentDidCatch/getDerivedStateFromError

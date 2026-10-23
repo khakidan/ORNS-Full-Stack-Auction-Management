@@ -20,7 +20,7 @@ interface WinnerGridProps {
  * Responsive card grid for one checkout tab (pending or completed):
  * skeleton cards while loading, an empty-state placeholder when there
  * are no matching winners, or the real WinnerCard list. This is a
- * winner *card grid*, not a <Table> - see refactor-opportunities.md's
+ * winner *card grid*, not a <Table> - see CHANGELOG.md's
  * note on why DataTableWrapper doesn't apply to Checkout.tsx.
  */
 export function WinnerGrid({

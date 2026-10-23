@@ -45,39 +45,44 @@ loaded via dynamic imports:
 
 Use standard React `<Suspense>` components to wrap these workflows when they are active.
 
-**Real measured bundle size** (`npm install && npm run build`, run
-2026-09-02 - updated after lazy-loading `firebase`'s init, see below):
+**Real measured bundle size** (`npm run build`, run 2026-10-23 - after
+lazy-loading the Dashboard's attendance pie, see below):
 
 | Chunk | Raw | Gzip |
 | --- | --- | --- |
-| `index` (main entry) | 108.01 kB | 29.06 kB |
-| `vendor-utils` (catch-all for everything else in `node_modules`) | 263.71 kB | 85.98 kB |
+| `index` (main entry) | 152.02 kB | 42.02 kB |
+| `vendor-utils` (catch-all for everything else in `node_modules`) | 262.75 kB | 85.03 kB |
 | `vendor-react` | 194.40 kB | 60.73 kB |
-| `vendor-recharts` | 186.67 kB | 49.55 kB |
 | `vendor-base-ui` | 136.56 kB | 46.44 kB |
 | `vendor-motion` | 127.89 kB | 41.94 kB |
-| `vendor-lucide` | 24.12 kB | 5.25 kB |
-| `index.css` | 79.70 kB | 14.10 kB |
+| `vendor-lucide` | 31.34 kB | 6.76 kB |
+| `index.css` | 84.84 kB | 15.39 kB |
 | *Lazy, not part of initial load:* `vendor-firebase` | 691.27 kB | 160.04 kB |
-| *Lazy:* `AuctionItemsWorkflow` | 43.39 kB | 11.83 kB |
-| *Lazy:* `AuctionTicketsWorkflow` | 16.79 kB | 5.39 kB |
-| *Lazy:* `ConfigSettings` | 14.90 kB | 4.45 kB |
-| *Lazy:* `firebase-applet-config.json` | 0.58 kB | 0.36 kB |
+| *Lazy:* `vendor-html2canvas` (bug-report screenshots) | 202.38 kB | 47.71 kB |
+| *Lazy:* `vendor-recharts` (Dashboard attendance pie) | 186.67 kB | 49.55 kB |
+| *Lazy:* `AuctionItemsWorkflow` | 36.64 kB | 10.13 kB |
+| *Lazy:* `AuctionTicketsWorkflow` | 23.88 kB | 7.08 kB |
+| *Lazy:* `ConfigSettings` | 22.08 kB | 6.44 kB |
+| *Lazy:* `BugReportsAdmin` | 6.21 kB | 2.23 kB |
+| *Lazy:* `FolderFilesCard` | 5.45 kB | 2.10 kB |
+| *Lazy:* `AttendancePie` | 0.47 kB | 0.34 kB |
+| *Lazy:* `firebase-applet-config.json` | 0.74 kB | 0.44 kB |
 
-`firebase/app`/`auth`/`firestore` are no longer part of the initial
-bundle - `src/services/firebase.ts` defers `initializeApp`/`getAuth`/
+`firebase/app`/`auth`/`firestore` are not part of the initial bundle -
+`src/services/firebase.ts` defers `initializeApp`/`getAuth`/
 `getFirestore` behind a memoized `getFirebase()` that `ConfigContext.tsx`
 awaits instead of importing them statically, since cross-device config
-sync isn't needed for first paint. Everything except the six lazy
-chunks above loads on initial page load (`App.tsx` eagerly imports
-`Dashboard`, `Bidders`, `Items`, `BidEntry`, `Checkout`, `Receipts`,
-which pull in `recharts`, `motion`, and `lucide-react` immediately).
-Summed, that is **~319 kB gzipped of JS** on the critical path, plus
-14 kB of CSS - down from ~424 kB before this change. Per
-`performance.md`'s own budget (target <200 kB, warning >300 kB,
-requires review >500 kB), this is much closer to target but still
-technically in the warning band; `@base-ui/react`'s heavier primitives
-are the next largest eager chunk if further reduction is wanted.
+sync isn't needed for first paint. `recharts` isn't either:
+`AttendanceChart.tsx` renders its card at once and lazy-loads the pie
+itself (`AttendancePie.tsx`). Everything else loads on initial page load
+(`App.tsx` eagerly imports `Dashboard`, `Bidders`, `Items`, `BidEntry`,
+`Checkout`, `Receipts`, which pull in `motion` and `lucide-react`
+immediately). Summed, that is **~283 kB gzipped of JS** on the critical
+path, plus 15 kB of CSS - down from ~333 kB before the pie was
+lazy-loaded (and ~424 kB before Firebase was). Per `performance.md`'s
+own budget (target <200 kB, warning >300 kB, requires review >500 kB),
+this is under the warning line; `vendor-utils` and `@base-ui/react` are
+the largest eager chunks if further reduction is wanted.
 
 One real trade-off, not hidden: `vendor-firebase` itself grew once
 deferred (105.53 kB → 160.04 kB gzipped, 450.35 kB → 691.27 kB raw).

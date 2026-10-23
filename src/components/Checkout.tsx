@@ -22,7 +22,7 @@ const STATUS_LABELS: Record<CheckoutStatusFilter, string> = {
 };
 
 export default function Checkout() {
-  const { bidders, items, loading, fetchAllData, attendees } = useAuction();
+  const { bidders, items, loading, fetchAllData, attendees, bidGridWins, fetchWinners } = useAuction();
   const { config } = useConfig();
   const spreadsheetId = config.bidManagementSpreadsheetId;
   const itemsSpreadsheetId = config.auctionItemsSpreadsheetId;
@@ -35,6 +35,8 @@ export default function Checkout() {
     bidders,
     items,
     attendees,
+    bidGridWins,
+    fetchWinners,
     fetchAllData,
     spreadsheetId,
     itemsSpreadsheetId,

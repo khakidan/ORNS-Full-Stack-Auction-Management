@@ -122,7 +122,7 @@ describe("checkInBidderWithBid - concurrency (defense-in-depth)", () => {
   // same time (e.g. two check-in stations, or two staff processing the
   // same physical ticket at nearly the same moment) is a realistic risk
   // this closes. Found in a hardening audit - see
-  // docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+  // docs/agents/CHANGELOG.md's Code Hardening item #1 /
   // CHANGELOG.md. Mirrors auctionService.test.ts's checkoutMarkPaid
   // concurrency test: gate the first call's initial wide read, prove the
   // second call's own read doesn't even start until the first fully

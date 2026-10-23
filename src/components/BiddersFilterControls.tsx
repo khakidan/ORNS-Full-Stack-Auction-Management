@@ -35,7 +35,7 @@ const SOURCE_LABELS: Record<string, string> = {
 
 // Encodes a BidderSortConfig as one string so it can back a single Select
 // (BiddersList.tsx dropped the old clickable-column-header sort UI when
-// it moved off <table> markup - see refactor-opportunities.md's "UI /
+// it moved off <table> markup - see CHANGELOG.md's "UI /
 // Layout Tweaks" item).
 const SORT_OPTIONS: { value: string; label: string; config: BidderSortConfig }[] = [
   { value: "id-asc", label: "Bidder # (Low to High)", config: { key: "id", direction: "asc" } },

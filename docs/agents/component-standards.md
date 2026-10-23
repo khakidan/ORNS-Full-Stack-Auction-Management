@@ -24,7 +24,7 @@ currently contains: `alert-dialog.tsx`, `badge.tsx`, `button.tsx`,
 `card.tsx`, `checkbox.tsx`, `ConfirmationDialog.tsx`, `dialog.tsx`,
 `IconButton.tsx` (app-specific), `input.tsx`, `label.tsx`,
 `ListPageCard.tsx` (app-specific), `LoadingButton.tsx` (app-specific),
-`scroll-area.tsx`, `select.tsx`, `separator.tsx`, `sheet.tsx`,
+`scroll-area.tsx`, `select.tsx`,
 `sonner.tsx` (toasts), `StatusStatePlaceholder.tsx` (app-specific),
 `table.tsx`, `tabs.tsx`, `textarea.tsx`. Check this list (or
 `file-reference.md`)
@@ -218,7 +218,6 @@ back.
 ## Dialogs and Modals
 
 This app's dialog primitives are `dialog.tsx`, `alert-dialog.tsx`,
-`sheet.tsx` (a slide-over panel used for the bundling and edit flows),
 and `src/components/ui/ConfirmationDialog.tsx` - the shared destructive-
 confirmation wrapper (built on `alert-dialog.tsx`). Use it for any new
 destructive-confirmation flow rather than hand-rolling one from
@@ -242,11 +241,11 @@ Don't treat this as a generic toast - it needs the persistent variant.
 ## Toasts
 
 Toasts (`src/components/ui/sonner.tsx`, via `sonner`) are used for
-successful saves and background sync failures. Note `sonner.tsx` imports
-`useTheme` from `next-themes` to pick its color scheme - this is the one
-real place `next-themes` is wired into this app; it is not used for a
-user-facing light/dark toggle anywhere else (`style_guide.md` correctly
-says this app runs a single light theme with no in-app theme switcher).
+successful saves and background sync failures. `sonner.tsx` sets
+`theme="light"`: the app runs a single light theme with no in-app theme
+switcher (`style_guide.md`), so toasts stay light even on a computer set
+to dark mode. (It used to read `next-themes`' `useTheme` with no
+ThemeProvider, which followed the OS setting instead.)
 
 Never use a toast for the winner-notification case above without the
 `duration: Infinity` override - a normal auto-dismissing toast would let a

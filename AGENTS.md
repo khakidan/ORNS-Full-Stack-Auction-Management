@@ -37,7 +37,7 @@ To keep developer directives clean, maintainable, and modular, the monolithic Ag
 
 7.  **[Visual Identity & Style Guide (style_guide.md)](./docs/agents/style_guide.md)**
     *   Typography selections (Inter, Space Grotesk, JetBrains Mono) and custom spacing.
-    *   Lazy-loading chunk specifications to keep critical JS path size below 103 kB.
+    *   Lazy-loading chunk specifications and the measured per-chunk bundle sizes.
 
 8.  **[User Workflows & Operational Guidelines (USER_GUIDE.md)](./docs/agents/USER_GUIDE.md)**
     *   Detailed instructions for auction operations, bidding procedures, ticket sales, registration, and PayPal checkout.

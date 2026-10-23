@@ -15,7 +15,7 @@ interface ListPageCardProps {
  * Shared Card/CardHeader/CardContent skeleton for this app's four
  * search-and-list workflow pages (Items.tsx, Bidders.tsx,
  * TicketAttendeeTab.tsx, AuctionItemsTab.tsx - see
- * refactor-opportunities.md's "UI / Layout Tweaks" item). Each of those
+ * CHANGELOG.md's "UI / Layout Tweaks" item). Each of those
  * pages independently hand-rolled the identical
  * `<Card><CardHeader>{icon+title+description}</CardHeader>
  * <CardContent className="p-0">{list}</CardContent></Card>` shape, and

@@ -90,7 +90,7 @@ async function fetchCategoryBases(sheets: sheets_v4.Sheets, spreadsheetId: strin
  * concurrently (a realistic pre-event pattern) could otherwise read the
  * same snapshot and the second write would silently discard the first's
  * change. Found in a hardening audit - see
- * docs/agents/refactor-opportunities.md's Code Hardening item #1 /
+ * docs/agents/CHANGELOG.md's Code Hardening item #1 /
  * CHANGELOG.md. Shares a lock key with deleteItem/updateItem/
  * bulkUpdateItems/processBundle/restoreBundle - all mutate the same
  * 'Auction-Items' range.

@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Lock } from "lucide-react";
 
 interface DocumentCreationPanelProps {
   description: string;
@@ -40,7 +40,7 @@ export function DocumentCreationPanel({
 
         {isAuctionClosed && (
           <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-100 flex items-center gap-2 mt-4">
-            <Loader2 className="w-3 h-3 animate-pulse" />
+            <Lock className="w-3 h-3" />
             Auction Closed: Creation tools disabled.
           </p>
         )}

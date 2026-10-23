@@ -166,6 +166,7 @@ describe("useQuickBidEntryState - duplicate/repeatable handling", () => {
     act(() => { result.current.setItemId("1301"); result.current.setBidderId("142"); result.current.setPrice("150"); });
     await act(async () => { await result.current.handleSubmit(); });
 
-    expect(recordWinningBid).toHaveBeenCalled();
+    expect(recordWinningBid).toHaveBeenCalledTimes(1);
+    expect(recordWinningBid).toHaveBeenCalledWith("142", "1301", 150);
   });
 });

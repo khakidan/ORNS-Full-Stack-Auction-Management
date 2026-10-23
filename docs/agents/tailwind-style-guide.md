@@ -52,14 +52,16 @@ block in `src/index.css`. Use `text-orns-red` / `bg-orns-red` /
 above for everything else. Don't invent new hardcoded hex values in
 components - if a new brand color is genuinely needed, add it as a named
 token in `src/index.css` the same way `orns-red` was added, not as an
-inline `text-[#hexvalue]`.
+inline `text-[#hexvalue]`. Chart colors work the same way:
+`--chart-1`..`--chart-3` hold the Dashboard attendance pie's colors
+(checked in, checked out, not present), and Recharts fills reference
+them as `var(--chart-N)` rather than hex strings.
 
 ### Dark mode infrastructure exists but is not user-facing
 
-`src/index.css` defines a full `.dark` variable set, and `next-themes` is
-a real dependency - but it's wired into exactly one place,
-`src/components/ui/sonner.tsx`, to pick the toast color scheme. There is
-no in-app light/dark toggle and no other component reads `next-themes`.
+`src/index.css` defines a full `.dark` variable set (shadcn's default),
+but nothing applies the `.dark` class: there is no in-app light/dark
+toggle, and `src/components/ui/sonner.tsx` pins toasts to `theme="light"`.
 Don't build new UI assuming a dark-mode toggle is reachable by users;
 `style_guide.md`'s "no unrequested theme selectors, single light theme"
 guidance is accurate for anything user-facing.
