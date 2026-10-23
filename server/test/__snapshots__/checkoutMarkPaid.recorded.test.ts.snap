@@ -1,0 +1,295 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`checkoutMarkPaid - recorded calls > card already paid on PayPal: marks paid 1`] = `
+{
+  "log": [
+    [
+      "get",
+      "bm",
+      "'Bidder-Numbers'!A:L",
+    ],
+    [
+      "get",
+      "bm",
+      "'Bidder-Numbers'!G3:I3",
+    ],
+    [
+      "get",
+      "bm",
+      "'Bidder-Numbers'!L3",
+    ],
+    [
+      "update",
+      "bm",
+      "'Bidder-Numbers'!G3:I3",
+      [
+        [
+          true,
+          true,
+          "Credit Card / PayPal",
+        ],
+      ],
+    ],
+    [
+      "update",
+      "bm",
+      "'Bidder-Numbers'!L3",
+      [
+        [
+          "",
+        ],
+      ],
+    ],
+  ],
+  "paypal": {
+    "extractInvoiceIdFromUrl": [
+      [
+        "https://paypal/#INV-3",
+      ],
+    ],
+    "getInvoiceStatus": [
+      [
+        "INV-3",
+      ],
+    ],
+    "recordOfflinePayment": [],
+    "removeSurchargeLine": [],
+  },
+  "result": {
+    "attendeeUpdated": false,
+    "deferred": false,
+    "success": true,
+  },
+}
+`;
+
+exports[`checkoutMarkPaid - recorded calls > card with no invoice yet: creates one, then defers to PayPal Verification Pending 1`] = `
+{
+  "invoiceBuilds": [
+    [
+      "bm",
+      "items",
+      "101",
+    ],
+  ],
+  "log": [
+    [
+      "get",
+      "bm",
+      "'Bidder-Numbers'!A:L",
+    ],
+    [
+      "get",
+      "bm",
+      "'Bidder-Numbers'!G3:I3",
+    ],
+    [
+      "get",
+      "bm",
+      "'Bidder-Numbers'!L3",
+    ],
+    [
+      "update",
+      "bm",
+      "'Bidder-Numbers'!G3:I3",
+      [
+        [
+          false,
+          false,
+          "PayPal Verification Pending",
+        ],
+      ],
+    ],
+    [
+      "update",
+      "bm",
+      "'Bidder-Numbers'!L3",
+      [
+        [
+          "2026-10-24T20:15:00.000Z",
+        ],
+      ],
+    ],
+    [
+      "get",
+      "bm",
+      "'Bidder-Numbers'!L1:N1",
+    ],
+    [
+      "update",
+      "bm",
+      "'Bidder-Numbers'!L1:N1",
+      [
+        [
+          "PayPal Pending Since",
+          "Receipt Emailed At",
+          "Receipt Emailed Invoice",
+        ],
+      ],
+    ],
+  ],
+  "paypal": {
+    "extractInvoiceIdFromUrl": [
+      [
+        "",
+      ],
+    ],
+    "getInvoiceStatus": [],
+    "recordOfflinePayment": [],
+    "removeSurchargeLine": [],
+  },
+  "result": {
+    "attendeeUpdated": false,
+    "deferred": true,
+    "success": true,
+  },
+}
+`;
+
+exports[`checkoutMarkPaid - recorded calls > cash with an invoice: marks paid, takes the fee off, records the cash on PayPal, updates the ticket sheet 1`] = `
+{
+  "log": [
+    [
+      "get",
+      "bm",
+      "'Bidder-Numbers'!A:L",
+    ],
+    [
+      "get",
+      "bm",
+      "'Bidder-Numbers'!G3:I3",
+    ],
+    [
+      "get",
+      "bm",
+      "'Bidder-Numbers'!L3",
+    ],
+    [
+      "update",
+      "bm",
+      "'Bidder-Numbers'!G3:I3",
+      [
+        [
+          true,
+          true,
+          "Cash",
+        ],
+      ],
+    ],
+    [
+      "update",
+      "bm",
+      "'Bidder-Numbers'!L3",
+      [
+        [
+          "",
+        ],
+      ],
+    ],
+    [
+      "get",
+      "tix",
+      "'tickets'!U7",
+    ],
+    [
+      "update",
+      "tix",
+      "'tickets'!U7",
+      [
+        [
+          "Paid",
+        ],
+      ],
+    ],
+  ],
+  "paypal": {
+    "extractInvoiceIdFromUrl": [
+      [
+        "https://paypal/#INV-1",
+      ],
+    ],
+    "getInvoiceStatus": [],
+    "recordOfflinePayment": [
+      [
+        "INV-1",
+        "Cash",
+        100,
+      ],
+    ],
+    "removeSurchargeLine": [
+      [
+        "INV-1",
+      ],
+    ],
+  },
+  "result": {
+    "attendeeUpdated": true,
+    "deferred": false,
+    "success": true,
+  },
+}
+`;
+
+exports[`checkoutMarkPaid - recorded calls > check whose PayPal invoice was already paid online: marks paid and warns 1`] = `
+{
+  "log": [
+    [
+      "get",
+      "bm",
+      "'Bidder-Numbers'!A:L",
+    ],
+    [
+      "get",
+      "bm",
+      "'Bidder-Numbers'!G3:I3",
+    ],
+    [
+      "get",
+      "bm",
+      "'Bidder-Numbers'!L3",
+    ],
+    [
+      "update",
+      "bm",
+      "'Bidder-Numbers'!G3:I3",
+      [
+        [
+          true,
+          true,
+          "Check",
+        ],
+      ],
+    ],
+    [
+      "update",
+      "bm",
+      "'Bidder-Numbers'!L3",
+      [
+        [
+          "",
+        ],
+      ],
+    ],
+  ],
+  "paypal": {
+    "extractInvoiceIdFromUrl": [
+      [
+        "https://paypal/#INV-2",
+      ],
+    ],
+    "getInvoiceStatus": [],
+    "recordOfflinePayment": [],
+    "removeSurchargeLine": [
+      [
+        "INV-2",
+      ],
+    ],
+  },
+  "result": {
+    "attendeeUpdated": false,
+    "deferred": false,
+    "success": true,
+    "warning": "Bidder 101 is marked paid (Check), but PayPal shows invoice INV-2 as already paid (PAID). Check for a double payment before taking the check.",
+  },
+}
+`;

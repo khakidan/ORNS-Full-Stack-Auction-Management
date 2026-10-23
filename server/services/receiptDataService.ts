@@ -4,6 +4,7 @@ import { calculatePayPalSurcharge } from "../utils/financeUtils";
 import { quoteSheetName } from "../utils/rangeUtils";
 import { isValidEmailAddress } from "../utils/emailAddress";
 import { BIDDER_COL } from "../utils/sheetColumns";
+import { findBidderColumn } from "../utils/bidGrid";
 
 /**
  * Who a PayPal invoice goes to when the bidder has no usable email address
@@ -108,19 +109,8 @@ export function buildItemNameLookup(itemsRows: any[][]): (itemId: string) => str
   };
 }
 
-/**
- * Finds a bidder's 0-based column index in the Bid-Management header row
- * (row 0), scanning in ID/price pairs - mirrors
- * Class_ReceiptManager.gs's (now-removed) `findBidderColInBidSheet_`.
- * Returns -1 when not found.
- */
-export function findBidderColumn(mgmtRows: any[][], bidderId: string): number {
-  const headerRow = mgmtRows[0] || [];
-  for (let c = 0; c < headerRow.length; c += 2) {
-    if (String(headerRow[c] || "").trim() === String(bidderId).trim()) return c;
-  }
-  return -1;
-}
+// Re-exported for callers that already import it from here.
+export { findBidderColumn };
 
 /**
  * Resolves everything a bidder won from an already-fetched Bid-Management

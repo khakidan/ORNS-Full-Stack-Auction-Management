@@ -2,13 +2,14 @@ import { google, sheets_v4 } from "googleapis";
 import { IDEMPOTENT_POST_RETRY } from "../utils/googleRetry";
 import { OAuth2Client } from "google-auth-library";
 import { getColumnLetter } from "../utils/columnUtils";
-import { executeGoogleSheetsTransaction, SheetOp } from "../services/sheetsService";
+import { executeGoogleSheetsTransaction, SheetOp, ensureSheetTab, FOLLOW_UP_HEADER } from "../services/sheetsService";
 import { withLock } from "../utils/asyncLock";
 import { ensureTrackingHeaders } from "../utils/bidderNumbersHeaders";
 import { PayPalService, isPaidInvoiceStatus } from "./paypalService";
 import { buildBidderReceiptWithInvoice, DEFAULT_SHEET_NAMES } from "./receiptDataService";
 import { findExistingWins, isRepeatableItem, WinningBidConflictError } from "../utils/winningBidChecks";
-import { BIDDER_COL } from "../utils/sheetColumns";
+import { BIDDER_COL, TICKETS_COL } from "../utils/sheetColumns";
+import { findBidderColumn, findBidderRowIndex, firstEmptyBidRow } from "../utils/bidGrid";
 
 export interface RecordWinningBidParams {
   bidderId: string;
@@ -92,141 +93,80 @@ async function recordWinningBidLocked(
   sheets: sheets_v4.Sheets,
   params: RecordWinningBidParams
 ): Promise<WinningBidResult> {
-  const {
-    bidderId,
-    itemId,
-    price,
-    spreadsheetId,
-    bidManagementSheet,
-    bidderNumbersSheet,
-    itemsSpreadsheetId
-  } = params;
+  const { bidderId, itemId, price, spreadsheetId, bidManagementSheet, bidderNumbersSheet, itemsSpreadsheetId } = params;
 
-  // 1. Get Bidder Info to check checkout status
-  const bidderSearch = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `'${bidderNumbersSheet}'!A:G`,
-  });
-  const biddersRows = bidderSearch.data.values || [];
-  const bidderRow = biddersRows.find((row: any) => row[BIDDER_COL.id]?.toString() === bidderId);
-  
-  if (!bidderRow) {
+  // 1. The bidder must exist; a bidder who already checked out also gets a Follow-Up row.
+  const bidderSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${bidderNumbersSheet}'!A:G` });
+  const bidderRows = bidderSearch.data.values || [];
+  const bidderRowIndex = findBidderRowIndex(bidderRows, bidderId);
+  if (bidderRowIndex === -1) {
     throw new Error(`Bidder ${bidderId} not found.`);
   }
+  const checkedOutCell = bidderRows[bidderRowIndex][BIDDER_COL.checkedOut];
+  const isCheckedOut = checkedOutCell === true || checkedOutCell === "TRUE";
 
-  const isCheckedOut = bidderRow[BIDDER_COL.checkedOut] === true || bidderRow[BIDDER_COL.checkedOut] === "TRUE";
-
-  // 2. Find Bidder Column in Bid-Management
-  const dataRes = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `'${bidManagementSheet}'!1:300`,
-  });
+  // 2. The bidder's column pair in the Bid-Management grid.
+  const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${bidManagementSheet}'!1:300` });
   const values = dataRes.data.values || [];
   if (values.length === 0) throw new Error("Bid sheet is empty");
-
-  const header = values[0];
-  let colIndex = -1;
-  for (let j = 0; j < header.length; j += 2) {
-    if (header[j]?.toString() === bidderId) {
-      colIndex = j;
-      break;
-    }
-  }
+  const colIndex = findBidderColumn(values, bidderId);
   if (colIndex === -1) throw new Error("Bidder column not found in Bid Management sheet");
 
-  // One winner per item unless the item allows several (Milestone A). Bid
-  // Entry checks this too, but a bid resent from a device that was offline
-  // can't see what other devices recorded meanwhile. Safe to check then
-  // write: this whole function runs under the bidder-numbers lock.
-  const existingWins = findExistingWins(values, itemId);
-  if (existingWins.length > 0 && itemsSpreadsheetId) {
-    let repeatable: boolean | undefined;
-    try {
-      const itemsRes = await sheets.spreadsheets.values.get({ spreadsheetId: itemsSpreadsheetId, range: "'Auction-Items'!A:M" });
-      repeatable = isRepeatableItem(itemsRes.data.values || [], itemId);
-    } catch (e: any) {
-      // Don't stop bid entry because the Items sheet couldn't be read; this
-      // is the same as before the check existed.
-      console.warn(`[recordWinningBid] Couldn't read the Items sheet to check item ${itemId}; skipping the one-winner check:`, e?.message || e);
-    }
-    if (repeatable === false) {
-      const sameBid = existingWins.find((w) => w.bidderId === String(bidderId).trim() && Math.abs(w.price - price) < 0.005);
-      if (sameBid) {
-        // This bid is already in the sheet - most likely a resend whose
-        // first attempt succeeded but whose answer never arrived. Report
-        // success without writing it a second time.
-        return { success: true, followUpAdded: false, alreadyRecorded: true };
-      }
-      throw new WinningBidConflictError(
-        `Item #${itemId} already has a winning bid (bidder ${existingWins[0].bidderId}, $${existingWins[0].price.toFixed(2)}), so this bid wasn't recorded.`
-      );
-    }
+  // 3. One winner per item unless the item allows several (Milestone A).
+  const existing = await checkOneWinnerPerItem(sheets, values, { bidderId, itemId, price, itemsSpreadsheetId });
+  if (existing === "already-recorded") {
+    return { success: true, followUpAdded: false, alreadyRecorded: true };
   }
 
-  // 3. Find Empty Row for Bid
-  let rowIndex = -1;
-  for (let i = 3; i < values.length; i++) {
-    if (!values[i] || !values[i][colIndex]) {
-      rowIndex = i + 1;
-      break;
-    }
-  }
-  if (rowIndex === -1) rowIndex = values.length + 1;
-  if (rowIndex < 4) rowIndex = 4;
-
-  const colLetter = getColumnLetter(colIndex);
-  const nextColLetter = getColumnLetter(colIndex + 1);
-
-  const operations: SheetOp[] = [
-    {
-      type: 'UPDATE',
-      spreadsheetId,
-      range: `${bidManagementSheet}!${colLetter}${rowIndex}:${nextColLetter}${rowIndex}`,
-      newValues: [[itemId, price]]
-    }
-  ];
-
-  let followUpAdded = false;
+  // 4. Write the bid in the bidder's first empty row (and the Follow-Up row).
+  const rowIndex = firstEmptyBidRow(values, colIndex);
+  const operations: SheetOp[] = [{
+    type: 'UPDATE',
+    spreadsheetId,
+    range: `${bidManagementSheet}!${getColumnLetter(colIndex)}${rowIndex}:${getColumnLetter(colIndex + 1)}${rowIndex}`,
+    newValues: [[itemId, price]]
+  }];
   if (isCheckedOut) {
-    // 4. Handle Follow-Up for already checked out bidders
-    const metadata = await sheets.spreadsheets.get({ spreadsheetId });
-    const followUpSheet = metadata.data.sheets?.find(s => s.properties?.title === "Follow-Up");
-    
-    if (!followUpSheet) {
-      // Create Follow-Up sheet if it doesn't exist
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: {
-          requests: [{
-            addSheet: {
-              properties: { title: "Follow-Up" }
-            }
-          }]
-        }
-      });
-      // Add header
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: "Follow-Up!A1:C1",
-        valueInputOption: "USER_ENTERED",
-        requestBody: {
-          values: [["Bidder ID", "Item ID", "Amount"]]
-        }
-      });
-    }
-
-    operations.push({
-      type: 'APPEND',
-      spreadsheetId,
-      range: `Follow-Up!A:C`,
-      newValues: [[bidderId, itemId, price]]
-    });
-    followUpAdded = true;
+    await ensureSheetTab(sheets, spreadsheetId, "Follow-Up", FOLLOW_UP_HEADER);
+    operations.push({ type: 'APPEND', spreadsheetId, range: `Follow-Up!A:C`, newValues: [[bidderId, itemId, price]] });
   }
 
   await executeGoogleSheetsTransaction(sheets, operations);
+  return { success: true, followUpAdded: isCheckedOut };
+}
 
-  return { success: true, followUpAdded };
+/**
+ * Bid Entry checks for an existing winner too, but a bid resent from a
+ * device that was offline can't see what other devices recorded meanwhile,
+ * so the server checks again (safe: the caller holds the bidder-numbers
+ * lock). Throws WinningBidConflictError when a one-winner item already has
+ * a different winning bid; returns "already-recorded" when this exact bid
+ * is already in the sheet (a resend whose first answer never arrived).
+ * Skipped when the Items sheet can't be read - the same as before the
+ * check existed - so that can't stop bid entry.
+ */
+async function checkOneWinnerPerItem(
+  sheets: sheets_v4.Sheets,
+  gridRows: any[][],
+  bid: { bidderId: string; itemId: string; price: number; itemsSpreadsheetId?: string }
+): Promise<"ok" | "already-recorded"> {
+  const existingWins = findExistingWins(gridRows, bid.itemId);
+  if (existingWins.length === 0 || !bid.itemsSpreadsheetId) return "ok";
+
+  let repeatable: boolean | undefined;
+  try {
+    const itemsRes = await sheets.spreadsheets.values.get({ spreadsheetId: bid.itemsSpreadsheetId, range: "'Auction-Items'!A:M" });
+    repeatable = isRepeatableItem(itemsRes.data.values || [], bid.itemId);
+  } catch (e: any) {
+    console.warn(`[recordWinningBid] Couldn't read the Items sheet to check item ${bid.itemId}; skipping the one-winner check:`, e?.message || e);
+  }
+  if (repeatable !== false) return "ok";
+
+  const sameBid = existingWins.find((w) => w.bidderId === String(bid.bidderId).trim() && Math.abs(w.price - bid.price) < 0.005);
+  if (sameBid) return "already-recorded";
+  throw new WinningBidConflictError(
+    `Item #${bid.itemId} already has a winning bid (bidder ${existingWins[0].bidderId}, $${existingWins[0].price.toFixed(2)}), so this bid wasn't recorded.`
+  );
 }
 
 /**
@@ -253,172 +193,155 @@ export async function checkoutMarkPaid(
   return withLock(`bidder-numbers:${params.spreadsheetId}`, () => checkoutMarkPaidLocked(auth, params));
 }
 
+/** Bidder-Numbers G:I (Checked Out, Paid, Payment Method) and L (PayPal Pending Since) for one bidder row. */
+function paymentStatusOps(
+  spreadsheetId: string,
+  bidderNumbersSheet: string,
+  sheetRow: number,
+  status: { done: boolean; label: string; pendingSince: string }
+): SheetOp[] {
+  return [
+    { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!G${sheetRow}:I${sheetRow}`, newValues: [[status.done, status.done, status.label]] },
+    { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!L${sheetRow}`, newValues: [[status.pendingSince]] }
+  ];
+}
+
+/**
+ * Closes a cash/check payer's PayPal invoice so they can't also pay it
+ * online. They don't owe the card surcharge, so that line comes off first
+ * and the payment is recorded at what's left - leaving no balance
+ * (ROADMAP.md L3). If the surcharge can't be removed, the payment is
+ * recorded at the invoice's full total (Column K) instead, which still
+ * closes it. Column K is left as is: it's what a later receipt run compares
+ * against to reuse this invoice, so changing it would make that run cancel
+ * this invoice and send a new one.
+ *
+ * Never throws - the cash/check is in hand - but returns a warning for
+ * staff when something needs fixing by hand.
+ */
+async function settleOfflineInvoice(
+  paypal: PayPalService,
+  invoiceId: string,
+  label: string,
+  bidderId: string,
+  invoicedAmountCell: any
+): Promise<string | undefined> {
+  let amount = parseFloat(invoicedAmountCell) || 0;
+  let paidOnlineStatus: string | null = null;
+  try {
+    const adjusted = await paypal.removeSurchargeLine(invoiceId);
+    if (isPaidInvoiceStatus(adjusted.status)) paidOnlineStatus = adjusted.status;
+    else amount = adjusted.total;
+  } catch (e: any) {
+    console.warn(`[checkout] Couldn't remove the card surcharge from invoice ${invoiceId}; recording the full invoice amount instead: ${e?.message || e}`);
+  }
+
+  if (paidOnlineStatus) {
+    return `Bidder ${bidderId} is marked paid (${label}), but PayPal shows invoice ${invoiceId} as already paid (${paidOnlineStatus}). ` +
+      `Check for a double payment before taking the ${label.toLowerCase()}.`;
+  }
+
+  let recorded = false;
+  let reason = "PayPal rejected the request";
+  try {
+    recorded = await paypal.recordOfflinePayment(invoiceId, label, amount);
+  } catch (e: any) {
+    reason = e?.message || String(e);
+  }
+  if (recorded) return undefined;
+  console.warn(`[checkout] Couldn't record bidder ${bidderId}'s ${label.toLowerCase()} payment on PayPal invoice ${invoiceId}: ${reason}`);
+  return `Bidder ${bidderId} is marked paid (${label}), but PayPal didn't record the payment on invoice ${invoiceId}, so it can still be paid online. ` +
+    `Mark it paid in the PayPal dashboard.`;
+}
+
+/**
+ * A card payer's live PayPal invoice status. When no invoice was ever made
+ * (staff didn't print or email the receipt first), creates one now with
+ * the same get-or-create logic the receipt routes use, which also writes
+ * the URL/amount into columns J/K - otherwise checkout would mark
+ * "PayPal Verification Pending" with nothing to pay and nothing for the
+ * sweeper to resolve. A new invoice can't be paid yet, so that's "UNPAID".
+ */
+async function cardInvoiceStatus(auth: OAuth2Client, paypal: PayPalService, invoiceId: string | null, params: CheckoutParams): Promise<string> {
+  try {
+    if (invoiceId) return await paypal.getInvoiceStatus(invoiceId);
+
+    if (!params.itemsSpreadsheetId) {
+      throw new Error("Auction Items Spreadsheet ID is required to create a PayPal invoice.");
+    }
+    const invoiceResult = await buildBidderReceiptWithInvoice(auth, params.spreadsheetId, params.itemsSpreadsheetId, params.bidderId, paypal, {
+      bidderNumbers: params.bidderNumbersSheet,
+      bidManagement: params.bidManagementSheet || DEFAULT_SHEET_NAMES.bidManagement,
+    });
+    if (invoiceResult.success === false) {
+      throw new Error(invoiceResult.error);
+    }
+    return "UNPAID";
+  } catch (err: any) {
+    throw new Error("Credit Card validation processing error: " + err.message);
+  }
+}
+
 async function checkoutMarkPaidLocked(
   auth: OAuth2Client,
   params: CheckoutParams
 ): Promise<CheckoutResult> {
-  const {
-    bidderId,
-    spreadsheetId,
-    itemsSpreadsheetId,
-    ticketsSpreadsheetId,
-    bidderNumbersSheet,
-    bidManagementSheet,
-    paymentMethod,
-    paypalIsSandbox,
-    attendeeInfo
-  } = params;
-
+  const { bidderId, spreadsheetId, ticketsSpreadsheetId, bidderNumbersSheet, paymentMethod, paypalIsSandbox, attendeeInfo } = params;
   const sheets = google.sheets({ version: "v4", auth });
 
-  // 1. Record the payment - ported from
-  // Class_GoogleAIStudio.gs's (now-removed) `recordPayment`/
-  // `apiRecordPayment` bridge. See docs/agents/refactor-opportunities.md's
-  // Code Hardening item #2, Step 3 / CHANGELOG.md.
-  const method = (paymentMethod || "cash").toString();
-  const bidderSearch = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `'${bidderNumbersSheet}'!A:L`,
-  });
+  // 1. The bidder's Bidder-Numbers row and their PayPal invoice, if any.
+  const bidderSearch = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${bidderNumbersSheet}'!A:L` });
   const bidderRows = bidderSearch.data.values || [];
-  let targetRowIndex = -1;
-  for (let i = 1; i < bidderRows.length; i++) {
-    if (bidderRows[i][0]?.toString().trim() === String(bidderId).trim()) {
-      targetRowIndex = i;
-      break;
-    }
-  }
-
+  const targetRowIndex = findBidderRowIndex(bidderRows, bidderId);
   if (targetRowIndex === -1) {
     throw new Error("Bidder ID not found");
   }
-
   const sheetRow = targetRowIndex + 1; // 1-based sheet row
-  const invoiceUrlCell = bidderRows[targetRowIndex][9];
-  const invoicedAmountCell = bidderRows[targetRowIndex][10] || 0;
-
+  const bidderRow = bidderRows[targetRowIndex];
   const paypal = new PayPalService({ isSandbox: paypalIsSandbox !== false });
-  const invoiceId = paypal.extractInvoiceIdFromUrl(invoiceUrlCell);
+  const invoiceId = paypal.extractInvoiceIdFromUrl(bidderRow[BIDDER_COL.invoiceUrl]);
 
+  // 2. Work out the payment status (and settle the invoice for cash/check).
+  const method = (paymentMethod || "cash").toString();
   let deferred = false;
   let warning: string | undefined;
-  const paymentOps: SheetOp[] = [];
+  let paymentOps: SheetOp[];
 
   if (method === "cash" || method === "check") {
     const label = method === "cash" ? "Cash" : "Check";
-    paymentOps.push(
-      { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!G${sheetRow}:I${sheetRow}`, newValues: [[true, true, label]] },
-      { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!L${sheetRow}`, newValues: [[""]] }
-    );
-
-    // Closes the bidder's PayPal invoice so they can't also pay it online.
-    // A cash/check payer doesn't owe the card surcharge, so that line comes
-    // off the invoice first and the payment is recorded at what's left -
-    // leaving no balance (ROADMAP.md L3). If the surcharge can't be removed,
-    // the payment is recorded at the invoice's full total (Column K)
-    // instead, which still closes it. Column K is left as is: it's what a
-    // later receipt run compares against to reuse this invoice, so changing
-    // it would make that run cancel this invoice and send a new one.
-    //
-    // A failure doesn't block checkout - the cash/check is in hand - but
-    // it's never silent: staff get a `warning` saying what to fix by hand.
+    paymentOps = paymentStatusOps(spreadsheetId, bidderNumbersSheet, sheetRow, { done: true, label, pendingSince: "" });
     if (invoiceId) {
-      let amount = parseFloat(invoicedAmountCell) || 0;
-      let paidOnlineStatus: string | null = null;
-      try {
-        const adjusted = await paypal.removeSurchargeLine(invoiceId);
-        if (isPaidInvoiceStatus(adjusted.status)) paidOnlineStatus = adjusted.status;
-        else amount = adjusted.total;
-      } catch (e: any) {
-        console.warn(`[checkout] Couldn't remove the card surcharge from invoice ${invoiceId}; recording the full invoice amount instead: ${e?.message || e}`);
-      }
-
-      if (paidOnlineStatus) {
-        warning =
-          `Bidder ${bidderId} is marked paid (${label}), but PayPal shows invoice ${invoiceId} as already paid (${paidOnlineStatus}). ` +
-          `Check for a double payment before taking the ${label.toLowerCase()}.`;
-      } else {
-        let recorded = false;
-        let reason = "PayPal rejected the request";
-        try {
-          recorded = await paypal.recordOfflinePayment(invoiceId, label, amount);
-        } catch (e: any) {
-          reason = e?.message || String(e);
-        }
-        if (!recorded) {
-          console.warn(`[checkout] Couldn't record bidder ${bidderId}'s ${label.toLowerCase()} payment on PayPal invoice ${invoiceId}: ${reason}`);
-          warning =
-            `Bidder ${bidderId} is marked paid (${label}), but PayPal didn't record the payment on invoice ${invoiceId}, so it can still be paid online. ` +
-            `Mark it paid in the PayPal dashboard.`;
-        }
-      }
+      warning = await settleOfflineInvoice(paypal, invoiceId, label, bidderId, bidderRow[BIDDER_COL.invoicedAmount] || 0);
     }
   } else if (method === "credit_card") {
-    let liveStatus = "UNPAID";
-    try {
-      if (invoiceId) {
-        liveStatus = await paypal.getInvoiceStatus(invoiceId);
-      } else {
-        // No invoice has ever been created for this bidder - e.g. staff
-        // never generated/printed their receipt before clicking Checkout
-        // (the only other path that calls getOrCreateInvoiceUrl-style
-        // logic; see receiptDataService.ts). Without this, checkout used
-        // to silently mark "PayPal Verification Pending" with nothing
-        // for the customer to actually pay and nothing for
-        // paypalSweeperJob.ts to ever resolve - a real user-reported bug.
-        // Create the invoice now via the same get-or-create logic the
-        // receipt routes use, which also writes the URL/amount into
-        // columns J/K itself. A freshly created invoice can't already be
-        // paid, so liveStatus correctly stays "UNPAID" here.
-        if (!itemsSpreadsheetId) {
-          throw new Error("Auction Items Spreadsheet ID is required to create a PayPal invoice.");
-        }
-        const invoiceResult = await buildBidderReceiptWithInvoice(auth, spreadsheetId, itemsSpreadsheetId, bidderId, paypal, {
-          bidderNumbers: bidderNumbersSheet,
-          bidManagement: bidManagementSheet || DEFAULT_SHEET_NAMES.bidManagement,
-        });
-        if (invoiceResult.success === false) {
-          throw new Error(invoiceResult.error);
-        }
-      }
-    } catch (err: any) {
-      throw new Error("Credit Card validation processing error: " + err.message);
-    }
-
+    const liveStatus = await cardInvoiceStatus(auth, paypal, invoiceId, params);
     if (isPaidInvoiceStatus(liveStatus)) {
-      paymentOps.push(
-        { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!G${sheetRow}:I${sheetRow}`, newValues: [[true, true, "Credit Card / PayPal"]] },
-        { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!L${sheetRow}`, newValues: [[""]] }
-      );
+      paymentOps = paymentStatusOps(spreadsheetId, bidderNumbersSheet, sheetRow, { done: true, label: "Credit Card / PayPal", pendingSince: "" });
     } else {
+      // Not paid yet: the PayPal sweeper finishes the checkout once it is.
       deferred = true;
-      paymentOps.push(
-        { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!G${sheetRow}:I${sheetRow}`, newValues: [[false, false, "PayPal Verification Pending"]] },
-        { type: 'UPDATE', spreadsheetId, range: `'${bidderNumbersSheet}'!L${sheetRow}`, newValues: [[new Date().toISOString()]] }
-      );
+      paymentOps = paymentStatusOps(spreadsheetId, bidderNumbersSheet, sheetRow, { done: false, label: "PayPal Verification Pending", pendingSince: new Date().toISOString() });
     }
   } else {
     throw new Error("Unknown checkout payment method specified: " + method);
   }
 
+  // 3. Record it.
   await executeGoogleSheetsTransaction(sheets, paymentOps);
   if (deferred) {
     // Column L now holds a timestamp - make sure it has a label.
     await ensureTrackingHeaders(sheets, spreadsheetId, bidderNumbersSheet).catch((e) => console.warn("[checkout] Could not label Bidder-Numbers L1:N1:", e?.message || e));
   }
 
-  // 2. Optional: Update Tickets Spreadsheet
+  // 4. Mark their ticket paid on the 'tickets' tab, when the browser sent its row.
   let attendeeUpdated = false;
   if (ticketsSpreadsheetId && attendeeInfo?.sheet && attendeeInfo.rowIndex) {
-    const operations: SheetOp[] = [
-      {
-        type: 'UPDATE',
-        spreadsheetId: ticketsSpreadsheetId,
-        range: `${attendeeInfo.sheet}!U${attendeeInfo.rowIndex}`,
-        newValues: [["Paid"]]
-      }
-    ];
-    await executeGoogleSheetsTransaction(sheets, operations);
+    await executeGoogleSheetsTransaction(sheets, [{
+      type: 'UPDATE',
+      spreadsheetId: ticketsSpreadsheetId,
+      range: `${attendeeInfo.sheet}!${getColumnLetter(TICKETS_COL.paymentStatus)}${attendeeInfo.rowIndex}`,
+      newValues: [["Paid"]]
+    }]);
     attendeeUpdated = true;
   }
 

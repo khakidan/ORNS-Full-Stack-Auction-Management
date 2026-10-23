@@ -41,6 +41,27 @@ export const ITEM_COL = {
 } as const;
 
 /**
+ * The Auction Tickets spreadsheet's main 'tickets' tab (one row per ticket
+ * purchase; guests in H-S). The staff/sponsor tabs keep their payment
+ * columns elsewhere - see src/lib/attendeeSheetColumns.ts, which
+ * sheetColumns.test.ts checks these against.
+ */
+export const TICKETS_COL = {
+  firstName: 0,
+  lastName: 1,
+  email: 2,
+  phone: 3,
+  ticketsPurchased: 4,
+  hasGuests: 5,
+  paymentMethod: 19,
+  paymentStatus: 20,
+  totalPaid: 21,
+} as const;
+
+/** What registerWalkInBidder writes in TICKETS_COL.paymentMethod; the sync refuses to rebuild once it's there. */
+export const WALK_IN_PAYMENT_METHOD = "Auction Checkout";
+
+/**
  * Bid-Management grid: each bidder owns two columns (item, price); row 1
  * holds the bidder ID, row 2 the name, row 3 the "Item #:"/"Price:"
  * captions, and bids start on row 4 (0-based index 3).

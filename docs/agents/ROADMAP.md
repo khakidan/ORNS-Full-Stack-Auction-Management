@@ -77,9 +77,8 @@ Nothing outstanding - R1-R4 are fixed (see `CHANGELOG.md`).
 
 ### After the auction - structure
 
-R5-R10 are fixed (see `CHANGELOG.md`).
+Nothing outstanding - R5-R11 are fixed (see `CHANGELOG.md`).
 
-- **R11 - Long money-path functions** (`registerWalkInBidderLocked` 207 lines, `checkoutMarkPaidLocked` 174, `recordWinningBidLocked` 157). Split out their pure steps so they can be tested alone. Leave until well after the auction.
 
 ### Small cleanups
 
