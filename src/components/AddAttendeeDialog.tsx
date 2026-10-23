@@ -11,7 +11,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/LoadingButton";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -20,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FormSection } from "@/components/FormSection";
+import { FormField } from "@/components/FormField";
 import { AttendeeGuestsEditor, GuestDraft } from "@/components/AttendeeGuestsEditor";
 import { hasMoreGuestsThanTicketsPurchased } from "@/lib/attendeeValidation";
 
@@ -90,44 +90,50 @@ export function AddAttendeeDialog({
         <div className="flex flex-col gap-5 max-h-[65vh] overflow-y-auto pr-1">
           <FormSection title="Contact">
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">First name</Label>
-                <Input placeholder="First" value={newEntry.firstName} onChange={e => onNewEntryChange({ ...newEntry, firstName: e.target.value })} />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Last name</Label>
-                <Input placeholder="Last" value={newEntry.lastName} onChange={e => onNewEntryChange({ ...newEntry, lastName: e.target.value })} />
-              </div>
+              <FormField label="First name">
+                {(id) => (
+                  <Input id={id} placeholder="First" value={newEntry.firstName} onChange={e => onNewEntryChange({ ...newEntry, firstName: e.target.value })} />
+                )}
+              </FormField>
+              <FormField label="Last name">
+                {(id) => (
+                  <Input id={id} placeholder="Last" value={newEntry.lastName} onChange={e => onNewEntryChange({ ...newEntry, lastName: e.target.value })} />
+                )}
+              </FormField>
             </div>
-            <div className="mt-3">
-              <Label className="text-xs text-muted-foreground mb-1.5 block">Email</Label>
-              <Input value={newEntry.email} onChange={e => onNewEntryChange({ ...newEntry, email: e.target.value })} />
-            </div>
-            <div className="mt-3">
-              <Label className="text-xs text-muted-foreground mb-1.5 block">Phone</Label>
-              <Input value={newEntry.phone} onChange={e => onNewEntryChange({ ...newEntry, phone: e.target.value })} />
-            </div>
+            <FormField label="Email" className="mt-3">
+              {(id) => (
+                <Input id={id} value={newEntry.email} onChange={e => onNewEntryChange({ ...newEntry, email: e.target.value })} />
+              )}
+            </FormField>
+            <FormField label="Phone" className="mt-3">
+              {(id) => (
+                <Input id={id} value={newEntry.phone} onChange={e => onNewEntryChange({ ...newEntry, phone: e.target.value })} />
+              )}
+            </FormField>
           </FormSection>
 
           <FormSection title="Tickets">
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Source</Label>
-                <Select value={newEntry.source} onValueChange={v => onNewEntryChange({ ...newEntry, source: v })}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue>{(value: string) => SOURCE_LABELS[value] ?? value}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="tickets">General Tickets</SelectItem>
-                    <SelectItem value="sponsor tickets">Sponsor</SelectItem>
-                    <SelectItem value="staff tickets">Staff</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Tickets Purchased</Label>
-                <Input type="number" min="0" value={newEntry.tickets} onChange={e => onNewEntryChange({ ...newEntry, tickets: e.target.value })} />
-              </div>
+              <FormField label="Source">
+                {(id) => (
+                  <Select value={newEntry.source} onValueChange={v => onNewEntryChange({ ...newEntry, source: v })}>
+                    <SelectTrigger id={id} className="w-full">
+                      <SelectValue>{(value: string) => SOURCE_LABELS[value] ?? value}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="tickets">General Tickets</SelectItem>
+                      <SelectItem value="sponsor tickets">Sponsor</SelectItem>
+                      <SelectItem value="staff tickets">Staff</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </FormField>
+              <FormField label="Tickets Purchased">
+                {(id) => (
+                  <Input id={id} type="number" min="0" value={newEntry.tickets} onChange={e => onNewEntryChange({ ...newEntry, tickets: e.target.value })} />
+                )}
+              </FormField>
             </div>
           </FormSection>
 

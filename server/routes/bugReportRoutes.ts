@@ -5,6 +5,7 @@ import { appendBugReportToSheet, buildReportFilename, deleteScreenshotFromDrive,
 import { requireAuth } from "../middleware/requireAuth";
 import { notifyAdminOfBugReport } from "../services/adminNotifications";
 import { BugReportPayload, BugReportType } from "../../src/types";
+import { sheetsFor, driveFor } from '../utils/googleClients';
 
 const BUG_REPORT_TYPES: BugReportType[] = ["Bug", "UI Issue", "Workflow Issue"];
 const MAX_TEXT_LENGTH = 50_000;
@@ -144,8 +145,7 @@ export default function createBugReportRouter() {
     }
 
     try {
-      const client = getAuthenticatedClient(req.session!.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
+      const sheets = sheetsFor(req);
       const reports = await listOpenBugReports(sheets, spreadsheetId);
       res.json({ reports });
     } catch (error: any) {
@@ -163,16 +163,14 @@ export default function createBugReportRouter() {
     }
 
     try {
-      const client = getAuthenticatedClient(req.session!.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
+      const sheets = sheetsFor(req);
       const { rowIndex, screenshotLink } = await findReportRow(sheets, spreadsheetId, reportId);
       if (rowIndex === -1) {
         return res.status(404).json({ error: "Report not found" });
       }
       await markReportResolved(sheets, spreadsheetId, rowIndex);
       if (screenshotLink) {
-        const drive = google.drive({ version: "v3", auth: client });
-        await deleteScreenshotFromDrive(drive, screenshotLink);
+        await deleteScreenshotFromDrive(driveFor(req), screenshotLink);
       }
       res.json({ success: true });
     } catch (error: any) {

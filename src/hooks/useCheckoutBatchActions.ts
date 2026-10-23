@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { errorTextFrom, fetchWithRetry, getBaseUrl, NO_ANSWER_MESSAGE, postOnce, ServerUnreachableError } from "@/services/google-api";
+import { errorTextFrom, getBaseUrl, NO_ANSWER_MESSAGE, postOnce, ServerUnreachableError } from "@/services/google-api";
+import { postJson } from "@/services/apiClient";
 
 interface UseCheckoutBatchActionsArgs {
   spreadsheetId: string;
@@ -89,18 +90,12 @@ export function useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, fol
       setIsEmailingAll(true);
 
       console.log("[Checkout] Starting batch email...");
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/email-all`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // idempotencyKey: fetchWithRetry re-sends this same body on a
-        // timeout/5xx, and the server joins that retry to the run already
-        // in progress instead of starting a second one.
-        body: JSON.stringify({ spreadsheetId, itemsSpreadsheetId, bidderNumbersSheet, bidManagementSheet, idempotencyKey: window.crypto.randomUUID() }),
-        credentials: "include"
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || data.message || "Batch email failed");
+      // idempotencyKey: the request is retried on a timeout/5xx with this
+      // same body, and the server joins that retry to the run already in
+      // progress instead of starting a second one.
+      const data = await postJson("/api/receipts/email-all",
+        { spreadsheetId, itemsSpreadsheetId, bidderNumbersSheet, bidManagementSheet, idempotencyKey: window.crypto.randomUUID() },
+        "Batch email failed");
       toast.success(formatEmailAllSummary(data));
     } catch (error: any) {
       console.error("[Checkout] Batch email error:", error);

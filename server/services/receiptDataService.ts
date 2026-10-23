@@ -3,6 +3,7 @@ import { PayPalService, PayPalBidderInfo, PayPalLineItem } from "./paypalService
 import { calculatePayPalSurcharge } from "../utils/financeUtils";
 import { quoteSheetName } from "../utils/rangeUtils";
 import { isValidEmailAddress } from "../utils/emailAddress";
+import { BIDDER_COL } from "../utils/sheetColumns";
 
 /**
  * Who a PayPal invoice goes to when the bidder has no usable email address
@@ -226,14 +227,14 @@ export async function buildAllBidderReceipts(
   const dataRows = numData.slice(1);
 
   const sortedRows = [...dataRows].sort((a, b) => {
-    const lastA = String(a[2] || "").toLowerCase();
-    const lastB = String(b[2] || "").toLowerCase();
+    const lastA = String(a[BIDDER_COL.lastName] || "").toLowerCase();
+    const lastB = String(b[BIDDER_COL.lastName] || "").toLowerCase();
     return lastA.localeCompare(lastB);
   });
 
   const receipts: BidderReceiptData[] = [];
   for (const row of sortedRows) {
-    const bidderId = String(row[0] || "").trim();
+    const bidderId = String(row[BIDDER_COL.id] || "").trim();
     if (!bidderId) continue;
 
     const colIndex = findBidderColumn(mgmtData, bidderId);
@@ -244,9 +245,9 @@ export async function buildAllBidderReceipts(
 
     receipts.push({
       bidId: bidderId,
-      firstName: row[1] || "",
-      lastName: row[2] || "",
-      email: row[3] || "",
+      firstName: row[BIDDER_COL.firstName] || "",
+      lastName: row[BIDDER_COL.lastName] || "",
+      email: row[BIDDER_COL.email] || "",
       ...items
     });
   }
@@ -265,13 +266,13 @@ export async function buildAllBidderReceipts(
 export function findExistingInvoice(bidderNumbersRows: any[][], bidderId: string): ExistingInvoice | null {
   for (let i = 1; i < bidderNumbersRows.length; i++) {
     const row = bidderNumbersRows[i];
-    const cell = row[0];
+    const cell = row[BIDDER_COL.id];
     if (cell === null || cell === undefined || String(cell).trim() === "") continue;
     if (String(cell).trim() === String(bidderId).trim()) {
       return {
         rowIndex: i + 1,
-        url: String(row[9] || "").trim(),
-        amount: parseFloat(row[10]) || 0,
+        url: String(row[BIDDER_COL.invoiceUrl] || "").trim(),
+        amount: parseFloat(row[BIDDER_COL.invoicedAmount]) || 0,
       };
     }
   }

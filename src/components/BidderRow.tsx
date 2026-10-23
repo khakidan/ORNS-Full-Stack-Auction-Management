@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Bidder } from "@/types";
 import { BidderAttendeeInfo } from "@/lib/bidderAttendeeInfo";
 import { cn } from "@/lib/utils";
+import { RowIdTile } from "@/components/RowIdTile";
 
 const SOURCE_BADGE_STYLES: Record<string, string> = {
   "sponsor tickets": "bg-indigo-50 text-indigo-700 border-indigo-100",
@@ -61,16 +62,11 @@ export function BidderRow({
       data-testid={`bidder-row-${bidder.id}`}
       className="group/row flex items-center gap-4 px-5 py-4 border-b last:border-0 hover:bg-muted/50 transition-colors"
     >
-      <div className="w-13 shrink-0 flex flex-col items-center gap-0.5">
-        <div className="w-10 h-10 rounded-md bg-secondary text-secondary-foreground flex items-center justify-center font-mono font-bold text-sm">
-          {bidder.id}
-        </div>
-        <span className="text-[10px] uppercase text-muted-foreground">ID</span>
-      </div>
+      <RowIdTile value={bidder.id} caption="ID" />
 
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-semibold text-[15px]">{bidder.firstName} {bidder.lastName}</span>
+          <span className="font-semibold text-row-title">{bidder.firstName} {bidder.lastName}</span>
           {sourceLabel && (
             <Badge variant="outline" className={cn("capitalize text-xs font-normal", SOURCE_BADGE_STYLES[attendee!.sheet])}>
               {sourceLabel}

@@ -8,6 +8,7 @@ import { ensureTrackingHeaders } from "../utils/bidderNumbersHeaders";
 import { PayPalService, isPaidInvoiceStatus } from "./paypalService";
 import { buildBidderReceiptWithInvoice, DEFAULT_SHEET_NAMES } from "./receiptDataService";
 import { findExistingWins, isRepeatableItem, WinningBidConflictError } from "../utils/winningBidChecks";
+import { BIDDER_COL } from "../utils/sheetColumns";
 
 export interface RecordWinningBidParams {
   bidderId: string;
@@ -107,13 +108,13 @@ async function recordWinningBidLocked(
     range: `'${bidderNumbersSheet}'!A:G`,
   });
   const biddersRows = bidderSearch.data.values || [];
-  const bidderRow = biddersRows.find((row: any) => row[0]?.toString() === bidderId);
+  const bidderRow = biddersRows.find((row: any) => row[BIDDER_COL.id]?.toString() === bidderId);
   
   if (!bidderRow) {
     throw new Error(`Bidder ${bidderId} not found.`);
   }
 
-  const isCheckedOut = bidderRow[6] === true || bidderRow[6] === "TRUE";
+  const isCheckedOut = bidderRow[BIDDER_COL.checkedOut] === true || bidderRow[BIDDER_COL.checkedOut] === "TRUE";
 
   // 2. Find Bidder Column in Bid-Management
   const dataRes = await sheets.spreadsheets.values.get({
@@ -475,9 +476,9 @@ export async function closeAuctionAndCleanup(
   // 3. Queue Updates for Non-Winners
   const updates: any[] = [];
   for (let i = 1; i < bidderRows.length; i++) {
-    const id = bidderRows[i][0]?.toString();
-    const checkedIn = bidderRows[i][4] === "TRUE" || bidderRows[i][4] === "true";
-    const checkedOut = bidderRows[i][6] === "TRUE" || bidderRows[i][6] === "true";
+    const id = bidderRows[i][BIDDER_COL.id]?.toString();
+    const checkedIn = bidderRows[i][BIDDER_COL.checkedIn] === "TRUE" || bidderRows[i][BIDDER_COL.checkedIn] === "true";
+    const checkedOut = bidderRows[i][BIDDER_COL.checkedOut] === "TRUE" || bidderRows[i][BIDDER_COL.checkedOut] === "true";
     
     if (id && checkedIn && !checkedOut && !winnersSet.has(id)) {
       updates.push({

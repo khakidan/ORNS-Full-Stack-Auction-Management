@@ -1,7 +1,7 @@
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { parseDollar, calculateAutoBids, ValueCalculationTier } from "@/lib/auctionItemPricing";
 import { AuctionItem } from "@/types";
+import { postJson, HttpError } from "@/services/apiClient";
 
 export interface AuctionItemEditChange {
   field: keyof AuctionItem;
@@ -71,22 +71,7 @@ export function useAuctionItemUpdate(
     setItems(prev => prev.map(item => item.rowIndex === rowIndex ? ({ ...item, ...changes } as AuctionItem) : item));
 
     try {
-      const response = await fetchWithRetry(`${getBaseUrl()}/api/auction/update-item`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ spreadsheetId, rowIndex, changes, expectedName: targetItem.name }),
-      });
-      const resData = await response.json().catch(() => ({}));
-      if (!response.ok || resData.error) {
-        const error = new Error(resData.error || "The server didn't save the change.");
-        if (response.status === 409) {
-          rollbackThisRow();
-          toast.error(error.message);
-          fetchData();
-          return;
-        }
-        throw error;
-      }
+      await postJson("/api/auction/update-item", { spreadsheetId, rowIndex, changes, expectedName: targetItem.name }, "The server didn't save the change.");
       if ("category" in changes) {
         toast.success("Category updated and re-sequenced successfully!");
         fetchData();
@@ -94,8 +79,14 @@ export function useAuctionItemUpdate(
         toast.success("Saved successfully");
       }
     } catch (e: any) {
-      console.error("Failed to save item changes", e);
       rollbackThisRow();
+      if (e instanceof HttpError && e.status === 409) {
+        // Someone else changed this item meanwhile - say so and reload it.
+        toast.error(e.message);
+        fetchData();
+        return;
+      }
+      console.error("Failed to save item changes", e);
       toast.error("Failed to save changes: " + e.message);
     }
   };

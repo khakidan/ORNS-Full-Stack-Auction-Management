@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl, getSheetData } from "@/services/google-api";
+import { getSheetData } from "@/services/google-api";
+import { postJson } from "@/services/apiClient";
 
 export function useAuctionStatusData(spreadsheetId: string, bidManagementSheet: string, bidderNumbersSheet: string) {
   const [isAuctionClosed, setIsAuctionClosed] = useState(false);
@@ -28,23 +29,11 @@ export function useAuctionStatusData(spreadsheetId: string, bidManagementSheet: 
   const requestCloseAuction = useCallback(async (): Promise<boolean> => {
     if (!spreadsheetId) return false;
     try {
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/auction/close-and-cleanup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          spreadsheetId,
-          bidderNumbersSheet,
-          bidManagementSheet
-        }),
-        credentials: "include"
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to close auction and cleanup");
-      }
-
-      const data = await res.json();
+      const data = await postJson("/api/auction/close-and-cleanup", {
+        spreadsheetId,
+        bidderNumbersSheet,
+        bidManagementSheet
+      }, "Failed to close auction and cleanup");
       setIsAuctionClosed(true);
       toast.success("Auction closed successfully.");
       if (data.count > 0) {

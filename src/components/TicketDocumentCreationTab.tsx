@@ -8,6 +8,7 @@ import { FolderFilesCard } from "@/components/FolderFilesCard";
 
 import { useAuction } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
+import { isConfiguredId } from "@/lib/configuredId";
 
 export default function TicketDocumentCreationTab() {
   const { isAuctionClosed } = useAuction();
@@ -19,11 +20,11 @@ export default function TicketDocumentCreationTab() {
   const { files, loadingFiles, fetchFiles, isInvalidFolder } = useForPrintFolderFiles(forPrintFolderId);
 
   const runScript = async (functionName: string, label: string) => {
-    if (!spreadsheetId || spreadsheetId.includes("PASTE")) {
+    if (!isConfiguredId(spreadsheetId)) {
       toast.error("Please correctly configure the Auction Tickets Spreadsheet ID in Settings.");
       return;
     }
-    if (!bidManagementSpreadsheetId || bidManagementSpreadsheetId.includes("PASTE")) {
+    if (!isConfiguredId(bidManagementSpreadsheetId)) {
       toast.error("Please correctly configure the Bid Management Spreadsheet ID in Settings.");
       return;
     }

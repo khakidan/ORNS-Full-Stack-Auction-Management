@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { useAuction } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
 import { getErrorBuffer } from "@/lib/errorBuffer";
 import { formatAppState, formatBrowserInfo, formatConsoleActivity, getCurrentRoute } from "@/lib/bugReportContext";
 import { blobToBase64, captureScreenshot } from "@/lib/screenshotCapture";
 import { BugReportType } from "@/types";
+import { postJson } from "@/services/apiClient";
 
 export interface BugReportFormState {
   title: string;
@@ -85,29 +85,19 @@ export function useBugReportState() {
         auctionTicketsSpreadsheetConfigured: !!config.auctionTicketsSpreadsheetId,
       });
 
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/bug-reports`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: form.title.trim(),
-          description: form.description.trim(),
-          type: form.type,
-          timestamp: new Date().toISOString(),
-          route: getCurrentRoute(),
-          appState,
-          browserInfo: formatBrowserInfo(),
-          consoleActivity: getErrorBuffer(),
-          screenshotBase64,
-          bugReportsSpreadsheetId: config.bugReportsSpreadsheetId,
-          bugReportsFolderId: config.bugReportsFolderId,
-        }),
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to save bug report");
-      }
+      await postJson("/api/bug-reports", {
+        title: form.title.trim(),
+        description: form.description.trim(),
+        type: form.type,
+        timestamp: new Date().toISOString(),
+        route: getCurrentRoute(),
+        appState,
+        browserInfo: formatBrowserInfo(),
+        consoleActivity: getErrorBuffer(),
+        screenshotBase64,
+        bugReportsSpreadsheetId: config.bugReportsSpreadsheetId,
+        bugReportsFolderId: config.bugReportsFolderId,
+      }, "Failed to save bug report");
 
       toast.success("Bug report saved");
       setOpen(false);

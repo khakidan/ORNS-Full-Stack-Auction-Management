@@ -8,6 +8,7 @@ import { DocumentCreationPanel } from "@/components/DocumentCreationPanel";
 import { FolderFilesCard } from "@/components/FolderFilesCard";
 
 import { useAuction } from "@/context/AuctionContext";
+import { isConfiguredId } from "@/lib/configuredId";
 
 export default function DocumentCreationTab() {
   const { isAuctionClosed } = useAuction();
@@ -18,7 +19,7 @@ export default function DocumentCreationTab() {
   const { files, loadingFiles, fetchFiles, isInvalidFolder } = useForPrintFolderFiles(forPrintFolderId);
 
   const runScript = async (functionName: string, label: string) => {
-    if (!spreadsheetId || spreadsheetId.includes("PASTE")) {
+    if (!isConfiguredId(spreadsheetId)) {
       toast.error("Please correctly configure the Auction Items Spreadsheet ID in Settings.");
       return;
     }

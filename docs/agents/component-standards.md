@@ -51,6 +51,19 @@ with the shared bare-header, `p-0`-content shape those four pages all
 need, closing off the exact per-page `className` override drift that
 caused the whitespace double-gap bugs (see `CHANGELOG.md`).
 
+Two small shared pieces sit beside the views in `src/components/`:
+
+- **`FormField.tsx`** - one labelled field in the add/edit dialogs (inside
+  a `FormSection`). It renders the small muted label and passes a
+  generated `id` to its child, so the label is linked to the control:
+  `<FormField label="Donor">{(id) => <Input id={id} ... />}</FormField>`.
+  For a `Select`, put the `id` on its `SelectTrigger`. Every dialog
+  field needs a linked label (or an `aria-label` when there's no visible
+  one, as in `AttendeeGuestsEditor.tsx`).
+- **`RowIdTile.tsx`** - the number box at the start of `BidderRow`,
+  `ItemRow` and `AuctionItemRow`; pair it with `font-semibold
+  text-row-title` for the row's name.
+
 There are seven top-level workflow views under `src/components/`
 (`Dashboard.tsx`, `Bidders.tsx`, `Items.tsx`, `BidEntry.tsx`,
 `Checkout.tsx`, `Receipts.tsx`, plus tab/workflow files like

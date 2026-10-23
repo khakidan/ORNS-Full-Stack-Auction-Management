@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
+import { isConfiguredId } from "@/lib/configuredId";
 
 /**
  * Fetches and refreshes the file listing for the configured "For Print"
@@ -11,7 +12,7 @@ export function useForPrintFolderFiles(forPrintFolderId: string) {
   const [loadingFiles, setLoadingFiles] = useState(false);
 
   const fetchFiles = useCallback(async () => {
-    if (!forPrintFolderId || ["undefined", "null", ""].includes(forPrintFolderId) || forPrintFolderId.includes("PASTE")) {
+    if (!isConfiguredId(forPrintFolderId)) {
       setLoadingFiles(false);
       return;
     }
@@ -39,7 +40,7 @@ export function useForPrintFolderFiles(forPrintFolderId: string) {
     fetchFiles();
   }, [fetchFiles]);
 
-  const isInvalidFolder = !forPrintFolderId || forPrintFolderId === "undefined" || forPrintFolderId === "null" || forPrintFolderId.includes("PASTE");
+  const isInvalidFolder = !isConfiguredId(forPrintFolderId);
 
   return { files, loadingFiles, fetchFiles, isInvalidFolder };
 }

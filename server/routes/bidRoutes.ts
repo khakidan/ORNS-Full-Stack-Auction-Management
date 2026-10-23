@@ -1,15 +1,13 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { google } from 'googleapis';
-import { getColumnLetter } from '../utils/columnUtils';
 import { getAuthenticatedClient } from '../services/oauth';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
-import { executeGoogleSheetsTransaction, SheetOp } from '../services/sheetsService';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { registerWalkInBidder, checkInBidderWithBid, setBidderFlag, BIDDER_FLAG_COLUMNS } from '../services/bidderService';
 import { recordWinningBid, checkoutMarkPaid, closeAuctionAndCleanup } from '../services/auctionService';
 import { requireAuth } from '../middleware/requireAuth';
 import { saveSpecialWinner, SPECIAL_PRIZES } from '../services/specialWinnerService';
 import { getPaypalIsSandbox } from '../services/sharedConfig';
+import { sheetsFor } from '../utils/googleClients';
 
 export default function createBidRouter() {
   const router = Router();
@@ -46,8 +44,7 @@ export default function createBidRouter() {
 
     try {
       const outcome = await withIdempotency("auction/record-winning-bid", idempotencyKey, async () => {
-        const client = getAuthenticatedClient(req.session.tokens);
-        const sheets = google.sheets({ version: "v4", auth: client });
+        const sheets = sheetsFor(req);
 
         const result = await recordWinningBid(sheets, {
           bidderId,
@@ -143,8 +140,7 @@ export default function createBidRouter() {
     }
 
     try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
+      const sheets = sheetsFor(req);
 
       const result = await closeAuctionAndCleanup(sheets, {
         spreadsheetId,
@@ -184,8 +180,7 @@ export default function createBidRouter() {
 
     try {
       const outcome = await withIdempotency("bidders/walk-in", idempotencyKey, async () => {
-        const client = getAuthenticatedClient(req.session.tokens);
-        const sheets = google.sheets({ version: "v4", auth: client });
+        const sheets = sheetsFor(req);
 
         const result = await registerWalkInBidder(sheets, {
           firstName,
@@ -221,8 +216,7 @@ export default function createBidRouter() {
 
     try {
       const outcome = await withIdempotency("auction/special-winner", idempotencyKey, async () => {
-        const client = getAuthenticatedClient(req.session.tokens);
-        const sheets = google.sheets({ version: "v4", auth: client });
+        const sheets = sheetsFor(req);
         return saveSpecialWinner(sheets, { spreadsheetId, prize, bidderId: bidderId.trim(), addFollowUp: !!addFollowUp });
       });
       res.json(idempotentBody(outcome));
@@ -240,8 +234,7 @@ export default function createBidRouter() {
     }
 
     try {
-      const client = getAuthenticatedClient(req.session.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
+      const sheets = sheetsFor(req);
       const result = await setBidderFlag(sheets, { spreadsheetId, bidderNumbersSheet, bidderId: String(bidderId), flag });
       clearCacheForSpreadsheet(spreadsheetId);
       res.json(result);
@@ -279,8 +272,7 @@ export default function createBidRouter() {
 
     try {
       const outcome = await withIdempotency("auction/check-in-with-bid", idempotencyKey, async () => {
-        const client = getAuthenticatedClient(req.session.tokens);
-        const sheets = google.sheets({ version: "v4", auth: client });
+        const sheets = sheetsFor(req);
 
         const result = await checkInBidderWithBid(sheets, {
           bidderId,

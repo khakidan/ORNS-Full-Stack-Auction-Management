@@ -1,0 +1,470 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`performSheetSync - full rebuild > archives the old tabs, then writes Bidder-Numbers and the Bid-Management grid 1`] = `
+[
+  {
+    "args": "bm-id _Settings!A:C",
+    "op": "get",
+  },
+  {
+    "args": "tickets-id 'tickets'!A:T",
+    "op": "get",
+  },
+  {
+    "args": [
+      {
+        "updateSheetProperties": {
+          "fields": "title",
+          "properties": {
+            "sheetId": 1,
+            "title": "Bid-Management (Backup 2026-10-24_09-05-07)",
+          },
+        },
+      },
+      {
+        "updateSheetProperties": {
+          "fields": "title",
+          "properties": {
+            "sheetId": 2,
+            "title": "Bidder-Numbers (Backup 2026-10-24_09-05-07)",
+          },
+        },
+      },
+      {
+        "addSheet": {
+          "properties": {
+            "title": "Bidder-Numbers",
+          },
+        },
+      },
+      {
+        "addSheet": {
+          "properties": {
+            "title": "Bid-Management",
+          },
+        },
+      },
+    ],
+    "op": "batchUpdate",
+  },
+  {
+    "args": "tickets-id 'tickets'!A:S",
+    "op": "get",
+  },
+  {
+    "args": "tickets-id 'staff tickets'!A:C",
+    "op": "get",
+  },
+  {
+    "args": "tickets-id 'sponsor tickets'!A:C",
+    "op": "get",
+  },
+  {
+    "args": {
+      "range": "Bidder-Numbers!A1",
+      "values": [
+        [
+          "ID",
+          "First Name",
+          "Last Name",
+          "Email",
+          "Checked In",
+          "Proxy Bidder",
+          "Checked Out",
+          "Paid",
+          "Payment Method",
+          "Invoice URL",
+          "Invoiced Amount",
+          "PayPal Pending Since",
+          "Receipt Emailed At",
+          "Receipt Emailed Invoice",
+        ],
+        [
+          101,
+          "Ann",
+          "Staff",
+          "ann@orns.org",
+          false,
+          false,
+          false,
+          false,
+          "",
+          "",
+          "",
+        ],
+        [
+          102,
+          "Pat",
+          "Lee",
+          "pat@x.org",
+          false,
+          false,
+          false,
+          false,
+          "",
+          "",
+          "",
+        ],
+        [
+          103,
+          "Sam",
+          "Lee",
+          "sam@x.org",
+          false,
+          false,
+          false,
+          false,
+          "",
+          "",
+          "",
+        ],
+      ],
+    },
+    "op": "update",
+  },
+  {
+    "args": [
+      {
+        "setDataValidation": {
+          "range": {
+            "endColumnIndex": 8,
+            "endRowIndex": 4,
+            "sheetId": 10,
+            "startColumnIndex": 4,
+            "startRowIndex": 1,
+          },
+          "rule": {
+            "condition": {
+              "type": "BOOLEAN",
+            },
+            "showCustomUi": true,
+          },
+        },
+      },
+      {
+        "updateSheetProperties": {
+          "fields": "gridProperties.frozenRowCount",
+          "properties": {
+            "gridProperties": {
+              "frozenRowCount": 1,
+            },
+            "sheetId": 10,
+          },
+        },
+      },
+    ],
+    "op": "batchUpdate",
+  },
+  {
+    "args": {
+      "range": "Bid-Management!A1",
+      "values": [
+        [
+          101,
+          "",
+          102,
+          "",
+          103,
+          "",
+        ],
+        [
+          "Ann",
+          "Staff",
+          "Pat",
+          "Lee",
+          "Sam",
+          "Lee",
+        ],
+        [
+          "Item #:",
+          "Price:",
+          "Item #:",
+          "Price:",
+          "Item #:",
+          "Price:",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+      ],
+    },
+    "op": "update",
+  },
+  {
+    "args": [
+      {
+        "updateSheetProperties": {
+          "fields": "gridProperties.frozenRowCount",
+          "properties": {
+            "gridProperties": {
+              "frozenRowCount": 3,
+            },
+            "sheetId": 11,
+          },
+        },
+      },
+      {
+        "mergeCells": {
+          "mergeType": "MERGE_ALL",
+          "range": {
+            "endColumnIndex": 2,
+            "endRowIndex": 1,
+            "sheetId": 11,
+            "startColumnIndex": 0,
+            "startRowIndex": 0,
+          },
+        },
+      },
+      {
+        "repeatCell": {
+          "cell": {
+            "userEnteredFormat": {
+              "horizontalAlignment": "CENTER",
+            },
+          },
+          "fields": "userEnteredFormat.horizontalAlignment",
+          "range": {
+            "endColumnIndex": 2,
+            "endRowIndex": 3,
+            "sheetId": 11,
+            "startColumnIndex": 0,
+            "startRowIndex": 0,
+          },
+        },
+      },
+      {
+        "mergeCells": {
+          "mergeType": "MERGE_ALL",
+          "range": {
+            "endColumnIndex": 4,
+            "endRowIndex": 1,
+            "sheetId": 11,
+            "startColumnIndex": 2,
+            "startRowIndex": 0,
+          },
+        },
+      },
+      {
+        "repeatCell": {
+          "cell": {
+            "userEnteredFormat": {
+              "horizontalAlignment": "CENTER",
+            },
+          },
+          "fields": "userEnteredFormat.horizontalAlignment",
+          "range": {
+            "endColumnIndex": 4,
+            "endRowIndex": 3,
+            "sheetId": 11,
+            "startColumnIndex": 2,
+            "startRowIndex": 0,
+          },
+        },
+      },
+      {
+        "mergeCells": {
+          "mergeType": "MERGE_ALL",
+          "range": {
+            "endColumnIndex": 6,
+            "endRowIndex": 1,
+            "sheetId": 11,
+            "startColumnIndex": 4,
+            "startRowIndex": 0,
+          },
+        },
+      },
+      {
+        "repeatCell": {
+          "cell": {
+            "userEnteredFormat": {
+              "horizontalAlignment": "CENTER",
+            },
+          },
+          "fields": "userEnteredFormat.horizontalAlignment",
+          "range": {
+            "endColumnIndex": 6,
+            "endRowIndex": 3,
+            "sheetId": 11,
+            "startColumnIndex": 4,
+            "startRowIndex": 0,
+          },
+        },
+      },
+    ],
+    "op": "batchUpdate",
+  },
+]
+`;

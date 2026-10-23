@@ -49,7 +49,7 @@ export function WinnerCard({
       <CardHeader className="pt-4 pb-3 gap-0">
         <div className="flex justify-between items-start gap-3">
           <div className="min-w-0">
-            <div className="font-semibold text-[15px] truncate">{winner.name}</div>
+            <div className="font-semibold text-row-title truncate">{winner.name}</div>
             <div className="text-xs text-muted-foreground">Bidder #{winner.bidderId}</div>
           </div>
           <div className="text-right shrink-0">

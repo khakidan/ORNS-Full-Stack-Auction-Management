@@ -1,5 +1,6 @@
 import { SweeperStatus, PaypalSweepOutcome } from "@/types";
 import { newRequestId, reportDone, reportRetry } from "@/lib/syncStatus";
+import { isConfiguredId } from "@/lib/configuredId";
 
 export const getBaseUrl = () => {
   return "";
@@ -114,7 +115,7 @@ export async function logout() {
 }
 
 export async function getSheetData(spreadsheetId: string, range: string) {
-  if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+  if (!isConfiguredId(spreadsheetId)) {
     return { values: [] };
   }
   const res = await fetchWithRetry(`${getBaseUrl()}/api/sheets/${spreadsheetId}/${encodeURIComponent(range)}`, { credentials: "include" });
@@ -130,7 +131,7 @@ export async function getSheetData(spreadsheetId: string, range: string) {
 }
 
 export async function updateSheetData(spreadsheetId: string, range: string, values: any[][]) {
-  if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+  if (!isConfiguredId(spreadsheetId)) {
     throw new Error("Invalid Spreadsheet ID");
   }
   const res = await fetchWithRetry(`${getBaseUrl()}/api/sheets/${spreadsheetId}/${encodeURIComponent(range)}`, {
@@ -147,7 +148,7 @@ export async function updateSheetData(spreadsheetId: string, range: string, valu
 }
 
 export async function appendSheetData(spreadsheetId: string, range: string, values: any[][]) {
-  if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+  if (!isConfiguredId(spreadsheetId)) {
     throw new Error("Invalid Spreadsheet ID");
   }
   const res = await fetchWithRetry(`${getBaseUrl()}/api/sheets/${spreadsheetId}/${encodeURIComponent(range)}/append`, {
@@ -223,7 +224,7 @@ export async function getAppsScriptVersions(): Promise<AppsScriptVersionStatus[]
 }
 
 export async function clearSheetData(spreadsheetId: string, range: string) {
-  if (!spreadsheetId || spreadsheetId === "undefined" || spreadsheetId === "null" || spreadsheetId.includes("PASTE")) {
+  if (!isConfiguredId(spreadsheetId)) {
     throw new Error("Invalid Spreadsheet ID");
   }
   const res = await fetchWithRetry(`${getBaseUrl()}/api/sheets/${spreadsheetId}/${encodeURIComponent(range)}/clear`, {

@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { getBidderAttendeeInfo } from "@/lib/bidderAttendeeInfo";
 import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { Bidder, Attendee } from "@/types";
+import { postJson } from "@/services/apiClient";
 
 // The only three keys sortedBidders' comparator below actually handles -
 // narrowing sortConfig to this literal union (instead of a bare `string`)
@@ -165,24 +165,14 @@ export function useBiddersState({
       setIsAddingTicketToReceipt(true);
 
       try {
-        const res = await fetchWithRetry(`${getBaseUrl()}/api/auction/check-in-with-bid`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            bidderId: originalBidder.id,
-            spreadsheetId,
-            bidManagementSheet,
-            bidderNumbersSheet,
-            bidValue: parseFloat(ticketPrice) || 35,
-            idempotencyKey
-          }),
-          credentials: "include"
-        });
-
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || "Transactional check-in failed");
-        }
+        await postJson("/api/auction/check-in-with-bid", {
+          bidderId: originalBidder.id,
+          spreadsheetId,
+          bidManagementSheet,
+          bidderNumbersSheet,
+          bidValue: parseFloat(ticketPrice) || 35,
+          idempotencyKey
+        }, "Transactional check-in failed");
 
         toast.success(`Check-in complete and ticket added to ${originalBidder.firstName}'s receipt`);
         await fetchBidders();
@@ -223,27 +213,15 @@ export function useBiddersState({
     );
 
     try {
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/bidders/walk-in`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...walkInForm,
-          spreadsheetId,
-          ticketsSpreadsheetId,
-          ticketPrice: ticketPrice,
-          bidderNumbersSheet,
-          bidManagementSheet,
-          idempotencyKey
-        }),
-        credentials: "include"
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || "Failed to create walk-in ticket");
-      }
-
-      const result = await res.json();
+      const result = await postJson("/api/bidders/walk-in", {
+        ...walkInForm,
+        spreadsheetId,
+        ticketsSpreadsheetId,
+        ticketPrice: ticketPrice,
+        bidderNumbersSheet,
+        bidManagementSheet,
+        idempotencyKey
+      }, "Failed to create walk-in ticket");
       toast.success(
         `Success! Recorded Walk-In transaction in Google Sheets for ${result.bidder.firstName} ${result.bidder.lastName}.`,
         { id: loadingToastId, duration: 5000 }

@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FormSection } from "@/components/FormSection";
+import { FormField } from "@/components/FormField";
 import { AuctionItem } from "@/types";
 
 interface AddAuctionItemDialogProps {
@@ -63,82 +64,94 @@ export function AddAuctionItemDialog({
 
         <div className="flex flex-col gap-5 max-h-[65vh] overflow-y-auto pr-1">
           <FormSection title="Details">
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1.5 block">Category *</Label>
-              <Select
-                value={newItem.category}
-                onValueChange={(val) => onNewItemChange({ ...newItem, category: val })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="mt-3">
-              <Label className="text-xs text-muted-foreground mb-1.5 block">Name *</Label>
-              <Input
-                value={newItem.name}
-                onChange={(e) => onNewItemChange({ ...newItem, name: e.target.value })}
-                placeholder="Item Name"
-              />
-            </div>
-            <div className="mt-3">
-              <Label className="text-xs text-muted-foreground mb-1.5 block">Description</Label>
-              <Textarea
-                value={newItem.description}
-                onChange={(e) => onNewItemChange({ ...newItem, description: e.target.value })}
-                placeholder="Item Description"
-              />
-            </div>
+            <FormField label="Category *">
+              {(id) => (
+                <Select
+                  value={newItem.category}
+                  onValueChange={(val) => onNewItemChange({ ...newItem, category: val })}
+                >
+                  <SelectTrigger id={id} className="w-full">
+                    <SelectValue placeholder="Select Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </FormField>
+            <FormField label="Name *" className="mt-3">
+              {(id) => (
+                <Input
+                  id={id}
+                  value={newItem.name}
+                  onChange={(e) => onNewItemChange({ ...newItem, name: e.target.value })}
+                  placeholder="Item Name"
+                />
+              )}
+            </FormField>
+            <FormField label="Description" className="mt-3">
+              {(id) => (
+                <Textarea
+                  id={id}
+                  value={newItem.description}
+                  onChange={(e) => onNewItemChange({ ...newItem, description: e.target.value })}
+                  placeholder="Item Description"
+                />
+              )}
+            </FormField>
           </FormSection>
 
           <FormSection title="Pricing">
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1.5 block">Value</Label>
-              <Input
-                value={newItem.value}
-                onChange={(e) => onNewItemChange({ ...newItem, value: e.target.value })}
-                placeholder="$0.00"
-              />
-              <p className="text-xs text-muted-foreground mt-1.5">
-                Opening bid and minimum raise are calculated automatically from this value once saved.
-              </p>
-            </div>
+            <FormField label="Value">
+              {(id) => (
+                <>
+                  <Input
+                    id={id}
+                    value={newItem.value}
+                    onChange={(e) => onNewItemChange({ ...newItem, value: e.target.value })}
+                    placeholder="$0.00"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    Opening bid and minimum raise are calculated automatically from this value once saved.
+                  </p>
+                </>
+              )}
+            </FormField>
           </FormSection>
 
           <FormSection title="Donor & Type">
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Donor</Label>
-                <Input
-                  value={newItem.donor}
-                  onChange={(e) => onNewItemChange({ ...newItem, donor: e.target.value })}
-                  placeholder="Donor Name"
-                />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Type</Label>
-                <Select
-                  value={newItem.itemType}
-                  onValueChange={(val) => onNewItemChange({ ...newItem, itemType: val })}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Physical Item">Physical Item</SelectItem>
-                    <SelectItem value="Certificate">Certificate</SelectItem>
-                    <SelectItem value="Both">Both</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <FormField label="Donor">
+                {(id) => (
+                  <Input
+                    id={id}
+                    value={newItem.donor}
+                    onChange={(e) => onNewItemChange({ ...newItem, donor: e.target.value })}
+                    placeholder="Donor Name"
+                  />
+                )}
+              </FormField>
+              <FormField label="Type">
+                {(id) => (
+                  <Select
+                    value={newItem.itemType}
+                    onValueChange={(val) => onNewItemChange({ ...newItem, itemType: val })}
+                  >
+                    <SelectTrigger id={id} className="w-full">
+                      <SelectValue placeholder="Select Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Physical Item">Physical Item</SelectItem>
+                      <SelectItem value="Certificate">Certificate</SelectItem>
+                      <SelectItem value="Both">Both</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </FormField>
             </div>
             <div className="mt-3 flex items-center gap-2">
               <Checkbox

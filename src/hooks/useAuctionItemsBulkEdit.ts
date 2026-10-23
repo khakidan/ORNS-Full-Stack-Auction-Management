@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { AuctionItem } from "@/types";
 import { BundlingSelection } from "./useAuctionItemsFilterSort";
+import { postJson } from "@/services/apiClient";
 
 /**
  * Bulk-edit flow for the auction items table (category or item type,
@@ -47,21 +47,15 @@ export function useAuctionItemsBulkEdit(
     // Both fields go through the server's locked bulk route (category also
     // renumbers IDs there), never direct cell writes.
     try {
-      const response = await fetchWithRetry(`${getBaseUrl()}/api/auction/bulk-update-items`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          spreadsheetId,
-          rowIndices: selectedIndices,
-          field: bulkField,
-          value: bulkValue,
-          // Made once here so fetchWithRetry's retries reuse it and the
-          // server applies the change only once.
-          idempotencyKey: window.crypto.randomUUID(),
-        })
-      });
-      const resData = await response.json().catch(() => ({}));
-      if (!response.ok || resData.error) throw new Error(resData.error || "The server didn't save the change.");
+      await postJson("/api/auction/bulk-update-items", {
+        spreadsheetId,
+        rowIndices: selectedIndices,
+        field: bulkField,
+        value: bulkValue,
+        // Made once here so the request's retries reuse it and the server
+        // applies the change only once.
+        idempotencyKey: window.crypto.randomUUID(),
+      }, "The server didn't save the change.");
       toast.success(bulkField === "category"
         ? "Bulk categories updated and re-sequenced successfully!"
         : `Updated item type for ${selectedIndices.length} items`);

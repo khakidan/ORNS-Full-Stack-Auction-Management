@@ -1,6 +1,4 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { google } from 'googleapis';
-import { getAuthenticatedClient } from '../services/oauth';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import {
@@ -10,6 +8,7 @@ import {
   restoreBundle
 } from '../services/bundleService';
 import { requireAuth } from '../middleware/requireAuth';
+import { sheetsFor } from '../utils/googleClients';
 
 export default function createBundleRouter() {
   const router = Router();
@@ -70,8 +69,7 @@ export default function createBundleRouter() {
 
     try {
       const outcome = await withIdempotency("bundle/process", idempotencyKey, async () => {
-        const client = getAuthenticatedClient(req.session.tokens);
-        const sheets = google.sheets({ version: "v4", auth: client });
+        const sheets = sheetsFor(req);
 
         const result = await processBundle(sheets, {
           spreadsheetId,
@@ -106,8 +104,7 @@ export default function createBundleRouter() {
 
     try {
       const outcome = await withIdempotency("bundle/restore", idempotencyKey, async () => {
-        const client = getAuthenticatedClient(req.session.tokens);
-        const sheets = google.sheets({ version: "v4", auth: client });
+        const sheets = sheetsFor(req);
 
         const result = await restoreBundle(sheets, {
           spreadsheetId,

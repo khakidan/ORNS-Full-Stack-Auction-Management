@@ -39,7 +39,7 @@ export function AuctionItemsBulkActionBar({
             <span className="text-sm font-bold text-primary">{selectedItemsCount} items selected</span>
             <span className="text-xxs text-muted-foreground uppercase tracking-wider font-semibold">Bulk Actions</span>
           </div>
-          <div className="w-[1px] h-10 bg-border" />
+          <div className="w-px h-10 bg-border" />
           <div className="flex gap-2">
             <Button size="sm" onClick={onBundle} className="rounded-lg px-4 bg-primary hover:bg-primary/90 flex items-center gap-2">
               <Package className="w-4 h-4" /> Bundle

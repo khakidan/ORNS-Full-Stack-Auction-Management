@@ -1,31 +1,34 @@
-import { google } from "googleapis";
+import { sheets_v4 } from "googleapis";
 import { BIDDER_NUMBERS_HEADERS } from "../utils/bidderNumbersHeaders";
+import { BIDDER_COL } from "../utils/sheetColumns";
+import { guestRowIndicesForSheet } from "../../src/lib/attendeeSheetColumns";
 
-/** Reads the staff/tickets/sponsor rows from the external Auction Tickets spreadsheet. */
-async function fetchTicketSheetRows(sheets: any, auctionTicketSheetsID: string): Promise<{ ticketsRows: any[][]; staffRows: any[][]; sponsorRows: any[][] }> {
-  let ticketsRows: any[][] = [];
-  let staffRows: any[][] = [];
-  let sponsorRows: any[][] = [];
+/** Rows as the Sheets API returns them (cells may be strings, numbers, booleans or missing). */
+type SheetRows = unknown[][];
 
-  try {
-    const tRes = await sheets.spreadsheets.values.get({ spreadsheetId: auctionTicketSheetsID, range: "'tickets'!A:S" });
-    ticketsRows = tRes.data.values || [];
-  } catch (e) {
-    console.warn("[Sync warnings] 'tickets' tab download bypassed or missing:", e);
-  }
-  try {
-    const sRes = await sheets.spreadsheets.values.get({ spreadsheetId: auctionTicketSheetsID, range: "'staff tickets'!A:C" });
-    staffRows = sRes.data.values || [];
-  } catch (e) {
-    console.warn("[Sync warnings] 'staff tickets' tab download bypassed or missing:", e);
-  }
-  try {
-    const spRes = await sheets.spreadsheets.values.get({ spreadsheetId: auctionTicketSheetsID, range: "'sponsor tickets'!A:C" });
-    sponsorRows = spRes.data.values || [];
-  } catch (e) {
-    console.warn("[Sync warnings] 'sponsor tickets' tab download bypassed or missing:", e);
-  }
+/** One built Bidder-Numbers row, A-K: ID, First, Last, Email, 4 blank checkboxes, 3 blank strings. */
+type BidderNumbersRow = [number, string, string, string, boolean, boolean, boolean, boolean, string, string, string];
 
+/** The 'tickets' sheet's Payment Method column (T): registerWalkInBidder writes "Auction Checkout" there. */
+const TICKETS_PAYMENT_METHOD_INDEX = 19;
+const WALK_IN_MARKER = "Auction Checkout";
+
+const cell = (row: unknown[] | undefined, index: number): string => String(row?.[index] ?? "").trim();
+
+/** Reads the staff/tickets/sponsor rows from the external Auction Tickets spreadsheet. A missing tab reads as empty. */
+async function fetchTicketSheetRows(sheets: sheets_v4.Sheets, auctionTicketSheetsID: string): Promise<{ ticketsRows: SheetRows; staffRows: SheetRows; sponsorRows: SheetRows }> {
+  const read = async (range: string): Promise<SheetRows> => {
+    try {
+      const res = await sheets.spreadsheets.values.get({ spreadsheetId: auctionTicketSheetsID, range });
+      return res.data.values || [];
+    } catch (e) {
+      console.warn(`[Sync warnings] ${range} tab download bypassed or missing:`, e);
+      return [];
+    }
+  };
+  const ticketsRows = await read("'tickets'!A:S");
+  const staffRows = await read("'staff tickets'!A:C");
+  const sponsorRows = await read("'sponsor tickets'!A:C");
   return { ticketsRows, staffRows, sponsorRows };
 }
 
@@ -42,88 +45,53 @@ async function fetchTicketSheetRows(sheets: any, auctionTicketSheetsID: string):
  * is exactly one implementation of this ordering here, never two copies
  * that could quietly drift apart.
  */
-export function computeBidderNumbersRows(staffRows: any[][], ticketsRows: any[][], sponsorRows: any[][]): any[][] {
+export function computeBidderNumbersRows(staffRows: SheetRows, ticketsRows: SheetRows, sponsorRows: SheetRows): BidderNumbersRow[] {
   const collectedBidders: [string, string, string][] = [];
 
-  // Parse staff: Row pattern [First, Last, Email]
-  for (let i = 1; i < staffRows.length; i++) {
-    const row = staffRows[i];
-    if (row && (row[0] || row[1])) {
-      collectedBidders.push([
-        String(row[0] || "").trim(),
-        String(row[1] || "").trim(),
-        String(row[2] || "").trim()
-      ]);
-    }
-  }
-
-  // Parse primary ticket bidders
-  for (let i = 1; i < ticketsRows.length; i++) {
-    const row = ticketsRows[i];
-    if (row && (row[0] || row[1])) {
-      collectedBidders.push([
-        String(row[0] || "").trim(),
-        String(row[1] || "").trim(),
-        String(row[2] || "").trim()
-      ]);
-    }
-  }
-
-  // Parse guest tickets
-  const collectGuestInfo = (firstCol: number, lastCol: number, emailCol: number, ownBidderCol: number) => {
-    for (let i = 1; i < ticketsRows.length; i++) {
-      const row = ticketsRows[i];
-      if (row && row.length > Math.max(firstCol, lastCol, emailCol, ownBidderCol)) {
-        const guestFirst = String(row[firstCol] || "").trim();
-        // A guest is real whenever their own name is present - matches
-        // src/lib/attendeeParsing.ts's own inclusion check, which never
-        // reads column G (row[6]) at all. This used to also require
-        // row[6] to be non-blank (a separate "guest marker" checkbox
-        // distinct from the guest's own data), which silently dropped
-        // any guest whose row simply never had that checkbox ticked -
-        // even one with a real name/email who explicitly opted in below
-        // - from ever being added to Bidder-Numbers, so their labels
-        // were never generated. Guest inclusion is real name + opt-in
-        // only now, the same two facts the app's own attendee table
-        // already treats as authoritative.
-        if (guestFirst !== "") {
-          const wantsOwn = String(row[ownBidderCol] || "").trim().toLowerCase();
-          if (wantsOwn === "yes") {
-            collectedBidders.push([
-              guestFirst,
-              String(row[lastCol] || "").trim(),
-              String(row[emailCol] || "").trim()
-            ]);
-          }
-        }
+  // Staff, primary ticket buyers and sponsors all start [First, Last, Email].
+  const collectPeople = (rows: SheetRows) => {
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row && (row[0] || row[1])) {
+        collectedBidders.push([cell(row, 0), cell(row, 1), cell(row, 2)]);
       }
     }
   };
 
-  collectGuestInfo(7, 8, 9, 10);
-  collectGuestInfo(11, 12, 13, 14);
-  collectGuestInfo(15, 16, 17, 18);
-
-  // Parse sponsor tickets
-  for (let i = 1; i < sponsorRows.length; i++) {
-    const row = sponsorRows[i];
-    if (row && (row[0] || row[1])) {
-       collectedBidders.push([
-         String(row[0] || "").trim(),
-         String(row[1] || "").trim(),
-         String(row[2] || "").trim()
-       ]);
+  // Guests who asked for their own bidder number. A guest is real whenever
+  // their own name is present - matches src/lib/attendeeParsing.ts's own
+  // inclusion check, which never reads column G (row[6]). That used to
+  // also require the separate "guest marker" checkbox in G, which silently
+  // dropped any guest who opted in but never had it ticked, so their
+  // labels were never generated.
+  const collectGuests = (guestIndex: 1 | 2 | 3) => {
+    const cols = guestRowIndicesForSheet("tickets")[guestIndex];
+    const ownBidderCol = cols.ownBidderNumber!;
+    for (let i = 1; i < ticketsRows.length; i++) {
+      const row = ticketsRows[i];
+      if (!row || row.length <= ownBidderCol) continue;
+      const guestFirst = cell(row, cols.firstName);
+      if (guestFirst !== "" && cell(row, ownBidderCol).toLowerCase() === "yes") {
+        collectedBidders.push([guestFirst, cell(row, cols.lastName), cell(row, cols.email)]);
+      }
     }
-  }
+  };
 
-  // Filter out any blank or duplicate-looking rows
+  collectPeople(staffRows);
+  collectPeople(ticketsRows);
+  collectGuests(1);
+  collectGuests(2);
+  collectGuests(3);
+  collectPeople(sponsorRows);
+
+  // Drop repeats of the same person (same formatted name and email).
   const formatName = (str: string) => {
     const cleaned = str.trim();
     if (!cleaned) return "";
     return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
   };
 
-  const finalBidders: any[][] = [];
+  const finalBidders: BidderNumbersRow[] = [];
   const seenKey = new Set<string>();
 
   collectedBidders.forEach((b) => {
@@ -133,20 +101,7 @@ export function computeBidderNumbersRows(staffRows: any[][], ticketsRows: any[][
     const hash = first + "|" + last + "|" + email;
     if (!seenKey.has(hash)) {
       seenKey.add(hash);
-      const id = 101 + finalBidders.length;
-      finalBidders.push([
-        id,
-        first,
-        last,
-        email,
-        false,
-        false,
-        false,
-        false,
-        "",
-        "",
-        ""
-      ]);
+      finalBidders.push([101 + finalBidders.length, first, last, email, false, false, false, false, "", "", ""]);
     }
   });
 
@@ -154,14 +109,9 @@ export function computeBidderNumbersRows(staffRows: any[][], ticketsRows: any[][
 }
 
 /** Writes computed Bidder-Numbers rows into the given sheet, then applies checkbox validation (Checked In/Proxy/Checked Out/Paid) and freezes the header row. */
-async function writeBidderNumbersSheet(sheets: any, spreadsheetId: string, bnSheetId: number, finalBidders: any[][]): Promise<void> {
-  const bidderNumbersHeader = BIDDER_NUMBERS_HEADERS;
-  const bidderNumbersValues = [
-    bidderNumbersHeader,
-    ...finalBidders
-  ];
+async function writeBidderNumbersSheet(sheets: sheets_v4.Sheets, spreadsheetId: string, bnSheetId: number, finalBidders: BidderNumbersRow[]): Promise<void> {
+  const bidderNumbersValues = [BIDDER_NUMBERS_HEADERS, ...finalBidders];
 
-  console.log("[Sync] Writing content values to Bidder-Numbers...");
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: "Bidder-Numbers!A1",
@@ -169,7 +119,6 @@ async function writeBidderNumbersSheet(sheets: any, spreadsheetId: string, bnShe
     requestBody: { values: bidderNumbersValues }
   });
 
-  console.log("[Sync] Formatting checkboxes and freezing header row on Bidder-Numbers...");
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
@@ -180,8 +129,8 @@ async function writeBidderNumbersSheet(sheets: any, spreadsheetId: string, bnShe
               sheetId: bnSheetId,
               startRowIndex: 1,
               endRowIndex: 1 + finalBidders.length,
-              startColumnIndex: 4,
-              endColumnIndex: 8
+              startColumnIndex: BIDDER_COL.checkedIn,
+              endColumnIndex: BIDDER_COL.paid + 1
             },
             rule: {
               condition: {
@@ -221,41 +170,36 @@ async function writeBidderNumbersSheet(sheets: any, spreadsheetId: string, bnShe
  * performSheetSync, so there is exactly one implementation of the
  * numbering algorithm, not a second copy that could drift from it.
  */
-export async function ensureBidderNumbersSheet(client: any, spreadsheetId: string, auctionTicketSheetsID: string): Promise<{ created: boolean; count: number }> {
-  const sheets = google.sheets({ version: "v4", auth: client });
+export async function ensureBidderNumbersSheet(sheets: sheets_v4.Sheets, spreadsheetId: string, auctionTicketSheetsID: string): Promise<{ created: boolean; count: number }> {
 
   if (!auctionTicketSheetsID) {
     throw new Error("Missing the Auction Tickets spreadsheet ID - configure it in Settings before creating bidder labels.");
   }
 
   const existing = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Bidder-Numbers!A2:A2" }).catch(() => ({ data: { values: [] } }));
-  const alreadyPopulated = (existing.data.values || []).length > 0 && !!existing.data.values[0]?.[0];
-  if (alreadyPopulated) {
-    console.log("[Bidder Labels] Bidder-Numbers already has data - reusing it so already-printed numbers never change.");
-    return { created: false, count: 0 };
-  }
+  const alreadyPopulated = !!existing.data.values?.[0]?.[0];
+  if (alreadyPopulated) return { created: false, count: 0 };
 
-  console.log("[Bidder Labels] Bidder-Numbers is missing or empty - building it now so labels can be printed before Bid-Management setup.");
   const { ticketsRows, staffRows, sponsorRows } = await fetchTicketSheetRows(sheets, auctionTicketSheetsID);
   const finalBidders = computeBidderNumbersRows(staffRows, ticketsRows, sponsorRows);
 
   let meta = await sheets.spreadsheets.get({ spreadsheetId });
-  let bnSheet = (meta.data.sheets || []).find((s: any) => s.properties?.title === "Bidder-Numbers");
+  let bnSheet = (meta.data.sheets || []).find((s) => s.properties?.title === "Bidder-Numbers");
   if (!bnSheet) {
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId,
       requestBody: { requests: [{ addSheet: { properties: { title: "Bidder-Numbers" } } }] }
     });
     meta = await sheets.spreadsheets.get({ spreadsheetId });
-    bnSheet = (meta.data.sheets || []).find((s: any) => s.properties?.title === "Bidder-Numbers");
+    bnSheet = (meta.data.sheets || []).find((s) => s.properties?.title === "Bidder-Numbers");
   }
   const bnSheetId = bnSheet?.properties?.sheetId;
-  if (bnSheetId === undefined) {
+  if (bnSheetId === undefined || bnSheetId === null) {
     throw new Error("Failed to create or find the Bidder-Numbers sheet.");
   }
 
   await writeBidderNumbersSheet(sheets, spreadsheetId, bnSheetId, finalBidders);
-  console.log(`[Bidder Labels] Bidder-Numbers built with ${finalBidders.length} entries.`);
+  console.log(`[Bidder Labels] Bidder-Numbers was empty; built it with ${finalBidders.length} bidders so labels can print before Bid-Management setup.`);
   return { created: true, count: finalBidders.length };
 }
 
@@ -276,67 +220,41 @@ export async function ensureBidderNumbersSheet(client: any, spreadsheetId: strin
  * to each other in the same row - so there is no second implementation left
  * to drift out of sync.
  */
-export async function getBidderLabelList(client: any, spreadsheetId: string): Promise<{ name: string; number: string }[]> {
-  const sheets = google.sheets({ version: "v4", auth: client });
+export async function getBidderLabelList(sheets: sheets_v4.Sheets, spreadsheetId: string): Promise<{ name: string; number: string }[]> {
   const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: "Bidder-Numbers!A2:D" });
   const rows = res.data.values || [];
 
   return rows
-    .filter((row: any[]) => row && row[0])
-    .map((row: any[]) => ({
-      name: `${row[1] || ""} ${row[2] || ""}`.trim(),
-      number: String(row[0])
+    .filter((row) => row && row[BIDDER_COL.id])
+    .map((row) => ({
+      name: `${row[BIDDER_COL.firstName] || ""} ${row[BIDDER_COL.lastName] || ""}`.trim(),
+      number: String(row[BIDDER_COL.id])
     }))
-    .sort((a: { number: string }, b: { number: string }) => parseInt(a.number, 10) - parseInt(b.number, 10));
+    .sort((a, b) => parseInt(a.number, 10) - parseInt(b.number, 10));
 }
 
-export async function performSheetSync(client: any, spreadsheetId: string, customAuctionTicketSheetsID?: string) {
-  const sheets = google.sheets({ version: "v4", auth: client });
-
-  console.log("[Sync] --- STARTING INTEGRATED NODE.JS SHEET SYNC TRANSITION ---");
-  console.log("[Sync] Spreadsheet target ID: " + spreadsheetId);
-
-  // Step 1: Load Settings
-  console.log("[Sync Step 1] Fetching settings list from _Settings sheet...");
-  const settingsRes = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: "_Settings!A:C"
-  }).catch(() => ({ data: { values: [] } }));
-  const settingsRows = settingsRes.data.values || [];
-  const settingsMap: Record<string, string> = {};
-  for (const row of settingsRows) {
-    if (row[0] && row[0] !== "Setting Key") {
-      settingsMap[row[0]] = String(row[1] || "").trim();
-    }
+/** _Settings key -> trimmed value (column A -> column B). A missing tab reads as no settings. */
+async function readSettings(sheets: sheets_v4.Sheets, spreadsheetId: string): Promise<Record<string, string>> {
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: "_Settings!A:C" }).catch(() => ({ data: { values: [] as SheetRows } }));
+  const settings: Record<string, string> = {};
+  for (const row of res.data.values || []) {
+    const key = String(row[0] ?? "");
+    if (key && key !== "Setting Key") settings[key] = cell(row, 1);
   }
+  return settings;
+}
 
-  const auctionTicketSheetsID = customAuctionTicketSheetsID || settingsMap["auctionTicketSheetsID"];
-  const ticketPriceVal = parseFloat(settingsMap["ticketPrice"] || "35") || 35;
-
-  console.log("[Sync Config] Master Ticket sales file ID: " + auctionTicketSheetsID);
-  console.log("[Sync Config] Walk-In standard ticket cost: $" + ticketPriceVal);
-
-  if (!auctionTicketSheetsID) {
-    throw new Error("Missing 'auctionTicketSheetsID' in settings. Please configure settings first.");
-  }
-
-  // Step 1.5: Refuse to re-sync once a walk-in bidder has already been
-  // registered directly against Bid-Management (see bidderService.ts's
-  // registerWalkInBidder, which appends a "Auction Checkout" payment-method
-  // marker in column T of the 'tickets' sheet). A full sync rebuilds
-  // Bidder-Numbers from scratch, which would reassign or duplicate that
-  // person's bidder number relative to the ID already recorded against
-  // their existing Bid-Management bids - exactly the kind of drift that
-  // could let someone win an item under a number that isn't really theirs.
-  console.log("[Sync Guard] Checking for already-registered walk-in bidders...");
-  const walkInCheckRes = await sheets.spreadsheets.values.get({
-    spreadsheetId: auctionTicketSheetsID,
-    range: "'tickets'!A:T"
-  }).catch(() => ({ data: { values: [] } }));
-  const walkInCheckRows = walkInCheckRes.data.values || [];
-  const walkInNames = walkInCheckRows.slice(1)
-    .filter((row: any[]) => String(row?.[19] || "").trim() === "Auction Checkout")
-    .map((row: any[]) => `${row[0] || ""} ${row[1] || ""}`.trim())
+/**
+ * Refuses a rebuild once a walk-in has been registered straight into
+ * Bid-Management (registerWalkInBidder marks them "Auction Checkout" in
+ * the 'tickets' sheet's column T). A rebuild renumbers Bidder-Numbers from
+ * scratch, which could give that person's bids to a different number.
+ */
+async function assertNoWalkInsRegistered(sheets: sheets_v4.Sheets, auctionTicketSheetsID: string): Promise<void> {
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId: auctionTicketSheetsID, range: "'tickets'!A:T" }).catch(() => ({ data: { values: [] as SheetRows } }));
+  const walkInNames = (res.data.values || []).slice(1)
+    .filter((row) => cell(row, TICKETS_PAYMENT_METHOD_INDEX) === WALK_IN_MARKER)
+    .map((row) => `${row[0] || ""} ${row[1] || ""}`.trim())
     .filter(Boolean);
   if (walkInNames.length > 0) {
     throw new Error(
@@ -345,180 +263,122 @@ export async function performSheetSync(client: any, spreadsheetId: string, custo
       `bidder number, breaking bids already recorded against it. Only run sync before any walk-ins are registered.`
     );
   }
+}
 
-  // Step 2: Query sheet list of spreadsheet
-  console.log("[Sync Step 2] Inspecting target spreadsheet sheet tabs...");
-  const meta = await sheets.spreadsheets.get({ spreadsheetId });
-  const existingSheets = meta.data.sheets || [];
-
-  const requests: any[] = [];
-  const now = new Date();
+/** "2026-10-24_09-05-07" (local time), for the backup tab names. */
+function backupTimestamp(now: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
-  const timestamp = now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate()) + "_" + pad(now.getHours()) + "-" + pad(now.getMinutes()) + "-" + pad(now.getSeconds());
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+}
 
-  // Find sheet ID for "Bid-Management" and "Bidder-Numbers"
-  const bidMgmtSheet = existingSheets.find(s => s.properties?.title === "Bid-Management");
-  const bidderNumSheet = existingSheets.find(s => s.properties?.title === "Bidder-Numbers");
+/**
+ * Renames any existing Bid-Management / Bidder-Numbers tabs to
+ * "<name> (Backup <time>)" and adds fresh empty ones, in one batch.
+ * Returns the new tabs' sheet IDs.
+ */
+async function archiveAndCreateTabs(sheets: sheets_v4.Sheets, spreadsheetId: string): Promise<{ bnSheetId: number; bmSheetId: number }> {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  const existing = meta.data.sheets || [];
+  const timestamp = backupTimestamp(new Date());
 
-  // Step 3: Archive and Backup existing sheets if present
-  if (bidMgmtSheet) {
-    const backupTitle = "Bid-Management (Backup " + timestamp + ")";
-    console.log("[Sync Step 3] Staging archiving of Bid-Management to: " + backupTitle + "...");
-    requests.push({
-      updateSheetProperties: {
-         properties: {
-           sheetId: bidMgmtSheet.properties?.sheetId,
-           title: backupTitle
-         },
-         fields: "title"
-      }
-    });
-  }
-
-  if (bidderNumSheet) {
-    const backupTitle = "Bidder-Numbers (Backup " + timestamp + ")";
-    console.log("[Sync Step 3] Staging archiving of Bidder-Numbers to: " + backupTitle + "...");
-    requests.push({
-      updateSheetProperties: {
-         properties: {
-           sheetId: bidderNumSheet.properties?.sheetId,
-           title: backupTitle
-         },
-         fields: "title"
-      }
-    });
-  }
-
-  // Create clean sheet placeholders
-  console.log("[Sync Step 4] Appending fresh 'Bidder-Numbers' and 'Bid-Management' sheets...");
-  requests.push({
-    addSheet: {
-      properties: {
-        title: "Bidder-Numbers"
-      }
+  const requests: sheets_v4.Schema$Request[] = [];
+  for (const title of ["Bid-Management", "Bidder-Numbers"]) {
+    const tab = existing.find((s) => s.properties?.title === title);
+    if (tab) {
+      requests.push({
+        updateSheetProperties: {
+          properties: { sheetId: tab.properties?.sheetId, title: `${title} (Backup ${timestamp})` },
+          fields: "title"
+        }
+      });
     }
-  });
-  requests.push({
-    addSheet: {
-      properties: {
-        title: "Bid-Management"
-      }
-    }
-  });
+  }
+  requests.push({ addSheet: { properties: { title: "Bidder-Numbers" } } });
+  requests.push({ addSheet: { properties: { title: "Bid-Management" } } });
+  await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } });
 
-  // Run the batch update
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId,
-    requestBody: { requests }
-  });
-
-  // Fetch updated sheet IDs
-  console.log("[Sync] Retrieve new sheet IDs after creation...");
-  const updatedMeta = await sheets.spreadsheets.get({ spreadsheetId });
-  const updatedSheets = updatedMeta.data.sheets || [];
-  
-  const newBidderNumSheet = updatedSheets.find(s => s.properties?.title === "Bidder-Numbers");
-  const newBidMgmtSheet = updatedSheets.find(s => s.properties?.title === "Bid-Management");
-
-  if (!newBidderNumSheet || !newBidMgmtSheet) {
+  const updated = (await sheets.spreadsheets.get({ spreadsheetId })).data.sheets || [];
+  const bnSheetId = updated.find((s) => s.properties?.title === "Bidder-Numbers")?.properties?.sheetId;
+  const bmSheetId = updated.find((s) => s.properties?.title === "Bid-Management")?.properties?.sheetId;
+  if (bnSheetId == null || bmSheetId == null) {
     throw new Error("Sheet creation verification failed.");
   }
+  return { bnSheetId, bmSheetId };
+}
 
-  const bnSheetId = newBidderNumSheet.properties?.sheetId;
-  const bmSheetId = newBidMgmtSheet.properties?.sheetId;
-
-  // Step 4: Loading external ticket lists
-  console.log("[Sync Step 5] Extracting external ticket registrants and staff check-ins from sheet ID: " + auctionTicketSheetsID + "...");
-  const { ticketsRows, staffRows, sponsorRows } = await fetchTicketSheetRows(sheets, auctionTicketSheetsID);
-  const finalBidders = computeBidderNumbersRows(staffRows, ticketsRows, sponsorRows);
-
-  console.log("[Sync] Gained registry index: " + finalBidders.length + " unique ticketed/sponsor bidders.");
-
-  await writeBidderNumbersSheet(sheets, spreadsheetId, bnSheetId, finalBidders);
-
-  // Step 6: Build Column Matrix on Bid-Management
-  console.log("[Sync] Populating core Column Matrix on Bid-Management table...");
-  const numBidders = finalBidders.length;
-  const totalCols = numBidders * 2;
-  const bmRow1: any[] = [];
-  const bmRow2: any[] = [];
-  const bmRow3: any[] = [];
-
-  for (let i = 0; i < numBidders; i++) {
-    const bidder = finalBidders[i];
-    const id = bidder[0];
-    const first = bidder[1];
-    const last = bidder[2];
-    bmRow1.push(id, "");
-    bmRow2.push(first, last);
-    bmRow3.push("Item #:", "Price:");
+/**
+ * The Bid-Management grid's first 25 rows: per bidder two columns with
+ * the ID, then First/Last, then "Item #:"/"Price:", then empty bid rows.
+ */
+export function buildBidManagementGrid(bidders: BidderNumbersRow[]): (string | number)[][] {
+  const ids: (string | number)[] = [];
+  const names: string[] = [];
+  const captions: string[] = [];
+  for (const [id, first, last] of bidders) {
+    ids.push(id, "");
+    names.push(first, last);
+    captions.push("Item #:", "Price:");
   }
+  const grid: (string | number)[][] = [ids, names, captions];
+  for (let r = 4; r <= 25; r++) grid.push(Array(bidders.length * 2).fill(""));
+  return grid;
+}
 
-  // Pre-fill columns to have a tidy grid layout height 25
-  const bmGridValues: any[][] = [bmRow1, bmRow2, bmRow3];
-  for (let r = 4; r <= 25; r++) {
-    bmGridValues.push(Array(totalCols).fill(""));
-  }
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: "Bid-Management!A1",
-    valueInputOption: "USER_ENTERED",
-    requestBody: { values: bmGridValues }
-  });
-
-  // Align, Merge headers, Freeze Rows, and Apply custom banding colors
-  console.log("[Sync] Setting cell merges, alignment filters, freezing 3 rows, and styling bands on Bid-Management...");
-  
-  const bmFormattingRequests: any[] = [
-    {
-      updateSheetProperties: {
-        properties: {
-          sheetId: bmSheetId,
-          gridProperties: {
-            frozenRowCount: 3
-          }
-        },
-        fields: "gridProperties.frozenRowCount"
-      }
+/** Freezes the grid's 3 header rows, merges each bidder's ID cell across their two columns and centres the headers. */
+function bidManagementFormatRequests(bmSheetId: number, bidderCount: number): sheets_v4.Schema$Request[] {
+  const requests: sheets_v4.Schema$Request[] = [{
+    updateSheetProperties: {
+      properties: { sheetId: bmSheetId, gridProperties: { frozenRowCount: 3 } },
+      fields: "gridProperties.frozenRowCount"
     }
-  ];
-
-  // Merge headings (A1 to B1, C1 to D1, etc.)
-  for (let i = 0; i < numBidders; i++) {
-    bmFormattingRequests.push({
-      mergeCells: {
-        range: {
-          sheetId: bmSheetId,
-          startRowIndex: 0,
-          endRowIndex: 1,
-          startColumnIndex: 2 * i,
-          endColumnIndex: 2 * i + 2
-        },
-        mergeType: "MERGE_ALL"
-      }
+  }];
+  for (let i = 0; i < bidderCount; i++) {
+    const columns = { startColumnIndex: 2 * i, endColumnIndex: 2 * i + 2 };
+    requests.push({
+      mergeCells: { range: { sheetId: bmSheetId, startRowIndex: 0, endRowIndex: 1, ...columns }, mergeType: "MERGE_ALL" }
     });
-
-    bmFormattingRequests.push({
+    requests.push({
       repeatCell: {
-        range: {
-          sheetId: bmSheetId,
-          startRowIndex: 0,
-          endRowIndex: 3,
-          startColumnIndex: 2 * i,
-          endColumnIndex: 2 * i + 2
-        },
+        range: { sheetId: bmSheetId, startRowIndex: 0, endRowIndex: 3, ...columns },
         cell: { userEnteredFormat: { horizontalAlignment: "CENTER" } },
         fields: "userEnteredFormat.horizontalAlignment"
       }
     });
   }
+  return requests;
+}
 
+/**
+ * "Set Up Bid Management App": backs up any existing Bid-Management and
+ * Bidder-Numbers tabs, then rebuilds both from the Auction Tickets
+ * spreadsheet. Refused once walk-ins exist (assertNoWalkInsRegistered).
+ */
+export async function performSheetSync(sheets: sheets_v4.Sheets, spreadsheetId: string, customAuctionTicketSheetsID?: string) {
+  const settings = await readSettings(sheets, spreadsheetId);
+  const auctionTicketSheetsID = customAuctionTicketSheetsID || settings["auctionTicketSheetsID"];
+  if (!auctionTicketSheetsID) {
+    throw new Error("Missing 'auctionTicketSheetsID' in settings. Please configure settings first.");
+  }
+
+  await assertNoWalkInsRegistered(sheets, auctionTicketSheetsID);
+
+  const { bnSheetId, bmSheetId } = await archiveAndCreateTabs(sheets, spreadsheetId);
+
+  const { ticketsRows, staffRows, sponsorRows } = await fetchTicketSheetRows(sheets, auctionTicketSheetsID);
+  const finalBidders = computeBidderNumbersRows(staffRows, ticketsRows, sponsorRows);
+  await writeBidderNumbersSheet(sheets, spreadsheetId, bnSheetId, finalBidders);
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: "Bid-Management!A1",
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: buildBidManagementGrid(finalBidders) }
+  });
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
-    requestBody: { requests: bmFormattingRequests }
+    requestBody: { requests: bidManagementFormatRequests(bmSheetId, finalBidders.length) }
   });
 
-  console.log("[Sync] --- SYNC TRANSITION WORKFLOW SUCCESSFULLY COMPLETED ---");
+  console.log(`[Sync] Rebuilt Bidder-Numbers and Bid-Management in ${spreadsheetId} with ${finalBidders.length} bidders.`);
   return { success: true };
 }

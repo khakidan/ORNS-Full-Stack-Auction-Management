@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { AuctionItem } from "@/types";
 import { categoryBadgeClass, ITEM_TYPE_STYLES } from "@/lib/itemBadgeColors";
 import { cn } from "@/lib/utils";
+import { RowIdTile } from "@/components/RowIdTile";
 
 interface AuctionItemRowProps {
   item: AuctionItem;
@@ -64,16 +65,11 @@ export function AuctionItemRow({
         <Checkbox checked={isSelected} onCheckedChange={() => onToggleSelect(item.rowIndex)} />
       </div>
 
-      <div className="w-13 shrink-0 flex flex-col items-center gap-0.5 pt-0.5">
-        <div className="w-10 h-10 rounded-md bg-secondary text-secondary-foreground flex items-center justify-center font-mono font-bold text-sm">
-          {item.id}
-        </div>
-        <span className="text-[10px] uppercase text-muted-foreground">Item</span>
-      </div>
+      <RowIdTile value={item.id} caption="Item" className="pt-0.5" />
 
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-semibold text-[15px]">{item.name || <span className="italic text-muted-foreground">Untitled item</span>}</span>
+          <span className="font-semibold text-row-title">{item.name || <span className="italic text-muted-foreground">Untitled item</span>}</span>
           {item.category && (
             <Badge variant="outline" className={cn("text-xs font-normal", categoryBadgeClass(item.category))}>
               {item.category}

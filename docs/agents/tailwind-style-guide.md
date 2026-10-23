@@ -118,6 +118,12 @@ uppercase section eyebrows, italic helper notes - rather than an arbitrary
 step, so a call site that needs "a little smaller than `text-xs`" should
 use `text-xxs` (10px), not invent a new in-between arbitrary value.
 
+One more step sits between `text-sm` (14px) and `text-base` (16px):
+`--text-row-title: 0.9375rem` (15px, line height `1.375rem`), used as
+`font-semibold text-row-title` for the name at the top of each list row
+and winner card (BidderRow, ItemRow, AuctionItemRow, AttendeeRow,
+WinnerCard). Those rows' number box is the shared `RowIdTile` component.
+
 ---
 
 # Component Styling

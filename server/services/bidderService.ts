@@ -3,6 +3,7 @@ import { getColumnLetter } from "../utils/columnUtils";
 import { executeGoogleSheetsTransaction, SheetOp } from "../services/sheetsService";
 import { withLock } from "../utils/asyncLock";
 import { AUCTION_TICKETS_ITEM_ID } from "../utils/categoryHelpers";
+import { BIDDER_COL } from "../utils/sheetColumns";
 
 export interface WalkInParams {
   firstName: string;
@@ -113,7 +114,7 @@ async function registerWalkInBidderLocked(
   const formattedLast = formatName(lastName);
   const formattedEmail = (email || "").trim();
 
-  const maxId = bdRows.slice(1).reduce((max: number, row: any) => Math.max(max, parseInt(row[0]) || 0), 100);
+  const maxId = bdRows.slice(1).reduce((max: number, row: any) => Math.max(max, parseInt(row[BIDDER_COL.id]) || 0), 100);
   const newId = maxId + 1;
 
   // Step C: Prepare Bid-Management columns
@@ -329,7 +330,7 @@ async function checkInBidderWithBidLocked(
     range: `'${bidderNumbersSheet}'!A:A`,
   });
   const biddersRows = bidderSearch.data.values || [];
-  const bidderRowIndex = biddersRows.findIndex((row: any, i: number) => i > 0 && row[0]?.toString().trim() === String(bidderId).trim()) + 1;
+  const bidderRowIndex = biddersRows.findIndex((row: any, i: number) => i > 0 && row[BIDDER_COL.id]?.toString().trim() === String(bidderId).trim()) + 1;
   if (bidderRowIndex < 2) throw new Error(`Bidder ${bidderId} not found in ${bidderNumbersSheet}`);
 
   const operations: SheetOp[] = [
@@ -375,7 +376,7 @@ export async function setBidderFlag(sheets: sheets_v4.Sheets, params: SetBidderF
     const { spreadsheetId, bidderNumbersSheet, bidderId, flag } = params;
     const search = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${bidderNumbersSheet}'!A:A` });
     const rows = search.data.values || [];
-    const rowIndex = rows.findIndex((row: any, i: number) => i > 0 && row[0]?.toString().trim() === String(bidderId).trim()) + 1;
+    const rowIndex = rows.findIndex((row: any, i: number) => i > 0 && row[BIDDER_COL.id]?.toString().trim() === String(bidderId).trim()) + 1;
     if (rowIndex < 2) throw new Error(`Bidder ${bidderId} not found in ${bidderNumbersSheet}`);
 
     await sheets.spreadsheets.values.update({

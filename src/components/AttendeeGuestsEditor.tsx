@@ -79,10 +79,10 @@ export function AttendeeGuestsEditor({ guests, onChange, allowOwnBidderNumber }:
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Input placeholder="First" value={g.firstName} onChange={(e) => updateGuest(g.guestIndex, "firstName", e.target.value)} />
-            <Input placeholder="Last" value={g.lastName} onChange={(e) => updateGuest(g.guestIndex, "lastName", e.target.value)} />
+            <Input aria-label={`Guest ${g.guestIndex} first name`} placeholder="First" value={g.firstName} onChange={(e) => updateGuest(g.guestIndex, "firstName", e.target.value)} />
+            <Input aria-label={`Guest ${g.guestIndex} last name`} placeholder="Last" value={g.lastName} onChange={(e) => updateGuest(g.guestIndex, "lastName", e.target.value)} />
           </div>
-          <Input placeholder="Guest email" value={g.email} onChange={(e) => updateGuest(g.guestIndex, "email", e.target.value)} />
+          <Input aria-label={`Guest ${g.guestIndex} email`} placeholder="Guest email" value={g.email} onChange={(e) => updateGuest(g.guestIndex, "email", e.target.value)} />
           {allowOwnBidderNumber && (
             <div className="flex items-center gap-2 pt-0.5">
               <Checkbox

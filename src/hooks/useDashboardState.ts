@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl, getSheetData } from "@/services/google-api";
+import { getSheetData } from "@/services/google-api";
 import { Bidder } from "@/types";
+import { postJson } from "@/services/apiClient";
 
 interface UseDashboardStateArgs {
   bidders: Bidder[];
@@ -95,20 +96,14 @@ export function useDashboardState({ bidders, items, winners, spreadsheetId, isAu
 
     setSaving(true);
     try {
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/auction/special-winner`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          spreadsheetId,
-          prize,
-          bidderId: winnerId,
-          addFollowUp: !!bidder?.checkedOut,
-          // Made once here so a retried request can't add a second Follow-Up row.
-          idempotencyKey: window.crypto.randomUUID(),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.error) throw new Error(data.error || "The server didn't save the winner.");
+      await postJson("/api/auction/special-winner", {
+        spreadsheetId,
+        prize,
+        bidderId: winnerId,
+        addFollowUp: !!bidder?.checkedOut,
+        // Made once here so a retried request can't add a second Follow-Up row.
+        idempotencyKey: window.crypto.randomUUID(),
+      }, "The server didn't save the winner.");
       if (bidder?.checkedOut) fetchFollowUpRecords();
       toast.success(`Updated ${prizeName} winner`);
     } catch (err: any) {

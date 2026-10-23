@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { parseDollar, calculateAutoBids } from "@/lib/auctionItemPricing";
 import { AuctionItem } from "@/types";
+import { postJson } from "@/services/apiClient";
 
 interface BundlingSelection {
   [rowIndex: number]: boolean;
@@ -31,18 +32,11 @@ export function useBundling(
     const idempotencyKey = crypto.randomUUID?.() || Math.random().toString(36).substring(2);
 
     try {
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/bundle/restore`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          spreadsheetId,
-          targetBundleToken: tokenToRestore,
-          idempotencyKey
-        })
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.error) throw new Error(data.error || `Failed to restore bundle (status ${res.status})`);
+      const data = await postJson("/api/bundle/restore", {
+        spreadsheetId,
+        targetBundleToken: tokenToRestore,
+        idempotencyKey
+      }, "Failed to restore bundle");
 
       toast.success(`Bundle restored! Items: ${data.ui_history_log?.original_item_names?.join(', ') || "unknown"}`);
       setRestoreBundleId("");
@@ -158,27 +152,20 @@ export function useBundling(
       const ts = new Date().toLocaleString('en-US', { hour12: false }).replace(/\//g, '-');
       const bundleEventToken = "BND-" + ts.replace(/[^0-9]/g, '');
 
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/bundle/process`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          spreadsheetId,
-          targetIds: selectedItems.map(i => i.id),
-          newName: bundleDetails.name,
-          newDescription: bundleDetails.description,
-          targetCategory: bundleDetails.category,
-          value: bundleDetails.value,
-          openingBid: bundleDetails.openingBid,
-          minRaise: bundleDetails.minRaise,
-          donor: bundleDetails.donor,
-          itemType: bundleDetails.itemType,
-          bundleEventToken,
-          idempotencyKey
-        })
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.error) throw new Error(data.error || `Failed to bundle items (status ${res.status})`);
+      const data = await postJson("/api/bundle/process", {
+        spreadsheetId,
+        targetIds: selectedItems.map(i => i.id),
+        newName: bundleDetails.name,
+        newDescription: bundleDetails.description,
+        targetCategory: bundleDetails.category,
+        value: bundleDetails.value,
+        openingBid: bundleDetails.openingBid,
+        minRaise: bundleDetails.minRaise,
+        donor: bundleDetails.donor,
+        itemType: bundleDetails.itemType,
+        bundleEventToken,
+        idempotencyKey
+      }, "Failed to bundle items");
 
       toast.success(`Items bundled into "${data.ui_history_log?.bundle_item_name || bundleDetails.name}" successfully! Token: ${data.ui_history_log?.bundle_token || bundleEventToken}`);
       setBundleDetails({});

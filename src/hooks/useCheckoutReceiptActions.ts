@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { errorTextFrom, fetchWithRetry, getBaseUrl, NO_ANSWER_MESSAGE, postOnce, ServerUnreachableError } from "@/services/google-api";
+import { errorTextFrom, getBaseUrl, NO_ANSWER_MESSAGE, postOnce, ServerUnreachableError } from "@/services/google-api";
 import type { WinnerRecord } from "./useCheckoutState";
+import { postJson } from "@/services/apiClient";
 
 interface UseCheckoutReceiptActionsArgs {
   spreadsheetId: string;
@@ -22,23 +23,13 @@ export function useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, f
   const handleEmailReceipt = async (winner: WinnerRecord) => {
     setProcessingId(`${winner.bidderId}-email`);
     try {
-      const res = await fetchWithRetry(`${getBaseUrl()}/api/receipts/email-only`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bidderId: winner.bidderId,
-          spreadsheetId,
-          itemsSpreadsheetId,
-          bidderNumbersSheet,
-          bidManagementSheet
-        }),
-        credentials: "include"
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to send email");
-      }
+      await postJson("/api/receipts/email-only", {
+        bidderId: winner.bidderId,
+        spreadsheetId,
+        itemsSpreadsheetId,
+        bidderNumbersSheet,
+        bidManagementSheet
+      }, "Failed to send email");
       toast.success(`Receipt emailed to ${winner.name}`);
     } catch (error: any) {
       toast.error(error.message);

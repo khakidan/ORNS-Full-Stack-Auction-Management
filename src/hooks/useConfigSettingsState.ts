@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { useConfig } from "@/context/ConfigContext";
 import { Config } from "@/types";
+import { postJson } from "@/services/apiClient";
 
 export function extractId(input: string): string {
   if (!input) return "";
@@ -26,21 +27,11 @@ export function extractId(input: string): string {
 }
 
 async function syncSettingToCloud(spreadsheetId: string, key: string, value: string, description: string) {
-  // idempotencyKey generated once here, before fetchWithRetry's internal
-  // retries reuse this same body - matches add-item/bulk-update-items'
-  // existing convention. Found in a hardening audit - see
-  // docs/agents/refactor-opportunities.md's Code Hardening item #1 /
-  // CHANGELOG.md.
-  const res = await fetchWithRetry(`${getBaseUrl()}/api/settings/update`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ spreadsheetId, key, value, description, idempotencyKey: window.crypto.randomUUID() }),
-    credentials: "include"
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || "Failed to sync setting to cloud");
-  }
+  // idempotencyKey made once here, so the request's retries reuse it and
+  // the server applies the change once.
+  await postJson("/api/settings/update",
+    { spreadsheetId, key, value, description, idempotencyKey: window.crypto.randomUUID() },
+    "Failed to sync setting to cloud");
 }
 
 export function useConfigSettingsState() {
