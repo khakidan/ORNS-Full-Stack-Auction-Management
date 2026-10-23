@@ -1,6 +1,6 @@
 import { sheets_v4 } from "googleapis";
 import { BIDDER_NUMBERS_HEADERS } from "../utils/bidderNumbersHeaders";
-import { BIDDER_COL } from "../utils/sheetColumns";
+import { BIDDER_COL, TICKETS_COL, WALK_IN_PAYMENT_METHOD } from "../utils/sheetColumns";
 import { guestRowIndicesForSheet } from "../../src/lib/attendeeSheetColumns";
 
 /** Rows as the Sheets API returns them (cells may be strings, numbers, booleans or missing). */
@@ -9,9 +9,6 @@ type SheetRows = unknown[][];
 /** One built Bidder-Numbers row, A-K: ID, First, Last, Email, 4 blank checkboxes, 3 blank strings. */
 type BidderNumbersRow = [number, string, string, string, boolean, boolean, boolean, boolean, string, string, string];
 
-/** The 'tickets' sheet's Payment Method column (T): registerWalkInBidder writes "Auction Checkout" there. */
-const TICKETS_PAYMENT_METHOD_INDEX = 19;
-const WALK_IN_MARKER = "Auction Checkout";
 
 const cell = (row: unknown[] | undefined, index: number): string => String(row?.[index] ?? "").trim();
 
@@ -253,7 +250,7 @@ async function readSettings(sheets: sheets_v4.Sheets, spreadsheetId: string): Pr
 async function assertNoWalkInsRegistered(sheets: sheets_v4.Sheets, auctionTicketSheetsID: string): Promise<void> {
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: auctionTicketSheetsID, range: "'tickets'!A:T" }).catch(() => ({ data: { values: [] as SheetRows } }));
   const walkInNames = (res.data.values || []).slice(1)
-    .filter((row) => cell(row, TICKETS_PAYMENT_METHOD_INDEX) === WALK_IN_MARKER)
+    .filter((row) => cell(row, TICKETS_COL.paymentMethod) === WALK_IN_PAYMENT_METHOD)
     .map((row) => `${row[0] || ""} ${row[1] || ""}`.trim())
     .filter(Boolean);
   if (walkInNames.length > 0) {

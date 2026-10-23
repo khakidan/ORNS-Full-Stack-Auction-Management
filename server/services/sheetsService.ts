@@ -1,6 +1,7 @@
 import { sheets_v4 } from 'googleapis';
 import { IDEMPOTENT_POST_RETRY } from "../utils/googleRetry";
 import { normalizeRange } from '../utils/rangeUtils';
+import { getColumnLetter } from "../utils/columnUtils";
 
 export interface SheetOp {
   spreadsheetId: string;
@@ -100,3 +101,32 @@ export async function executeGoogleSheetsTransaction(
     }
   }
 }
+
+/**
+ * Adds the tab `title` when the spreadsheet doesn't have it yet, writing
+ * `header` into its first row. Returns whether it was created. Callers
+ * creating a tab other writers also create hold the same lock, since
+ * Sheets refuses a second "add sheet" with the same name.
+ */
+export async function ensureSheetTab(sheets: sheets_v4.Sheets, spreadsheetId: string, title: string, header?: string[]): Promise<boolean> {
+  const metadata = await sheets.spreadsheets.get({ spreadsheetId });
+  if (metadata.data.sheets?.some((s) => s.properties?.title === title)) return false;
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: { requests: [{ addSheet: { properties: { title } } }] },
+  });
+  if (header?.length) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${title}'!A1:${getColumnLetter(header.length - 1)}1`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [header] },
+    });
+  }
+  return true;
+}
+
+/** The Follow-Up tab's header: items won after the bidder already checked out (Dashboard's Post-Checkout Item Wins). */
+export const FOLLOW_UP_HEADER = ["Bidder ID", "Item ID", "Amount"];
+

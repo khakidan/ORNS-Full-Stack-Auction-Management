@@ -1,6 +1,7 @@
 import { sheets_v4 } from "googleapis";
 import { withLock } from "../utils/asyncLock";
 import { clearCacheForSpreadsheet } from "../utils/sheetCache";
+import { ensureSheetTab, FOLLOW_UP_HEADER } from "./sheetsService";
 
 /**
  * The Dashboard's two special prizes: which Special-Winners cell holds
@@ -22,29 +23,6 @@ export interface SaveSpecialWinnerParams {
 }
 
 /**
- * Creates a tab when the spreadsheet doesn't have it yet. Special-Winners
- * isn't built by the sheet sync, so the first save makes it; a new
- * Follow-Up tab gets the same header recordWinningBid writes.
- */
-async function ensureSheet(sheets: sheets_v4.Sheets, spreadsheetId: string, title: string): Promise<void> {
-  const metadata = await sheets.spreadsheets.get({ spreadsheetId });
-  if (metadata.data.sheets?.some((s) => s.properties?.title === title)) return;
-
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId,
-    requestBody: { requests: [{ addSheet: { properties: { title } } }] },
-  });
-  if (title === "Follow-Up") {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: "'Follow-Up'!A1:C1",
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: [["Bidder ID", "Item ID", "Amount"]] },
-    });
-  }
-}
-
-/**
  * Saves the gift-card or raffle winner, and adds a Follow-Up row when the
  * winner has already checked out.
  *
@@ -55,7 +33,7 @@ async function ensureSheet(sheets: sheets_v4.Sheets, spreadsheetId: string, titl
 export async function saveSpecialWinner(sheets: sheets_v4.Sheets, params: SaveSpecialWinnerParams): Promise<{ success: boolean }> {
   const { spreadsheetId, prize, bidderId, addFollowUp } = params;
   return withLock(`bidder-numbers:${spreadsheetId}`, async () => {
-    await ensureSheet(sheets, spreadsheetId, "Special-Winners");
+    await ensureSheetTab(sheets, spreadsheetId, "Special-Winners");
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `'Special-Winners'!${SPECIAL_PRIZES[prize].cell}`,
@@ -64,7 +42,7 @@ export async function saveSpecialWinner(sheets: sheets_v4.Sheets, params: SaveSp
     });
 
     if (addFollowUp && bidderId) {
-      await ensureSheet(sheets, spreadsheetId, "Follow-Up");
+      await ensureSheetTab(sheets, spreadsheetId, "Follow-Up", FOLLOW_UP_HEADER);
       await sheets.spreadsheets.values.append({
         spreadsheetId,
         range: "'Follow-Up'!A:C",

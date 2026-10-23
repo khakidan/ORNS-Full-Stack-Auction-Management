@@ -1,0 +1,459 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`checkInBidderWithBid - recorded calls > adds the ticket bid in the bidder's first empty row and ticks Checked In 1`] = `
+[
+  [
+    "get",
+    "bm",
+    "'Bid-Management'!1:300",
+  ],
+  [
+    "get",
+    "bm",
+    "'Bidder-Numbers'!A:A",
+  ],
+  [
+    "get",
+    "bm",
+    "'Bid-Management'!C4:D4",
+  ],
+  [
+    "get",
+    "bm",
+    "'Bidder-Numbers'!E3",
+  ],
+  [
+    "update",
+    "bm",
+    "'Bid-Management'!C4:D4",
+    [
+      [
+        "1701",
+        40,
+      ],
+    ],
+  ],
+  [
+    "update",
+    "bm",
+    "'Bidder-Numbers'!E3",
+    [
+      [
+        true,
+      ],
+    ],
+  ],
+]
+`;
+
+exports[`recordWinningBid - recorded calls > also creates the Follow-Up tab and adds a row for a bidder who already checked out 1`] = `
+[
+  [
+    "get",
+    "bm",
+    "'Bidder-Numbers'!A:G",
+  ],
+  [
+    "get",
+    "bm",
+    "'Bid-Management'!1:300",
+  ],
+  [
+    "get-meta",
+    "bm",
+  ],
+  [
+    "batchUpdate",
+    "bm",
+    [
+      {
+        "addSheet": {
+          "properties": {
+            "title": "Follow-Up",
+          },
+        },
+      },
+    ],
+  ],
+  [
+    "update",
+    "bm",
+    "'Follow-Up'!A1:C1",
+    [
+      [
+        "Bidder ID",
+        "Item ID",
+        "Amount",
+      ],
+    ],
+  ],
+  [
+    "get",
+    "bm",
+    "'Bid-Management'!C4:D4",
+  ],
+  [
+    "get",
+    "bm",
+    "'Follow-Up'!A1",
+  ],
+  [
+    "update",
+    "bm",
+    "'Bid-Management'!C4:D4",
+    [
+      [
+        "803",
+        20,
+      ],
+    ],
+  ],
+  [
+    "append",
+    "bm",
+    "'Follow-Up'!A:C",
+    [
+      [
+        "102",
+        "803",
+        20,
+      ],
+    ],
+  ],
+]
+`;
+
+exports[`recordWinningBid - recorded calls > writes the bid in the bidder's first empty row 1`] = `
+[
+  [
+    "get",
+    "bm",
+    "'Bidder-Numbers'!A:G",
+  ],
+  [
+    "get",
+    "bm",
+    "'Bid-Management'!1:300",
+  ],
+  [
+    "get",
+    "bm",
+    "'Bid-Management'!A5:B5",
+  ],
+  [
+    "update",
+    "bm",
+    "'Bid-Management'!A5:B5",
+    [
+      [
+        "802",
+        75,
+      ],
+    ],
+  ],
+]
+`;
+
+exports[`registerWalkInBidder - recorded calls > adds the bidder, their grid columns (growing the grid), formatting, and the ticket row 1`] = `
+[
+  [
+    "get-meta",
+    "tix",
+  ],
+  [
+    "get",
+    "tix",
+    "'tickets'!A1",
+  ],
+  [
+    "get-meta",
+    "bm",
+  ],
+  [
+    "get",
+    "bm",
+    "'Bidder-Numbers'!A:A",
+  ],
+  [
+    "get",
+    "bm",
+    "'Bid-Management'!1:5",
+  ],
+  [
+    "batchUpdate",
+    "bm",
+    [
+      {
+        "appendDimension": {
+          "dimension": "COLUMNS",
+          "length": 2,
+          "sheetId": 2,
+        },
+      },
+    ],
+  ],
+  [
+    "get",
+    "bm",
+    "'Bidder-Numbers'!A1",
+  ],
+  [
+    "get",
+    "bm",
+    "'Bid-Management'!E1:F4",
+  ],
+  [
+    "append",
+    "bm",
+    "'Bidder-Numbers'!A:H",
+    [
+      [
+        103,
+        "Dee",
+        "Moore",
+        "dee@x.org",
+        true,
+        false,
+        false,
+        false,
+      ],
+    ],
+  ],
+  [
+    "update",
+    "bm",
+    "'Bid-Management'!E1:F4",
+    [
+      [
+        103,
+        "",
+      ],
+      [
+        "Dee",
+        "Moore",
+      ],
+      [
+        "Item #:",
+        "Price:",
+      ],
+      [
+        "1701",
+        40,
+      ],
+    ],
+  ],
+  [
+    "batchUpdate",
+    "bm",
+    [
+      {
+        "mergeCells": {
+          "mergeType": "MERGE_ALL",
+          "range": {
+            "endColumnIndex": 6,
+            "endRowIndex": 1,
+            "sheetId": 2,
+            "startColumnIndex": 4,
+            "startRowIndex": 0,
+          },
+        },
+      },
+      {
+        "repeatCell": {
+          "cell": {
+            "userEnteredFormat": {
+              "horizontalAlignment": "CENTER",
+            },
+          },
+          "fields": "userEnteredFormat.horizontalAlignment",
+          "range": {
+            "endColumnIndex": 6,
+            "endRowIndex": 1,
+            "sheetId": 2,
+            "startColumnIndex": 4,
+            "startRowIndex": 0,
+          },
+        },
+      },
+      {
+        "repeatCell": {
+          "cell": {
+            "userEnteredFormat": {
+              "textFormat": {
+                "bold": true,
+              },
+            },
+          },
+          "fields": "userEnteredFormat.textFormat.bold",
+          "range": {
+            "endColumnIndex": 6,
+            "endRowIndex": 2,
+            "sheetId": 2,
+            "startColumnIndex": 4,
+            "startRowIndex": 1,
+          },
+        },
+      },
+    ],
+  ],
+  [
+    "get",
+    "tix",
+    "'tickets'!A1",
+  ],
+  [
+    "append",
+    "tix",
+    "'tickets'!A:V",
+    [
+      [
+        "dee",
+        "MOORE",
+        " dee@x.org ",
+        "",
+        "1",
+        "FALSE",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "Auction Checkout",
+        "Pending",
+        "$40",
+      ],
+    ],
+  ],
+]
+`;
+
+exports[`registerWalkInBidder - recorded calls > without a tickets spreadsheet, skips the ticket row 1`] = `
+[
+  [
+    "get-meta",
+    "bm",
+  ],
+  [
+    "get",
+    "bm",
+    "'Bidder-Numbers'!A:A",
+  ],
+  [
+    "get",
+    "bm",
+    "'Bid-Management'!1:5",
+  ],
+  [
+    "get",
+    "bm",
+    "'Bidder-Numbers'!A1",
+  ],
+  [
+    "get",
+    "bm",
+    "'Bid-Management'!E1:F4",
+  ],
+  [
+    "append",
+    "bm",
+    "'Bidder-Numbers'!A:H",
+    [
+      [
+        103,
+        "Al",
+        "Fox",
+        "",
+        true,
+        false,
+        false,
+        false,
+      ],
+    ],
+  ],
+  [
+    "update",
+    "bm",
+    "'Bid-Management'!E1:F4",
+    [
+      [
+        103,
+        "",
+      ],
+      [
+        "Al",
+        "Fox",
+      ],
+      [
+        "Item #:",
+        "Price:",
+      ],
+      [
+        "1701",
+        35,
+      ],
+    ],
+  ],
+  [
+    "batchUpdate",
+    "bm",
+    [
+      {
+        "mergeCells": {
+          "mergeType": "MERGE_ALL",
+          "range": {
+            "endColumnIndex": 6,
+            "endRowIndex": 1,
+            "sheetId": 2,
+            "startColumnIndex": 4,
+            "startRowIndex": 0,
+          },
+        },
+      },
+      {
+        "repeatCell": {
+          "cell": {
+            "userEnteredFormat": {
+              "horizontalAlignment": "CENTER",
+            },
+          },
+          "fields": "userEnteredFormat.horizontalAlignment",
+          "range": {
+            "endColumnIndex": 6,
+            "endRowIndex": 1,
+            "sheetId": 2,
+            "startColumnIndex": 4,
+            "startRowIndex": 0,
+          },
+        },
+      },
+      {
+        "repeatCell": {
+          "cell": {
+            "userEnteredFormat": {
+              "textFormat": {
+                "bold": true,
+              },
+            },
+          },
+          "fields": "userEnteredFormat.textFormat.bold",
+          "range": {
+            "endColumnIndex": 6,
+            "endRowIndex": 2,
+            "sheetId": 2,
+            "startColumnIndex": 4,
+            "startRowIndex": 1,
+          },
+        },
+      },
+    ],
+  ],
+]
+`;

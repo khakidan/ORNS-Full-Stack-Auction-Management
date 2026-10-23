@@ -67,7 +67,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── receiptService.ts        # Apps Script receipt calls; batch email loop
 │   │   ├── settingsService.ts       # _Settings key upsert (settings: lock)
 │   │   ├── sharedConfig.ts          # Server-side settings/global reads (PayPal sandbox/live)
-│   │   ├── sheetsService.ts         # Staged multi-op Sheets "transaction" with rollback
+│   │   ├── sheetsService.ts         # Staged multi-op Sheets "transaction" with rollback; ensureSheetTab
 │   │   ├── specialWinnerService.ts  # Dashboard gift card / raffle winner + Follow-Up row (bidder-numbers lock)
 │   │   └── syncService.ts           # Bidder-Numbers / Bid-Management sheet build from ticket sheets
 │   │
@@ -75,6 +75,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── appsScriptMode.ts  # APPS_SCRIPT_DEV_MODE -> scripts.run devMode
 │   │   ├── appsScriptRun.ts   # runAppsScript (scripts.run with the real error text) + isAppsScriptFailure
 │   │   ├── asyncLock.ts       # In-process per-key mutex (withLock) + runIfIdle (409 instead of a second run)
+│   │   ├── bidGrid.ts         # findBidderColumn / firstEmptyBidRow (Bid-Management grid), findBidderRowIndex (Bidder-Numbers)
 │   │   ├── bidderNumbersHeaders.ts # Bidder-Numbers A-N header row; labels L1:N1
 │   │   ├── categoryHelpers.ts # Category ID bases and resequencing
 │   │   ├── columnUtils.ts     # Column index -> letter
@@ -85,7 +86,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── minRaiseHelpers.ts # Minimum-raise tiers
 │   │   ├── rangeUtils.ts      # A1 range sheet-name quoting
 │   │   ├── sheetCache.ts      # 5-second Sheets read cache, keyed per user
-│   │   ├── sheetColumns.ts    # Named 0-based columns: BIDDER_COL (Bidder-Numbers A-N), ITEM_COL (Auction-Items A-M)
+│   │   ├── sheetColumns.ts    # Named 0-based columns: BIDDER_COL (Bidder-Numbers A-N), ITEM_COL (Auction-Items A-M), TICKETS_COL ('tickets' tab)
 │   │   ├── validateEnv.ts     # Boot-time required env var check
 │   │   └── winningBidChecks.ts # One-winner-per-item check for record-winning-bid
 │   │
