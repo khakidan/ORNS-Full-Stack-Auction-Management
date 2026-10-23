@@ -67,6 +67,37 @@ Nothing outstanding - L1-L9 are all fixed (see `CHANGELOG.md`).
 
 ---
 
+## 2026-10-22 Refactor Audit Backlog
+
+Whole-codebase read against `AGENTS.md` and every guide under `docs/agents/` (component-standards, patterns, performance, react-patterns, style_guide, tailwind-style-guide, testing-philosophy), at commit `b67bd17`. Each item was confirmed in the code. Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
+
+### Before the auction - unlocked writes
+
+Nothing outstanding - R1-R4 are fixed (see `CHANGELOG.md`).
+
+### After the auction - structure
+
+- **R5 - Split `server/routes/dataRoutes.ts`** (481 lines: settings, items, passthrough, Drive, attendees, sweeper status, bidder sync) into one route file per area, moving the inline Sheets/Drive work (settings upsert, Drive listing) into services.
+- **R6 - Link form labels to inputs.** The label style `text-xs text-muted-foreground mb-1.5 block` is copied 28 times with no `htmlFor`/`id` (EditAttendeeDialog, EditAuctionItemDialog, AddAttendeeDialog, BundlingDialog); AttendeeGuestsEditor uses placeholders as its only labels. Fix: a shared `FormField` (label + control, `useId`).
+- **R7 - One list-row component.** BidderRow, ItemRow, AuctionItemRow, AttendeeRow (and partly WinnerCard) repeat the row container, ID tile, `text-[10px]` caption and `text-[15px]` title; ItemRow and AuctionItemRow are near-duplicates.
+- **R8 - Named column maps.** ~130 raw column indexes on the server (bundleService 35, syncService 27, itemService 14) plus hard-coded column letters in the browser. Fix: one column map per sheet, matching `schema.md`.
+- **R9 - Type and quiet `server/services/syncService.ts`.** 22 `any`s (use `OAuth2Client` / `sheets_v4.Sheets`), 21 `console.log`s, and a 231-line `performSheetSync`.
+- **R10 - Shared client request helpers.** 22 hand-built `fetchWithRetry` requests in 16 files repeat headers, body and error parsing; 11 copies of the `PASTE` placeholder check. Fix: a `postJson` helper and an `isConfiguredId` helper. Server side, 21 copies of the `getAuthenticatedClient` + `google.sheets` setup and 6 copies of the 404 mapping.
+- **R11 - Long money-path functions** (`registerWalkInBidderLocked` 207 lines, `checkoutMarkPaidLocked` 174, `recordWinningBidLocked` 157). Split out their pure steps so they can be tested alone. Leave until well after the auction.
+
+### Small cleanups
+
+- **R12 - Tailwind guide fixes:** `text-[10px]`/`text-[11px]` -> `text-xxs`; `w-[1px]` -> `w-px`; Dashboard chart hex fills (`useDashboardState.ts`) -> chart tokens; template-literal `className` in `PayPalSweeperStatusCard.tsx` -> `cn()`; the "Auction Closed" note in DocumentCreationPanel uses a pulsing loader icon; AuctionItemRow's restore button hand-rolls a spinner instead of `LoadingButton`.
+- **R13 - Toasts follow the OS theme.** `src/components/ui/sonner.tsx` calls next-themes' `useTheme` with no ThemeProvider, so toasts go dark on dark-mode computers in a light-only app. Fix: `theme="light"`, drop next-themes.
+- **R14 - Unused UI files:** `src/components/ui/sheet.tsx`, `src/components/ui/separator.tsx`.
+- **R15 - Derived state in an effect:** `useAuctionItemsFilterSort.ts` trims the selection inside an effect; compute it during render instead.
+- **R16 - Duplicate read:** Checkout's `useWinnersList` reads Bid-Management `A:ZZ` again though `useWinnersData` already has it.
+- **R17 - Shallow test:** `useQuickBidEntryState.test.ts` asserts `recordWinningBid` was called but not with which bidder, item and price.
+- **R18 - Stale comments:** 92 code comments in 80 files cite the retired `refactor-opportunities.md`.
+- **R19 - Guide doc drift:** `react-patterns.md` (no `src/services`, google-api in `src/lib`, localStorage tokens, test count 25); `component-standards.md` (says `sheet.tsx` is used); `performance.md` (969-line components); `style_guide.md`'s bundle table (first load is now ~333 kB gzip JS, over the 300 kB warning; lazy-loading the Dashboard's chart library would save ~50 kB).
+
+---
+
 ## Feature Milestones (Staging)
 
 Nothing outstanding.

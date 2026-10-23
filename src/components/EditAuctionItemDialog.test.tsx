@@ -97,7 +97,7 @@ describe("EditAuctionItemDialog - prefill", () => {
 });
 
 describe("EditAuctionItemDialog - saving", () => {
-  it("only sends the fields that actually changed, with their sheet column letters", async () => {
+  it("only sends the fields that actually changed", async () => {
     const user = userEvent.setup();
     const { onSave } = renderDialog(makeItem({ rowIndex: 5 }));
 
@@ -107,7 +107,7 @@ describe("EditAuctionItemDialog - saving", () => {
     await user.click(screen.getByRole("button", { name: "Save Changes" }));
 
     expect(onSave).toHaveBeenCalledWith(5, [
-      { field: "name", colLetter: "C", value: "Antique Camera" },
+      { field: "name", value: "Antique Camera" },
     ]);
   });
 
@@ -128,8 +128,8 @@ describe("EditAuctionItemDialog - saving", () => {
     const changes = onSave.mock.calls[0][1];
     expect(changes).toEqual(
       expect.arrayContaining([
-        { field: "name", colLetter: "C", value: "Antique Camera" },
-        { field: "value", colLetter: "E", value: "$150.00" },
+        { field: "name", value: "Antique Camera" },
+        { field: "value", value: "$150.00" },
       ])
     );
     expect(changes).toHaveLength(2);
@@ -145,14 +145,14 @@ describe("EditAuctionItemDialog - saving", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it("changing category sends the category field with column B", async () => {
+  it("changing category sends the category field", async () => {
     const { onSave } = renderDialog(makeItem({ rowIndex: 5, category: "Collectibles" }));
 
     const categorySelect = screen.getAllByTestId("mock-select")[0];
     fireEvent.change(categorySelect, { target: { value: "Decor" } });
     fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 
-    expect(onSave).toHaveBeenCalledWith(5, [{ field: "category", colLetter: "B", value: "Decor" }]);
+    expect(onSave).toHaveBeenCalledWith(5, [{ field: "category", value: "Decor" }]);
   });
 
   it("clicking Cancel calls onOpenChange(false) without saving", async () => {
@@ -177,7 +177,7 @@ describe("EditAuctionItemDialog - Allow Multiple Winners", () => {
     expect(screen.getByRole("checkbox")).toBeChecked();
   });
 
-  it("checking the box sends allowMultipleWinners=true on column M", async () => {
+  it("checking the box sends allowMultipleWinners=true", async () => {
     const user = userEvent.setup();
     const { onSave } = renderDialog(makeItem({ rowIndex: 5, allowMultipleWinners: false }));
 
@@ -185,7 +185,7 @@ describe("EditAuctionItemDialog - Allow Multiple Winners", () => {
     await user.click(screen.getByRole("button", { name: "Save Changes" }));
 
     expect(onSave).toHaveBeenCalledWith(5, [
-      { field: "allowMultipleWinners", colLetter: "M", value: true },
+      { field: "allowMultipleWinners", value: true },
     ]);
   });
 
@@ -197,7 +197,7 @@ describe("EditAuctionItemDialog - Allow Multiple Winners", () => {
     await user.click(screen.getByRole("button", { name: "Save Changes" }));
 
     expect(onSave).toHaveBeenCalledWith(5, [
-      { field: "allowMultipleWinners", colLetter: "M", value: false },
+      { field: "allowMultipleWinners", value: false },
     ]);
   });
 

@@ -162,6 +162,40 @@ describe("Proxy Route Integration Tests", () => {
     });
   });
 
+  describe("POST /api/sheets passthrough - sheets with their own locked routes are refused", () => {
+    const cases: [string, string][] = [
+      ["write", "/api/sheets/test-spreadsheet-id/Auction-Items!E2"],
+      ["write", "/api/sheets/test-spreadsheet-id/'Bidder-Numbers'!E5"],
+      ["write", "/api/sheets/test-spreadsheet-id/bid-management!A1"],
+      ["append", "/api/sheets/test-spreadsheet-id/Follow-Up!A:C/append"],
+      ["write", "/api/sheets/test-spreadsheet-id/Special-Winners!B2"],
+      ["clear", "/api/sheets/test-spreadsheet-id/Bidder-Numbers!A2:Z2/clear"],
+    ];
+    for (const [kind, url] of cases) {
+      it(`refuses a ${kind} to ${url.split("/")[4]} with 403, without calling Google`, async () => {
+        let googleCalled = false;
+        server.use(
+          http.put("https://sheets.googleapis.com/v4/spreadsheets/:id/values/:range", () => { googleCalled = true; return HttpResponse.json({}); }),
+          http.post("https://sheets.googleapis.com/v4/spreadsheets/:id/values/:range", () => { googleCalled = true; return HttpResponse.json({}); }),
+        );
+        const response = await request(app).post(encodeURI(url)).set(authHeader).send({ values: [["x"]] });
+
+        expect(response.status).toBe(403);
+        expect(response.body.error).toMatch(/can only be changed through the app's own save actions/);
+        expect(googleCalled).toBe(false);
+      });
+    }
+
+    it("still allows a write to a ticket sheet (attendee edits)", async () => {
+      const response = await request(app)
+        .post("/api/sheets/test-spreadsheet-id/tickets!C4")
+        .set(authHeader)
+        .send({ values: [["guest@example.com"]] });
+
+      expect(response.status).toBe(200);
+    });
+  });
+
   describe("POST /api/sheets/:spreadsheetId/:range/clear", () => {
     it("Happy path — clears the range, returns success", async () => {
       const response = await request(app)

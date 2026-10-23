@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { getSheetData, updateSheetData } from "@/services/google-api";
+import { fetchWithRetry, getBaseUrl, getSheetData } from "@/services/google-api";
 import { parseBidderRows } from "@/lib/bidderParsing";
 import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { Bidder } from "@/types";
@@ -35,12 +35,12 @@ export function useBiddersData(spreadsheetId: string, bidderNumbersSheet: string
   }, [spreadsheetId, bidderNumbersSheet]);
 
   // checkInBidder and markBidderAsProxy are the same optimistic-update/
-  // background-sync/scoped-rollback flow apart from which boolean field
-  // and sheet column they flip - collapsed into this one helper.
+  // server-save/scoped-rollback flow apart from which box they tick. The
+  // server's /api/bidders/set-flag finds the row and writes it under the
+  // `bidder-numbers:` lock, like every other Bidder-Numbers write.
   const setBidderFlag = async (
     bidder: Bidder,
     field: 'checkedIn' | 'isProxy',
-    column: string,
     successMessage: string
   ) => {
     if (!spreadsheetId) return;
@@ -53,29 +53,29 @@ export function useBiddersData(spreadsheetId: string, bidderNumbersSheet: string
     // 2. Optimistic Update (Immediate UI change)
     setBidders(prev => prev.map(b => b.id === bidder.id ? { ...b, [field]: true } : b));
 
-    // 3. Background Sync
-    getSheetData(spreadsheetId, `${bidderNumbersSheet}!A:A`)
-      .then(data => {
-        const rowIndex = data.values.findIndex((row: any) => row[0]?.toString() === bidder.id) + 1;
-        if (rowIndex > 1) {
-          return updateSheetData(spreadsheetId, `${bidderNumbersSheet}!${column}${rowIndex}`, [[true]]);
-        } else {
-          throw new Error("Bidder not found in management sheet.");
-        }
-      })
-      .then(() => toast.success(successMessage))
-      .catch(e => {
-        // 4. Rollback on failure - scoped to just this bidder.
-        setBidders(prev => prev.map(b => b.id === bidder.id ? { ...b, [field]: previousValue } : b));
-        toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
+    // 3. Save on the server
+    try {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/bidders/set-flag`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spreadsheetId, bidderNumbersSheet, bidderId: bidder.id, flag: field }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || "The server didn't save the change.");
+      toast.success(successMessage);
+    } catch (e) {
+      console.error(e);
+      // 4. Rollback on failure - scoped to just this bidder.
+      setBidders(prev => prev.map(b => b.id === bidder.id ? { ...b, [field]: previousValue } : b));
+      toast.error(ROLLBACK_SYNC_ERROR_MESSAGE);
+    }
   };
 
   const checkInBidder = (bidder: Bidder) =>
-    setBidderFlag(bidder, 'checkedIn', 'E', `${bidder.firstName} ${bidder.lastName} checked in (Synced)`);
+    setBidderFlag(bidder, 'checkedIn', `${bidder.firstName} ${bidder.lastName} checked in (Synced)`);
 
   const markBidderAsProxy = (bidder: Bidder) =>
-    setBidderFlag(bidder, 'isProxy', 'F', `${bidder.firstName} ${bidder.lastName} marked as Proxy Bidder`);
+    setBidderFlag(bidder, 'isProxy', `${bidder.firstName} ${bidder.lastName} marked as Proxy Bidder`);
 
   return { bidders, loading, setLoading, fetchBidders, checkInBidder, markBidderAsProxy };
 }

@@ -17,7 +17,8 @@ import { AuctionItemsFilterControls } from "@/components/AuctionItemsFilterContr
 import { AuctionItemsList } from "@/components/AuctionItemsList";
 import { AuctionItemsBulkActionBar } from "@/components/AuctionItemsBulkActionBar";
 import { AddAuctionItemDialog } from "@/components/AddAuctionItemDialog";
-import { EditAuctionItemDialog, AuctionItemEditChange } from "@/components/EditAuctionItemDialog";
+import { EditAuctionItemDialog } from "@/components/EditAuctionItemDialog";
+import type { AuctionItemEditChange } from "@/hooks/useAuctionItemUpdate";
 import { AuctionItem } from "@/types";
 
 export default function AuctionItemsTab() {
@@ -39,26 +40,16 @@ export default function AuctionItemsTab() {
   // EditableCell inline editors that used to live in AuctionItemRow.tsx,
   // mirroring EditAttendeeDialog.tsx's pattern on the Attendee List. Kept
   // local here (not in useAuctionItemsTableState.ts) since it's pure UI
-  // state - the actual save logic reuses table.handleUpdate unchanged.
+  // state - the save itself is table.saveItemChanges.
   const [itemToEdit, setItemToEdit] = useState<AuctionItem | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const handleEditSave = async (rowIndex: number, changes: AuctionItemEditChange[]) => {
     setIsSavingEdit(true);
     try {
-      // Category triggers a server-side resequencing + full resync
-      // (see useAuctionItemUpdate.ts) - applied last so it doesn't race
-      // with the other fields' own optimistic updates/background syncs
-      // still in flight from the same Save.
-      const nonCategoryChanges = changes.filter((c) => c.field !== "category");
-      const categoryChange = changes.find((c) => c.field === "category");
-
-      await Promise.all(
-        nonCategoryChanges.map((c) => table.handleUpdate(rowIndex, c.field, c.colLetter, c.value))
-      );
-      if (categoryChange) {
-        await table.handleUpdate(rowIndex, categoryChange.field, categoryChange.colLetter, categoryChange.value);
-      }
+      // One locked request for every changed field (category included),
+      // so the fields can't race each other or another staff member's edit.
+      await table.saveItemChanges(rowIndex, changes);
     } finally {
       setIsSavingEdit(false);
       setItemToEdit(null);

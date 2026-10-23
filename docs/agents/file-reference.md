@@ -22,10 +22,10 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │
 │   ├── routes/
 │   │   ├── authRoutes.ts      # /auth/url, /auth/callback (OAuth -> session cookie), /auth/status, /auth/logout
-│   │   ├── bidRoutes.ts       # Live-auction transactions: record-winning-bid, checkout-mark-paid, close-and-cleanup, walk-in, check-in-with-bid
+│   │   ├── bidRoutes.ts       # Live-auction transactions: record-winning-bid, checkout-mark-paid, close-and-cleanup, walk-in, check-in-with-bid, bidders/set-flag (check-in/proxy), special-winner
 │   │   ├── bugReportRoutes.ts # POST /api/bug-reports (unauthenticated), /list, /resolve
 │   │   ├── bundleRoutes.ts    # Gemini name/description suggestions; bundle process/restore
-│   │   ├── dataRoutes.ts      # Bidder sync, PayPal sweeper status/run-now, _Settings, auction item CRUD, generic Sheets/Drive proxies, attendee field updates
+│   │   ├── dataRoutes.ts      # Bidder sync, PayPal sweeper status/run-now, _Settings, auction item CRUD, generic Sheets proxy (refuses locked sheets) and Drive proxy
 │   │   ├── health.ts          # GET /api/health
 │   │   ├── bugReportRoutes.ts # POST /api/bug-reports (open) emails the admin via services/adminNotifications.ts; list/resolve are admin-only
 │   │   ├── productionRoutes.ts# Apps Script document generators (item docs/labels/slides, bidder labels)
@@ -43,7 +43,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   ├── services/
 │   │   ├── auctionService.ts        # recordWinningBid, checkoutMarkPaid, closeAuctionAndCleanup
 │   │   ├── auctionSetupService.ts   # Annual rollover / new-auction spreadsheet setup
-│   │   ├── bidderService.ts         # Walk-in registration, check-in with bid, attendee field updates
+│   │   ├── bidderService.ts         # Walk-in registration, check-in with bid, check-in/proxy flags
 │   │   ├── bugReportService.ts      # Bug-Reports sheet rows, Drive screenshots, log/local-file fallback
 │   │   ├── bundleService.ts         # Gemini bundle suggestions, bundle process/restore + resequencing
 │   │   ├── emailService.ts          # Receipt email HTML/MIME + Gmail send
@@ -60,6 +60,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── receiptService.ts        # Apps Script receipt calls; batch email loop
 │   │   ├── sharedConfig.ts          # Server-side settings/global reads (PayPal sandbox/live)
 │   │   ├── sheetsService.ts         # Staged multi-op Sheets "transaction" with rollback
+│   │   ├── specialWinnerService.ts  # Dashboard gift card / raffle winner + Follow-Up row (bidder-numbers lock)
 │   │   └── syncService.ts           # Bidder-Numbers / Bid-Management sheet build from ticket sheets
 │   │
 │   ├── utils/

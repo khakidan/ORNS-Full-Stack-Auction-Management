@@ -5,9 +5,10 @@ import { getAuthenticatedClient } from '../services/oauth';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { executeGoogleSheetsTransaction, SheetOp } from '../services/sheetsService';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
-import { registerWalkInBidder, checkInBidderWithBid } from '../services/bidderService';
+import { registerWalkInBidder, checkInBidderWithBid, setBidderFlag, BIDDER_FLAG_COLUMNS } from '../services/bidderService';
 import { recordWinningBid, checkoutMarkPaid, closeAuctionAndCleanup } from '../services/auctionService';
 import { requireAuth } from '../middleware/requireAuth';
+import { saveSpecialWinner, SPECIAL_PRIZES } from '../services/specialWinnerService';
 import { getPaypalIsSandbox } from '../services/sharedConfig';
 
 export default function createBidRouter() {
@@ -205,6 +206,48 @@ export default function createBidRouter() {
     } catch (error: any) {
       console.error("[Route Error] walk-in:", error);
       if (error.message.includes("not found")) {
+        return res.status(400).json({ error: error.message });
+      }
+      next(error);
+    }
+  });
+
+  // Dashboard: save the gift-card / raffle winner (plus a Follow-Up row if they already checked out)
+  router.post("/auction/special-winner", async (req: Request, res: Response, next: NextFunction) => {
+    const { spreadsheetId, prize, bidderId, addFollowUp, idempotencyKey } = req.body;
+    if (!spreadsheetId || !Object.hasOwn(SPECIAL_PRIZES, prize) || typeof bidderId !== "string") {
+      return res.status(400).json({ error: "Missing or invalid parameters for saving a special winner." });
+    }
+
+    try {
+      const outcome = await withIdempotency("auction/special-winner", idempotencyKey, async () => {
+        const client = getAuthenticatedClient(req.session.tokens);
+        const sheets = google.sheets({ version: "v4", auth: client });
+        return saveSpecialWinner(sheets, { spreadsheetId, prize, bidderId: bidderId.trim(), addFollowUp: !!addFollowUp });
+      });
+      res.json(idempotentBody(outcome));
+    } catch (error: any) {
+      console.error("[Route Error] special-winner:", error);
+      next(error);
+    }
+  });
+
+  // Tick a bidder's Checked In or Proxy Bidder box (locked, like every Bidder-Numbers write)
+  router.post("/bidders/set-flag", async (req: Request, res: Response, next: NextFunction) => {
+    const { spreadsheetId, bidderNumbersSheet, bidderId, flag } = req.body;
+    if (!spreadsheetId || !bidderNumbersSheet || !bidderId || !Object.hasOwn(BIDDER_FLAG_COLUMNS, flag)) {
+      return res.status(400).json({ error: "Missing or invalid parameters for setting a bidder flag." });
+    }
+
+    try {
+      const client = getAuthenticatedClient(req.session.tokens);
+      const sheets = google.sheets({ version: "v4", auth: client });
+      const result = await setBidderFlag(sheets, { spreadsheetId, bidderNumbersSheet, bidderId: String(bidderId), flag });
+      clearCacheForSpreadsheet(spreadsheetId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("[Route Error] set-flag:", error);
+      if (error.message?.includes("not found")) {
         return res.status(400).json({ error: error.message });
       }
       next(error);

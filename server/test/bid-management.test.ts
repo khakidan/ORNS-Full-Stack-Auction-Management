@@ -462,6 +462,51 @@ describe("bidRoutes - /api/auction/check-in-with-bid", () => {
   });
 });
 
+describe("bidRoutes - /api/bidders/set-flag", () => {
+  afterEach(() => {
+    resetHandlersState();
+  });
+
+  it("ticks the bidder's Checked In box (column E) on their row", async () => {
+    const response = await request(app)
+      .post("/api/bidders/set-flag")
+      .set(authHeader)
+      .send({ spreadsheetId: "ss-id", bidderNumbersSheet: "Bidder-Numbers", bidderId: "42", flag: "checkedIn" });
+
+    expect(response.status).toBe(200);
+    expect(lastBulkWritePayload).toEqual([[true]]);
+  });
+
+  it("rejects a flag other than checkedIn/isProxy without writing", async () => {
+    const response = await request(app)
+      .post("/api/bidders/set-flag")
+      .set(authHeader)
+      .send({ spreadsheetId: "ss-id", bidderNumbersSheet: "Bidder-Numbers", bidderId: "42", flag: "paid" });
+
+    expect(response.status).toBe(400);
+    expect(updateCallCount).toBe(0);
+  });
+
+  it("returns 400 when the bidder isn't in the sheet", async () => {
+    const response = await request(app)
+      .post("/api/bidders/set-flag")
+      .set(authHeader)
+      .send({ spreadsheetId: "ss-id", bidderNumbersSheet: "Bidder-Numbers", bidderId: "999", flag: "isProxy" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/not found/);
+    expect(updateCallCount).toBe(0);
+  });
+
+  it("returns 401 when unauthenticated", async () => {
+    const response = await request(app)
+      .post("/api/bidders/set-flag")
+      .send({ spreadsheetId: "ss-id", bidderNumbersSheet: "Bidder-Numbers", bidderId: "42", flag: "checkedIn" });
+
+    expect(response.status).toBe(401);
+  });
+});
+
 describe('Checkout workflow', () => {
   afterEach(() => {
     resetHandlersState();

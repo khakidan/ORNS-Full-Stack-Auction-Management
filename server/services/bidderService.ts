@@ -352,53 +352,38 @@ async function checkInBidderWithBidLocked(
   return { success: true, bidAdded: true, checkedIn: true };
 }
 
-export interface UpdateAttendeeParams {
+/** Bidder-Numbers checkbox columns the Bidders page can tick (schema.md). */
+export const BIDDER_FLAG_COLUMNS = { checkedIn: "E", isProxy: "F" } as const;
+export type BidderFlag = keyof typeof BIDDER_FLAG_COLUMNS;
+
+export interface SetBidderFlagParams {
   spreadsheetId: string;
-  sheet: string;
-  rowIndex: number;
-  field: string;
-  value: string;
+  bidderNumbersSheet: string;
+  bidderId: string;
+  flag: BidderFlag;
 }
 
-export async function updateAttendeeField(
-  sheets: sheets_v4.Sheets,
-  params: UpdateAttendeeParams
-): Promise<{ success: boolean }> {
-  const { spreadsheetId, sheet, rowIndex, field, value } = params;
+/**
+ * Ticks a bidder's Checked In (E) or Proxy Bidder (F) box.
+ *
+ * Wrapped in the same `bidder-numbers:` lock as every other Bidder-Numbers
+ * writer (patterns.md), so the row lookup and the write can't interleave
+ * with a walk-in registration or checkout on the same sheet.
+ */
+export async function setBidderFlag(sheets: sheets_v4.Sheets, params: SetBidderFlagParams): Promise<{ success: boolean }> {
+  return withLock(`bidder-numbers:${params.spreadsheetId}`, async () => {
+    const { spreadsheetId, bidderNumbersSheet, bidderId, flag } = params;
+    const search = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${bidderNumbersSheet}'!A:A` });
+    const rows = search.data.values || [];
+    const rowIndex = rows.findIndex((row: any, i: number) => i > 0 && row[0]?.toString().trim() === String(bidderId).trim()) + 1;
+    if (rowIndex < 2) throw new Error(`Bidder ${bidderId} not found in ${bidderNumbersSheet}`);
 
-  if (!rowIndex || isNaN(Number(rowIndex)) || Number(rowIndex) < 1) {
-    const error: any = new Error("Row index must be a positive number.");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const normalizedSheet = sheet.trim().toLowerCase();
-
-  const fieldMapping: Record<string, string> = {
-    firstName: "A",
-    lastName: "B",
-    email: "C",
-    phone: "D",
-    paymentStatus: normalizedSheet === "tickets" ? "U" : "R"
-  };
-
-  const colLetter = fieldMapping[field];
-  if (!colLetter) {
-    const error: any = new Error(`Invalid field: ${field}`);
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const range = `'${sheet}'!${colLetter}${rowIndex}`;
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range,
-    valueInputOption: "USER_ENTERED",
-    requestBody: {
-      values: [[value]]
-    }
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${bidderNumbersSheet}'!${BIDDER_FLAG_COLUMNS[flag]}${rowIndex}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [[true]] },
+    });
+    return { success: true };
   });
-
-  return { success: true };
 }

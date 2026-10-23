@@ -6,7 +6,7 @@
  * unmocked, since it never needed to touch the network. This file tests
  * the real wiring between AuctionItemRow.tsx's Edit button,
  * EditAuctionItemDialog.tsx, and useAuctionItemUpdate.ts's real
- * `handleUpdate` - mirroring AuctionItemsTab.bundling.test.tsx's
+ * `saveItemChanges` - mirroring AuctionItemsTab.bundling.test.tsx's
  * convention of mocking google-api and leaving the hook under test real.
  */
 import React from "react";
@@ -40,6 +40,7 @@ vi.mock("@/context/AuctionContext", () => ({
   useAuction: () => ({ isAuctionClosed: false })
 }));
 
+const { mockRefresh } = vi.hoisted(() => ({ mockRefresh: vi.fn() }));
 vi.mock("@/hooks/useAuctionItems", () => ({
   useAuctionItems: () => ({
     items: [
@@ -49,7 +50,7 @@ vi.mock("@/hooks/useAuctionItems", () => ({
     categories: ["Food", "Health & Beauty"],
     valueCalculations: [],
     loading: false,
-    refresh: vi.fn()
+    refresh: mockRefresh
   })
 }));
 
@@ -74,7 +75,7 @@ vi.mock("@/hooks/useBundling", () => ({
 }));
 
 // google-api intentionally NOT mocked wholesale as no-ops - this file
-// tests the real handleUpdate wiring, matching
+// tests the real saveItemChanges wiring, matching
 // AuctionItemsTab.bundling.test.tsx's convention for useBundling.
 vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
@@ -113,7 +114,12 @@ describe("AuctionItemsTab - real single-item edit wiring", () => {
     expect(within(dialog).getByDisplayValue("Donor A")).toBeInTheDocument();
   });
 
-  it("saving a changed non-category field writes directly to the sheet, not through the resequencing endpoint", async () => {
+  const updateItemBody = () => {
+    const call = mockedFetchWithRetry.mock.calls.find(([url]) => String(url).includes("/api/auction/update-item"));
+    return call ? JSON.parse(String((call[1] as RequestInit).body)) : undefined;
+  };
+
+  it("saving a changed field sends it to the locked update-item route, never a direct cell write", async () => {
     render(<AuctionItemsTab />);
 
     const row = screen.getByTestId("auction-item-row-2");
@@ -125,53 +131,17 @@ describe("AuctionItemsTab - real single-item edit wiring", () => {
     await user.type(donorInput, "Donor Z");
     await user.click(within(dialog).getByRole("button", { name: "Save Changes" }));
 
-    expect(mockedUpdateSheetData).toHaveBeenCalledWith("test-sheet-id", "Auction-Items!H2", [["Donor Z"]]);
-    expect(mockedFetchWithRetry).not.toHaveBeenCalled();
+    expect(updateItemBody()).toEqual({
+      spreadsheetId: "test-sheet-id",
+      rowIndex: 2,
+      changes: { donor: "Donor Z" },
+      expectedName: "Food 1",
+    });
+    expect(mockedUpdateSheetData).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("saving a changed category goes through the resequencing endpoint instead of a direct cell write", async () => {
-    render(<AuctionItemsTab />);
-
-    const row = screen.getByTestId("auction-item-row-2");
-    await user.click(within(row).getByRole("button", { name: "Edit Food 1" }));
-
-    const dialog = await screen.findByRole("dialog");
-    const categorySelect = within(dialog).getAllByTestId("mock-select")[0];
-    await user.selectOptions(categorySelect, "Health & Beauty");
-    await user.click(within(dialog).getByRole("button", { name: "Save Changes" }));
-
-    expect(mockedFetchWithRetry).toHaveBeenCalledWith(
-      expect.stringContaining("/api/auction/update-item"),
-      expect.objectContaining({
-        body: JSON.stringify({
-          spreadsheetId: "test-sheet-id",
-          rowIndex: 2,
-          field: "category",
-          value: "Health & Beauty",
-        }),
-      })
-    );
-  });
-
-  // Regression guard: category's resequencing + full resync
-  // (useAuctionItemUpdate.ts's fetchData()) must not fire until every
-  // other changed field's own write has at least been dispatched - firing
-  // it concurrently risks the resync clobbering another field's
-  // just-issued optimistic update before it's persisted. This is a real
-  // scenario now that one dialog Save can change multiple fields at once
-  // (previously each field committed via its own separate inline edit).
-  it("dispatches the non-category field write before starting the category resequencing call, when both change in one Save", async () => {
-    const callOrder: string[] = [];
-    mockedUpdateSheetData.mockImplementation(async () => {
-      callOrder.push("donor-write");
-      return {};
-    });
-    mockedFetchWithRetry.mockImplementation(async () => {
-      callOrder.push("category-resequence");
-      return { ok: true, json: async () => ({}) } as Response;
-    });
-
+  it("sends a category change and another field together in one request", async () => {
     render(<AuctionItemsTab />);
 
     const row = screen.getByTestId("auction-item-row-2");
@@ -185,6 +155,67 @@ describe("AuctionItemsTab - real single-item edit wiring", () => {
     await user.selectOptions(categorySelect, "Health & Beauty");
     await user.click(within(dialog).getByRole("button", { name: "Save Changes" }));
 
-    expect(callOrder).toEqual(["donor-write", "category-resequence"]);
+    expect(mockedFetchWithRetry).toHaveBeenCalledTimes(1);
+    expect(updateItemBody().changes).toEqual({ category: "Health & Beauty", donor: "Donor Z" });
+  });
+
+  // Bug report "Item's value change doesn't update min bid and starting
+  // value": a new value with the two amounts cleared saved them blank.
+  it("fills a cleared opening bid and min raise from the new value", async () => {
+    render(<AuctionItemsTab />);
+
+    const row = screen.getByTestId("auction-item-row-2");
+    await user.click(within(row).getByRole("button", { name: "Edit Food 1" }));
+
+    const dialog = await screen.findByRole("dialog");
+    const valueInput = within(dialog).getByDisplayValue("$100.00");
+    await user.clear(valueInput);
+    await user.type(valueInput, "200");
+    await user.clear(within(dialog).getByDisplayValue("$45.00"));
+    await user.clear(within(dialog).getByDisplayValue("$5.00"));
+    await user.click(within(dialog).getByRole("button", { name: "Save Changes" }));
+
+    expect(updateItemBody().changes).toEqual({ value: "$200.00", openingBid: "$90.00", minRaise: "$10.00" });
+  });
+
+  it("keeps an opening bid the user typed when the value changes", async () => {
+    render(<AuctionItemsTab />);
+
+    const row = screen.getByTestId("auction-item-row-2");
+    await user.click(within(row).getByRole("button", { name: "Edit Food 1" }));
+
+    const dialog = await screen.findByRole("dialog");
+    const valueInput = within(dialog).getByDisplayValue("$100.00");
+    await user.clear(valueInput);
+    await user.type(valueInput, "200");
+    const openingInput = within(dialog).getByDisplayValue("$45.00");
+    await user.clear(openingInput);
+    await user.type(openingInput, "$70.00");
+    await user.click(within(dialog).getByRole("button", { name: "Save Changes" }));
+
+    expect(updateItemBody().changes).toEqual({ value: "$200.00", openingBid: "$70.00" });
+  });
+
+  it("tells the user and reloads the list when the server says the item changed (409)", async () => {
+    const { toast } = await import("sonner");
+    mockedFetchWithRetry.mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ error: "This item changed since you opened it. Refresh the list and try again." }),
+    } as Response);
+
+    render(<AuctionItemsTab />);
+
+    const row = screen.getByTestId("auction-item-row-2");
+    await user.click(within(row).getByRole("button", { name: "Edit Food 1" }));
+
+    const dialog = await screen.findByRole("dialog");
+    const donorInput = within(dialog).getByDisplayValue("Donor A");
+    await user.clear(donorInput);
+    await user.type(donorInput, "Donor Z");
+    await user.click(within(dialog).getByRole("button", { name: "Save Changes" }));
+
+    expect(toast.error).toHaveBeenCalledWith("This item changed since you opened it. Refresh the list and try again.");
+    expect(mockRefresh).toHaveBeenCalled();
   });
 });

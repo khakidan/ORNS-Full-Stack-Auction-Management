@@ -39,8 +39,22 @@ export interface DeleteItemParams {
 export interface UpdateItemParams {
   spreadsheetId: string;
   rowIndex: number;
-  field: string;
-  value: any;
+  /** Field name -> new value; any of ITEM_FIELD_MAPPING's fields, plus allowMultipleWinners. */
+  changes: Record<string, any>;
+  /**
+   * The item name the editor saw at this row. When given and the row now
+   * holds a different name, nothing is written (ItemChangedError) - the
+   * row's ID can't be used for this, since resequencing renumbers IDs.
+   */
+  expectedName?: string;
+}
+
+/** Thrown when an edit's row no longer holds the item the editor opened. */
+export class ItemChangedError extends Error {
+  constructor(message = "This item changed since you opened it. Refresh the list and try again.") {
+    super(message);
+    this.name = "ItemChangedError";
+  }
 }
 
 export interface BulkUpdateParams {
@@ -230,52 +244,88 @@ const ITEM_FIELD_MAPPING: Record<string, number> = {
   bundledDateTime: 11
 };
 
+/** Column M - outside the A:L range the other item writes read and rewrite. */
+const ALLOW_MULTIPLE_WINNERS_FIELD = "allowMultipleWinners";
+
 /**
- * Updates a specific field of an auction item and manages re-sequencing if necessary.
+ * Saves one or more fields of an auction item in a single locked write,
+ * resequencing IDs when the category or status changes.
  *
- * Wrapped in withLock - see addItem's docblock for why.
+ * Wrapped in withLock - see addItem's docblock for why. Every item edit
+ * goes through here (not the generic /api/sheets passthrough), so an edit
+ * can't land between another writer's read and its whole-range rewrite
+ * and be lost.
  */
 export async function updateItem(sheets: sheets_v4.Sheets, params: UpdateItemParams): Promise<{ success: boolean; affected_categories: string[] }> {
   return withLock(`auction-items:${params.spreadsheetId}`, () => updateItemLocked(sheets, params));
 }
 
 async function updateItemLocked(sheets: sheets_v4.Sheets, params: UpdateItemParams): Promise<{ success: boolean; affected_categories: string[] }> {
-  const { spreadsheetId, rowIndex, field, value } = params;
+  const { spreadsheetId, rowIndex, changes, expectedName } = params;
 
-  const baseNumbers = await fetchCategoryBases(sheets, spreadsheetId);
+  const fields = Object.keys(changes);
+  if (fields.length === 0) throw new Error("Invalid field: no changes given");
+  for (const field of fields) {
+    if (field !== ALLOW_MULTIPLE_WINNERS_FIELD && ITEM_FIELD_MAPPING[field] === undefined) {
+      throw new Error(`Invalid field: ${field}`);
+    }
+  }
+
   const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Items'!A:L" });
   const values = dataRes.data.values || [];
 
-  if (!values[rowIndex - 1]) {
+  // Row 1 is the header; a real item row is 2 or later.
+  if (rowIndex < 2 || !values[rowIndex - 1]) {
     throw new Error(`Row ${rowIndex} not found`);
   }
 
   const row = values[rowIndex - 1];
-  const oldCategory = row[1];
-  const colIdx = ITEM_FIELD_MAPPING[field];
-  if (colIdx === undefined) throw new Error(`Invalid field: ${field}`);
+  if (expectedName !== undefined && String(row[2] ?? "").trim() !== expectedName.trim()) {
+    throw new ItemChangedError();
+  }
 
-  row[colIdx] = value;
+  const oldCategory = row[1];
+  for (const field of fields) {
+    if (field === ALLOW_MULTIPLE_WINNERS_FIELD) continue;
+    row[ITEM_FIELD_MAPPING[field]] = changes[field];
+  }
 
   const affectedCategories = new Set<string>();
-  if (field === 'category') {
+  if ("category" in changes) {
     if (oldCategory) affectedCategories.add(oldCategory);
-    if (value) affectedCategories.add(value);
-  } else if (field === 'status') {
-    const category = row[1];
-    if (category) affectedCategories.add(category);
+    if (changes.category) affectedCategories.add(changes.category);
+  } else if ("status" in changes) {
+    if (row[1]) affectedCategories.add(row[1]);
+  }
+
+  if (ALLOW_MULTIPLE_WINNERS_FIELD in changes) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'Auction-Items'!M${rowIndex}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [[!!changes[ALLOW_MULTIPLE_WINNERS_FIELD]]] }
+    });
   }
 
   if (affectedCategories.size > 0) {
+    const baseNumbers = await fetchCategoryBases(sheets, spreadsheetId);
     resequenceCategoryIds(values, affectedCategories, baseNumbers);
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "'Auction-Items'!A1:L",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values }
+    });
+  } else if (fields.some((f) => f !== ALLOW_MULTIPLE_WINNERS_FIELD)) {
+    // No ID changes, so only this item's own row is rewritten.
+    const fullRow = Array.from({ length: 12 }, (_, i) => row[i] ?? "");
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'Auction-Items'!A${rowIndex}:L${rowIndex}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [fullRow] }
+    });
   }
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId, 
-    range: "'Auction-Items'!A1:L", 
-    valueInputOption: "USER_ENTERED", 
-    requestBody: { values }
-  });
 
   clearCacheForSpreadsheet(spreadsheetId);
 
@@ -334,34 +384,3 @@ async function bulkUpdateItemsLocked(sheets: sheets_v4.Sheets, params: BulkUpdat
 
   return { success: true, affected_categories: Array.from(affectedCategories) };
 }
-
-export async function ensureFollowUpSheet(sheets: sheets_v4.Sheets, spreadsheetId: string, sheetName: string): Promise<void> {
-  const metadata = await sheets.spreadsheets.get({ spreadsheetId }).catch(() => null);
-  
-  if (metadata) {
-    const hasSheet = metadata.data.sheets?.some(s => s.properties?.title === sheetName);
-    if (!hasSheet) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: {
-          requests: [{
-            addSheet: {
-              properties: { title: sheetName }
-            }
-          }]
-        }
-      });
-      if (sheetName === "Follow-Up") {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range: "'Follow-Up'!A1:C1",
-          valueInputOption: "USER_ENTERED",
-          requestBody: {
-            values: [["Bidder ID", "Item ID", "Amount"]]
-          }
-        });
-      }
-    }
-  }
-}
-
