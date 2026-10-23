@@ -45,10 +45,18 @@ export function useAuctionItemUpdate(
     if (typeof changes.value === "string" && changes.value) {
       const parsedNum = parseDollar(changes.value);
       if (parsedNum > 0) changes.value = `$${parsedNum.toFixed(2)}`;
+    }
 
-      const { opening, raise } = calculateAutoBids(changes.value, valueCalculations);
-      if (opening && !("openingBid" in changes) && isBlankAmount(targetItem.openingBid)) changes.openingBid = opening;
-      if (raise && !("minRaise" in changes) && isBlankAmount(targetItem.minRaise)) changes.minRaise = raise;
+    // When this save changes the value or clears an amount, fill in any
+    // opening bid / min raise that would be left blank, from the item's
+    // (new) value. An amount the user typed is never overwritten.
+    if ("value" in changes || "openingBid" in changes || "minRaise" in changes) {
+      const finalValue = String(changes.value ?? targetItem.value ?? "");
+      const { opening, raise } = calculateAutoBids(finalValue, valueCalculations);
+      const finalOpening = "openingBid" in changes ? String(changes.openingBid) : targetItem.openingBid;
+      const finalRaise = "minRaise" in changes ? String(changes.minRaise) : targetItem.minRaise;
+      if (opening && isBlankAmount(finalOpening)) changes.openingBid = opening;
+      if (raise && isBlankAmount(finalRaise)) changes.minRaise = raise;
     }
 
     // Only the fields this save changed are rolled back on failure - not

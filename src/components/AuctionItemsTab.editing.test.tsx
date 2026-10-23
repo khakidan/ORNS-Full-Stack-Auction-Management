@@ -159,6 +159,43 @@ describe("AuctionItemsTab - real single-item edit wiring", () => {
     expect(updateItemBody().changes).toEqual({ category: "Health & Beauty", donor: "Donor Z" });
   });
 
+  // Bug report "Item's value change doesn't update min bid and starting
+  // value": a new value with the two amounts cleared saved them blank.
+  it("fills a cleared opening bid and min raise from the new value", async () => {
+    render(<AuctionItemsTab />);
+
+    const row = screen.getByTestId("auction-item-row-2");
+    await user.click(within(row).getByRole("button", { name: "Edit Food 1" }));
+
+    const dialog = await screen.findByRole("dialog");
+    const valueInput = within(dialog).getByDisplayValue("$100.00");
+    await user.clear(valueInput);
+    await user.type(valueInput, "200");
+    await user.clear(within(dialog).getByDisplayValue("$45.00"));
+    await user.clear(within(dialog).getByDisplayValue("$5.00"));
+    await user.click(within(dialog).getByRole("button", { name: "Save Changes" }));
+
+    expect(updateItemBody().changes).toEqual({ value: "$200.00", openingBid: "$90.00", minRaise: "$10.00" });
+  });
+
+  it("keeps an opening bid the user typed when the value changes", async () => {
+    render(<AuctionItemsTab />);
+
+    const row = screen.getByTestId("auction-item-row-2");
+    await user.click(within(row).getByRole("button", { name: "Edit Food 1" }));
+
+    const dialog = await screen.findByRole("dialog");
+    const valueInput = within(dialog).getByDisplayValue("$100.00");
+    await user.clear(valueInput);
+    await user.type(valueInput, "200");
+    const openingInput = within(dialog).getByDisplayValue("$45.00");
+    await user.clear(openingInput);
+    await user.type(openingInput, "$70.00");
+    await user.click(within(dialog).getByRole("button", { name: "Save Changes" }));
+
+    expect(updateItemBody().changes).toEqual({ value: "$200.00", openingBid: "$70.00" });
+  });
+
   it("tells the user and reloads the list when the server says the item changed (409)", async () => {
     const { toast } = await import("sonner");
     mockedFetchWithRetry.mockResolvedValue({
