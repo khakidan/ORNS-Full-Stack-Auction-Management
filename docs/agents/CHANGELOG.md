@@ -6,6 +6,8 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Added
 
+- **Verified the saved-bids outbox (Milestone A) in a real browser with a real Wi-Fi drop, per `ROADMAP.md`'s "DO THIS BEFORE THE AUCTION" checklist.** Previously covered only by unit tests simulating the offline/online transition. User ran all 6 steps (go offline, record 3 winning bids, reload mid-offline, go back online, confirm each bid sent exactly once in the Bid-Management sheet) and reported it worked as expected - the banner tracked the 3 saved bids correctly through the reload, and all 3 sent exactly once once connectivity returned. Removed the "Test the saved-bids outbox" item from `ROADMAP.md`; the PayPal sandbox item in that same section is still outstanding, so the section itself stays.
+
 - **"New Auction Bug Submitted" email to web-admin@orns.org on every saved bug report.** Anyone can submit a report without signing in, and the report only lands in a sheet (or, if that fails, the logs), so one could go unseen.
   - `server/services/adminNotifications.ts` sends it after the report is saved (in the sheet, the production log fallback, or the local file), from `bugReportRoutes.ts`. The email has the title, type, page, time, whether the sender was signed in, and the first 1,500 characters of the description (all HTML-escaped; the subject is fixed). It points to Bug Reports in the app.
   - **Sent as the most recent staff sign-in**: an anonymous report has no Google session, so it uses the stored refresh token the PayPal sweeper already keeps (`system/paypalSweeperAuth`; its scopes include `gmail.send`), then falls back to the submitter's own session. If neither exists, or Gmail refuses, the report is still saved and the failure is logged.
