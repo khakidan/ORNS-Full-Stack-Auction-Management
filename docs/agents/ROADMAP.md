@@ -26,20 +26,6 @@ Steps:
 
 If step 7 doesn't check out, cash/check checkouts will still work (the code falls back to recording the full fee-inclusive amount if the removal call fails) - but the bidder's invoice will keep showing the fee amount even though cash was collected without it. In that case let the dev know what happened in step 6/7 instead of using this feature for real auction checkouts yet.
 
-**Test the saved-bids outbox (Milestone A) in a real browser at least once.** It's covered by unit tests, but has never run in a real browser with a real connection drop.
-
-Steps:
-
-1. On a laptop, open the app, sign in, and go to **Bid Management -> Bid Entry**. Use test items and bidders, or a copy of the spreadsheets.
-2. Turn the laptop's Wi-Fi off. The banner should say **No internet connection**.
-3. Record 3 winning bids. Each should show **Saved on this device** in This Session, and the sidebar should say **3 bids waiting**.
-4. Reload the page while still offline. Click through the "Leave site?" warning. The banner should still count 3 saved bids.
-5. Turn the Wi-Fi back on. Within a few seconds the banner should say **Sending saved bids**, then **All saved bids sent**.
-6. Open the Bid-Management sheet and check each of the 3 bids appears **exactly once**.
-7. Once this works, remove this item and note the result in `CHANGELOG.md`. When both items are done, remove this whole section.
-
-If a bid is missing or appears twice, don't rely on the outbox at the auction: if the Wi-Fi drops, write bids on paper and enter them once it's back. Tell the dev what you saw.
-
 ---
 
 ## 2026-10-21 Code Audit Backlog
