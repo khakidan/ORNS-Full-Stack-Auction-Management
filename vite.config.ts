@@ -32,8 +32,8 @@ export default defineConfig(({ mode }) => {
           navigateFallbackDenylist: [/^\/auth\//, /^\/api\//],
         },
         manifest: {
-          name: 'ORNS Charity Auction Manager',
-          short_name: 'ORNS Auction',
+          name: 'Auction Management App',
+          short_name: 'Auction App',
           description: 'Manages live and silent charity auctions for Orchard Ridge Nursery School - guest check-in, bidding, checkout, and receipts.',
           theme_color: '#e31b23',
           background_color: '#f8fafc',
