@@ -76,7 +76,6 @@ vi.mock("@/hooks/useAuctionItems", () => ({
 vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn(),
   getBaseUrl: vi.fn(() => "http://localhost:3000"),
-  updateSheetData: vi.fn(),
   deleteAuctionItem: vi.fn(),
 }));
 

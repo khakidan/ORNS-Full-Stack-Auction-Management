@@ -5,6 +5,7 @@ import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { IDEMPOTENT_POST_RETRY } from '../utils/googleRetry';
 import { logAction } from '../services/actionLog';
 import { syncBiddersFromTickets } from '../services/bidderTicketSync';
+import { withIdempotency, idempotentBody } from '../utils/idempotency';
 
 /** The Auction Tickets spreadsheet's attendee tabs. */
 export const TICKET_SHEETS = ["tickets", "staff tickets", "sponsor tickets"];
@@ -38,34 +39,43 @@ function parseTicketRange(range: unknown): { sheet: string; cells: string; row: 
 export default function createAttendeeRouter() {
   const router = Router();
 
+  /**
+   * Appends an attendee row. The browser resends after a 5xx or a dropped
+   * connection (fetchWithRetry), and a second append would add the person
+   * twice, so the request's `idempotencyKey` makes a resend return the
+   * first result instead (ROADMAP A4).
+   */
   router.post("/attendees/add", async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, sheet, row } = req.body || {};
+    const { spreadsheetId, sheet, row, idempotencyKey } = req.body || {};
     if (!spreadsheetId || !TICKET_SHEETS.includes(sheet) || !Array.isArray(row)) {
       return res.status(400).json({ error: "spreadsheetId, a ticket sheet name and the new row are required." });
     }
     try {
-      const result = await sheetsFor(req).spreadsheets.values.append({
-        spreadsheetId,
-        range: `'${sheet}'!A:A`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [row] },
+      const outcome = await withIdempotency("attendees/add", idempotencyKey, async () => {
+        const result = await sheetsFor(req).spreadsheets.values.append({
+          spreadsheetId,
+          range: `'${sheet}'!A:A`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: [row] },
+        });
+        clearCacheForSpreadsheet(spreadsheetId);
+        const written = result.data.updates?.updatedRange;
+        await logAction(req, {
+          area: "Tickets",
+          action: "Add attendee",
+          target: `${row[0] ?? ""} ${row[1] ?? ""}`.trim(),
+          summary: `Added ${`${row[0] ?? ""} ${row[1] ?? ""}`.trim() || "an attendee"} to ${sheet}`,
+          after: row,
+          location: `Auction Tickets ${written || sheet}`,
+          ...(written
+            ? { undo: { kind: "cells" as const, spreadsheetId, range: written, before: [row.map(() => "")], after: [row] } }
+            : { notUndoableReason: "the sheet didn't say which row it was added to" }),
+        });
+        // The bidder follows their ticket (bidderTicketSync.ts).
+        await syncBiddersFromTickets(req);
+        return result.data;
       });
-      clearCacheForSpreadsheet(spreadsheetId);
-      const written = result.data.updates?.updatedRange;
-      await logAction(req, {
-        area: "Tickets",
-        action: "Add attendee",
-        target: `${row[0] ?? ""} ${row[1] ?? ""}`.trim(),
-        summary: `Added ${`${row[0] ?? ""} ${row[1] ?? ""}`.trim() || "an attendee"} to ${sheet}`,
-        after: row,
-        location: `Auction Tickets ${written || sheet}`,
-        ...(written
-          ? { undo: { kind: "cells" as const, spreadsheetId, range: written, before: [row.map(() => "")], after: [row] } }
-          : { notUndoableReason: "the sheet didn't say which row it was added to" }),
-      });
-      // The bidder follows their ticket (bidderTicketSync.ts).
-      await syncBiddersFromTickets(req);
-      res.json(result.data);
+      res.json(idempotentBody(outcome));
     } catch (error) {
       next(error);
     }

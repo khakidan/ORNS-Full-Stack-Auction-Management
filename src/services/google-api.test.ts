@@ -10,7 +10,7 @@
  * untouched.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { fetchWithRetry, ServerUnreachableError } from "./google-api";
+import { appendAttendeeRow, fetchWithRetry, ServerUnreachableError } from "./google-api";
 import { getRetryStatus, _resetRetryStatusForTesting } from "@/lib/syncStatus";
 
 describe("fetchWithRetry - sends the caller's request as-is", () => {
@@ -94,5 +94,29 @@ describe("fetchWithRetry - retry reporting", () => {
     expect(res.status).toBe(409);
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(getRetryStatus().retrying).toBe(0);
+  });
+});
+
+describe("appendAttendeeRow - a resent add can't add the person twice (ROADMAP A4)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends one idempotency key per add, the same on every retry of that add", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 503, clone: () => ({ text: async () => "" }), json: async () => ({}) })
+      .mockResolvedValue({ ok: true, status: 200, clone: () => ({ text: async () => "" }), json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.useFakeTimers();
+
+    const first = appendAttendeeRow("1abcdefghijklmnopqrstuvwxyz", "tickets", ["Pat", "Lee"]);
+    await vi.runAllTimersAsync();
+    await first;
+    await appendAttendeeRow("1abcdefghijklmnopqrstuvwxyz", "tickets", ["Sam", "Ng"]);
+    vi.useRealTimers();
+
+    const keys = fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init.body)).idempotencyKey);
+    expect(keys).toHaveLength(3);
+    expect(keys[0]).toEqual(expect.any(String));
+    expect(keys[1]).toBe(keys[0]);
+    expect(keys[2]).not.toBe(keys[0]);
   });
 });

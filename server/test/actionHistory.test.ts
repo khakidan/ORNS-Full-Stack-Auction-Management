@@ -389,6 +389,23 @@ describe("routes record what they did", () => {
     }));
   });
 
+  it("an attendee add resent with the same key (a retry after a dropped connection) adds the row once (ROADMAP A4)", async () => {
+    let appends = 0;
+    server.use(http.post(`${SHEETS}/:id/values/:range\\:append`, () => {
+      appends++;
+      return HttpResponse.json({ updates: { updatedRange: "'tickets'!A9:V9" } });
+    }));
+    const body = { spreadsheetId: "tk", sheet: "tickets", row: ["Pat", "Lee"], idempotencyKey: "add-pat-1" };
+
+    const first = await request(app).post("/api/attendees/add").set(admin).send(body);
+    const resent = await request(app).post("/api/attendees/add").set(admin).send(body);
+
+    expect([first.status, resent.status]).toEqual([200, 200]);
+    expect(resent.body.duplicated).toBe(true);
+    expect(appends).toBe(1);
+    expect(vi.mocked(logAction).mock.calls.filter(([, e]) => e.action === "Add attendee")).toHaveLength(1);
+  });
+
   it.each([
     ["a range on another tab", "Bid-Management!C4"],
     ["cells across two rows", "tickets!C4:C5"],

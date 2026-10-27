@@ -82,10 +82,8 @@ vi.mock("sonner", () => ({
 // Google-api mock
 vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn(),
-  updateSheetData: vi.fn(),
   getBaseUrl: vi.fn(() => "http://localhost:3000"),
   getSheetData: vi.fn(),
-  appendSheetData: vi.fn(),
 }));
 
 import { toast } from "sonner";

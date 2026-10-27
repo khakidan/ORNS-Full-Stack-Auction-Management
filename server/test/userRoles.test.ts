@@ -149,9 +149,11 @@ describe("permissions on routes", () => {
     expect(header.status).toBe(400);
   });
 
-  it("refuses clearing a ticket tab through the generic sheets proxy, even for a Full Administrator, so the attendee permission can't be bypassed", async () => {
-    const res = await request(app).post(`/api/sheets/s/${encodeURIComponent("tickets!A5:Z5")}/clear`).set(as(TEST_ADMIN_EMAIL)).send({});
-    expect(res.status).toBe(403);
+  it("has no generic sheets clear, so the attendee permission can't be bypassed - with or without a tab name", async () => {
+    for (const range of ["tickets!A5:Z5", "A5:Z5"]) {
+      const res = await request(app).post(`/api/sheets/s/${encodeURIComponent(range)}/clear`).set(as("sam@orns.org")).send({});
+      expect(res.status).toBe(404);
+    }
   });
 
   it("still lets a User do everyday work (a route with no extra permission)", async () => {

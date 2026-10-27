@@ -5,6 +5,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { extractId, useConfigSettingsState } from "./useConfigSettingsState";
 import { useConfig } from "@/context/ConfigContext";
+import { fetchWithRetry } from "@/services/google-api";
+import { toast } from "sonner";
 import { Config } from "@/types";
 
 describe("extractId", () => {
@@ -89,10 +91,12 @@ const BASE_CONFIG: Config = {
   paypalIsSandbox: true,
 };
 
-function mockUseConfig(config: Config) {
+function mockUseConfig(config: Config, overrides: Record<string, unknown> = {}) {
   vi.mocked(useConfig).mockReturnValue({
     config,
     saveConfig: vi.fn().mockResolvedValue(undefined),
+    reloadConfig: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
     firebaseUser: null,
     loginToFirebase: vi.fn(),
     loading: false,
@@ -149,5 +153,58 @@ describe("useConfigSettingsState - local draft sync from remoteConfig", () => {
     mockUseConfig(SECOND_UPDATE);
     rerender();
     expect(result.current.config.ticketPrice).toBe("65");
+  });
+});
+
+describe("useConfigSettingsState - Setup New Auction Year (ROADMAP A5)", () => {
+  /** The setup route's NDJSON stream: one log line, then the result. */
+  function streamOf(result: Record<string, unknown>) {
+    const lines = [JSON.stringify({ log: "Starting setup" }), JSON.stringify(result)].map((l) => new TextEncoder().encode(l + "\n"));
+    let i = 0;
+    return { ok: true, body: { getReader: () => ({ read: async () => (i < lines.length ? { value: lines[i++], done: false } : { value: undefined, done: true }) }) } } as unknown as Response;
+  }
+  const RESULT = { success: true, auctionYear: 2027, bidderReceiptsFolderId: "new-receipts", forPrintFolderId: "new-print" };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+  });
+
+  it("leaves saving the new folders to the server and reloads the Config, instead of saving from the browser", async () => {
+    const saveConfig = vi.fn();
+    const reloadConfig = vi.fn().mockResolvedValue(undefined);
+    mockUseConfig(BASE_CONFIG, { saveConfig, reloadConfig });
+    vi.mocked(fetchWithRetry).mockResolvedValue(streamOf(RESULT));
+    const { result } = renderHook(() => useConfigSettingsState());
+
+    await act(() => result.current.handleSetupNewAuction());
+
+    expect(saveConfig).not.toHaveBeenCalled();
+    expect(reloadConfig).toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalled();
+  });
+
+  it("gives a draft with unsaved edits the new folders, so saving it later can't put last year's back", async () => {
+    mockUseConfig(BASE_CONFIG);
+    vi.mocked(fetchWithRetry).mockResolvedValue(streamOf(RESULT));
+    const { result } = renderHook(() => useConfigSettingsState());
+    act(() => result.current.setConfig({ ...result.current.config, ticketPrice: "99" }));
+
+    await act(() => result.current.handleSetupNewAuction());
+
+    expect(result.current.config).toMatchObject({ ticketPrice: "99", receiptFolderId: "new-receipts", forPrintFolderId: "new-print" });
+  });
+
+  it("shows the server's message, and doesn't touch the draft, when the server couldn't save the folders", async () => {
+    mockUseConfig(BASE_CONFIG);
+    vi.mocked(fetchWithRetry).mockResolvedValue(streamOf({ ...RESULT, configSaveError: "Set Receipts Folder ID to new-receipts" }));
+    const { result } = renderHook(() => useConfigSettingsState());
+    act(() => result.current.setConfig({ ...result.current.config, ticketPrice: "99" }));
+
+    await act(() => result.current.handleSetupNewAuction());
+
+    expect(toast.error).toHaveBeenCalledWith("Set Receipts Folder ID to new-receipts", expect.anything());
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(result.current.config.receiptFolderId).toBe("mock-receipts-folder");
   });
 });

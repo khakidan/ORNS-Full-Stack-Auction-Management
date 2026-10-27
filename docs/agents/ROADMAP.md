@@ -34,13 +34,6 @@ Read of everything changed on 2026-10-27 (`cf4ea05`..`bf7994a`: auction states, 
 
 Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 
-### Medium - before the auction
-
-- **A2 - A volunteer link isn't used up atomically.** `POST /auth/volunteer` looks the token up (`findVolunteerByToken`), then `redeemVolunteer` sets the record `active` without checking it still holds that token. A Revoke or Resend landing in between is overwritten back to `active` (a revoked volunteer gets in, or an old link still works after Resend), and two quick submissions both sign in. Fix: redeem in a Firestore transaction that requires `status: "invited"` and the same `tokenHash`.
-- **A3 - The generic sheets proxy's write routes can skip the ticket-tab and locked-tab refusals.** `refuseTicketSheet` / `refuseLockedSheet` (`server/routes/sheetsProxyRoutes.ts`) match the tab name in the range, but a range without one (`A5:Z5`) writes to the spreadsheet's first tab - so a User can clear an attendee row without the `attendees.delete` permission or an Action History row, or write a Bid Management tab without its lock. The app no longer calls these routes (`updateSheetData`, `appendSheetData` and `clearSheetData` in `src/services/google-api.ts` have no callers). Fix: remove the three write routes and those three client helpers; keep the cached read.
-- **A4 - Adding an attendee can add them twice.** `appendAttendeeRow` (`src/services/google-api.ts`) posts `/api/attendees/add` through `fetchWithRetry`, which repeats a POST after a 5xx, a 429 or a dropped connection - if the first append landed, the retry appends the row again. Fix: an idempotency key (`withIdempotency`, as the bid routes use) or `postOnce`.
-- **A5 - Setup New Auction Year's new folder IDs are saved by the browser, after the rollover.** The server creates the new For Print and Bidder Receipts folders, then `useConfigSettingsState.ts` saves their IDs with `saveConfig`. If that save fails (tab closed, connection lost), Config keeps last year's folders and receipts and print documents go there. Now that the server owns the Config (`configService.ts`), the setup route should save them itself.
-
 ### Low
 
 - **A6 - A staff sign-in can stay a volunteer.** `/auth/callback` adds `tokens` and `email` to the existing session but leaves a `volunteer` field from an earlier volunteer link in the same browser, and `requireAuth` checks `volunteer` first. Fix: delete `req.session.volunteer` on a staff sign-in.

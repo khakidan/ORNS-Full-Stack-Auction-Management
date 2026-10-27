@@ -118,93 +118,26 @@ describe("Proxy Route Integration Tests", () => {
     });
   });
 
-  describe("POST /api/sheets/:spreadsheetId/:range", () => {
-    it("Happy path — writes values to the given range, returns success", async () => {
-      const response = await request(app)
-        .post("/api/sheets/test-spreadsheet-id/Sheet1!A1:B2")
-        .set(authHeader)
-        .send({ values: [["hello", "world"]] });
+  describe("no generic sheet writes (ROADMAP A3)", () => {
+    // Every change has its own locked, logged route. A range without a tab
+    // name ("A5:Z5") used to write the first tab, skipping the ticket-tab and
+    // locked-tab refusals, so the write/append/clear passthrough is gone.
+    it.each([
+      ["write", "/api/sheets/test-spreadsheet-id/A5:Z5"],
+      ["write", "/api/sheets/test-spreadsheet-id/Sheet1!A1:B2"],
+      ["append", "/api/sheets/test-spreadsheet-id/A:A/append"],
+      ["clear", "/api/sheets/test-spreadsheet-id/A5:Z5/clear"],
+      ["clear", `/api/sheets/test-spreadsheet-id/${encodeURIComponent("tickets!A5:Z5")}/clear`],
+    ])("has no %s route (%s), and never calls Google", async (_kind, url) => {
+      let googleCalled = false;
+      server.use(
+        http.put("https://sheets.googleapis.com/v4/spreadsheets/:id/values/:range", () => { googleCalled = true; return HttpResponse.json({}); }),
+        http.post("https://sheets.googleapis.com/v4/spreadsheets/:id/values/:range", () => { googleCalled = true; return HttpResponse.json({}); }),
+      );
+      const response = await request(app).post(url).set(authHeader).send({ values: [["x"]] });
 
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty("updatedRows");
-    });
-
-    it("Missing body — returns 400", async () => {
-      const response = await request(app)
-        .post("/api/sheets/test-spreadsheet-id/Sheet1!A1:B2")
-        .set(authHeader)
-        .send({});
-
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe("Missing body values");
-    });
-  });
-
-  describe("POST /api/sheets/:spreadsheetId/:range/append", () => {
-    it("Happy path — appends values to the range, returns success", async () => {
-      const response = await request(app)
-        .post("/api/sheets/test-spreadsheet-id/Sheet1!A1:B2/append")
-        .set(authHeader)
-        .send({ values: [["appended", "value"]] });
-
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty("updates");
-    });
-
-    it("Missing body — returns 400", async () => {
-      const response = await request(app)
-        .post("/api/sheets/test-spreadsheet-id/Sheet1!A1:B2/append")
-        .set(authHeader)
-        .send({});
-
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe("Missing body values");
-    });
-  });
-
-  describe("POST /api/sheets passthrough - sheets with their own locked routes are refused", () => {
-    const cases: [string, string][] = [
-      ["write", "/api/sheets/test-spreadsheet-id/Auction-Items!E2"],
-      ["write", "/api/sheets/test-spreadsheet-id/'Bidder-Numbers'!E5"],
-      ["write", "/api/sheets/test-spreadsheet-id/bid-management!A1"],
-      ["append", "/api/sheets/test-spreadsheet-id/Follow-Up!A:C/append"],
-      ["write", "/api/sheets/test-spreadsheet-id/Special-Winners!B2"],
-      ["clear", "/api/sheets/test-spreadsheet-id/Bidder-Numbers!A2:Z2/clear"],
-    ];
-    for (const [kind, url] of cases) {
-      it(`refuses a ${kind} to ${url.split("/")[4]} with 403, without calling Google`, async () => {
-        let googleCalled = false;
-        server.use(
-          http.put("https://sheets.googleapis.com/v4/spreadsheets/:id/values/:range", () => { googleCalled = true; return HttpResponse.json({}); }),
-          http.post("https://sheets.googleapis.com/v4/spreadsheets/:id/values/:range", () => { googleCalled = true; return HttpResponse.json({}); }),
-        );
-        const response = await request(app).post(encodeURI(url)).set(authHeader).send({ values: [["x"]] });
-
-        expect(response.status).toBe(403);
-        expect(response.body.error).toMatch(/can only be changed through the app's own save actions/);
-        expect(googleCalled).toBe(false);
-      });
-    }
-
-    it("refuses writes to the ticket sheets - attendee changes go through /api/attendees/* so each is recorded in Action History", async () => {
-      for (const path of ["tickets!C4", "'staff tickets'!A5", "tickets!A:A/append"]) {
-        const response = await request(app)
-          .post(`/api/sheets/test-spreadsheet-id/${encodeURIComponent(path.split("/")[0])}${path.includes("/append") ? "/append" : ""}`)
-          .set(authHeader)
-          .send({ values: [["guest@example.com"]] });
-        expect(response.status).toBe(403);
-      }
-    });
-  });
-
-  describe("POST /api/sheets/:spreadsheetId/:range/clear", () => {
-    it("Happy path — clears the range, returns success", async () => {
-      const response = await request(app)
-        .post("/api/sheets/test-spreadsheet-id/Sheet1!A1:B2/clear")
-        .set(authHeader);
-
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty("clearedRange");
+      expect(response.status).toBe(404);
+      expect(googleCalled).toBe(false);
     });
   });
 });

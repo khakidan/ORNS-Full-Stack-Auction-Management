@@ -13,7 +13,6 @@ vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn(),
   getBaseUrl: vi.fn(() => "http://localhost:3000"),
   getSheetData: vi.fn(),
-  updateSheetData: vi.fn()
 }));
 
 vi.mock("@/context/ConfigContext", () => ({

@@ -8,6 +8,8 @@ import { requireAuth } from '../middleware/requireAuth';
 import { archiveAuctionSpreadsheets } from '../services/archiveService';
 import { isDriveId } from '../services/driveService';
 import { getActionHistorySpreadsheetId } from '../services/actionHistoryStore';
+import { updateSharedConfigFields } from '../services/configService';
+import { CONFIG_KEY, noteChange } from '../utils/changeFeed';
 
 export default function createSetupRouter() {
   const router = Router();
@@ -51,15 +53,29 @@ export default function createSetupRouter() {
         onLog
       );
 
+      // Point the Config at the new year's folders here, not from the
+      // browser afterwards - a closed tab or lost connection would leave
+      // receipts and print documents going to last year's (ROADMAP A5).
+      let configSaveError: string | undefined;
+      try {
+        await updateSharedConfigFields({ receiptFolderId: result.bidderReceiptsFolderId, forPrintFolderId: result.forPrintFolderId }, req.user!.email);
+        noteChange(CONFIG_KEY);
+        onLog("Saved the new Bidder Receipts and For Print folders in the configuration.");
+      } catch (err: any) {
+        configSaveError = `The new folders were created but couldn't be saved in the configuration (${err?.message || err}). Set Receipts Folder ID to ${result.bidderReceiptsFolderId} and For Print Folder ID to ${result.forPrintFolderId} in Settings.`;
+        onLog(configSaveError);
+      }
+
       await logAction(req, {
         area: "Settings",
         action: "Set up new auction year",
         target: `${result.auctionYear} Auction`,
-        summary: `Started the ${result.auctionYear} auction year: backed up last year's spreadsheets and cleared the masters`,
+        summary: `Started the ${result.auctionYear} auction year: backed up last year's spreadsheets and cleared the masters${configSaveError ? "" : "; receipts and print documents now go to the new year's folders"}`,
         notUndoableReason: "the backups are in last year's folder",
       });
       res.write(JSON.stringify({
         ...result,
+        configSaveError,
         logs
       }) + "\n");
       res.end();

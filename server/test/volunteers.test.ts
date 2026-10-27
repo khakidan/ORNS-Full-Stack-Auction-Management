@@ -9,6 +9,7 @@ const fake = createFakeFirestore();
 vi.mock("../services/firebaseAdmin", () => ({ getAdminFirestore: () => fake.db }));
 
 import { app } from "../app";
+import * as volunteerService from "../services/volunteerService";
 import { hashToken, _resetVolunteerCachesForTesting } from "../services/volunteerService";
 import { _resetVolunteerLinkRateLimitForTesting } from "../routes/volunteerAuthRoutes";
 import { _resetUserCacheForTesting } from "../services/userService";
@@ -109,6 +110,30 @@ describe("the one-time link", () => {
 
     const again = await request(app).post("/auth/volunteer").type("form").send({ token: "good-token" });
     expect(again.status).toBe(410);
+  });
+
+  it("two quick submissions of the same link use it up only once", async () => {
+    // Both have already passed the lookup; only one may redeem.
+    const results = await Promise.all([volunteerService.redeemVolunteer("v1", "good-token"), volunteerService.redeemVolunteer("v1", "good-token")]);
+    expect(results.sort()).toEqual([false, true]);
+  });
+
+  it.each([
+    ["a Revoke", { status: "revoked", tokenHash: "" }],
+    ["a Resend (new link)", { status: "invited", tokenHash: hashToken("newer-token") }],
+  ])("isn't undone by %s landing between the link check and the sign-in", async (_label, change) => {
+    // The lookup still sees the old record; the change lands before it is used up.
+    const find = vi.spyOn(volunteerService, "findVolunteerByToken").mockImplementationOnce(async () => {
+      const found = { id: "v1", email: "pat@gmail.com", name: "Pat Lee", status: "invited" as const, invitedBy: "", invitedAt: "" };
+      fake.docs("volunteers").set("v1", { ...fake.docs("volunteers").get("v1"), ...change });
+      return found;
+    });
+
+    const res = await request(app).post("/auth/volunteer").type("form").send({ token: "good-token" });
+
+    expect(res.status).toBe(410);
+    expect(fake.docs("volunteers").get("v1")).toMatchObject(change);
+    find.mockRestore();
   });
 
   it("refuses an unknown token", async () => {
