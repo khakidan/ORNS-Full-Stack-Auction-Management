@@ -6,7 +6,6 @@ import { createRawEmail, getSenderEmail, isValidEmailAddress } from '../services
 import { logAction } from '../services/actionLog';
 import {
   clearEndedVolunteers,
-  getRuntimeConfig,
   getVolunteerAccountStatus,
   inviteVolunteer,
   listVolunteers,
@@ -41,18 +40,9 @@ async function emailLink(req: Request, volunteer: Volunteer, token: string): Pro
   await google.gmail({ version: "v1", auth: client }).users.messages.send({ userId: "me", requestBody: { raw } });
 }
 
-/** Settings > Users: volunteers (Full Administrator only), plus the Config volunteers' pages need. */
+/** Settings > Users: volunteers (Full Administrator only). */
 export default function createVolunteerRouter() {
   const router = Router();
-
-  /** The Config fields the Bid Management page needs - volunteers can't read Firestore themselves. */
-  router.get("/config/runtime", async (_req: Request, res: Response, next: NextFunction) => {
-    try {
-      res.json(await getRuntimeConfig());
-    } catch (error) {
-      next(error);
-    }
-  });
 
   router.get("/volunteers", requirePermission("users.manage"), async (_req: Request, res: Response, next: NextFunction) => {
     try {

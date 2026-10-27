@@ -91,12 +91,16 @@ Firestore is utilized to synchronize system configuration, active operational pa
 *   The three `*ScriptId` fields are never read: the server runs the
     Apps Scripts by its Cloud Run settings `SCRIPT_ID_ITEM_ENTRY`,
     `SCRIPT_ID_TICKETS` and `SCRIPT_ID_BID_MANAGEMENT`, and the Settings
-    page no longer shows boxes for them. They stay in the document only
-    because `firestore.rules` requires exactly these 17 keys.
-*   On load, `ConfigContext.tsx` mirrors every field into `localStorage`
-    (plus two legacy keys, `spreadsheetId` and `googleScriptId`) for
-    components not yet reading from context directly. `saveConfig()`
-    requires an authenticated Firebase user and rejects writes otherwise.
+    page no longer shows boxes for them. They are still saved through
+    unchanged.
+*   Only the server reads or writes this document
+    (`server/services/configService.ts`, cached 30 seconds and replaced
+    on save). Browsers get it from `GET /api/config` - every signed-in
+    staff member gets all of it, a volunteer only the Bid Management
+    fields - and Full Administrators save it with `POST /api/config`
+    (validated, recorded in Action History, and announced on the change
+    feed as `config` so open screens reload it). `firestore.rules` denies
+    browsers everything.
 
 ### Spreadsheet: Action History (`Actions` tab)
 

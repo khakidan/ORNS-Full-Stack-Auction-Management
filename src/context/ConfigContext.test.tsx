@@ -1,24 +1,9 @@
 /**
  * @vitest-environment jsdom
  *
- * ConfigContext.tsx had zero test coverage - flagged as the highest-risk
- * untested file in the security-relevant category (Firestore config
- * sync, the @orns.org domain-enforcement, and the permission-denied
- * toast branch). It's also marked "DO NOT MODIFY... unless explicitly
- * ordered" in patterns.md.
- *
- * Writing these tests confirmed a real, already-logged bug: the
- * `useEffect`'s `return () => unsubConfig()` was returned from *inside*
- * the nested `onAuthStateChanged` callback, not from the effect's own
- * callback - Firebase ignores that return value entirely (it's not how
- * the effect-cleanup contract works for a nested callback), so the
- * Firestore config listener was never actually unsubscribed on
- * sign-out/re-sign-in or unmount. Per the user's explicit go-ahead (this
- * file needs permission before any edit), fixed by hoisting `unsubConfig`
- * to the effect's outer scope and tearing it down both before starting a
- * new listener on each auth-state change and in the effect's real
- * cleanup. The "does not leak the config listener" test below is the
- * regression guard for this exact fix.
+ * ConfigContext reads the shared Config from the server (GET /api/config)
+ * once someone is signed in - any role, no separate sign-in - and saves it
+ * back through POST /api/config.
  */
 import React from "react";
 import "@testing-library/jest-dom";
@@ -27,21 +12,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ConfigProvider, useConfig } from "./ConfigContext";
 import { Config } from "@/types";
 
-vi.mock("@/services/firebase", () => ({
-  getFirebase: vi.fn(),
+vi.mock("@/services/google-api", () => ({
+  fetchWithRetry: vi.fn(),
+  getBaseUrl: () => "",
+  errorTextFrom: (data: any, fallback: string) => data?.error || fallback,
 }));
+vi.mock("@/services/apiClient", () => ({ postJson: vi.fn() }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-vi.mock("sonner", () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-  },
-}));
+let mockAuthenticated: boolean | null = true;
+vi.mock("./AuthContext", () => ({ useAuth: () => ({ authenticated: mockAuthenticated }) }));
 
-import { getFirebase } from "@/services/firebase";
+import { fetchWithRetry } from "@/services/google-api";
+import { postJson } from "@/services/apiClient";
 import { toast } from "sonner";
-
-const mockedGetFirebase = vi.mocked(getFirebase);
 
 const FAKE_CONFIG: Config = {
   auctionItemsSpreadsheetId: "items-id",
@@ -58,357 +42,73 @@ const FAKE_CONFIG: Config = {
   bidManagementScriptId: "bm-script",
   bugReportsSpreadsheetId: "bug-reports-id",
   bugReportsFolderId: "bug-reports-folder",
-  paypalIsSandbox: true,
+  paypalIsSandbox: false,
 };
 
-/**
- * Builds a fully controllable fake of getFirebase()'s resolved value,
- * with hooks to manually fire the auth-state and snapshot callbacks and
- * to inspect the unsubscribe spies each listener produced.
- */
-function makeFirebaseMock() {
-  let authCallback: ((user: any) => void) | null = null;
-  const authUnsubscribe = vi.fn();
+const json = (body: unknown, status = 200) => ({ ok: status < 400, status, json: async () => body }) as Response;
+const wrapper = ({ children }: { children: React.ReactNode }) => <ConfigProvider>{children}</ConfigProvider>;
 
-  let snapshotOnNext: ((snap: any) => void) | null = null;
-  let snapshotOnError: ((err: any) => void) | null = null;
-  const configUnsubscribe = vi.fn();
-
-  const signInWithPopup = vi.fn();
-  const signOut = vi.fn().mockResolvedValue(undefined);
-  const setDoc = vi.fn().mockResolvedValue(undefined);
-  const serverTimestamp = vi.fn(() => "SERVER_TIMESTAMP");
-  const doc = vi.fn((_db: any, ...path: string[]) => ({ path: path.join("/") }));
-
-  const onAuthStateChanged = vi.fn((_auth: any, callback: (user: any) => void) => {
-    authCallback = callback;
-    return authUnsubscribe;
-  });
-
-  const onSnapshot = vi.fn((_ref: any, onNext: (snap: any) => void, onError: (err: any) => void) => {
-    snapshotOnNext = onNext;
-    snapshotOnError = onError;
-    return configUnsubscribe;
-  });
-
-  const services = {
-    auth: {},
-    db: {},
-    GoogleAuthProvider: vi.fn().mockImplementation(function (this: any) { this.setCustomParameters = vi.fn(); }),
-    onAuthStateChanged,
-    signInWithPopup,
-    signOut,
-    doc,
-    setDoc,
-    onSnapshot,
-    serverTimestamp,
-  };
-
-  return {
-    services,
-    // Simulates Firebase Auth reporting a sign-in/sign-out.
-    fireAuthChange: (user: any) => authCallback!(user),
-    // Simulates a Firestore document snapshot arriving.
-    fireSnapshot: (snap: any) => snapshotOnNext!(snap),
-    fireSnapshotError: (err: any) => snapshotOnError!(err),
-    authUnsubscribe,
-    configUnsubscribe,
-    signInWithPopup,
-    signOut,
-    setDoc,
-    doc,
-    serverTimestamp,
-  };
-}
-
-function renderConfigHook() {
-  return renderHook(() => useConfig(), {
-    wrapper: ({ children }) => <ConfigProvider>{children}</ConfigProvider>,
-  });
-}
-
-describe("useConfig", () => {
-  it("throws when used outside ConfigProvider", () => {
-    expect(() => renderHook(() => useConfig())).toThrow("useConfig must be used within a ConfigProvider");
-  });
-});
-
-describe("ConfigProvider - auth state and config sync", () => {
+describe("ConfigContext", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    localStorage.clear();
+    mockAuthenticated = true;
+    vi.mocked(fetchWithRetry).mockReset().mockResolvedValue(json(FAKE_CONFIG));
+    vi.mocked(postJson).mockReset();
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.success).mockClear();
   });
 
-  it("clears loading with default config when there is no signed-in user", async () => {
-    const fb = makeFirebaseMock();
-    mockedGetFirebase.mockResolvedValue(fb.services as any);
-
-    const { result } = renderConfigHook();
-    await waitFor(() => expect(fb.services.onAuthStateChanged).toHaveBeenCalled());
-
-    act(() => fb.fireAuthChange(null));
-
+  it("loads the shared Config from the server once signed in, whatever the role", async () => {
+    const { result } = renderHook(() => useConfig(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.firebaseUser).toBeNull();
-  });
-
-  it("subscribes to the global config doc and applies a real snapshot on sign-in", async () => {
-    const fb = makeFirebaseMock();
-    mockedGetFirebase.mockResolvedValue(fb.services as any);
-
-    const { result } = renderConfigHook();
-    await waitFor(() => expect(fb.services.onAuthStateChanged).toHaveBeenCalled());
-
-    act(() => fb.fireAuthChange({ email: "staff@orns.org" }));
-    await waitFor(() => expect(fb.services.onSnapshot).toHaveBeenCalled());
-
-    act(() => fb.fireSnapshot({ exists: () => true, data: () => FAKE_CONFIG }));
-
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(fetchWithRetry).toHaveBeenCalledWith("/api/config", { credentials: "include" });
     expect(result.current.config).toEqual(FAKE_CONFIG);
-    expect(result.current.firebaseUser).toEqual({ email: "staff@orns.org" });
-
-    // Mirrors every config field to localStorage, plus the two legacy keys.
-    expect(localStorage.getItem("auctionItemsSpreadsheetId")).toBe("items-id");
-    expect(localStorage.getItem("spreadsheetId")).toBe("bm-id");
-    expect(localStorage.getItem("googleScriptId")).toBe("bm-script");
   });
 
-  it("defaults a newly-added Config field to '' instead of undefined, for a Firestore doc saved before that field existed", async () => {
-    // Regression guard: adding bugReportsSpreadsheetId/bugReportsFolderId
-    // to the Config type doesn't retroactively add them to already-saved
-    // Firestore documents. A blind `docSnap.data() as Config` cast used
-    // to leave them `undefined` at runtime, which tripped Base UI's
-    // uncontrolled-to-controlled warning on that field's Input the first
-    // time an existing user opened Settings after this field was added.
-    const { bugReportsSpreadsheetId, bugReportsFolderId, ...oldShapeConfig } = FAKE_CONFIG;
-    const fb = makeFirebaseMock();
-    mockedGetFirebase.mockResolvedValue(fb.services as any);
-
-    const { result } = renderConfigHook();
-    await waitFor(() => expect(fb.services.onAuthStateChanged).toHaveBeenCalled());
-    act(() => fb.fireAuthChange({ email: "staff@orns.org" }));
-    await waitFor(() => expect(fb.services.onSnapshot).toHaveBeenCalled());
-
-    act(() => fb.fireSnapshot({ exists: () => true, data: () => oldShapeConfig }));
-
+  it("doesn't ask the server while signed out", async () => {
+    mockAuthenticated = false;
+    const { result } = renderHook(() => useConfig(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
-    // Asserting typeof "string" rather than a literal "" deliberately -
-    // defaultConfig's own fallback chain (localStorage, then a real
-    // VITE_BUG_REPORTS_SPREADSHEET_ID env var this machine may have set)
-    // legitimately decides the exact value; the actual bug being guarded
-    // against is `undefined`, not "whatever the real default happens to
-    // resolve to on this machine".
-    expect(typeof result.current.config.bugReportsSpreadsheetId).toBe("string");
-    expect(typeof result.current.config.bugReportsFolderId).toBe("string");
-    // Every field the old doc DID have must still come through untouched.
-    expect(result.current.config.auctionItemsSpreadsheetId).toBe("items-id");
+    expect(fetchWithRetry).not.toHaveBeenCalled();
+    expect(result.current.config.bidManagementSpreadsheetId).toBe("");
   });
 
-  it("drops a stale field a Firestore doc still carries from before it was removed from Config (regression guard)", async () => {
-    // Real production bug: `settings/global` still had `auctionItemsSheet`
-    // (removed from Config well before paypalIsSandbox was added) from
-    // its last successful save. A blind `{...defaultConfig,
-    // ...docSnap.data()}` spread let that stray key ride along into local
-    // state, and every subsequent save wrote it right back out alongside
-    // the 15 real Config fields - 16 keys total (+ updatedAt/updatedBy =
-    // 18), tripping firestore.rules' strict `keys().size() == 17` check
-    // and silently blocking every Config save with "Missing or
-    // insufficient permissions." Only ever copying keys `defaultConfig`
-    // actually declares (see ConfigContext.tsx's snapshot handler) fixes
-    // this at the read side, since local `config` state is what every
-    // save round-trips from.
-    const staleShapeConfig = { ...FAKE_CONFIG, auctionItemsSheet: "Auction-Items" };
-    const fb = makeFirebaseMock();
-    mockedGetFirebase.mockResolvedValue(fb.services as any);
-
-    const { result } = renderConfigHook();
-    await waitFor(() => expect(fb.services.onAuthStateChanged).toHaveBeenCalled());
-    act(() => fb.fireAuthChange({ email: "staff@orns.org" }));
-    await waitFor(() => expect(fb.services.onSnapshot).toHaveBeenCalled());
-
-    act(() => fb.fireSnapshot({ exists: () => true, data: () => staleShapeConfig }));
-
+  it("keeps only Config's own fields, defaulting any the server leaves out", async () => {
+    const { bidderNumbersSheet: _omit, ...rest } = FAKE_CONFIG;
+    vi.mocked(fetchWithRetry).mockResolvedValue(json({ ...rest, auctionItemsSheet: "stale" }));
+    const { result } = renderHook(() => useConfig(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.config).toEqual(FAKE_CONFIG);
-    expect((result.current.config as any).auctionItemsSheet).toBeUndefined();
+    expect(result.current.config).toEqual({ ...FAKE_CONFIG, bidderNumbersSheet: "Bidder-Numbers" });
+    expect(result.current.config).not.toHaveProperty("auctionItemsSheet");
   });
 
-  it("shows the @orns.org permission-denied toast and clears loading on a Firestore permission error", async () => {
-    const fb = makeFirebaseMock();
-    mockedGetFirebase.mockResolvedValue(fb.services as any);
+  it("says so when the settings can't be loaded, but a live refresh fails quietly", async () => {
+    vi.mocked(fetchWithRetry).mockResolvedValue(json({ error: "nope" }, 500));
+    const { result } = renderHook(() => useConfig(), { wrapper });
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
 
-    const { result } = renderConfigHook();
-    await waitFor(() => expect(fb.services.onAuthStateChanged).toHaveBeenCalled());
-    act(() => fb.fireAuthChange({ email: "someone@gmail.com" }));
-    await waitFor(() => expect(fb.services.onSnapshot).toHaveBeenCalled());
+    await act(() => result.current.reloadConfig());
+    expect(toast.error).toHaveBeenCalledTimes(1);
+  });
 
-    act(() => fb.fireSnapshotError({ code: "permission-denied", message: "denied" }));
-
+  it("saves through the server and uses what it saved", async () => {
+    vi.mocked(postJson).mockResolvedValue({ ...FAKE_CONFIG, ticketPrice: "40" });
+    const { result } = renderHook(() => useConfig(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(toast.error).toHaveBeenCalledWith("Permission denied: Sync is only available for @orns.org users.");
+
+    await act(() => result.current.saveConfig({ ...FAKE_CONFIG, ticketPrice: "40" }));
+
+    expect(postJson).toHaveBeenCalledWith("/api/config", { ...FAKE_CONFIG, ticketPrice: "40" }, expect.any(String));
+    expect(result.current.config.ticketPrice).toBe("40");
+    expect(toast.success).toHaveBeenCalled();
   });
 
-  it("does not show the permission toast for other Firestore error codes", async () => {
-    const fb = makeFirebaseMock();
-    mockedGetFirebase.mockResolvedValue(fb.services as any);
-
-    const { result } = renderConfigHook();
-    await waitFor(() => expect(fb.services.onAuthStateChanged).toHaveBeenCalled());
-    act(() => fb.fireAuthChange({ email: "staff@orns.org" }));
-    await waitFor(() => expect(fb.services.onSnapshot).toHaveBeenCalled());
-
-    act(() => fb.fireSnapshotError({ code: "unavailable", message: "network down" }));
-
+  it("shows the server's refusal and rethrows, leaving the Config as it was", async () => {
+    vi.mocked(postJson).mockRejectedValue(new Error("You don't have permission to do that."));
+    const { result } = renderHook(() => useConfig(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(toast.error).not.toHaveBeenCalled();
-  });
 
-  it("does not leak the config listener across a sign-out/re-sign-in cycle (regression guard)", async () => {
-    const fb = makeFirebaseMock();
-    mockedGetFirebase.mockResolvedValue(fb.services as any);
-
-    renderConfigHook();
-    await waitFor(() => expect(fb.services.onAuthStateChanged).toHaveBeenCalled());
-
-    // First sign-in creates a config listener.
-    act(() => fb.fireAuthChange({ email: "staff@orns.org" }));
-    await waitFor(() => expect(fb.services.onSnapshot).toHaveBeenCalledTimes(1));
-    const firstUnsub = fb.configUnsubscribe;
-
-    // Sign-out must tear down that listener - not leave it running forever.
-    act(() => fb.fireAuthChange(null));
-    expect(firstUnsub).toHaveBeenCalledTimes(1);
-
-    // Re-sign-in creates a second listener.
-    act(() => fb.fireAuthChange({ email: "staff@orns.org" }));
-    await waitFor(() => expect(fb.services.onSnapshot).toHaveBeenCalledTimes(2));
-
-    // Signing out again must tear down THIS (second) listener too - proves
-    // the fix isn't just a one-shot cleanup, it re-arms every cycle. The
-    // mock's onSnapshot always returns the same spy instance, so two full
-    // sign-out cycles means two cumulative calls.
-    act(() => fb.fireAuthChange(null));
-    expect(fb.configUnsubscribe).toHaveBeenCalledTimes(2);
-  });
-
-  it("unsubscribes both listeners on unmount", async () => {
-    const fb = makeFirebaseMock();
-    mockedGetFirebase.mockResolvedValue(fb.services as any);
-
-    const { unmount } = renderConfigHook();
-    await waitFor(() => expect(fb.services.onAuthStateChanged).toHaveBeenCalled());
-    act(() => fb.fireAuthChange({ email: "staff@orns.org" }));
-    await waitFor(() => expect(fb.services.onSnapshot).toHaveBeenCalled());
-
-    unmount();
-
-    expect(fb.authUnsubscribe).toHaveBeenCalledTimes(1);
-    expect(fb.configUnsubscribe).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("ConfigProvider - loginToFirebase", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    localStorage.clear();
-  });
-
-  it("signs in successfully with an @orns.org account and does not sign back out", async () => {
-    const fb = makeFirebaseMock();
-    mockedGetFirebase.mockResolvedValue(fb.services as any);
-    fb.signInWithPopup.mockResolvedValue({ user: { email: "staff@orns.org" } });
-
-    const { result } = renderConfigHook();
-    await act(async () => {
-      await result.current.loginToFirebase();
-    });
-
-    expect(fb.signInWithPopup).toHaveBeenCalled();
-    expect(fb.signOut).not.toHaveBeenCalled();
-    expect(toast.error).not.toHaveBeenCalled();
-  });
-
-  it("restricts and signs back out a non-@orns.org account", async () => {
-    const fb = makeFirebaseMock();
-    mockedGetFirebase.mockResolvedValue(fb.services as any);
-    fb.signInWithPopup.mockResolvedValue({ user: { email: "someone@gmail.com" } });
-
-    const { result } = renderConfigHook();
-    await act(async () => {
-      await result.current.loginToFirebase();
-    });
-
-    expect(toast.error).toHaveBeenCalledWith("Access restricted: Please use an @orns.org account.");
-    expect(fb.signOut).toHaveBeenCalled();
-  });
-
-  it("shows a generic error toast (not a crash) when sign-in itself fails", async () => {
-    const fb = makeFirebaseMock();
-    mockedGetFirebase.mockResolvedValue(fb.services as any);
-    fb.signInWithPopup.mockRejectedValue(new Error("popup closed"));
-
-    const { result } = renderConfigHook();
-    await act(async () => {
-      await result.current.loginToFirebase();
-    });
-
-    expect(toast.error).toHaveBeenCalledWith("Failed to sign in to sync service.");
-  });
-});
-
-describe("ConfigProvider - saveConfig", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    localStorage.clear();
-  });
-
-  it("refuses to save and shows an error toast when no one is signed in", async () => {
-    const fb = makeFirebaseMock();
-    mockedGetFirebase.mockResolvedValue(fb.services as any);
-
-    const { result } = renderConfigHook();
-    await act(async () => {
-      await result.current.saveConfig(FAKE_CONFIG);
-    });
-
-    expect(fb.setDoc).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith("You must be signed in to save shared settings.");
-  });
-
-  it("writes to the real settings/global doc with updatedBy/updatedAt, updates local config, and shows success", async () => {
-    const fb = makeFirebaseMock();
-    mockedGetFirebase.mockResolvedValue(fb.services as any);
-
-    const { result } = renderConfigHook();
-    await waitFor(() => expect(fb.services.onAuthStateChanged).toHaveBeenCalled());
-    act(() => fb.fireAuthChange({ email: "staff@orns.org" }));
-    await waitFor(() => expect(result.current.firebaseUser).toEqual({ email: "staff@orns.org" }));
-
-    await act(async () => {
-      await result.current.saveConfig(FAKE_CONFIG);
-    });
-
-    expect(fb.doc).toHaveBeenCalledWith(fb.services.db, "settings", "global");
-    expect(fb.setDoc).toHaveBeenCalledWith(
-      { path: "settings/global" },
-      expect.objectContaining({ ...FAKE_CONFIG, updatedAt: "SERVER_TIMESTAMP", updatedBy: "staff@orns.org" })
-    );
-    expect(result.current.config).toEqual(FAKE_CONFIG);
-    expect(toast.success).toHaveBeenCalledWith("Settings saved and synced across devices!");
-  });
-
-  it("shows an error toast and rethrows when the write fails", async () => {
-    const fb = makeFirebaseMock();
-    mockedGetFirebase.mockResolvedValue(fb.services as any);
-    fb.setDoc.mockRejectedValue(new Error("quota exceeded"));
-
-    const { result } = renderConfigHook();
-    await waitFor(() => expect(fb.services.onAuthStateChanged).toHaveBeenCalled());
-    act(() => fb.fireAuthChange({ email: "staff@orns.org" }));
-    await waitFor(() => expect(result.current.firebaseUser).toEqual({ email: "staff@orns.org" }));
-
-    await expect(result.current.saveConfig(FAKE_CONFIG)).rejects.toThrow("quota exceeded");
-    expect(toast.error).toHaveBeenCalledWith("Error saving settings: quota exceeded");
+    await expect(act(() => result.current.saveConfig({ ...FAKE_CONFIG, ticketPrice: "1" }))).rejects.toThrow("permission");
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("permission"));
+    expect(result.current.config.ticketPrice).toBe("35");
   });
 });

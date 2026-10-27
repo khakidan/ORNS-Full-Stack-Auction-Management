@@ -29,7 +29,6 @@
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
-    "firebase": "^12.13.0",
     "firebase-admin": "^14.3.0",
     "google-auth-library": "^10.6.2",
     "googleapis": "^171.4.0",
@@ -70,9 +69,6 @@
     "vitest": "^4.1.7"
   },
   "overrides": {
-    "qs": "^6.16.1",
-    "@firebase/firestore": {
-      "@grpc/grpc-js": "^1.14.6"
-    }
+    "qs": "^6.16.1"
   }
 }

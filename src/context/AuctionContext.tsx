@@ -53,7 +53,7 @@ interface AuctionContextType {
 const AuctionContext = createContext<AuctionContextType | undefined>(undefined);
 
 export function AuctionProvider({ children }: { children: React.ReactNode }) {
-  const { config } = useConfig();
+  const { config, reloadConfig } = useConfig();
   const spreadsheetId = config.bidManagementSpreadsheetId;
   const ticketsSpreadsheetId = config.auctionTicketsSpreadsheetId;
 
@@ -100,10 +100,13 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     }
     if (touched(config.auctionItemsSpreadsheetId)) reloads.push(refreshItems({ silent: true }));
     if (touched(ticketsSpreadsheetId)) reloads.push(fetchAttendees({ silent: true }));
+    // A Full Administrator saved the Config: pick up the new IDs (the data
+    // effects below then reload anything that now points elsewhere).
+    if (touched("config")) reloads.push(reloadConfig());
     await Promise.all(reloads);
     setLastChangedKeys(reset ? ["*"] : [...changed]);
     setDataVersion((v) => v + 1);
-  }, [spreadsheetId, config.auctionItemsSpreadsheetId, ticketsSpreadsheetId, fetchBidders, fetchAuctionStatus, fetchSetupStatus, refreshItems, fetchAttendees]);
+  }, [spreadsheetId, config.auctionItemsSpreadsheetId, ticketsSpreadsheetId, fetchBidders, fetchAuctionStatus, fetchSetupStatus, refreshItems, fetchAttendees, reloadConfig]);
   const checkForChanges = useChangeFeed(isApiAuthenticated === true, onRemoteChange);
 
   const goLive = useCallback(async () => {

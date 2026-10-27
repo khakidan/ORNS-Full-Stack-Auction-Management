@@ -11,11 +11,13 @@
  * browsers treat a count that went backwards as "reload everything".
  */
 export const ACTION_HISTORY_KEY = "action-history";
+/** The shared Config (settings/global) was saved - browsers re-read it. */
+export const CONFIG_KEY = "config";
 
 let version = 0;
 const lastChanged = new Map<string, number>();
 
-/** Records that `key` (a spreadsheet ID, or ACTION_HISTORY_KEY) changed. */
+/** Records that `key` (a spreadsheet ID, ACTION_HISTORY_KEY or CONFIG_KEY) changed. */
 export function noteChange(key: string): void {
   if (!key) return;
   version += 1;

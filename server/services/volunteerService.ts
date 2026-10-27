@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { google } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
 import { getAdminFirestore } from "./firebaseAdmin";
+import { getSharedConfig, _resetConfigCacheForTesting } from "./configService";
 import { getOAuthClient } from "./oauth";
 import { normalizeEmail } from "./userService";
 import { AuctionState, parseAuctionState } from "../utils/auctionState";
@@ -217,25 +218,20 @@ export interface RuntimeConfig {
   paypalIsSandbox: boolean;
 }
 
-let cachedConfig: { config: RuntimeConfig; readAt: number } | null = null;
-
-/** The Config fields the Bid Management page needs (volunteers can't read Firestore themselves). */
+/** The Config fields the Bid Management page needs - all a volunteer is given (configService.ts caches the read). */
 export async function getRuntimeConfig(now = Date.now()): Promise<RuntimeConfig> {
-  if (cachedConfig && now - cachedConfig.readAt < CACHE_TTL_MS) return cachedConfig.config;
-  const d = (await getAdminFirestore().collection("settings").doc("global").get()).data() || {};
-  const config: RuntimeConfig = {
-    auctionItemsSpreadsheetId: d.auctionItemsSpreadsheetId || "",
-    auctionTicketsSpreadsheetId: d.auctionTicketsSpreadsheetId || "",
-    bidManagementSpreadsheetId: d.bidManagementSpreadsheetId || "",
-    bidderNumbersSheet: d.bidderNumbersSheet || "Bidder-Numbers",
-    bidManagementSheet: d.bidManagementSheet || "Bid-Management",
-    receiptFolderId: d.receiptFolderId || "",
-    forPrintFolderId: d.forPrintFolderId || "",
-    ticketPrice: d.ticketPrice || "",
-    paypalIsSandbox: d.paypalIsSandbox !== false,
+  const c = await getSharedConfig(now);
+  return {
+    auctionItemsSpreadsheetId: c.auctionItemsSpreadsheetId,
+    auctionTicketsSpreadsheetId: c.auctionTicketsSpreadsheetId,
+    bidManagementSpreadsheetId: c.bidManagementSpreadsheetId,
+    bidderNumbersSheet: c.bidderNumbersSheet,
+    bidManagementSheet: c.bidManagementSheet,
+    receiptFolderId: c.receiptFolderId,
+    forPrintFolderId: c.forPrintFolderId,
+    ticketPrice: c.ticketPrice,
+    paypalIsSandbox: c.paypalIsSandbox,
   };
-  cachedConfig = { config, readAt: now };
-  return config;
 }
 
 let cachedState: { state: AuctionState; readAt: number } | null = null;
@@ -267,6 +263,6 @@ export function _resetVolunteerCachesForTesting(): void {
   statusCache.clear();
   lastSeenWritten.clear();
   cachedClient = null;
-  cachedConfig = null;
+  _resetConfigCacheForTesting();
   cachedState = null;
 }

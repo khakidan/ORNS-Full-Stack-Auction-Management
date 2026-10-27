@@ -87,7 +87,7 @@ function BackToTop() {
 }
 
 export default function App() {
-  const { config, applyServerConfig } = useConfig();
+  const { config } = useConfig();
   const { auctionState, isAuctionClosed, isBidManagementSetUp, closeAuction, goLive } = useAuction();
   const { authenticated, user, can, signedOutReason, handleLogin, handleLogout } = useAuth();
   const isVolunteer = user?.role === "volunteer";
@@ -105,21 +105,6 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   // Sends winning bids saved on this device while offline (Milestone A).
   useOutboxReplay(authenticated === true);
-
-  // Sync state to URL and localStorage
-  // Volunteers can't read the shared Config from Firestore, so the server
-  // hands them the fields the Bid Management page needs. They only ever see
-  // Bid Management.
-  useEffect(() => {
-    if (!isVolunteer) return;
-    fetchWithRetry(`${getBaseUrl()}/api/config/runtime`, { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`status ${res.status}`))))
-      .then((fields) => applyServerConfig(fields))
-      .catch((e) => {
-        console.error("Couldn't load the auction settings:", e);
-        toast.error("Couldn't load the auction's settings. Reload the page to try again.");
-      });
-  }, [isVolunteer, applyServerConfig]);
 
   useEffect(() => {
     if (isVolunteer && activeWorkflow !== 'bids') setActiveWorkflow('bids');

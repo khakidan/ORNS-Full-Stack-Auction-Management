@@ -57,7 +57,6 @@ lazy-loading the Dashboard's attendance pie, see below):
 | `vendor-motion` | 127.89 kB | 41.94 kB |
 | `vendor-lucide` | 31.34 kB | 6.76 kB |
 | `index.css` | 84.84 kB | 15.39 kB |
-| *Lazy, not part of initial load:* `vendor-firebase` | 691.27 kB | 160.04 kB |
 | *Lazy:* `vendor-html2canvas` (bug-report screenshots) | 202.38 kB | 47.71 kB |
 | *Lazy:* `vendor-recharts` (Dashboard attendance pie) | 186.67 kB | 49.55 kB |
 | *Lazy:* `AuctionItemsWorkflow` | 36.64 kB | 10.13 kB |
@@ -66,13 +65,11 @@ lazy-loading the Dashboard's attendance pie, see below):
 | *Lazy:* `BugReportsAdmin` | 6.21 kB | 2.23 kB |
 | *Lazy:* `FolderFilesCard` | 5.45 kB | 2.10 kB |
 | *Lazy:* `AttendancePie` | 0.47 kB | 0.34 kB |
-| *Lazy:* `firebase-applet-config.json` | 0.74 kB | 0.44 kB |
 
-`firebase/app`/`auth`/`firestore` are not part of the initial bundle -
-`src/services/firebase.ts` defers `initializeApp`/`getAuth`/
-`getFirestore` behind a memoized `getFirebase()` that `ConfigContext.tsx`
-awaits instead of importing them statically, since cross-device config
-sync isn't needed for first paint. `recharts` isn't either:
+The browser no longer loads Firebase at all (since 2026-10-27, the
+shared Config comes from `GET /api/config`); before that it was a lazy
+~160 kB gzipped `vendor-firebase` chunk. `recharts` isn't part of the
+initial bundle:
 `AttendanceChart.tsx` renders its card at once and lazy-loads the pie
 itself (`AttendancePie.tsx`). Everything else loads on initial page load
 (`App.tsx` eagerly imports `Dashboard`, `Bidders`, `Items`, `BidEntry`,
@@ -84,15 +81,3 @@ own budget (target <200 kB, warning >300 kB, requires review >500 kB),
 this is under the warning line; `vendor-utils` and `@base-ui/react` are
 the largest eager chunks if further reduction is wanted.
 
-One real trade-off, not hidden: `vendor-firebase` itself grew once
-deferred (105.53 kB → 160.04 kB gzipped, 450.35 kB → 691.27 kB raw).
-Neither `@firebase/auth` nor `@firebase/firestore` declares
-`"sideEffects": false`, so Rollup loses some export-level tree-shaking
-across the async `import()` boundary that it had when everything sat in
-one static module graph (confirmed with a temporary
-`rollup-plugin-visualizer` pass). `firebase/firestore/lite` isn't a
-viable swap - it's REST-only, and this app's config sync depends on
-`onSnapshot`'s real-time listener. Net effect: users who never touch
-cloud sync now pay zero Firebase cost, instead of ~106 kB gzipped
-unconditionally; users who do trigger it pay more than before, but only
-then.

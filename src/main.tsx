@@ -15,13 +15,13 @@ initErrorCapture();
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <ConfigProvider>
-        <AuthProvider>
+      <AuthProvider>
+        <ConfigProvider>
           <AuctionProvider>
             <App />
           </AuctionProvider>
-        </AuthProvider>
-      </ConfigProvider>
+        </ConfigProvider>
+      </AuthProvider>
     </ErrorBoundary>
   </StrictMode>,
 );

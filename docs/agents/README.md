@@ -7,7 +7,7 @@ The **ORNS (Orchard Ridge Nursery School) Charity Auction Manager** is a high-pe
 *   **Frontend**: React 19, TypeScript, Vite 6, Tailwind CSS (using fluid responsive utilities and design system components)
 *   **Animations**: Framer Motion (`motion` from `motion/react`) for fluid and purposeful route/state transitions
 *   **Backend**: Express (Node.js) server running as an ES module during development and compiled to a single, high-efficiency CJS bundle for production
-*   **Datastore**: Google Sheets API (for core relational databases) combined with Firebase Firestore (for distributed cloud sync of configurations)
+*   **Datastore**: Google Sheets API (for core relational databases) combined with Firestore (the shared auction Config, staff roles, volunteers and other server-only records, read and written only by the server)
 *   **Authentication**: Firebase Authentication (Google OAuth & restricted to `@orns.org` administrative domains)
 *   **Deployment**: Google Cloud Run (containerized server environment)
 *   **PWA**: `vite-plugin-pwa` (installable, offline-capable web app manifest + service worker - see PWA Support below)
@@ -221,11 +221,14 @@ script's editor -> Deploy -> Manage deployments -> the API executable
 deployment -> Edit -> Version: **New version** -> Deploy. Until then the
 app keeps running the previous version.
 
-When the production URL changes (a new service or custom domain), two
-allowlists must be updated or sign-in breaks: the OAuth client's
-**Authorized redirect URIs** (`<URL>/auth/callback`) in Google Cloud
-Console, and **Firebase console -> Authentication -> Settings ->
-Authorized domains** (bare domain) for the Cloud Sync sign-in.
+When the production URL changes (a new service or custom domain), the
+OAuth client's **Authorized redirect URIs** (`<URL>/auth/callback`) in
+Google Cloud Console must be updated or sign-in breaks.
+
+**Firestore rules deploy separately.** `firestore.rules` denies browsers
+everything (only the server, through firebase-admin, uses Firestore).
+After changing it, run `npx firebase-tools deploy --only firestore:rules`
+(it uses `firebase.json`'s named database); Cloud Build doesn't deploy it.
 
 The app was originally built in Google AI Studio, which ran it inside an
 iframe and deployed it to a separate Cloud Run service

@@ -63,14 +63,11 @@ vi.mock("./UsersAdmin", () => ({ default: () => <div>UsersAdmin</div> }));
 vi.mock("./ActionHistoryAdmin", () => ({ default: () => <div>ActionHistoryAdmin</div> }));
 
 const mockSaveConfig = vi.fn().mockResolvedValue(undefined);
-const mockLoginToFirebase = vi.fn();
 
 vi.mock("@/context/ConfigContext", () => ({
   useConfig: () => ({
     config: mockConfig,
     saveConfig: mockSaveConfig,
-    firebaseUser: null,
-    loginToFirebase: mockLoginToFirebase,
     loading: false,
   }),
 }));
@@ -222,14 +219,24 @@ describe("ConfigSettings", () => {
     });
   });
 
-  it("shows the plain success toast when every cloud-settings sync call succeeds", async () => {
+  it("after saving, copies the settings to the Bid-Management _Settings tab without complaint when every copy succeeds", async () => {
     render(<ConfigSettings />);
     fireEvent.click(screen.getByText("Save Configuration"));
 
     await waitFor(() => {
-      expect(toast.success).toHaveBeenCalledWith("Settings saved locally and synced to cloud");
+      expect(fetchWithRetry).toHaveBeenCalledWith(expect.stringContaining("/api/settings/update"), expect.anything());
     });
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("doesn't copy anything to the _Settings tab when the save itself is refused", async () => {
+    mockSaveConfig.mockRejectedValueOnce(new Error("You don't have permission to do that."));
+    render(<ConfigSettings />);
+    fireEvent.click(screen.getByText("Save Configuration"));
+
+    await waitFor(() => expect(mockSaveConfig).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(fetchWithRetry).not.toHaveBeenCalledWith(expect.stringContaining("/api/settings/update"), expect.anything());
   });
 
   it("shows a cloud-sync-failure toast, not the plain success toast, when a settings/update call returns a non-ok response - useConfigSettingsState.ts's syncSettingToCloud never checked res.ok, so a 4xx here used to be silently reported as full success", async () => {
@@ -245,10 +252,9 @@ describe("ConfigSettings", () => {
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith(
-        expect.stringContaining("failed to sync")
+        expect.stringContaining("couldn't be copied")
       );
     });
-    expect(toast.success).not.toHaveBeenCalledWith("Settings saved locally and synced to cloud");
   });
 
   it("splits the Settings page into Configuration / PayPal Integration / Google Apps Scripts / Bug Reports tabs, each showing only its own content", async () => {
