@@ -10,6 +10,7 @@ import { useWinnersData } from "@/hooks/useWinnersData";
 import { useAuctionStatusData } from "@/hooks/useAuctionStatusData";
 import { AuctionState } from "@/lib/auctionState";
 import { useChangeFeed } from "@/hooks/useChangeFeed";
+import { postJson } from "@/services/apiClient";
 
 interface AuctionContextType {
   bidders: Bidder[];
@@ -126,6 +127,18 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
       fetchAllData();
     }
   }, [isApiAuthenticated, spreadsheetId, fetchAllData]);
+
+  // Bidders follow their tickets (server/services/bidderTicketSync.ts): on
+  // load, have the server bring any renamed ticket across, then show it.
+  // Staff only - volunteers' checkout and receipts run the same check on
+  // the server.
+  const isStaff = !!user && user.role !== "volunteer";
+  useEffect(() => {
+    if (!isApiAuthenticated || !isStaff || !spreadsheetId || !ticketsSpreadsheetId) return;
+    postJson<{ renamed: number }>("/api/bidders/sync-from-tickets", {}, "Couldn't check bidders against the tickets")
+      .then(({ renamed }) => { if (renamed > 0) fetchBidders({ silent: true }); })
+      .catch((e) => console.warn(e.message));
+  }, [isApiAuthenticated, isStaff, spreadsheetId, ticketsSpreadsheetId, fetchBidders]);
 
   useEffect(() => {
     if (isApiAuthenticated && ticketsSpreadsheetId) {

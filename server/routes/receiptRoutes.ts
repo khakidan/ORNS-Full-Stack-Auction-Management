@@ -11,10 +11,17 @@ import { getPaypalIsSandbox } from '../services/sharedConfig';
 import { requireAuth } from '../middleware/requireAuth';
 import { AlreadyRunningError, runIfIdle, withLock } from '../utils/asyncLock';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
+import { syncBiddersFromTickets } from '../services/bidderTicketSync';
 
 export default function createReceiptsRouter() {
   const router = Router();
   router.use(requireAuth);
+  // Receipts and their emails carry bidders' names and email addresses -
+  // bring them in line with the tickets first (bidderTicketSync.ts).
+  router.use(async (req, _res, next) => {
+    await syncBiddersFromTickets(req);
+    next();
+  });
 
   router.post("/generate", async (req, res, next) => {
     const { bidderId, spreadsheetId, itemsSpreadsheetId } = req.body;

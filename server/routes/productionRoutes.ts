@@ -7,6 +7,7 @@ import { requireAuth } from '../middleware/requireAuth';
 import { ensureBidderNumbersSheet, getBidderLabelList } from '../services/syncService';
 import { getValidSortedItems } from '../services/itemDataService';
 import { sheetsFor } from '../utils/googleClients';
+import { syncBiddersFromTickets } from '../services/bidderTicketSync';
 
 export default function createProductionRouter() {
   const router = Router();
@@ -138,6 +139,8 @@ export default function createProductionRouter() {
       try {
         const sheets = sheetsFor(req);
         await ensureBidderNumbersSheet(sheets, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId || "");
+        // Labels print each bidder's name - make sure it matches their ticket.
+        await syncBiddersFromTickets(req);
         bidders = await getBidderLabelList(sheets, bidManagementSpreadsheetId);
       } catch (error: any) {
         return res.status(400).json({ error: error.message });

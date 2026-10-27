@@ -5,7 +5,7 @@
  * the header row the sync writes.
  */
 
-/** Bidder-Numbers (Bid-Management spreadsheet), columns A-N. */
+/** Bidder-Numbers (Bid-Management spreadsheet), columns A-O. */
 export const BIDDER_COL = {
   id: 0,
   firstName: 1,
@@ -21,6 +21,7 @@ export const BIDDER_COL = {
   paypalPendingSince: 11,
   receiptEmailedAt: 12,
   receiptEmailedInvoice: 13,
+  ticketRef: 14,
 } as const;
 
 /** Auction-Items (Auction Items spreadsheet), columns A-M. */

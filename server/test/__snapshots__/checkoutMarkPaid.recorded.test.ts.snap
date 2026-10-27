@@ -113,17 +113,18 @@ exports[`checkoutMarkPaid - recorded calls > card with no invoice yet: creates o
     [
       "get",
       "bm",
-      "'Bidder-Numbers'!L1:N1",
+      "'Bidder-Numbers'!L1:O1",
     ],
     [
       "update",
       "bm",
-      "'Bidder-Numbers'!L1:N1",
+      "'Bidder-Numbers'!L1:O1",
       [
         [
           "PayPal Pending Since",
           "Receipt Emailed At",
           "Receipt Emailed Invoice",
+          "Ticket",
         ],
       ],
     ],

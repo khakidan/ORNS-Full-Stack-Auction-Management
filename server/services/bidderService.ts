@@ -5,6 +5,7 @@ import { withLock } from "../utils/asyncLock";
 import { AUCTION_TICKETS_ITEM_ID } from "../utils/categoryHelpers";
 import { BIDDER_COL, TICKETS_COL, WALK_IN_PAYMENT_METHOD } from "../utils/sheetColumns";
 import { findBidderColumn, findBidderRowIndex, firstEmptyBidRow } from "../utils/bidGrid";
+import { bidderEmail, bidderName } from "./ticketPeople";
 
 export interface WalkInParams {
   firstName: string;
@@ -65,7 +66,6 @@ export async function registerWalkInBidder(
 
 const DEFAULT_TICKET_PRICE = 35;
 
-const capitalize = (str: string) => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : '';
 
 /** One more than the highest bidder number in Bidder-Numbers column A (walk-ins start above 100). */
 export function nextBidderId(idRows: unknown[][]): number {
@@ -154,9 +154,9 @@ async function registerWalkInBidderLocked(
   // 3. The new bidder number, and their column pair (growing the grid if it's too narrow).
   const idRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${bidderNumbersSheet}'!A:A` });
   const newId = nextBidderId(idRes.data.values || []);
-  const formattedFirst = capitalize(firstName);
-  const formattedLast = capitalize(lastName);
-  const formattedEmail = (email || "").trim();
+  const formattedFirst = bidderName(firstName);
+  const formattedLast = bidderName(lastName);
+  const formattedEmail = bidderEmail(email);
 
   const gridRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${bidManagementSheet}'!1:5` });
   const startCol = nextColumnPairStart(gridRes.data.values || []);

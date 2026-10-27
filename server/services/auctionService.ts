@@ -334,7 +334,7 @@ async function checkoutMarkPaidLocked(
   await executeGoogleSheetsTransaction(sheets, paymentOps);
   if (deferred) {
     // Column L now holds a timestamp - make sure it has a label.
-    await ensureTrackingHeaders(sheets, spreadsheetId, bidderNumbersSheet).catch((e) => console.warn("[checkout] Could not label Bidder-Numbers L1:N1:", e?.message || e));
+    await ensureTrackingHeaders(sheets, spreadsheetId, bidderNumbersSheet).catch((e) => console.warn("[checkout] Could not label Bidder-Numbers L1:O1:", e?.message || e));
   }
 
   // 4. Mark their ticket paid on the 'tickets' tab, when the browser sent its row.

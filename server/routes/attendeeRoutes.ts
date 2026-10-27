@@ -4,6 +4,7 @@ import { sheetsFor } from '../utils/googleClients';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { IDEMPOTENT_POST_RETRY } from '../utils/googleRetry';
 import { logAction } from '../services/actionLog';
+import { syncBiddersFromTickets } from '../services/bidderTicketSync';
 
 /** The Auction Tickets spreadsheet's attendee tabs. */
 export const TICKET_SHEETS = ["tickets", "staff tickets", "sponsor tickets"];
@@ -62,6 +63,8 @@ export default function createAttendeeRouter() {
           ? { undo: { kind: "cells" as const, spreadsheetId, range: written, before: [row.map(() => "")], after: [row] } }
           : { notUndoableReason: "the sheet didn't say which row it was added to" }),
       });
+      // The bidder follows their ticket (bidderTicketSync.ts).
+      await syncBiddersFromTickets(req);
       res.json(result.data);
     } catch (error) {
       next(error);
@@ -96,6 +99,8 @@ export default function createAttendeeRouter() {
         location: `Auction Tickets ${a1}`,
         undo: { kind: "cells", spreadsheetId, range: a1, before, after: values },
       });
+      // The bidder follows their ticket (bidderTicketSync.ts).
+      await syncBiddersFromTickets(req);
       res.json(result.data);
     } catch (error) {
       next(error);
@@ -128,6 +133,7 @@ export default function createAttendeeRouter() {
         location: `Auction Tickets ${a1}`,
         undo: { kind: "cells", spreadsheetId, range: a1, before: [before], after: [[]] },
       });
+      await syncBiddersFromTickets(req);
       res.json({ success: true });
     } catch (error) {
       next(error);

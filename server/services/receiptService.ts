@@ -87,7 +87,7 @@ export async function processAllEmails(
 
     const bNum = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${quoteSheetName(sheetNames.bidderNumbers)}!A:N` });
     const bidderRows = bNum.data.values || [];
-    await ensureTrackingHeaders(sheets, spreadsheetId, sheetNames.bidderNumbers).catch((e) => console.warn("[processAllEmails] Could not label Bidder-Numbers L1:N1:", e?.message || e));
+    await ensureTrackingHeaders(sheets, spreadsheetId, sheetNames.bidderNumbers).catch((e) => console.warn("[processAllEmails] Could not label Bidder-Numbers L1:O1:", e?.message || e));
 
     const senderEmail = await getSenderEmail(client);
     const result: EmailAllResult = { sentCount: 0, alreadySentCount: 0, failedCount: 0 };

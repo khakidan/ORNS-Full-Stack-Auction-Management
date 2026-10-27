@@ -9,14 +9,14 @@ This document contains the structural definitions and schemas utilized for exter
 The application relies on Google Sheets as its primary database. The following sheets must conform to these strict column-indexed formats:
 
 ### Sheet: 'Bidder-Numbers'
-This sheet tracks all event registrations, active bidders, and their checkout/payment statuses. The full A-N header row lives in `server/utils/bidderNumbersHeaders.ts` and is written when the tab is built (`syncService.ts`'s `writeBidderNumbersSheet`); on a tab built before L-N existed, `ensureTrackingHeaders` fills in any blank L1/M1/N1 the first time checkout or a receipt email writes to those columns (never overwriting a header someone typed). Table verified against that code and every reader/writer of this sheet on 2026-10-21 (this replaces an older table that listed Phone/Ticket Type/Table Number/Status/Notes columns that don't exist).
+This sheet tracks all event registrations, active bidders, and their checkout/payment statuses. **Names follow the tickets:** the Auction Tickets spreadsheet is the source of truth for each bidder's name and email; B-D (and the Bid-Management grid's name row) are copies that `server/services/bidderTicketSync.ts` keeps in step, using Column O to know which ticket is whose. It runs after every ticket change made in the app, when Bid Management loads, before receipts, labels and checkout, and about once a minute while anyone on staff has the app open (catching edits made directly in the spreadsheet). Change a name or email on the ticket, not here - an edit here is put back to the ticket's. The full A-O header row lives in `server/utils/bidderNumbersHeaders.ts` and is written when the tab is built (`syncService.ts`'s `writeBidderNumbersSheet`); on a tab built before L-O existed, `ensureTrackingHeaders` fills in any blank L1-O1 the first time checkout or a receipt email writes to those columns (never overwriting a header someone typed). Table verified against that code and every reader/writer of this sheet on 2026-10-21 (this replaces an older table that listed Phone/Ticket Type/Table Number/Status/Notes columns that don't exist).
 
 | Column Index | Header | Type | Description |
 |---|---|---|---|
 | Column A | `ID` | Number | Unique bidder number (walk-ins get `max existing + 1`, starting above 100) |
-| Column B | `First Name` | String | Guest first name |
-| Column C | `Last Name` | String | Guest last name |
-| Column D | `Email` | String | Email address for receipts, invoices, and contact |
+| Column B | `First Name` | String | First name (from their ticket; words typed all capitals or all lowercase are tidied, a typed mix like "McDonald" is kept - `bidderName` in `server/services/ticketPeople.ts`) |
+| Column C | `Last Name` | String | Last name (same rule as B) |
+| Column D | `Email` | String | Email address for receipts, invoices, and contact (from their ticket, lowercased) |
 | Column E | `Checked In` | Checkbox | `TRUE` once the bidder has checked in |
 | Column F | `Proxy Bidder` | Checkbox | Bidder is bidding by proxy |
 | Column G | `Checked Out` | Checkbox | `TRUE` once checkout completes (also set for non-winners on auction close) |
@@ -27,6 +27,7 @@ This sheet tracks all event registrations, active bidders, and their checkout/pa
 | **Column L** | `PayPal Pending Since` | String (ISO) | **Automated Field**: timestamp set when checkout defers to "PayPal Verification Pending"; read and cleared by the PayPal sweeper (`server/services/paypalSweeperJob.ts`) |
 | **Column M** | `Receipt Emailed At` | String (ISO) | **Automated Field**: when this bidder's receipt was last emailed (`emailService.ts`'s `recordReceiptEmailed`) |
 | **Column N** | `Receipt Emailed Invoice` | String | **Automated Field**: the invoice link that email carried. Email All skips a bidder whose Column N equals their current Column J, so a re-run never re-sends an unchanged receipt. Clear it to force a re-send |
+| **Column O** | `Ticket` | String | **Automated Field**: where the bidder's ticket is - `tickets!12`, `staff tickets!4`, `sponsor tickets!3`, or `tickets!12#2` for guest 2 on row 12. Written by Set Up; filled in by the ticket sync for older rows and walk-ins (by unique email, else unique name). Keeps the bidder tied to their ticket when its name or email changes |
 
 ### Sheet: 'Auction-Status'
 

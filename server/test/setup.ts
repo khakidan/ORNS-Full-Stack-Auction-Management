@@ -36,6 +36,14 @@ afterEach(async () => {
   vi.mocked(logAction).mockClear()
 })
 
+// Bidders follow their tickets (bidderTicketSync.ts): many routes run the
+// sync first. Tests never reach it unless they say so - it's a spy here,
+// and bidderTicketSync.test.ts covers the real module via vi.importActual.
+vi.mock('../services/bidderTicketSync', () => ({
+  syncBiddersFromTickets: vi.fn(async () => []),
+  BACKGROUND_SYNC_INTERVAL_MS: 60000,
+}))
+
 // Where the Action History spreadsheet is (Firestore system/actionHistory).
 // Not set up unless a test says otherwise; actionHistoryStore.test.ts
 // covers the real module via vi.importActual.
