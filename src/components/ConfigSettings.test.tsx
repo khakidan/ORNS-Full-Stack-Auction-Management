@@ -59,6 +59,8 @@ vi.mock("@/context/AuctionContext", () => ({
 
 // BugReportsAdmin has its own tests; it only needs to render here.
 vi.mock("./BugReportsAdmin", () => ({ default: () => <div>BugReportsAdmin</div> }));
+vi.mock("./UsersAdmin", () => ({ default: () => <div>UsersAdmin</div> }));
+vi.mock("./ActionHistoryAdmin", () => ({ default: () => <div>ActionHistoryAdmin</div> }));
 
 const mockSaveConfig = vi.fn().mockResolvedValue(undefined);
 const mockLoginToFirebase = vi.fn();
@@ -249,11 +251,12 @@ describe("ConfigSettings", () => {
     expect(toast.success).not.toHaveBeenCalledWith("Settings saved locally and synced to cloud");
   });
 
-  it("splits the page into Settings / PayPal Integration / Google Apps Scripts / Bug Reports tabs, each showing only its own content", async () => {
+  it("splits the Settings page into Configuration / PayPal Integration / Google Apps Scripts / Bug Reports tabs, each showing only its own content", async () => {
     const user = userEvent.setup();
     render(<ConfigSettings />);
 
-    expect(screen.getByRole("heading", { name: "Configuration" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Configuration" })).toBeInTheDocument();
     expect(screen.getByText("Ticket Pricing")).toBeInTheDocument();
     expect(screen.queryByText("Apps Script Versions")).not.toBeInTheDocument();
 
@@ -263,6 +266,9 @@ describe("ConfigSettings", () => {
 
     await user.click(screen.getByRole("tab", { name: "Bug Reports" }));
     expect(screen.getByText("BugReportsAdmin")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Users" }));
+    expect(screen.getByText("UsersAdmin")).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "PayPal Integration" }));
     expect(screen.getByText("Save Configuration")).toBeInTheDocument();

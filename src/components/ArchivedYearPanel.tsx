@@ -154,6 +154,15 @@ export default function ArchivedYearPanel({ auction }: { auction: ArchivedAuctio
                 <ExternalLink className="w-4 h-4" /> Open {year} Auction Items
               </Button>
             )}
+            {auction.actionHistorySpreadsheetId && (
+              <Button
+                variant="outline"
+                className="justify-start gap-2"
+                onClick={() => window.open(`https://docs.google.com/spreadsheets/d/${auction.actionHistorySpreadsheetId}`, "_blank", "noopener,noreferrer")}
+              >
+                <ExternalLink className="w-4 h-4" /> Open {year} Action History
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>

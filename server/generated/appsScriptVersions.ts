@@ -3,6 +3,6 @@
 // (scripts/apps-script/fingerprint.mjs); see server/routes/appsScriptRoutes.ts.
 export const EXPECTED_APPS_SCRIPT_VERSIONS = {
   BidManagementSpreadsheet: "b9bf3f07d255",
-  ItemsSpreadsheet: "0aebc22b7fc6",
-  TicketsSpreadsheet: "7a317a5b55f2",
+  ItemsSpreadsheet: "41d9e4d8761c",
+  TicketsSpreadsheet: "d6708dbd0189",
 } as const;

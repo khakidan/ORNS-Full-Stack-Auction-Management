@@ -59,6 +59,7 @@ function renderRow(overrides: Partial<Parameters<typeof AttendeeRow>[0]> = {}) {
     <AttendeeRow
       attendee={attendee}
       isAuctionClosed={false}
+      canDelete={true}
       onEdit={onEdit}
       onUpdatePaymentStatus={onUpdatePaymentStatus}
       onDeleteRequest={onDeleteRequest}
@@ -88,6 +89,7 @@ describe("AttendeeRow - display", () => {
         <AttendeeRow
           attendee={makeAttendee({ sheet })}
           isAuctionClosed={false}
+          canDelete={true}
           onEdit={vi.fn()}
           onUpdatePaymentStatus={vi.fn()}
           onDeleteRequest={vi.fn()}
@@ -205,12 +207,20 @@ describe("AttendeeRow - actions", () => {
     expect(onUpdatePaymentStatus).toHaveBeenCalledWith(attendee, "Pending");
   });
 
+  it("hides only the Delete button for someone who may not delete attendees (a User)", () => {
+    const { attendee } = renderRow({ canDelete: false });
+
+    expect(screen.getByRole("button", { name: `Edit ${attendee.firstName} ${attendee.lastName}` })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: `Delete ${attendee.firstName} ${attendee.lastName}` })).not.toBeInTheDocument();
+  });
+
   it("hides the Edit and Delete buttons when the auction is closed", () => {
     const attendee = makeAttendee();
     render(
       <AttendeeRow
         attendee={attendee}
         isAuctionClosed={true}
+        canDelete={true}
         onEdit={vi.fn()}
         onUpdatePaymentStatus={vi.fn()}
         onDeleteRequest={vi.fn()}
@@ -227,6 +237,7 @@ describe("AttendeeRow - actions", () => {
       <AttendeeRow
         attendee={attendee}
         isAuctionClosed={true}
+        canDelete={true}
         onEdit={vi.fn()}
         onUpdatePaymentStatus={vi.fn()}
         onDeleteRequest={vi.fn()}

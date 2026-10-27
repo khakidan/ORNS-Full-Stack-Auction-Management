@@ -24,6 +24,34 @@ vi.mock('../services/idempotencyStore', () => {
     _clearForTesting: () => records.clear(),
   }
 })
+// Every logged route records to the Action History spreadsheet
+// (actionLog.ts). Tests never reach it: logAction is a spy that route tests
+// can inspect, and actionLog.test.ts covers the real module via
+// vi.importActual.
+vi.mock('../services/actionLog', () => ({
+  logAction: vi.fn(async () => {}),
+}))
+afterEach(async () => {
+  const { logAction } = await import('../services/actionLog')
+  vi.mocked(logAction).mockClear()
+})
+
+// Where the Action History spreadsheet is (Firestore system/actionHistory).
+// Not set up unless a test says otherwise; actionHistoryStore.test.ts
+// covers the real module via vi.importActual.
+vi.mock('../services/actionHistoryStore', () => ({
+  getActionHistorySpreadsheetId: vi.fn(async () => ''),
+  setActionHistorySpreadsheetId: vi.fn(async () => {}),
+  _resetActionHistoryStoreForTesting: () => {},
+}))
+
+// Closing the auction ends every volunteer's access (Firestore). Route tests
+// get a spy instead; volunteers.test.ts covers the real function.
+vi.mock('../services/volunteerService', async (importActual) => ({
+  ...(await importActual<typeof import('../services/volunteerService')>()),
+  deactivateAllVolunteers: vi.fn(async () => 0),
+}))
+
 import * as durableStore from '../services/idempotencyStore'
 afterEach(() => (durableStore as any)._clearForTesting())
 

@@ -2,6 +2,8 @@ import { drive_v3, sheets_v4 } from "googleapis";
 import { AUCTION_TICKETS_ITEM_ID } from "../utils/categoryHelpers";
 import { currentAuctionYear } from "../utils/auctionYear";
 import { archiveAuctionSpreadsheets } from "./archiveService";
+import { AUCTION_STATE_CELL } from "../utils/auctionState";
+import { getActionHistorySpreadsheetId } from "./actionHistoryStore";
 
 export interface SetupAuctionParams {
   ticketsSpreadsheetId: string;
@@ -134,11 +136,12 @@ export async function setupNewAuction(
   // Auctions page looks for; anything already archived with "Archive This
   // Auction" is left as it is.
   onLog(`Backing up master spreadsheets to last year's folder (${lastYear})...`);
+  const actionHistorySpreadsheetId = await getActionHistorySpreadsheetId();
   const backup = await archiveAuctionSpreadsheets(drive, {
     year: lastYear,
     parentFolderId,
     folderId: lastYearFolderId,
-    spreadsheets: { tickets: ticketsSpreadsheetId, items: itemEntrySpreadsheetId, bidManagement: bidManagementSpreadsheetId },
+    spreadsheets: { tickets: ticketsSpreadsheetId, items: itemEntrySpreadsheetId, bidManagement: bidManagementSpreadsheetId, actionHistory: actionHistorySpreadsheetId || undefined },
     replaceExisting: false,
   }, onLog);
   const failedBackups = backup.results.filter((r) => r.status === "failed");
@@ -213,6 +216,15 @@ export async function setupNewAuction(
   // 6. Clean master spreadsheets
   onLog(`Cleaning data from master spreadsheets...`);
   try {
+    // The new season's Action History starts empty; last season's is in
+    // "{lastYear} Action History", backed up above.
+    if (actionHistorySpreadsheetId) {
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: actionHistorySpreadsheetId,
+        range: "'Actions'!A2:O"
+      }).catch(err => onLog(`Failed to clear the Action History: ${err.message}`));
+    }
+
     if (itemEntrySpreadsheetId) {
       await sheets.spreadsheets.values.clear({
         spreadsheetId: itemEntrySpreadsheetId,
@@ -266,7 +278,7 @@ export async function setupNewAuction(
         spreadsheetId: bidManagementSpreadsheetId,
         range: "'Auction-Status'!A2",
         valueInputOption: "USER_ENTERED",
-        requestBody: { values: [[true]] }
+        requestBody: { values: [[AUCTION_STATE_CELL.prep]] }
       }).catch(err => onLog(`Failed to reset Auction-Status: ${err.message}`));
 
       await sheets.spreadsheets.values.clear({

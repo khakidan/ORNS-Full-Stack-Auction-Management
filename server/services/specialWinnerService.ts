@@ -30,13 +30,17 @@ export interface SaveSpecialWinnerParams {
  * it too) also creates and appends to the Follow-Up tab - two creators at
  * once would make Sheets refuse the second "add sheet".
  */
-export async function saveSpecialWinner(sheets: sheets_v4.Sheets, params: SaveSpecialWinnerParams): Promise<{ success: boolean }> {
+/** `range` is the winner cell and `before` the bidder number it held, for Action History. */
+export async function saveSpecialWinner(sheets: sheets_v4.Sheets, params: SaveSpecialWinnerParams): Promise<{ success: boolean; range: string; before: string }> {
   const { spreadsheetId, prize, bidderId, addFollowUp } = params;
   return withLock(`bidder-numbers:${spreadsheetId}`, async () => {
     await ensureSheetTab(sheets, spreadsheetId, "Special-Winners");
+    const range = `'Special-Winners'!${SPECIAL_PRIZES[prize].cell}`;
+    const old = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+    const before = String(old.data.values?.[0]?.[0] ?? "");
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `'Special-Winners'!${SPECIAL_PRIZES[prize].cell}`,
+      range,
       valueInputOption: "USER_ENTERED",
       requestBody: { values: [[bidderId]] },
     });
@@ -52,6 +56,6 @@ export async function saveSpecialWinner(sheets: sheets_v4.Sheets, params: SaveSp
     }
 
     clearCacheForSpreadsheet(spreadsheetId);
-    return { success: true };
+    return { success: true, range, before };
   });
 }

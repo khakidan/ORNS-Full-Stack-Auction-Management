@@ -17,7 +17,7 @@ import { useTicketAttendeeState } from "./useTicketAttendeeState";
 import { Attendee, Guest } from "@/types";
 
 vi.mock("@/services/google-api", () => ({
-  updateSheetData: vi.fn(),
+  updateAttendeeCells: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({
@@ -27,9 +27,9 @@ vi.mock("sonner", () => ({
   },
 }));
 
-import { updateSheetData } from "@/services/google-api";
+import { updateAttendeeCells } from "@/services/google-api";
 
-const mockedUpdateSheetData = vi.mocked(updateSheetData);
+const mockedUpdateSheetData = vi.mocked(updateAttendeeCells);
 
 function makeAttendee(overrides: Partial<Attendee> = {}): Attendee {
   return {

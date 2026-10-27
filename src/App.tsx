@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { Loader2, LayoutDashboard, RefreshCw, Users, ShoppingBag, CreditCard, Handshake, WalletCards, Settings, LogOut, FileText, Ticket, Package, ClipboardList, PanelLeftClose, Menu, ArrowUp, AlertCircle, ExternalLink, Archive } from "lucide-react";
+import { Loader2, LayoutDashboard, RefreshCw, Users, ShoppingBag, CreditCard, Handshake, WalletCards, Settings, LogOut, FileText, Ticket, Package, ClipboardList, PanelLeftClose, Menu, ArrowUp, AlertCircle, ExternalLink, Archive, CircleDot } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import Dashboard from "./components/Dashboard";
@@ -21,10 +21,12 @@ import BidEntry from "./components/BidEntry";
 import Checkout from "./components/Checkout";
 import Receipts from "./components/Receipts";
 import { BugReportButton } from "./components/BugReportButton";
+import { AuctionStateBadge } from "./components/AuctionStateBadge";
 import { useAuction } from "./context/AuctionContext";
 import { SyncStatusBanner, SavedBidsSidebarBadge } from "./components/SyncStatusBanner";
 import { useOutboxReplay } from "./hooks/useOutboxReplay";
 import { postJson } from "@/services/apiClient";
+import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 
 const ConfigSettings = lazy(() => import("./components/ConfigSettings"));
 const AuctionTicketsWorkflow = lazy(() => import("./components/AuctionTicketsWorkflow"));
@@ -37,7 +39,7 @@ const WORKFLOW_PATHS: Record<WorkflowType, string> = {
   items: "/AuctionItemsWorkflow",
   tickets: "/AuctionTicketsWorkflow",
   bids: "/BidManagement",
-  settings: "/Configuration",
+  settings: "/Settings",
   archive: "/ArchivedAuctions"
 };
 
@@ -85,9 +87,10 @@ function BackToTop() {
 }
 
 export default function App() {
-  const { config } = useConfig();
-  const { isAuctionClosed, closeAuction } = useAuction();
-  const { authenticated, handleLogin, handleLogout } = useAuth();
+  const { config, applyServerConfig } = useConfig();
+  const { auctionState, isAuctionClosed, isBidManagementSetUp, closeAuction, goLive } = useAuction();
+  const { authenticated, user, can, signedOutReason, handleLogin, handleLogout } = useAuth();
+  const isVolunteer = user?.role === "volunteer";
   const [activeWorkflow, setActiveWorkflow] = useState<WorkflowType>(() => {
     const pathWorkflow = getWorkflowFromPath(window.location.pathname);
     if (pathWorkflow) return pathWorkflow;
@@ -104,6 +107,33 @@ export default function App() {
   useOutboxReplay(authenticated === true);
 
   // Sync state to URL and localStorage
+  // Volunteers can't read the shared Config from Firestore, so the server
+  // hands them the fields the Bid Management page needs. They only ever see
+  // Bid Management.
+  useEffect(() => {
+    if (!isVolunteer) return;
+    fetchWithRetry(`${getBaseUrl()}/api/config/runtime`, { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`status ${res.status}`))))
+      .then((fields) => applyServerConfig(fields))
+      .catch((e) => {
+        console.error("Couldn't load the auction settings:", e);
+        toast.error("Couldn't load the auction's settings. Reload the page to try again.");
+      });
+  }, [isVolunteer, applyServerConfig]);
+
+  useEffect(() => {
+    if (isVolunteer && activeWorkflow !== 'bids') setActiveWorkflow('bids');
+    if (isVolunteer && activeBidTab === 'items') setActiveBidTab('dashboard');
+  }, [isVolunteer, activeWorkflow, activeBidTab]);
+
+  // Settings is Full Administrator only: someone else who lands there (a
+  // remembered tab, an old link) goes to Bid Management instead.
+  useEffect(() => {
+    if (user && activeWorkflow === 'settings' && !can("settings")) {
+      setActiveWorkflow('bids');
+    }
+  }, [user, activeWorkflow, can]);
+
   useEffect(() => {
     localStorage.setItem("activeWorkflow", activeWorkflow);
     const targetPath = WORKFLOW_PATHS[activeWorkflow];
@@ -169,6 +199,21 @@ export default function App() {
     );
   }
 
+  if (!authenticated && signedOutReason === "volunteer_access_ended") {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50 px-4">
+        <Card className="w-full max-w-md shadow-lg">
+          <CardHeader className="text-center space-y-1">
+            <CardTitle className="text-2xl font-bold tracking-tight">Thanks for volunteering!</CardTitle>
+            <CardDescription className="text-base">
+              The auction has closed, so your access to the app has ended. If you still need it, ask an auction organizer for a new link.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
   if (!authenticated) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50 px-4">
@@ -210,7 +255,7 @@ export default function App() {
              {activeWorkflow === 'items' && "Items"}
              {activeWorkflow === 'tickets' && "Tickets"}
              {activeWorkflow === 'bids' && "Bids"}
-             {activeWorkflow === 'settings' && "Config"}
+             {activeWorkflow === 'settings' && "Settings"}
              {activeWorkflow === 'archive' && "Archive"}
            </span>
            <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
@@ -255,6 +300,7 @@ export default function App() {
         <div className={cn("flex-1 py-6 px-3 space-y-1 overflow-y-auto overflow-x-hidden flex flex-col", (isSidebarOpen || isMobileMenuOpen) && "w-max")}>
           {(isSidebarOpen || isMobileMenuOpen) && <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Workflows</p>}
           
+          {!isVolunteer && (<>
           <Button 
             variant={activeWorkflow === 'items' ? 'secondary' : 'ghost'} 
             className={cn("justify-start gap-3 h-10", (isSidebarOpen || isMobileMenuOpen) ? "w-full" : "w-10 px-0 justify-center")}
@@ -274,6 +320,7 @@ export default function App() {
             <Ticket className="w-5 h-5 shrink-0" />
             {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Auction Tickets</span>}
           </Button>
+          </>)}
           
           <Button 
             variant={activeWorkflow === 'bids' ? 'secondary' : 'ghost'} 
@@ -285,6 +332,7 @@ export default function App() {
             {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Bid Management</span>}
           </Button>
 
+          {!isVolunteer && (<>
           <div className="h-6" />
           {(isSidebarOpen || isMobileMenuOpen) && <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">System</p>}
 
@@ -297,20 +345,29 @@ export default function App() {
             <Archive className="w-5 h-5 shrink-0" />
             {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Archived Auctions</span>}
           </Button>
+          </>)}
 
+          {can("settings") && (
           <Button
             variant={activeWorkflow === 'settings' ? 'secondary' : 'ghost'}
             className={cn("justify-start gap-3 h-10", (isSidebarOpen || isMobileMenuOpen) ? "w-full" : "w-10 px-0 justify-center")}
             onClick={() => { setActiveWorkflow('settings'); setIsMobileMenuOpen(false); }}
-            title="Configuration"
+            title="Settings"
           >
             <Settings className="w-5 h-5 shrink-0" />
-            {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Configuration</span>}
+            {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Settings</span>}
           </Button>
+          )}
         </div>
 
         <div className="p-3 border-t shrink-0 flex flex-col items-center">
           <SavedBidsSidebarBadge expanded={isSidebarOpen || isMobileMenuOpen} />
+          {user && (isSidebarOpen || isMobileMenuOpen) && (
+            <div className="w-full px-3 pb-2 text-xs" data-testid="signed-in-user">
+              <div className="truncate font-medium" title={user.email}>{user.email}</div>
+              <div className="text-muted-foreground">{user.roleLabel}</div>
+            </div>
+          )}
           <Button 
             variant="ghost" 
             className={cn("justify-start gap-3 text-muted-foreground hover:text-destructive", (isSidebarOpen || isMobileMenuOpen) ? "w-full" : "w-10 px-0 justify-center")}
@@ -339,7 +396,7 @@ export default function App() {
                 {activeWorkflow === 'tickets' && <AuctionTicketsWorkflow />}
                 {activeWorkflow === 'items' && <AuctionItemsWorkflow />}
                 
-                {activeWorkflow === 'settings' && <ConfigSettings />}
+                {activeWorkflow === 'settings' && can("settings") && <ConfigSettings />}
                 {activeWorkflow === 'archive' && <ArchivedAuctionsWorkflow />}
 
                 {activeWorkflow === 'bids' && (
@@ -352,39 +409,52 @@ export default function App() {
                       </p>
                     </div>
                     <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
-                      {isAuctionClosed && (
-                        <div className="flex items-center gap-2 px-3 py-1 bg-amber-100 text-amber-700 border border-amber-200 rounded-md font-bold text-xs uppercase tracking-wider animate-pulse whitespace-nowrap order-first sm:order-none mb-2 sm:mb-0">
-                          <AlertCircle className="w-4 h-4" />
-                          Auction Closed
-                        </div>
-                      )}
-                      {!isAuctionClosed && (
+                      <AuctionStateBadge state={auctionState} className="order-first sm:order-none mb-2 sm:mb-0" />
+                      {!isAuctionClosed && can("auction.stage") && (
                         <>
-                          <Button
-                            onClick={() => {
-                              if (window.confirm("Are you sure you want to CLOSE the auction? This will disable further bid entries.")) {
-                                closeAuction();
-                              }
-                            }}
-                            size="sm"
-                            variant="destructive"
-                            className="gap-2 w-full sm:w-auto shrink-0"
-                          >
-                            <AlertCircle className="w-4 h-4" />
-                            Close Auction
-                          </Button>
-                          <Button
-                            onClick={handleSyncBidders}
-                            disabled={isSyncing}
-                            size="sm"
-                            className="gap-2 w-full sm:w-auto shrink-0 bg-slate-900 text-slate-50 hover:bg-slate-900/90"
-                          >
-                            {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                            {isSyncing ? "Setting up..." : "Set Up Bid Management App"}
-                          </Button>
+                          {auctionState === "prep" && isBidManagementSetUp === true && (
+                            <Button
+                              onClick={() => {
+                                if (window.confirm("Take the auction LIVE? There's no way back to Prep from the app.")) {
+                                  goLive();
+                                }
+                              }}
+                              size="sm"
+                              className="gap-2 w-full sm:w-auto shrink-0 bg-emerald-600 text-white hover:bg-emerald-600/90"
+                            >
+                              <CircleDot className="w-4 h-4" />
+                              Go Live
+                            </Button>
+                          )}
+                          {auctionState === "live" && (
+                            <Button
+                              onClick={() => {
+                                if (window.confirm("Are you sure you want to CLOSE the auction? This will disable further bid entries.")) {
+                                  closeAuction();
+                                }
+                              }}
+                              size="sm"
+                              variant="destructive"
+                              className="gap-2 w-full sm:w-auto shrink-0"
+                            >
+                              <AlertCircle className="w-4 h-4" />
+                              Close Auction
+                            </Button>
+                          )}
+                          {isBidManagementSetUp === false && (
+                            <Button
+                              onClick={handleSyncBidders}
+                              disabled={isSyncing}
+                              size="sm"
+                              className="gap-2 w-full sm:w-auto shrink-0 bg-slate-900 text-slate-50 hover:bg-slate-900/90"
+                            >
+                              {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                              {isSyncing ? "Setting up..." : "Set Up Bid Management App"}
+                            </Button>
+                          )}
                         </>
                       )}
-                      {config.bidManagementSpreadsheetId && (
+                      {config.bidManagementSpreadsheetId && !isVolunteer && (
                         <Button 
                           variant="outline" 
                           size="sm"
@@ -416,10 +486,12 @@ export default function App() {
                           <Users className="w-4 h-4" />
                           <span className="hidden sm:inline">Bidders</span>
                         </TabsTrigger>
-                        <TabsTrigger value="items" className="gap-2 px-4 py-2">
-                          <ShoppingBag className="w-4 h-4" />
-                          <span className="hidden sm:inline">Items</span>
-                        </TabsTrigger>
+                        {!isVolunteer && (
+                          <TabsTrigger value="items" className="gap-2 px-4 py-2">
+                            <ShoppingBag className="w-4 h-4" />
+                            <span className="hidden sm:inline">Items</span>
+                          </TabsTrigger>
+                        )}
                         {!isAuctionClosed && (
                           <TabsTrigger value="bids" className="gap-2 px-4 py-2">
                             <CreditCard className="w-4 h-4" />

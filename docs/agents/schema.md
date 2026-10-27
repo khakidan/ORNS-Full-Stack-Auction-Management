@@ -28,6 +28,10 @@ This sheet tracks all event registrations, active bidders, and their checkout/pa
 | **Column M** | `Receipt Emailed At` | String (ISO) | **Automated Field**: when this bidder's receipt was last emailed (`emailService.ts`'s `recordReceiptEmailed`) |
 | **Column N** | `Receipt Emailed Invoice` | String | **Automated Field**: the invoice link that email carried. Email All skips a bidder whose Column N equals their current Column J, so a re-run never re-sends an unchanged receipt. Clear it to force a re-send |
 
+### Sheet: 'Auction-Status'
+
+`A2` holds the auction's state as text: `Prep`, `Live` or `Closed` (`server/utils/auctionState.ts`, mirrored in `src/lib/auctionState.ts`). It only moves forward from the app: **Go Live** (`POST /api/auction/go-live`, Prep -> Live only) and **Close Auction** (`/api/auction/close-and-cleanup`, writes `Closed`); Setup New Auction Year resets it to `Prep`. Going back is a manual edit of the cell. A sheet from before the three states holds a checkbox boolean: `TRUE` reads as Prep and `FALSE` as Closed; blank or unrecognized reads as Prep. Live behaves exactly like Prep for now - it is there for the user-role work in `ROADMAP.md`.
+
 ### Sheet: 'Bug-Reports'
 
 A separate, dedicated spreadsheet (its ID lives in `Config.bugReportsSpreadsheetId`, not the Bid-Management one) - the central catalog every in-app bug report (the floating button/Ctrl-Cmd-Shift-B dialog, `src/hooks/useBugReportState.ts`) writes to via `POST /api/bug-reports` (`server/routes/bugReportRoutes.ts`). See `AGENTS.md`'s "Bug Report Lifecycle" section for how to close one out once fixed.
@@ -93,6 +97,51 @@ Firestore is utilized to synchronize system configuration, active operational pa
     (plus two legacy keys, `spreadsheetId` and `googleScriptId`) for
     components not yet reading from context directly. `saveConfig()`
     requires an authenticated Firebase user and rejects writes otherwise.
+
+### Spreadsheet: Action History (`Actions` tab)
+
+Who did what this season (`server/services/actionHistoryRows.ts`). Created by **Settings > Action History > Create Action History spreadsheet** in the Auction/General Auction Info/Template Files folder (`DRIVE_TEMPLATE_FILES_FOLDER_ID`), next to the master Bid Management and Item Entry spreadsheets; its ID is kept in Firestore `system/actionHistory` (`{ spreadsheetId, createdBy, createdAt }`, server-only - not in the shared Config, so `firestore.rules` didn't change). Archived as "{year} Action History" with the other spreadsheets, and cleared (`A2:O`) by Setup New Auction Year after the backup.
+
+| Col | Header | Notes |
+|---|---|---|
+| A | Action ID | `yyyymmdd-hhmmss-xxxxxx`, unique |
+| B | Timestamp | ISO |
+| C | Who | Signed-in address (a volunteer's own email, later) |
+| D | Role | Full Administrator / Administrator / User; "Spreadsheet editor" for sheet edits |
+| E | Source | `App`, or `Sheet edit` (written by the Items/Tickets scripts' `ActionHistoryTracking.gs` on-edit trigger) |
+| F | Area | Bid Management / Auction Items / Tickets / Settings / Users |
+| G | Action | e.g. Record winning bid, Edit item, Bundle items, Edit attendee |
+| H | Target | e.g. Item 312, Bidder 104, `'tickets'!F57` |
+| I | Summary | One readable line |
+| J / K | Before / After | Values (JSON when not plain text) |
+| L | Location | Spreadsheet and range written |
+| M | Undo | Blank (undoable), `Undone by ... at ...`, or `Can't be undone: <reason>` |
+| N | Undo of | On an Undo row: the Action ID it reversed |
+| O | Undo Data | JSON `UndoSpec` (`server/utils/undoSpec.ts`) - what Undo needs; blank = not undoable |
+
+Written RAW by the app (typed text is never run as a formula). If the spreadsheet isn't set up or a write fails, the row goes to Cloud Logging (`jsonPayload.actionLog`) instead.
+
+### Collection: `volunteers` (server-only)
+
+Volunteer access (`server/services/volunteerService.ts`). Auto-generated document IDs.
+
+*   `email`, `name`: who was invited (re-inviting an address reuses its record)
+*   `status`: `invited` (link sent) -> `active` (link used) -> `deactivated` (the auction closed) or `revoked` (an admin ended it)
+*   `tokenHash`: SHA-256 of the one-time link token, cleared once used, revoked or deactivated - the token itself is never stored
+*   `invitedBy` / `invitedAt`, `redeemedAt`, `lastSeenAt` (at most once a minute), `deactivatedAt` / `deactivatedReason`
+
+`system/volunteerAuth` holds the shared volunteer account's stored sign-in: `{ refreshToken, email, connectedBy, connectedAt }`.
+
+### Collection: `users` (server-only)
+
+Staff roles (`server/services/userService.ts`). Document ID = the lowercased @orns.org address.
+
+*   `email`: the address
+*   `role`: `"full_admin"` or `"admin"` (or `"user"` after a role is removed). No document, or no role, means User
+*   `assignedBy` / `assignedAt`: who gave the role, and when
+*   `lastLoginAt`: set on every sign-in, so the Users tab lists everyone who has used the app
+
+`FULL_ADMIN_EMAILS` addresses are Full Administrators whatever this collection says. Only the server reads or writes it (firebase-admin); `firestore.rules`' default deny keeps browsers out.
 
 ---
 

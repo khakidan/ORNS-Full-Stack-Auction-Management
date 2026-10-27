@@ -190,11 +190,18 @@ async function addItemLocked(sheets: sheets_v4.Sheets, params: AddItemParams): P
  *
  * Wrapped in withLock - see addItem's docblock for why.
  */
-export async function deleteItem(sheets: sheets_v4.Sheets, params: DeleteItemParams): Promise<{ success: boolean }> {
+/** What a delete changed, for Action History (DeleteItemResult.before is the row's old status). */
+export interface DeleteItemResult {
+  success: boolean;
+  name: string;
+  before: { status: string };
+}
+
+export async function deleteItem(sheets: sheets_v4.Sheets, params: DeleteItemParams): Promise<DeleteItemResult> {
   return withLock(`auction-items:${params.spreadsheetId}`, () => deleteItemLocked(sheets, params));
 }
 
-async function deleteItemLocked(sheets: sheets_v4.Sheets, params: DeleteItemParams): Promise<{ success: boolean }> {
+async function deleteItemLocked(sheets: sheets_v4.Sheets, params: DeleteItemParams): Promise<DeleteItemResult> {
   const { spreadsheetId, rowIndex } = params;
 
   const baseNumbers = await fetchCategoryBases(sheets, spreadsheetId);
@@ -207,6 +214,7 @@ async function deleteItemLocked(sheets: sheets_v4.Sheets, params: DeleteItemPara
 
   const row = values[rowIndex - 1];
   const category = row[ITEM_COL.category];
+  const previousStatus = String(row[ITEM_COL.status] ?? "");
 
   row[ITEM_COL.id] = "";
   row[ITEM_COL.status] = "Deleted";
@@ -224,7 +232,7 @@ async function deleteItemLocked(sheets: sheets_v4.Sheets, params: DeleteItemPara
 
   clearCacheForSpreadsheet(spreadsheetId);
 
-  return { success: true };
+  return { success: true, name: String(row[ITEM_COL.name] ?? ""), before: { status: previousStatus } };
 }
 
 /** Fields update-item / bulk-update-items can set, and their A-L column (allowMultipleWinners, in M, is handled separately). */
@@ -243,11 +251,19 @@ const ALLOW_MULTIPLE_WINNERS_FIELD = "allowMultipleWinners";
  * can't land between another writer's read and its whole-range rewrite
  * and be lost.
  */
-export async function updateItem(sheets: sheets_v4.Sheets, params: UpdateItemParams): Promise<{ success: boolean; affected_categories: string[] }> {
+/** `before` holds the changed fields' old values and `name` the item's name after the edit, for Action History. */
+export interface UpdateItemResult {
+  success: boolean;
+  affected_categories: string[];
+  name: string;
+  before: Record<string, unknown>;
+}
+
+export async function updateItem(sheets: sheets_v4.Sheets, params: UpdateItemParams): Promise<UpdateItemResult> {
   return withLock(`auction-items:${params.spreadsheetId}`, () => updateItemLocked(sheets, params));
 }
 
-async function updateItemLocked(sheets: sheets_v4.Sheets, params: UpdateItemParams): Promise<{ success: boolean; affected_categories: string[] }> {
+async function updateItemLocked(sheets: sheets_v4.Sheets, params: UpdateItemParams): Promise<UpdateItemResult> {
   const { spreadsheetId, rowIndex, changes, expectedName } = params;
 
   const fields = Object.keys(changes);
@@ -272,8 +288,10 @@ async function updateItemLocked(sheets: sheets_v4.Sheets, params: UpdateItemPara
   }
 
   const oldCategory = row[ITEM_COL.category];
+  const before: Record<string, unknown> = {};
   for (const field of fields) {
     if (!isItemField(field)) continue;
+    before[field] = row[ITEM_FIELD_MAPPING[field]] ?? "";
     row[ITEM_FIELD_MAPPING[field]] = changes[field];
   }
 
@@ -286,6 +304,9 @@ async function updateItemLocked(sheets: sheets_v4.Sheets, params: UpdateItemPara
   }
 
   if (ALLOW_MULTIPLE_WINNERS_FIELD in changes) {
+    const old = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'Auction-Items'!M${rowIndex}` });
+    const oldCell = old.data.values?.[0]?.[0];
+    before[ALLOW_MULTIPLE_WINNERS_FIELD] = oldCell === true || String(oldCell ?? "").toUpperCase() === "TRUE";
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `'Auction-Items'!M${rowIndex}`,
@@ -316,7 +337,7 @@ async function updateItemLocked(sheets: sheets_v4.Sheets, params: UpdateItemPara
 
   clearCacheForSpreadsheet(spreadsheetId);
 
-  return { success: true, affected_categories: Array.from(affectedCategories) };
+  return { success: true, affected_categories: Array.from(affectedCategories), name: String(row[ITEM_COL.name] ?? ""), before };
 }
 
 /**
@@ -324,11 +345,18 @@ async function updateItemLocked(sheets: sheets_v4.Sheets, params: UpdateItemPara
  *
  * Wrapped in withLock - see addItem's docblock for why.
  */
-export async function bulkUpdateItems(sheets: sheets_v4.Sheets, params: BulkUpdateParams): Promise<{ success: boolean; affected_categories: string[] }> {
+/** `rows` holds each changed row's old value, for Action History. */
+export interface BulkUpdateResult {
+  success: boolean;
+  affected_categories: string[];
+  rows: { rowIndex: number; name: string; before: unknown }[];
+}
+
+export async function bulkUpdateItems(sheets: sheets_v4.Sheets, params: BulkUpdateParams): Promise<BulkUpdateResult> {
   return withLock(`auction-items:${params.spreadsheetId}`, () => bulkUpdateItemsLocked(sheets, params));
 }
 
-async function bulkUpdateItemsLocked(sheets: sheets_v4.Sheets, params: BulkUpdateParams): Promise<{ success: boolean; affected_categories: string[] }> {
+async function bulkUpdateItemsLocked(sheets: sheets_v4.Sheets, params: BulkUpdateParams): Promise<BulkUpdateResult> {
   const { spreadsheetId, rowIndices, field, value } = params;
 
   const baseNumbers = await fetchCategoryBases(sheets, spreadsheetId);
@@ -339,12 +367,14 @@ async function bulkUpdateItemsLocked(sheets: sheets_v4.Sheets, params: BulkUpdat
   const colIdx = ITEM_FIELD_MAPPING[field];
 
   const affectedCategories = new Set<string>();
+  const changedRows: BulkUpdateResult["rows"] = [];
 
   for (const rowIndex of rowIndices) {
     if (!values[rowIndex - 1]) continue;
     const row = values[rowIndex - 1];
     const oldCategory = row[ITEM_COL.category];
-    
+
+    changedRows.push({ rowIndex, name: String(row[ITEM_COL.name] ?? ""), before: row[colIdx] ?? "" });
     row[colIdx] = value;
 
     if (field === 'category') {
@@ -369,5 +399,5 @@ async function bulkUpdateItemsLocked(sheets: sheets_v4.Sheets, params: BulkUpdat
 
   clearCacheForSpreadsheet(spreadsheetId);
 
-  return { success: true, affected_categories: Array.from(affectedCategories) };
+  return { success: true, affected_categories: Array.from(affectedCategories), rows: changedRows };
 }

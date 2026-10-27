@@ -9,6 +9,7 @@ import { PayPalService, isPaidInvoiceStatus } from "./paypalService";
 import { buildBidderReceiptWithInvoice, DEFAULT_SHEET_NAMES } from "./receiptDataService";
 import { findExistingWins, isRepeatableItem, WinningBidConflictError } from "../utils/winningBidChecks";
 import { BIDDER_COL, TICKETS_COL } from "../utils/sheetColumns";
+import { AUCTION_STATE_CELL, parseAuctionState } from "../utils/auctionState";
 import { findBidderColumn, findBidderRowIndex, firstEmptyBidRow } from "../utils/bidGrid";
 
 export interface RecordWinningBidParams {
@@ -30,6 +31,8 @@ export interface WinningBidResult {
   followUpAdded: boolean;
   /** This exact bid (same bidder, same price) was already in the sheet, so nothing was written. */
   alreadyRecorded?: boolean;
+  /** The two grid cells written (item number, price), for Action History. */
+  range?: string;
 }
 
 export interface CheckoutParams {
@@ -120,10 +123,11 @@ async function recordWinningBidLocked(
 
   // 4. Write the bid in the bidder's first empty row (and the Follow-Up row).
   const rowIndex = firstEmptyBidRow(values, colIndex);
+  const range = `${bidManagementSheet}!${getColumnLetter(colIndex)}${rowIndex}:${getColumnLetter(colIndex + 1)}${rowIndex}`;
   const operations: SheetOp[] = [{
     type: 'UPDATE',
     spreadsheetId,
-    range: `${bidManagementSheet}!${getColumnLetter(colIndex)}${rowIndex}:${getColumnLetter(colIndex + 1)}${rowIndex}`,
+    range,
     newValues: [[itemId, price]]
   }];
   if (isCheckedOut) {
@@ -132,7 +136,7 @@ async function recordWinningBidLocked(
   }
 
   await executeGoogleSheetsTransaction(sheets, operations);
-  return { success: true, followUpAdded: isCheckedOut };
+  return { success: true, followUpAdded: isCheckedOut, range };
 }
 
 /**
@@ -349,6 +353,37 @@ async function checkoutMarkPaidLocked(
 }
 
 /**
+ * Moves the auction from Prep to Live. Refuses from any other state: the
+ * states only move forward, and a Live or Closed auction going back is a
+ * manual spreadsheet edit.
+ */
+export async function goLiveAuction(
+  sheets: sheets_v4.Sheets,
+  params: { spreadsheetId: string }
+): Promise<{ state: "live" }> {
+  const { spreadsheetId } = params;
+  const current = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: "'Auction-Status'!A2",
+    valueRenderOption: "UNFORMATTED_VALUE"
+  });
+  const state = parseAuctionState(current.data.values?.[0]?.[0]);
+  if (state !== "prep") {
+    throw new AuctionStateError(`The auction is already ${state === "live" ? "Live" : "Closed"}; it can only go Live from Prep.`);
+  }
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: "'Auction-Status'!A2",
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [[AUCTION_STATE_CELL.live]] }
+  });
+  return { state: "live" };
+}
+
+/** An auction-state change the current state doesn't allow (the route answers 409). */
+export class AuctionStateError extends Error {}
+
+/**
  * Closes the auction and marks bidders who didn't win anything as ready for checkout.
  */
 export async function closeAuctionAndCleanup(
@@ -362,7 +397,7 @@ export async function closeAuctionAndCleanup(
     spreadsheetId,
     range: "'Auction-Status'!A2",
     valueInputOption: "USER_ENTERED",
-    requestBody: { values: [[false]] }
+    requestBody: { values: [[AUCTION_STATE_CELL.closed]] }
   });
 
   // 2. Determine Winners

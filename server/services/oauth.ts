@@ -19,6 +19,9 @@ export const SCOPES = [
   "https://www.googleapis.com/auth/presentations",
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/script.external_request",
+  // The Items and Tickets scripts install the Action History on-edit
+  // trigger (ActionHistoryTracking.gs), which needs this in their manifest.
+  "https://www.googleapis.com/auth/script.scriptapp",
   "openid",
   "https://www.googleapis.com/auth/userinfo.email"
 ];

@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { logAction } from '../services/actionLog';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { addItem, deleteItem, updateItem, bulkUpdateItems, ItemChangedError } from '../services/itemService';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
@@ -16,8 +17,8 @@ export default function createItemRouter() {
     }
 
     try {
-      const outcome = await withIdempotency("auction/add-item", idempotencyKey, () =>
-        addItem(sheetsFor(req), {
+      const outcome = await withIdempotency("auction/add-item", idempotencyKey, async () => {
+        const result = await addItem(sheetsFor(req), {
           spreadsheetId,
           category,
           name,
@@ -26,8 +27,18 @@ export default function createItemRouter() {
           donor,
           itemType,
           allowMultipleWinners: !!allowMultipleWinners
-        })
-      );
+        });
+        await logAction(req, {
+          area: "Auction Items",
+          action: "Add item",
+          target: `Item ${result.assigned_id}`,
+          summary: `Added "${name}" (${category}) as item ${result.assigned_id}`,
+          after: { category, name, description, value, donor, itemType, allowMultipleWinners: !!allowMultipleWinners },
+          location: `Auction Items 'Auction-Items' row ${result.rowIndex}`,
+          undo: { kind: "item-add", spreadsheetId, rowIndex: result.rowIndex, name },
+        });
+        return result;
+      });
       res.json(idempotentBody(outcome));
     } catch (error: any) {
       console.error("[Server Error] add-item:", error);
@@ -48,6 +59,16 @@ export default function createItemRouter() {
       const outcome = await withIdempotency("auction/delete-item", idempotencyKey, async () => {
         const result = await deleteItem(sheetsFor(req), { spreadsheetId, rowIndex });
         clearCacheForSpreadsheet(spreadsheetId);
+        await logAction(req, {
+          area: "Auction Items",
+          action: "Delete item",
+          target: result.name,
+          summary: `Deleted "${result.name}"`,
+          before: result.before,
+          after: { status: "Deleted" },
+          location: `Auction Items 'Auction-Items' row ${rowIndex}`,
+          undo: { kind: "items", spreadsheetId, rows: [{ rowIndex, name: result.name, before: result.before, after: { status: "Deleted" } }] },
+        });
         return result;
       });
       res.json(idempotentBody(outcome));
@@ -69,6 +90,16 @@ export default function createItemRouter() {
 
     try {
       const result = await updateItem(sheetsFor(req), { spreadsheetId, rowIndex, changes, expectedName });
+      await logAction(req, {
+        area: "Auction Items",
+        action: "Edit item",
+        target: result.name,
+        summary: `Edited "${result.name}": ${Object.keys(changes).join(", ")}`,
+        before: result.before,
+        after: changes,
+        location: `Auction Items 'Auction-Items' row ${rowIndex}`,
+        undo: { kind: "items", spreadsheetId, rows: [{ rowIndex, name: result.name, before: result.before, after: changes }] },
+      });
       res.json(result);
     } catch (error: any) {
       console.error("[Server Error] update-item:", error);
@@ -90,9 +121,20 @@ export default function createItemRouter() {
     }
 
     try {
-      const outcome = await withIdempotency("auction/bulk-update-items", idempotencyKey, () =>
-        bulkUpdateItems(sheetsFor(req), { spreadsheetId, rowIndices, field, value })
-      );
+      const outcome = await withIdempotency("auction/bulk-update-items", idempotencyKey, async () => {
+        const result = await bulkUpdateItems(sheetsFor(req), { spreadsheetId, rowIndices, field, value });
+        await logAction(req, {
+          area: "Auction Items",
+          action: "Bulk edit items",
+          target: `${result.rows.length} item(s)`,
+          summary: `Set ${field} to "${value}" on ${result.rows.map((r) => `"${r.name}"`).join(", ")}`,
+          before: result.rows.map((r) => ({ item: r.name, [field]: r.before })),
+          after: { [field]: value },
+          location: "Auction Items 'Auction-Items'",
+          undo: { kind: "items", spreadsheetId, rows: result.rows.map((r) => ({ rowIndex: r.rowIndex, name: r.name, before: { [field]: r.before }, after: { [field]: value } })) },
+        });
+        return result;
+      });
       res.json(idempotentBody(outcome));
     } catch (error: any) {
       console.error("[Server Error] bulk-update-items:", error);

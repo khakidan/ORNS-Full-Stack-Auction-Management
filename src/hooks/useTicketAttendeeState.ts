@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { updateSheetData } from "@/services/google-api";
+import { updateAttendeeCells } from "@/services/google-api";
 import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { hasMoreGuestsThanTicketsPurchased } from "@/lib/attendeeValidation";
 import { guestColumnsForSheet, guestRowIndicesForSheet, paymentColumnsForSheet, GuestSlotIndex } from "@/lib/attendeeSheetColumns";
@@ -109,7 +109,7 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
     }));
 
     // Background sync
-    updateSheetData(spreadsheetId, `${attendee.sheet}!${col}${attendee.rowIndex}`, [[newValue]])
+    updateAttendeeCells(spreadsheetId, `${attendee.sheet}!${col}${attendee.rowIndex}`, [[newValue]])
       .then(() => toast.success("Updated successfully"))
       .catch(e => {
         console.error(e);
@@ -132,7 +132,7 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
 
     // Background sync
     const col = paymentColumnsForSheet(attendee.sheet).paymentStatus;
-    updateSheetData(spreadsheetId, `${attendee.sheet}!${col}${attendee.rowIndex}`, [[newStatus]])
+    updateAttendeeCells(spreadsheetId, `${attendee.sheet}!${col}${attendee.rowIndex}`, [[newStatus]])
       .then(() => toast.success("Payment status updated"))
       .catch(e => {
         console.error(e);
@@ -170,7 +170,7 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
     const lastCol = cols.ownBidderNumber || cols.email;
     if (cols.ownBidderNumber) values.push(guest.ownBidderNumber);
 
-    updateSheetData(spreadsheetId, `${attendee.sheet}!${cols.firstName}${attendee.rowIndex}:${lastCol}${attendee.rowIndex}`, [values])
+    updateAttendeeCells(spreadsheetId, `${attendee.sheet}!${cols.firstName}${attendee.rowIndex}:${lastCol}${attendee.rowIndex}`, [values])
       .then(() => toast.success("Guest added successfully"))
       .catch(e => {
         console.error(e);
@@ -193,7 +193,7 @@ export function useTicketAttendeeState({ attendees, setAttendees, addAttendee, r
     const lastCol = cols.ownBidderNumber || cols.email;
     if (cols.ownBidderNumber) values.push("");
 
-    updateSheetData(spreadsheetId, `${attendee.sheet}!${cols.firstName}${attendee.rowIndex}:${lastCol}${attendee.rowIndex}`, [values])
+    updateAttendeeCells(spreadsheetId, `${attendee.sheet}!${cols.firstName}${attendee.rowIndex}:${lastCol}${attendee.rowIndex}`, [values])
       .then(() => toast.success("Guest removed"))
       .catch(e => {
         console.error(e);

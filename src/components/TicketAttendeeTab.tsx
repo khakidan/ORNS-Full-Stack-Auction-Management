@@ -16,6 +16,7 @@ import { AttendeesList } from "@/components/AttendeesList";
 import { AddAttendeeDialog } from "@/components/AddAttendeeDialog";
 import { EditAttendeeDialog } from "@/components/EditAttendeeDialog";
 import { useAuction } from "@/context/AuctionContext";
+import { useAuth } from "@/context/AuthContext";
 import { useConfig } from "@/context/ConfigContext";
 import { useTicketAttendeeState } from "@/hooks/useTicketAttendeeState";
 
@@ -35,6 +36,7 @@ export default function TicketAttendeeTab() {
   const { config } = useConfig();
   const spreadsheetId = config.auctionTicketsSpreadsheetId;
   const { attendees, setAttendees, attendeesLoading, addAttendee, removeAttendee, fetchAttendees, isAuctionClosed } = useAuction();
+  const { can } = useAuth();
 
   const state = useTicketAttendeeState({ attendees, setAttendees, addAttendee, removeAttendee, spreadsheetId });
 
@@ -97,6 +99,7 @@ export default function TicketAttendeeTab() {
           attendees={state.filteredAttendees}
           loading={attendeesLoading}
           isAuctionClosed={isAuctionClosed}
+          canDelete={can("attendees.delete")}
           onEdit={state.setAttendeeToEdit}
           onUpdatePaymentStatus={state.updatePaymentStatus}
           onDeleteRequest={state.setAttendeeToDelete}

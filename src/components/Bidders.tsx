@@ -1,6 +1,7 @@
 // src/components/Bidders.tsx
 import { useAuction } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
+import { useAuth } from "@/context/AuthContext";
 import { ListPageCard } from "@/components/ui/ListPageCard";
 import { Badge } from "@/components/ui/badge";
 import { FilterToolbar } from "@/components/FilterToolbar";
@@ -13,6 +14,7 @@ import { useBiddersState } from "@/hooks/useBiddersState";
 export default function Bidders() {
   const { bidders, loading, checkInBidder, markBidderAsProxy, fetchBidders, fetchAttendees, attendees, isAuctionClosed } = useAuction();
   const { config } = useConfig();
+  const { can } = useAuth();
   const spreadsheetId = config.bidManagementSpreadsheetId;
   const ticketsSpreadsheetId = config.auctionTicketsSpreadsheetId;
   const ticketPrice = config.ticketPrice;
@@ -56,7 +58,7 @@ export default function Bidders() {
         }
         trailing={
           <>
-            {!isAuctionClosed && (
+            {!isAuctionClosed && can("bidders.walkIn") && (
               <WalkInTicketDialog
                 open={state.isWalkInOpen}
                 onOpenChange={state.setIsWalkInOpen}

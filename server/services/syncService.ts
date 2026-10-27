@@ -346,6 +346,17 @@ function bidManagementFormatRequests(bmSheetId: number, bidderCount: number): sh
 }
 
 /**
+ * Whether "Set Up Bid Management App" has been run on this spreadsheet:
+ * its "Bid-Management" grid tab exists. Only the full setup creates that
+ * tab (bidder labels build just Bidder-Numbers early), and the new-year
+ * rollover deletes it, so this reads false again for the next auction.
+ */
+export async function isBidManagementSetUp(sheets: sheets_v4.Sheets, spreadsheetId: string): Promise<boolean> {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets.properties.title" });
+  return (meta.data.sheets || []).some((s) => s.properties?.title === "Bid-Management");
+}
+
+/**
  * "Set Up Bid Management App": backs up any existing Bid-Management and
  * Bidder-Numbers tabs, then rebuilds both from the Auction Tickets
  * spreadsheet. Refused once walk-ins exist (assertNoWalkInsRegistered).

@@ -149,7 +149,7 @@ export type PaypalSweepOutcome =
 
 /**
  * GET /api/paypal-sweeper/status's response shape - drives the
- * Configuration page's sweeper status card, the only way to confirm
+ * Settings page's sweeper status card, the only way to confirm
  * from inside the app (rather than server logs) that the two manual-only
  * steps from Code Hardening item #2 have actually happened: an admin
  * signing in once (credentialConfigured), and the background job running
@@ -176,4 +176,6 @@ export interface ArchivedAuction {
   folderLink: string | null;
   bidManagementSpreadsheetId: string | null;
   itemsSpreadsheetId: string | null;
+  /** "{year} Action History" - who did what that season (absent from older lookups). */
+  actionHistorySpreadsheetId?: string | null;
 }

@@ -13,6 +13,7 @@ import createProductionRouter from './routes/productionRoutes';
 import createAppsScriptRouter from './routes/appsScriptRoutes';
 import createBugReportRouter from './routes/bugReportRoutes';
 import createSchedulerRouter from './routes/schedulerRoutes';
+import createVolunteerAuthRouter from './routes/volunteerAuthRoutes';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -24,9 +25,25 @@ declare global {
     interface Request {
       session: {
         tokens?: import('../src/types').GoogleTokens;
+        /** The signed-in staff member's @orns.org address, set by /auth/callback. */
+        email?: string;
         /** One-time OAuth `state`, set by /auth/url and consumed by /auth/callback. */
         oauthState?: string;
+        /** Set when the OAuth flow is connecting the shared volunteer account, not signing someone in. */
+        oauthPurpose?: "volunteer-account";
+        /** A volunteer's session (no Google tokens of their own). */
+        volunteer?: { id: string; email: string };
       } | null;
+      /** Who is asking - set by requireAuth. */
+      user?: {
+        email: string;
+        role: import('./utils/permissions').UserRole;
+        capabilities: import('./utils/permissions').Capability[];
+        /** Set for volunteers. */
+        volunteerId?: string;
+      };
+      /** For volunteers: the shared volunteer account's Google client, set by requireAuth. */
+      googleAuth?: import('google-auth-library').OAuth2Client;
     }
   }
 }
@@ -87,6 +104,7 @@ app.use(
 // Setup Base Routes (Mounting everything cleanly)
 app.use("/api/health", healthRouter);
 app.use(authRoutes);
+app.use(createVolunteerAuthRouter());
 app.use("/api/receipts", createReceiptsRouter());
 app.use("/api/auction", createSetupRouter());
 app.use("/api/production", createProductionRouter());

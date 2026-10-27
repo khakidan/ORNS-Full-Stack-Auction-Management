@@ -12,7 +12,8 @@ import { useApiAuthStatus } from "@/hooks/useApiAuthStatus";
  * /auth/status request.
  */
 export function useGoogleAuth() {
-  const { isApiAuthenticated: authenticated, checkProviderAuth } = useApiAuthStatus();
+  const { isApiAuthenticated: authenticated, user, signedOutReason, checkProviderAuth } = useApiAuthStatus();
+  const isVolunteer = user?.role === "volunteer";
 
   // Mirrors `authenticated` for the poll below to read without being in
   // its dependency array (which would tear down/recreate the interval
@@ -36,6 +37,15 @@ export function useGoogleAuth() {
 
     return () => clearInterval(interval);
   }, [checkProviderAuth]);
+
+  // A volunteer's access ends when the auction closes (or an organizer
+  // revokes it). Re-check every 30 seconds so their screen says so instead
+  // of every request quietly failing.
+  useEffect(() => {
+    if (!isVolunteer) return;
+    const interval = setInterval(checkProviderAuth, 30000);
+    return () => clearInterval(interval);
+  }, [isVolunteer, checkProviderAuth]);
 
   const handleLogin = async () => {
     // /auth/callback's page reads this back to return the user to the
@@ -67,5 +77,5 @@ export function useGoogleAuth() {
     await checkProviderAuth();
   };
 
-  return { authenticated, handleLogin, handleLogout };
+  return { authenticated, user, signedOutReason, handleLogin, handleLogout };
 }

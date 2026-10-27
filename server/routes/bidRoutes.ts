@@ -1,13 +1,15 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { getAuthenticatedClient } from '../services/oauth';
+import { requirePermission } from '../middleware/requirePermission';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { registerWalkInBidder, checkInBidderWithBid, setBidderFlag, BIDDER_FLAG_COLUMNS } from '../services/bidderService';
-import { recordWinningBid, checkoutMarkPaid, closeAuctionAndCleanup } from '../services/auctionService';
+import { recordWinningBid, checkoutMarkPaid, closeAuctionAndCleanup, goLiveAuction, AuctionStateError } from '../services/auctionService';
 import { requireAuth } from '../middleware/requireAuth';
 import { saveSpecialWinner, SPECIAL_PRIZES } from '../services/specialWinnerService';
 import { getPaypalIsSandbox } from '../services/sharedConfig';
-import { sheetsFor } from '../utils/googleClients';
+import { sheetsFor, googleAuthFor } from '../utils/googleClients';
+import { logAction } from '../services/actionLog';
+import { deactivateAllVolunteers, forgetAuctionState } from '../services/volunteerService';
 
 export default function createBidRouter() {
   const router = Router();
@@ -57,6 +59,17 @@ export default function createBidRouter() {
         });
 
         clearCacheForSpreadsheet(spreadsheetId);
+        if (!result.alreadyRecorded && result.range) {
+          await logAction(req, {
+            area: "Bid Management",
+            action: "Record winning bid",
+            target: `Item ${itemId}`,
+            summary: `Bidder ${bidderId} won item ${itemId} for $${numericPrice.toFixed(2)}${result.followUpAdded ? " (already checked out - added to Follow-Up)" : ""}`,
+            after: { bidderId, itemId, price: numericPrice },
+            location: `Bid Management ${result.range}`,
+            undo: { kind: "cells", spreadsheetId, range: result.range, before: [["", ""]], after: [[itemId, numericPrice]], lock: `bidder-numbers:${spreadsheetId}` },
+          });
+        }
         return result;
         // Durable: a bid saved on a device while offline can be resent
         // hours later, after Cloud Run has restarted (Milestone A).
@@ -94,7 +107,7 @@ export default function createBidRouter() {
 
     try {
       const outcome = await withIdempotency("auction/checkout-mark-paid", idempotencyKey, async () => {
-        const client = getAuthenticatedClient(req.session.tokens);
+        const client = googleAuthFor(req);
 
         const result = await checkoutMarkPaid(client, {
           bidderId: String(bidderId),
@@ -111,6 +124,14 @@ export default function createBidRouter() {
 
         clearCacheForSpreadsheet(spreadsheetId);
         if (ticketsSpreadsheetId) clearCacheForSpreadsheet(ticketsSpreadsheetId);
+        await logAction(req, {
+          area: "Bid Management",
+          action: result.deferred ? "Checkout (PayPal pending)" : "Checkout / mark paid",
+          target: `Bidder ${bidderId}`,
+          summary: `Checked out bidder ${bidderId} by ${paymentMethod || "cash"}${result.deferred ? " - PayPal payment not confirmed yet" : ""}`,
+          after: { paymentMethod: paymentMethod || "cash", deferred: !!result.deferred },
+          notUndoableReason: "payments and PayPal invoices are handled outside the app",
+        });
         return result;
       });
       const body = idempotentBody(outcome);
@@ -133,7 +154,28 @@ export default function createBidRouter() {
     }
   });
 
-  router.post("/auction/close-and-cleanup", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/auction/go-live", requirePermission("auction.stage"), async (req: Request, res: Response, next: NextFunction) => {
+    const { spreadsheetId } = req.body;
+    if (!spreadsheetId) {
+      return res.status(400).json({ error: "Missing the Bid Management spreadsheet ID." });
+    }
+
+    try {
+      const result = await goLiveAuction(sheetsFor(req), { spreadsheetId });
+      clearCacheForSpreadsheet(spreadsheetId);
+      forgetAuctionState();
+      await logAction(req, { area: "Bid Management", action: "Go Live", summary: "Took the auction Live", notUndoableReason: "the auction only moves forward; go back to Prep by editing Auction-Status!A2 by hand" });
+      res.json(result);
+    } catch (error: any) {
+      console.error("[Route Error] go-live:", error);
+      if (error instanceof AuctionStateError) {
+        return res.status(409).json({ error: error.message });
+      }
+      next(error);
+    }
+  });
+
+  router.post("/auction/close-and-cleanup", requirePermission("auction.stage"), async (req: Request, res: Response, next: NextFunction) => {
     const { spreadsheetId, bidderNumbersSheet, bidManagementSheet } = req.body;
     if (!spreadsheetId || !bidderNumbersSheet || !bidManagementSheet) {
       return res.status(400).json({ error: "Missing required spreadsheet parameters for cleanup." });
@@ -149,6 +191,20 @@ export default function createBidRouter() {
       });
 
       clearCacheForSpreadsheet(spreadsheetId);
+      forgetAuctionState();
+      // Volunteers' access ends with the auction. requireAuth's Live check
+      // would end it within 30 seconds anyway; this makes it immediate and
+      // records why on each volunteer.
+      const volunteersEnded = await deactivateAllVolunteers("auction_closed").catch((e) => {
+        console.error("[Volunteers] Couldn't deactivate volunteers on close:", e);
+        return 0;
+      });
+      await logAction(req, {
+        area: "Bid Management",
+        action: "Close auction",
+        summary: `Closed the auction, checked out ${result.count} bidder(s) who won nothing, and ended ${volunteersEnded} volunteer(s)' access`,
+        notUndoableReason: "the auction only moves forward; reopen it by editing Auction-Status!A2 by hand",
+      });
 
       res.json(result);
     } catch (error: any) {
@@ -161,7 +217,7 @@ export default function createBidRouter() {
   });
 
   // Update walk-in to be transactional across sheets
-  router.post("/bidders/walk-in", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/bidders/walk-in", requirePermission("bidders.walkIn"), async (req: Request, res: Response, next: NextFunction) => {
     const {
       firstName, 
       lastName, 
@@ -195,6 +251,14 @@ export default function createBidRouter() {
 
         clearCacheForSpreadsheet(spreadsheetId);
         if (ticketsSpreadsheetId) clearCacheForSpreadsheet(ticketsSpreadsheetId);
+        await logAction(req, {
+          area: "Bid Management",
+          action: "Register walk-in",
+          target: result.bidder ? `Bidder ${result.bidder.id}` : undefined,
+          summary: `Registered walk-in ${firstName} ${lastName}${result.bidder ? ` as bidder ${result.bidder.id}` : ""}`,
+          after: { firstName, lastName, email, ticketPrice },
+          notUndoableReason: "a walk-in adds a ticket, a bidder and a bid sheet column together",
+        });
         return result;
       });
       res.json(idempotentBody(outcome));
@@ -217,7 +281,19 @@ export default function createBidRouter() {
     try {
       const outcome = await withIdempotency("auction/special-winner", idempotencyKey, async () => {
         const sheets = sheetsFor(req);
-        return saveSpecialWinner(sheets, { spreadsheetId, prize, bidderId: bidderId.trim(), addFollowUp: !!addFollowUp });
+        const winner = bidderId.trim();
+        const result = await saveSpecialWinner(sheets, { spreadsheetId, prize, bidderId: winner, addFollowUp: !!addFollowUp });
+        await logAction(req, {
+          area: "Bid Management",
+          action: "Set special winner",
+          target: SPECIAL_PRIZES[prize as keyof typeof SPECIAL_PRIZES].itemName,
+          summary: winner ? `${SPECIAL_PRIZES[prize as keyof typeof SPECIAL_PRIZES].itemName} winner: bidder ${winner}` : `Cleared the ${SPECIAL_PRIZES[prize as keyof typeof SPECIAL_PRIZES].itemName} winner`,
+          before: result.before || undefined,
+          after: winner || undefined,
+          location: `Bid Management ${result.range}`,
+          undo: { kind: "cells", spreadsheetId, range: result.range, before: [[result.before]], after: [[winner]], lock: `bidder-numbers:${spreadsheetId}` },
+        });
+        return result;
       });
       res.json(idempotentBody(outcome));
     } catch (error: any) {
@@ -237,7 +313,17 @@ export default function createBidRouter() {
       const sheets = sheetsFor(req);
       const result = await setBidderFlag(sheets, { spreadsheetId, bidderNumbersSheet, bidderId: String(bidderId), flag });
       clearCacheForSpreadsheet(spreadsheetId);
-      res.json(result);
+      await logAction(req, {
+        area: "Bid Management",
+        action: flag === "checkedIn" ? "Check in" : "Mark proxy bidder",
+        target: `Bidder ${bidderId}`,
+        summary: flag === "checkedIn" ? `Checked in bidder ${bidderId}` : `Marked bidder ${bidderId} as a proxy bidder`,
+        before: result.before,
+        after: true,
+        location: `Bid Management ${result.range}`,
+        undo: { kind: "cells", spreadsheetId, range: result.range, before: [[result.before]], after: [[true]], lock: `bidder-numbers:${spreadsheetId}` },
+      });
+      res.json({ success: result.success });
     } catch (error: any) {
       console.error("[Route Error] set-flag:", error);
       if (error.message?.includes("not found")) {
@@ -283,6 +369,14 @@ export default function createBidRouter() {
         });
 
         clearCacheForSpreadsheet(spreadsheetId);
+        await logAction(req, {
+          area: "Bid Management",
+          action: "Check in with ticket payment",
+          target: `Bidder ${bidderId}`,
+          summary: `Checked in bidder ${bidderId} and recorded their $${numericBidValue.toFixed(2)} ticket on their bid sheet`,
+          after: { bidValue: numericBidValue },
+          notUndoableReason: "it checks in and records a ticket purchase together",
+        });
         return result;
       });
       res.json(idempotentBody(outcome));

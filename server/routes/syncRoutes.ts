@@ -1,12 +1,14 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { sheetsFor } from '../utils/googleClients';
-import { performSheetSync } from '../services/syncService';
+import { logAction } from '../services/actionLog';
+import { requirePermission } from '../middleware/requirePermission';
+import { sheetsFor, respondIfNotFound } from '../utils/googleClients';
+import { performSheetSync, isBidManagementSetUp } from '../services/syncService';
 
 /** Builds Bidder-Numbers / Bid-Management from the ticket sheets (syncService.ts). */
 export default function createSyncRouter() {
   const router = Router();
 
-  router.post("/bidders/sync", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/bidders/sync", requirePermission("auction.stage"), async (req: Request, res: Response, next: NextFunction) => {
     const { spreadsheetId, auctionTicketSheetsID } = req.body;
     if (!spreadsheetId) {
       return res.status(400).json({ error: "spreadsheetId is required to sync and setup bid management." });
@@ -14,6 +16,12 @@ export default function createSyncRouter() {
 
     try {
       const result = await performSheetSync(sheetsFor(req), spreadsheetId, auctionTicketSheetsID);
+      await logAction(req, {
+        area: "Bid Management",
+        action: "Set Up Bid Management App",
+        summary: "Rebuilt Bidder-Numbers and the bid sheet from the ticket spreadsheet (the previous tabs were kept as backups)",
+        notUndoableReason: "the previous tabs were kept as renamed backups in the spreadsheet",
+      });
       res.json({ success: true, result });
     } catch (error: any) {
       console.error(`[Sync Route Error] Native synchronization flow failed:`, error);
@@ -24,6 +32,19 @@ export default function createSyncRouter() {
       if (error.message.includes("Cannot re-sync") || error.message.includes("Missing '")) {
         return res.status(400).json({ error: error.message });
       }
+      next(error);
+    }
+  });
+
+  router.get("/bidders/setup-status", async (req: Request, res: Response, next: NextFunction) => {
+    const spreadsheetId = req.query.spreadsheetId;
+    if (typeof spreadsheetId !== "string" || !spreadsheetId) {
+      return res.status(400).json({ error: "spreadsheetId is required." });
+    }
+    try {
+      res.json({ setUp: await isBidManagementSetUp(sheetsFor(req), spreadsheetId) });
+    } catch (error: any) {
+      if (respondIfNotFound(error, res)) return;
       next(error);
     }
   });

@@ -144,6 +144,10 @@ vi.mock("@/context/ConfigContext", () => ({
 
 const mockAddAttendee = vi.fn();
 
+vi.mock("@/context/AuthContext", () => ({
+  useAuth: () => ({ can: () => true }),
+}));
+
 vi.mock("@/context/AuctionContext", () => ({
   useAuction: () => ({
     attendees: mockAttendees,

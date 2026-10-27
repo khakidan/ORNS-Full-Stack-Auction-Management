@@ -21,6 +21,8 @@ function fakeSheets(existingTabs: string[]) {
         return { data: {} };
       },
       values: {
+        // The old winner, read so Action History can record it (not a write, so not logged).
+        get: async () => ({ data: { values: [["5"]] } }),
         update: async ({ range, requestBody }: any) => {
           log.push(`update ${range} ${JSON.stringify(requestBody.values)}`);
           return { data: {} };
@@ -38,8 +40,9 @@ function fakeSheets(existingTabs: string[]) {
 describe("saveSpecialWinner", () => {
   it("writes the gift card winner to Special-Winners!B2 and nothing else for a bidder still checking out", async () => {
     const { sheets, log } = fakeSheets(["Special-Winners", "Follow-Up"]);
-    await saveSpecialWinner(sheets, { spreadsheetId: "bm", prize: "giftCard", bidderId: "12", addFollowUp: false });
+    const result = await saveSpecialWinner(sheets, { spreadsheetId: "bm", prize: "giftCard", bidderId: "12", addFollowUp: false });
     expect(log).toEqual([`update 'Special-Winners'!B2 [["12"]]`]);
+    expect(result).toEqual({ success: true, range: "'Special-Winners'!B2", before: "5" });
   });
 
   it("writes the raffle winner to B3 and adds a Follow-Up row when they already checked out", async () => {

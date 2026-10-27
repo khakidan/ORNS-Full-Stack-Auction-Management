@@ -84,4 +84,23 @@ describe("AuthContext", () => {
     // the Provider calls it once, not once per consumer.
     expect(mockUseGoogleAuth).toHaveBeenCalledTimes(1);
   });
+
+  it("can() answers from the signed-in person's capabilities, and is false while signed out", () => {
+    mockUseGoogleAuth.mockReturnValue({
+      authenticated: true,
+      user: { email: "jane@orns.org", role: "admin", roleLabel: "Administrator", capabilities: ["auction.stage", "attendees.delete"] },
+      handleLogin: vi.fn(),
+      handleLogout: vi.fn(),
+    });
+    const { result, rerender } = renderHook(() => useAuth(), {
+      wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+    });
+
+    expect(result.current.can("auction.stage")).toBe(true);
+    expect(result.current.can("settings")).toBe(false);
+
+    mockUseGoogleAuth.mockReturnValue({ authenticated: false, user: null, handleLogin: vi.fn(), handleLogout: vi.fn() });
+    rerender();
+    expect(result.current.can("auction.stage")).toBe(false);
+  });
 });

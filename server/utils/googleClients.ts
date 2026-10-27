@@ -1,15 +1,25 @@
 import { Request, Response } from "express";
 import { google, sheets_v4, drive_v3 } from "googleapis";
+import { OAuth2Client } from "google-auth-library";
 import { getAuthenticatedClient } from "../services/oauth";
 
-/** A Sheets client acting as the signed-in staff member who sent `req`. */
-export function sheetsFor(req: Request): sheets_v4.Sheets {
-  return google.sheets({ version: "v4", auth: getAuthenticatedClient(req.session.tokens) });
+/**
+ * The Google identity a request acts as: the signed-in staff member's own
+ * sign-in, or - for a volunteer, who has none - the shared volunteer
+ * account requireAuth attached.
+ */
+export function googleAuthFor(req: Request): OAuth2Client {
+  return req.googleAuth ?? getAuthenticatedClient(req.session?.tokens);
 }
 
-/** A Drive client acting as the signed-in staff member who sent `req`. */
+/** A Sheets client acting as whoever sent `req` (see googleAuthFor). */
+export function sheetsFor(req: Request): sheets_v4.Sheets {
+  return google.sheets({ version: "v4", auth: googleAuthFor(req) });
+}
+
+/** A Drive client acting as whoever sent `req` (see googleAuthFor). */
 export function driveFor(req: Request): drive_v3.Drive {
-  return google.drive({ version: "v3", auth: getAuthenticatedClient(req.session.tokens) });
+  return google.drive({ version: "v3", auth: googleAuthFor(req) });
 }
 
 export const SPREADSHEET_NOT_FOUND = "Spreadsheet not found. Please check the Spreadsheet ID in Settings.";

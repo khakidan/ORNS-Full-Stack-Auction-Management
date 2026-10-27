@@ -1,16 +1,19 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { logAction } from '../services/actionLog';
+import { requirePermission } from '../middleware/requirePermission';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
 import { setupNewAuction } from '../services/auctionSetupService';
 import { requireAuth } from '../middleware/requireAuth';
 import { archiveAuctionSpreadsheets } from '../services/archiveService';
 import { isDriveId } from '../services/driveService';
+import { getActionHistorySpreadsheetId } from '../services/actionHistoryStore';
 
 export default function createSetupRouter() {
   const router = Router();
   router.use(requireAuth);
 
-  router.post("/setup-new", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/setup-new", requirePermission("settings"), async (req: Request, res: Response, next: NextFunction) => {
     const {
       ticketsSpreadsheetId, 
       itemEntrySpreadsheetId, 
@@ -48,6 +51,13 @@ export default function createSetupRouter() {
         onLog
       );
 
+      await logAction(req, {
+        area: "Settings",
+        action: "Set up new auction year",
+        target: `${result.auctionYear} Auction`,
+        summary: `Started the ${result.auctionYear} auction year: backed up last year's spreadsheets and cleared the masters`,
+        notUndoableReason: "the backups are in last year's folder",
+      });
       res.write(JSON.stringify({
         ...result,
         logs
@@ -77,7 +87,7 @@ export default function createSetupRouter() {
    * named for the Archived Auctions page, and clears nothing. Safe to run
    * again - the earlier copy goes to the Drive trash.
    */
-  router.post("/archive", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/archive", requirePermission("settings"), async (req: Request, res: Response, next: NextFunction) => {
     const { year, ticketsSpreadsheetId, itemEntrySpreadsheetId, bidManagementSpreadsheetId } = req.body || {};
     const parentFolderId = process.env.DRIVE_PARENT_FOLDER_ID;
 
@@ -97,9 +107,21 @@ export default function createSetupRouter() {
       const result = await archiveAuctionSpreadsheets(drive, {
         year,
         parentFolderId,
-        spreadsheets: { tickets: ticketsSpreadsheetId, items: itemEntrySpreadsheetId, bidManagement: bidManagementSpreadsheetId },
+        spreadsheets: {
+          tickets: ticketsSpreadsheetId,
+          items: itemEntrySpreadsheetId,
+          bidManagement: bidManagementSpreadsheetId,
+          actionHistory: (await getActionHistorySpreadsheetId()) || undefined,
+        },
         replaceExisting: true,
       }, (msg) => console.log(`[Auction Archive] ${msg}`));
+      await logAction(req, {
+        area: "Settings",
+        action: "Archive auction",
+        target: `${year} Auction`,
+        summary: `Archived the ${year} auction: ${result.results.map((r) => `${r.name} (${r.status})`).join(", ")}`,
+        notUndoableReason: "archive copies are kept in Drive; re-archive to replace them",
+      });
       res.json({ success: result.results.every((r) => r.status !== "failed"), ...result });
     } catch (error: any) {
       console.error("[Route Error] archive:", error);

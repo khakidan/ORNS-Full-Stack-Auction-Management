@@ -186,13 +186,14 @@ describe("Proxy Route Integration Tests", () => {
       });
     }
 
-    it("still allows a write to a ticket sheet (attendee edits)", async () => {
-      const response = await request(app)
-        .post("/api/sheets/test-spreadsheet-id/tickets!C4")
-        .set(authHeader)
-        .send({ values: [["guest@example.com"]] });
-
-      expect(response.status).toBe(200);
+    it("refuses writes to the ticket sheets - attendee changes go through /api/attendees/* so each is recorded in Action History", async () => {
+      for (const path of ["tickets!C4", "'staff tickets'!A5", "tickets!A:A/append"]) {
+        const response = await request(app)
+          .post(`/api/sheets/test-spreadsheet-id/${encodeURIComponent(path.split("/")[0])}${path.includes("/append") ? "/append" : ""}`)
+          .set(authHeader)
+          .send({ values: [["guest@example.com"]] });
+        expect(response.status).toBe(403);
+      }
     });
   });
 

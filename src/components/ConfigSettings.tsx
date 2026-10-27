@@ -11,6 +11,8 @@ import PayPalSweeperStatusCard from "./PayPalSweeperStatusCard";
 import AppsScriptVersionsCard from "./AppsScriptVersionsCard";
 import ManualCopyDialog from "./ManualCopyDialog";
 import BugReportsAdmin from "./BugReportsAdmin";
+import UsersAdmin from "./UsersAdmin";
+import ActionHistoryAdmin from "./ActionHistoryAdmin";
 import { WorkflowTabsShell } from "@/components/WorkflowTabsShell";
 import { useAuction } from "@/context/AuctionContext";
 
@@ -30,7 +32,7 @@ export default function ConfigSettings() {
     handleSetupNewAuction,
     handleSave,
   } = useConfigSettingsState();
-  const { isAuctionClosed } = useAuction();
+  const { auctionState } = useAuction();
 
   // PayPal and Settings both edit the same `config` draft, so each carries
   // the same Save button.
@@ -62,7 +64,7 @@ export default function ConfigSettings() {
   // as its content (items-start). Cloud Sync spans the full width, the two
   // archive cards share a row, and Auction Configuration takes the rest of
   // the last row beside Ticket Pricing (one third).
-  const settingsTab = (
+  const configurationTab = (
     <div className="space-y-6">
       <CloudSyncStatusCard firebaseUser={firebaseUser} loginToFirebase={loginToFirebase} />
 
@@ -96,13 +98,13 @@ export default function ConfigSettings() {
 
   return (
     <WorkflowTabsShell
-      title="Configuration"
-      description="Auction settings, PayPal, Apps Script status, and in-app bug reports."
+      title="Settings"
+      description="Auction configuration, PayPal, Apps Script status, and in-app bug reports."
       spreadsheetId=""
-      isAuctionClosed={isAuctionClosed}
-      defaultTab="settings"
+      auctionState={auctionState}
+      defaultTab="configuration"
       tabs={[
-        { value: "settings", label: "Settings", content: settingsTab },
+        { value: "configuration", label: "Configuration", content: configurationTab },
         { value: "paypal", label: "PayPal Integration", content: paypalTab },
         {
           value: "apps_script",
@@ -112,6 +114,8 @@ export default function ConfigSettings() {
           ),
         },
         { value: "bug_reports", label: "Bug Reports", content: <BugReportsAdmin /> },
+        { value: "users", label: "Users", content: <UsersAdmin /> },
+        { value: "action_history", label: "Action History", content: <ActionHistoryAdmin /> },
       ]}
     />
   );

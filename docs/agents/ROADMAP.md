@@ -12,7 +12,7 @@ This document holds the **ORNS Charity Auction Manager**'s outstanding work: the
 
 Steps:
 
-1. Confirm the app is in PayPal sandbox mode (Config's `paypalIsSandbox`, or check the PayPal Integration card in Configuration).
+1. Confirm the app is in PayPal sandbox mode (Config's `paypalIsSandbox`, or check the PayPal Integration tab in Settings).
 2. Pick a test bidder who's won at least one item but hasn't checked out.
 3. Print or email that bidder's receipt first, so a PayPal invoice exists for them (Checkout page, or Bidders page).
 4. Log into the PayPal sandbox dashboard and find that invoice; note its total (it should include the processing fee).

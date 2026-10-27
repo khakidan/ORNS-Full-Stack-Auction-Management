@@ -1,8 +1,10 @@
 import { ReactNode, useState } from "react";
-import { AlertCircle, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { AuctionState } from "@/lib/auctionState";
+import { AuctionStateBadge } from "@/components/AuctionStateBadge";
 
 export interface WorkflowTab {
   value: string;
@@ -14,7 +16,7 @@ interface WorkflowTabsShellProps {
   title: string;
   description: string;
   spreadsheetId: string;
-  isAuctionClosed: boolean;
+  auctionState?: AuctionState;
   tabs: WorkflowTab[];
   defaultTab: string;
   /**
@@ -31,15 +33,15 @@ interface WorkflowTabsShellProps {
 /**
  * Shared page shell for the two top-level workflow pages
  * (AuctionItemsWorkflow.tsx/AuctionTicketsWorkflow.tsx) - both hand-rolled
- * a near byte-identical header (title/description, the closed-auction
- * amber badge, the "Open Spreadsheet" button) and tabs wrapper (a
+ * a near byte-identical header (title/description, the auction-state
+ * badge, the "Open Spreadsheet" button) and tabs wrapper (a
  * horizontally-scrollable TabsList over TabsContent panes).
  */
 export function WorkflowTabsShell({
   title,
   description,
   spreadsheetId,
-  isAuctionClosed,
+  auctionState = "prep",
   tabs,
   defaultTab,
   headerAlign = "end",
@@ -59,12 +61,7 @@ export function WorkflowTabsShell({
           <p className="text-muted-foreground mt-1 text-sm md:text-base">{description}</p>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
-          {isAuctionClosed && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-amber-100 text-amber-700 border border-amber-200 rounded-md font-bold text-xs uppercase tracking-wider animate-pulse whitespace-nowrap order-first sm:order-none mb-2 sm:mb-0">
-              <AlertCircle className="w-4 h-4" />
-              Auction Closed
-            </div>
-          )}
+          <AuctionStateBadge state={auctionState} className="order-first sm:order-none mb-2 sm:mb-0" />
           {spreadsheetId && (
             <Button
               variant="outline"

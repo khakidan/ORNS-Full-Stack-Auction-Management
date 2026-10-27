@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { logAction } from '../services/actionLog';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import {
@@ -87,6 +88,16 @@ export default function createBundleRouter() {
         });
 
         clearCacheForSpreadsheet(spreadsheetId);
+        const log = result.ui_history_log;
+        await logAction(req, {
+          area: "Auction Items",
+          action: "Bundle items",
+          target: log.bundle_item_name,
+          summary: `Bundled ${log.original_item_names.length} item(s) into "${log.bundle_item_name}": ${log.original_item_names.join(", ")}`,
+          after: { bundleId: log.bundle_token, items: log.original_item_names },
+          location: "Auction Items 'Auction-Items'",
+          undo: { kind: "bundle", spreadsheetId, bundleToken: log.bundle_token, bundleName: log.bundle_item_name },
+        });
         return result;
       });
       res.json(idempotentBody(outcome));
@@ -112,6 +123,13 @@ export default function createBundleRouter() {
         });
 
         clearCacheForSpreadsheet(spreadsheetId);
+        await logAction(req, {
+          area: "Auction Items",
+          action: "Restore bundle",
+          target: targetBundleToken,
+          summary: `Split bundle ${targetBundleToken} back into its original items`,
+          notUndoableReason: "re-bundle the items instead",
+        });
         return result;
       });
       res.json(idempotentBody(outcome));

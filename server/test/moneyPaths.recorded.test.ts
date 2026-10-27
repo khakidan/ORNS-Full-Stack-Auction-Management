@@ -61,13 +61,13 @@ describe("recordWinningBid - recorded calls", () => {
 
   it("writes the bid in the bidder's first empty row", async () => {
     const { sheets, calls } = fakeSheets({ "'Bidder-Numbers'!A:G": BIDDERS, "'Bid-Management'!1:300": BID_GRID }, TABS);
-    await expect(recordWinningBid(sheets, { ...base, bidderId: "101", itemId: "802", price: 75 })).resolves.toEqual({ success: true, followUpAdded: false });
+    await expect(recordWinningBid(sheets, { ...base, bidderId: "101", itemId: "802", price: 75 })).resolves.toEqual({ success: true, followUpAdded: false, range: "Bid-Management!A5:B5" });
     expect(calls).toMatchSnapshot();
   });
 
   it("also creates the Follow-Up tab and adds a row for a bidder who already checked out", async () => {
     const { sheets, calls } = fakeSheets({ "'Bidder-Numbers'!A:G": BIDDERS, "'Bid-Management'!1:300": BID_GRID }, TABS);
-    await expect(recordWinningBid(sheets, { ...base, bidderId: "102", itemId: "803", price: 20 })).resolves.toEqual({ success: true, followUpAdded: true });
+    await expect(recordWinningBid(sheets, { ...base, bidderId: "102", itemId: "803", price: 20 })).resolves.toEqual({ success: true, followUpAdded: true, range: "Bid-Management!C4:D4" });
     expect(calls).toMatchSnapshot();
   });
 
