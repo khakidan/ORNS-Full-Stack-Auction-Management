@@ -45,6 +45,13 @@ vi.mock('../services/actionHistoryStore', () => ({
   _resetActionHistoryStoreForTesting: () => {},
 }))
 
+// Closing the auction ends every volunteer's access (Firestore). Route tests
+// get a spy instead; volunteers.test.ts covers the real function.
+vi.mock('../services/volunteerService', async (importActual) => ({
+  ...(await importActual<typeof import('../services/volunteerService')>()),
+  deactivateAllVolunteers: vi.fn(async () => 0),
+}))
+
 import * as durableStore from '../services/idempotencyStore'
 afterEach(() => (durableStore as any)._clearForTesting())
 

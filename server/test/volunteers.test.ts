@@ -1,0 +1,204 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import request from "supertest";
+import { http, HttpResponse } from "msw";
+import { server } from "./setup";
+import { authCookieHeader, sessionCookie, TEST_ADMIN_EMAIL } from "./helpers/session";
+import { createFakeFirestore } from "./helpers/fakeFirestore";
+
+const fake = createFakeFirestore();
+vi.mock("../services/firebaseAdmin", () => ({ getAdminFirestore: () => fake.db }));
+
+import { app } from "../app";
+import { hashToken, _resetVolunteerCachesForTesting } from "../services/volunteerService";
+import { _resetVolunteerLinkRateLimitForTesting } from "../routes/volunteerAuthRoutes";
+import { _resetUserCacheForTesting } from "../services/userService";
+
+const SHEETS = "https://sheets.googleapis.com/v4/spreadsheets";
+const tokens = { access_token: "t", refresh_token: "r", expiry_date: Date.now() + 3600000 };
+const admin = authCookieHeader(tokens);
+const volunteerSession = (id = "v1", email = "pat@gmail.com") => ({ Cookie: sessionCookie({ volunteer: { id, email } }) });
+
+let auctionCell = "Live";
+let sheetReads: string[] = [];
+
+beforeEach(() => {
+  fake.clear();
+  _resetVolunteerCachesForTesting();
+  _resetVolunteerLinkRateLimitForTesting();
+  _resetUserCacheForTesting();
+  auctionCell = "Live";
+  sheetReads = [];
+  fake.docs("settings").set("global", {
+    bidManagementSpreadsheetId: "bm", auctionItemsSpreadsheetId: "it", auctionTicketsSpreadsheetId: "tk",
+    receiptFolderId: "receipts", forPrintFolderId: "print",
+  });
+  fake.docs("system").set("volunteerAuth", { refreshToken: "volunteer-refresh", email: "auction-volunteers@orns.org" });
+  server.use(http.get(`${SHEETS}/:id/values/:range`, ({ params, request }) => {
+    sheetReads.push(`${params.id} ${decodeURIComponent(String(params.range))} as ${request.headers.get("authorization")}`);
+    if (String(params.range).includes("Auction-Status")) return HttpResponse.json({ values: [[auctionCell]] });
+    return HttpResponse.json({ values: [["ID"]] });
+  }));
+});
+
+function addVolunteer(id: string, fields: Record<string, unknown>) {
+  fake.docs("volunteers").set(id, { email: "pat@gmail.com", name: "Pat Lee", invitedBy: TEST_ADMIN_EMAIL, invitedAt: "2026-03-01T00:00:00Z", ...fields });
+}
+
+describe("inviting volunteers (Users tab)", () => {
+  it("stores only a hash of the link token and emails the link from the inviting admin's Gmail", async () => {
+    let sent = "";
+    server.use(http.post("https://gmail.googleapis.com/gmail/v1/users/:userId/messages/send", async ({ request }) => {
+      sent = Buffer.from(((await request.json()) as any).raw, "base64url").toString("utf8");
+      return HttpResponse.json({ id: "m" });
+    }));
+
+    const res = await request(app).post("/api/volunteers").set(admin).send({ name: "Pat Lee", email: "Pat@Gmail.com" });
+
+    expect(res.status).toBe(200);
+    const [[, stored]] = [...fake.docs("volunteers").entries()];
+    expect(stored).toMatchObject({ email: "pat@gmail.com", name: "Pat Lee", status: "invited", invitedBy: TEST_ADMIN_EMAIL });
+    const token = /token=([A-Za-z0-9_-]+)/.exec(sent)![1];
+    expect(stored.tokenHash).toBe(hashToken(token));
+    expect(JSON.stringify(stored)).not.toContain(token);
+    expect(sent).toContain("To: pat@gmail.com");
+    expect(res.body.volunteer.tokenHash).toBeUndefined();
+  });
+
+  it("refuses @orns.org addresses (staff get a role instead) and non-Full-Admins", async () => {
+    expect((await request(app).post("/api/volunteers").set(admin).send({ name: "Sam", email: "sam@orns.org" })).status).toBe(400);
+    expect((await request(app).post("/api/volunteers").set(authCookieHeader(tokens, "sam@orns.org")).send({ name: "Pat", email: "pat@gmail.com" })).status).toBe(403);
+  });
+
+  it("revoke ends access and forgets the link", async () => {
+    addVolunteer("v1", { status: "invited", tokenHash: hashToken("tok") });
+    await request(app).post("/api/volunteers/v1/revoke").set(admin);
+    expect(fake.docs("volunteers").get("v1")).toMatchObject({ status: "revoked", tokenHash: "" });
+  });
+});
+
+describe("the one-time link", () => {
+  beforeEach(() => addVolunteer("v1", { status: "invited", tokenHash: hashToken("good-token") }));
+
+  it("opening it shows a Sign in button but does not use it up (so email scanners can't burn it)", async () => {
+    const res = await request(app).get("/auth/volunteer?token=good-token");
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("Sign in as Pat Lee");
+    expect(fake.docs("volunteers").get("v1")!.status).toBe("invited");
+  });
+
+  it("says the auction isn't live yet, and keeps the link valid, before Go Live", async () => {
+    auctionCell = "Prep";
+    for (const res of [await request(app).get("/auth/volunteer?token=good-token"), await request(app).post("/auth/volunteer").type("form").send({ token: "good-token" })]) {
+      expect(res.text).toContain("live yet");
+    }
+    expect(fake.docs("volunteers").get("v1")!.status).toBe("invited");
+  });
+
+  it("signing in uses the link once, starts a volunteer session and goes to Bid Management", async () => {
+    const agent = request.agent(app);
+    const res = await agent.post("/auth/volunteer").type("form").send({ token: "good-token" });
+
+    expect(res.status).toBe(303);
+    expect(res.headers.location).toBe("/BidManagement");
+    expect(fake.docs("volunteers").get("v1")).toMatchObject({ status: "active", tokenHash: "", redeemedAt: expect.any(String) });
+    expect((await agent.get("/auth/status")).body).toEqual({
+      authenticated: true,
+      user: { email: "pat@gmail.com", role: "volunteer", roleLabel: "Volunteer", capabilities: [] },
+    });
+
+    const again = await request(app).post("/auth/volunteer").type("form").send({ token: "good-token" });
+    expect(again.status).toBe(410);
+  });
+
+  it("refuses an unknown token", async () => {
+    expect((await request(app).get("/auth/volunteer?token=nope")).status).toBe(410);
+  });
+});
+
+describe("what a signed-in volunteer can do", () => {
+  beforeEach(() => addVolunteer("v1", { status: "active" }));
+
+  it("reads the auction's spreadsheets through the shared volunteer account", async () => {
+    const res = await request(app).get(`/api/sheets/bm/${encodeURIComponent("Bidder-Numbers!A:L")}`).set(volunteerSession());
+
+    expect(res.status).toBe(200);
+    // mock-access-token is what the stored volunteer sign-in refreshes to (handlers.ts).
+    expect(sheetReads).toContain("bm 'Bidder-Numbers'!A:L as Bearer mock-access-token");
+  });
+
+  it.each([
+    ["another spreadsheet", "GET", `/api/sheets/other-sheet/${encodeURIComponent("A1:B2")}`, {}],
+    ["Settings", "GET", "/api/paypal-sweeper/status", {}],
+    ["a walk-in (not in the volunteers' list)", "POST", "/api/bidders/walk-in", { spreadsheetId: "bm" }],
+    ["item editing", "POST", "/api/auction/update-item", { spreadsheetId: "it" }],
+    ["a winning bid in another spreadsheet", "POST", "/api/auction/record-winning-bid", { spreadsheetId: "elsewhere" }],
+    ["the Action History", "GET", "/api/action-history", {}],
+  ])("is refused %s", async (_label, method, path, body) => {
+    const req = method === "GET" ? request(app).get(path) : request(app).post(path).send(body);
+    const res = await req.set(volunteerSession());
+    expect(res.status).toBe(403);
+  });
+
+  it.each([
+    ["revoked", () => fake.docs("volunteers").set("v1", { ...fake.docs("volunteers").get("v1"), status: "revoked" })],
+    ["the auction closed", () => { auctionCell = "Closed"; }],
+    ["deleted", () => fake.docs("volunteers").delete("v1")],
+  ])("is signed out (401, volunteer_access_ended) once %s", async (_label, change) => {
+    change();
+    const res = await request(app).get(`/api/sheets/bm/${encodeURIComponent("A1")}`).set(volunteerSession());
+    expect(res.status).toBe(401);
+    expect(res.body.reason).toBe("volunteer_access_ended");
+    expect((await request(app).get("/auth/status").set(volunteerSession())).body).toEqual({ authenticated: false, reason: "volunteer_access_ended" });
+  });
+});
+
+describe("connecting the shared volunteer account", () => {
+  async function connectAs(email: string, refreshToken: string | undefined = "new-volunteer-refresh") {
+    server.use(
+      http.post("https://oauth2.googleapis.com/token", () => HttpResponse.json({ access_token: "a", refresh_token: refreshToken, token_type: "Bearer" })),
+      http.get("https://www.googleapis.com/oauth2/v2/userinfo", () => HttpResponse.json({ email, hd: "orns.org", verified_email: true }))
+    );
+    const agent = request.agent(app);
+    agent.jar.setCookie(admin.Cookie.split("; ")[0]);
+    agent.jar.setCookie(admin.Cookie.split("; ")[1]);
+    const start = await agent.get("/auth/volunteer-account/connect");
+    const state = new URL(start.headers.location).searchParams.get("state") as string;
+    expect(new URL(start.headers.location).searchParams.get("login_hint")).toBe("auction-volunteers@orns.org");
+    const res = await agent.get(`/auth/callback?code=c&state=${encodeURIComponent(state)}`);
+    return { agent, res };
+  }
+
+  it("stores that account's sign-in for volunteers and keeps the admin signed in as themselves", async () => {
+    const { agent, res } = await connectAs("auction-volunteers@orns.org");
+
+    expect(res.status).toBe(200);
+    expect(fake.docs("system").get("volunteerAuth")).toMatchObject({ refreshToken: "new-volunteer-refresh", email: "auction-volunteers@orns.org", connectedBy: TEST_ADMIN_EMAIL });
+    expect((await agent.get("/auth/status")).body.user.email).toBe(TEST_ADMIN_EMAIL);
+  });
+
+  it("refuses a different account", async () => {
+    const { res } = await connectAs("someone@orns.org");
+    expect(res.status).toBe(403);
+    expect(fake.docs("system").get("volunteerAuth")!.refreshToken).toBe("volunteer-refresh");
+  });
+
+  it("is Full Administrator only", async () => {
+    const res = await request(app).get("/auth/volunteer-account/connect").set(authCookieHeader(tokens, "sam@orns.org"));
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("closing the auction", () => {
+  it("ends every invited or active volunteer's access", async () => {
+    const real = await vi.importActual<typeof import("../services/volunteerService")>("../services/volunteerService");
+    addVolunteer("a", { status: "active" });
+    addVolunteer("b", { status: "invited", tokenHash: "h" });
+    addVolunteer("c", { status: "revoked" });
+
+    expect(await real.deactivateAllVolunteers("auction_closed")).toBe(2);
+    expect(fake.docs("volunteers").get("a")).toMatchObject({ status: "deactivated", deactivatedReason: "auction_closed" });
+    expect(fake.docs("volunteers").get("b")).toMatchObject({ status: "deactivated", tokenHash: "" });
+    expect(fake.docs("volunteers").get("c")!.status).toBe("revoked");
+  });
+});

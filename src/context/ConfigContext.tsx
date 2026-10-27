@@ -11,6 +11,11 @@ interface ConfigContextType {
   saveConfig: (newConfig: Config) => Promise<void>;
   firebaseUser: User | null;
   loginToFirebase: () => Promise<void>;
+  /**
+   * Merges Config fields read from the server (GET /api/config/runtime) -
+   * how a volunteer, who can't read Firestore, gets the spreadsheet IDs.
+   */
+  applyServerConfig: (fields: Partial<Config>) => void;
 }
 
 const defaultConfig: Config = {
@@ -161,8 +166,12 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const applyServerConfig = React.useCallback((fields: Partial<Config>) => {
+    setConfig((prev) => ({ ...prev, ...fields }));
+  }, []);
+
   return (
-    <ConfigContext.Provider value={{ config, loading, saveConfig, firebaseUser, loginToFirebase }}>
+    <ConfigContext.Provider value={{ config, loading, saveConfig, firebaseUser, loginToFirebase, applyServerConfig }}>
       {children}
     </ConfigContext.Provider>
   );

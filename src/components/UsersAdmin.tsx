@@ -11,6 +11,7 @@ import { RefreshableListCard } from "@/components/RefreshableListCard";
 import { useAuth } from "@/context/AuthContext";
 import { useUsersAdminState, StaffUser } from "@/hooks/useUsersAdminState";
 import { ROLE_LABELS, Role } from "@/lib/permissions";
+import VolunteersAdmin from "@/components/VolunteersAdmin";
 
 const ROLES: Role[] = ["full_admin", "admin", "user"];
 
@@ -102,6 +103,8 @@ export default function UsersAdmin() {
           )}
         />
       </RefreshableListCard>
+
+      <VolunteersAdmin />
     </div>
   );
 }

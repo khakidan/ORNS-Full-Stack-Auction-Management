@@ -64,7 +64,7 @@ describe("GET /auth/status", () => {
 
     expect(res.body).toEqual({
       authenticated: true,
-      user: { email: "jane@orns.org", role: "admin", roleLabel: "Administrator", capabilities: ["auction.stage", "attendees.delete"] },
+      user: { email: "jane@orns.org", role: "admin", roleLabel: "Administrator", capabilities: ["auction.stage", "attendees.delete", "bidders.walkIn"] },
     });
   });
 

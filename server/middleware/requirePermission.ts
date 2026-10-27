@@ -6,6 +6,7 @@ const REFUSALS: Record<Capability, string> = {
   "users.manage": "Only a Full Administrator can manage users.",
   "auction.stage": "Only an Administrator can set up, start or close the auction.",
   "attendees.delete": "Only an Administrator can delete attendees.",
+  "bidders.walkIn": "Volunteers can't register walk-ins - ask a staff member.",
 };
 
 /**

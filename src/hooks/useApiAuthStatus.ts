@@ -12,12 +12,15 @@ import type { AuthUser } from "@/lib/permissions";
 export function useApiAuthStatus() {
   const [isApiAuthenticated, setIsApiAuthenticated] = useState<boolean | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
+  /** Why the browser is signed out, when the server says ("volunteer_access_ended"). */
+  const [signedOutReason, setSignedOutReason] = useState<string | null>(null);
 
   const checkProviderAuth = useCallback(async () => {
     try {
       const status = await getAuthStatus();
       setIsApiAuthenticated(status.authenticated);
       setUser(status.authenticated ? status.user ?? null : null);
+      setSignedOutReason(status.authenticated ? null : status.reason ?? null);
     } catch {
       setIsApiAuthenticated(false);
       setUser(null);
@@ -38,5 +41,5 @@ export function useApiAuthStatus() {
     checkProviderAuth();
   }, [checkProviderAuth]);
 
-  return { isApiAuthenticated, user, checkProviderAuth };
+  return { isApiAuthenticated, user, signedOutReason, checkProviderAuth };
 }

@@ -45,6 +45,12 @@ describe("useApiAuthStatus", () => {
     expect(result.current.user).toBeNull();
   });
 
+  it("keeps why the server signed the browser out (a volunteer whose access ended)", async () => {
+    mockedGetAuthStatus.mockResolvedValue({ authenticated: false, reason: "volunteer_access_ended" });
+    const { result } = renderHook(() => useApiAuthStatus());
+    await waitFor(() => expect(result.current.signedOutReason).toBe("volunteer_access_ended"));
+  });
+
   it("reflects a false auth status", async () => {
     mockedGetAuthStatus.mockResolvedValue({ authenticated: false });
     const { result } = renderHook(() => useApiAuthStatus());

@@ -257,6 +257,11 @@ vi.mock("@/context/ConfigContext", () => ({
   }
 }));
 
+let mockCanWalkIn = true;
+vi.mock("@/context/AuthContext", () => ({
+  useAuth: () => ({ can: (cap: string) => cap !== "bidders.walkIn" || mockCanWalkIn }),
+}));
+
 vi.mock("@/context/AuctionContext", () => ({
   useAuction: () => authOverride ?? {
     bidders: mockBidders,
@@ -273,6 +278,19 @@ vi.mock("@/context/AuctionContext", () => ({
 afterEach(() => {
   authOverride = null;
   configOverride = null;
+  mockCanWalkIn = true;
+});
+
+describe('Bidders - walk-ins', () => {
+  it('offers New Walk-In Ticket to staff but not to volunteers (who may not register walk-ins)', () => {
+    const { unmount } = render(<Bidders />);
+    expect(screen.getAllByText('New Walk-In Ticket').length).toBeGreaterThan(0);
+    unmount();
+
+    mockCanWalkIn = false;
+    render(<Bidders />);
+    expect(screen.queryByText('New Walk-In Ticket')).not.toBeInTheDocument();
+  });
 });
 
 // Regression guards for a user-reported UI issue: too much white space

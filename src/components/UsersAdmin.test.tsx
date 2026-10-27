@@ -11,6 +11,7 @@ vi.mock("@/services/google-api", () => ({
   getBaseUrl: () => "",
   errorTextFrom: (d: any, f: string) => d?.error || f,
 }));
+vi.mock("./VolunteersAdmin", () => ({ default: () => null }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({ user: { email: "me@orns.org", role: "full_admin" } }),

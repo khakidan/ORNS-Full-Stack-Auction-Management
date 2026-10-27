@@ -5,6 +5,8 @@ import { getOAuthClient, SCOPES } from '../services/oauth';
 import { persistSweeperCredential } from '../services/paypalSweeperJob';
 import { getRole, normalizeEmail, recordLogin } from '../services/userService';
 import { capabilitiesFor, ROLE_LABELS } from '../utils/permissions';
+import { setVolunteerCredential, volunteerAccountEmail } from '../services/volunteerService';
+import { volunteerAccessEnded, VOLUNTEER_ACCESS_ENDED } from '../middleware/requireAuth';
 
 const router = Router();
 
@@ -45,7 +47,11 @@ router.get("/auth/url", (req, res, next) => {
 router.get("/auth/callback", async (req, res, next) => {
   const { code, state } = req.query;
   const expectedState = req.session?.oauthState;
-  if (req.session) delete req.session.oauthState;
+  const purpose = req.session?.oauthPurpose;
+  if (req.session) {
+    delete req.session.oauthState;
+    delete req.session.oauthPurpose;
+  }
   if (!sameState(state, expectedState)) {
     return res.status(403).send(`<html><body>This sign-in link has expired or was started in another browser. <a href="/">Return to the app</a> and sign in again.</body></html>`);
   }
@@ -63,6 +69,22 @@ router.get("/auth/callback", async (req, res, next) => {
     if (!email.endsWith(`@${ORG_DOMAIN}`) || userInfo.data.hd !== ORG_DOMAIN || userInfo.data.verified_email === false) {
       return res.status(403).send(`<html><body>Access Denied: @orns.org required.</body></html>`);
     }
+    // A Full Administrator connecting the shared volunteer account (started
+    // at /auth/volunteer-account/connect): keep that account's sign-in for
+    // volunteers, and leave the admin's own session exactly as it was.
+    if (purpose === "volunteer-account") {
+      if (normalizeEmail(email) !== volunteerAccountEmail()) {
+        return res.status(403).send(`<html><body>That was ${escapeHtml(email)}. Sign in as ${escapeHtml(volunteerAccountEmail())} to connect volunteer access. <a href="/Settings">Back to Settings</a></body></html>`);
+      }
+      if (!tokens.refresh_token) {
+        return res.status(400).send(`<html><body>Google didn't return a lasting sign-in for ${escapeHtml(email)}. <a href="/auth/volunteer-account/connect">Try again</a>.</body></html>`);
+      }
+      await setVolunteerCredential(tokens.refresh_token, req.session?.email || "unknown");
+      return res.send(`<!DOCTYPE html><html><body style="font-family: sans-serif; text-align: center; padding-top: 80px;">
+        <p>Connected ${escapeHtml(email)} for volunteers. Returning to Settings...</p>
+        <script>window.location.href = '/Settings';</script></body></html>`);
+    }
+
     // The shared volunteer account is a robot login the server uses for
     // volunteers, not a person - it never signs in to the app itself.
     const volunteerAccount = process.env.VOLUNTEER_GOOGLE_ACCOUNT;
@@ -128,6 +150,23 @@ router.get("/auth/callback", async (req, res, next) => {
 });
 
 router.get("/auth/status", async (req, res, next) => {
+  const volunteer = req.session?.volunteer;
+  if (volunteer) {
+    try {
+      if (await volunteerAccessEnded(volunteer.id)) {
+        req.session = null;
+        return res.json({ authenticated: false, reason: VOLUNTEER_ACCESS_ENDED });
+      }
+    } catch (error) {
+      // Couldn't check (Google or Firestore unreachable): stay signed in.
+      console.warn("[Volunteers] Couldn't check a volunteer's access:", (error as any)?.message || error);
+    }
+    return res.json({
+      authenticated: true,
+      user: { email: volunteer.email, role: "volunteer", roleLabel: ROLE_LABELS.volunteer, capabilities: capabilitiesFor("volunteer") },
+    });
+  }
+
   const email = req.session?.email;
   // A session from before roles existed has tokens but no email - it
   // counts as signed out, so the person signs in once more.

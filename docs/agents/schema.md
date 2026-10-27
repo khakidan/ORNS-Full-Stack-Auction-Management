@@ -121,6 +121,17 @@ Who did what this season (`server/services/actionHistoryRows.ts`). Created by **
 
 Written RAW by the app (typed text is never run as a formula). If the spreadsheet isn't set up or a write fails, the row goes to Cloud Logging (`jsonPayload.actionLog`) instead.
 
+### Collection: `volunteers` (server-only)
+
+Volunteer access (`server/services/volunteerService.ts`). Auto-generated document IDs.
+
+*   `email`, `name`: who was invited (re-inviting an address reuses its record)
+*   `status`: `invited` (link sent) -> `active` (link used) -> `deactivated` (the auction closed) or `revoked` (an admin ended it)
+*   `tokenHash`: SHA-256 of the one-time link token, cleared once used, revoked or deactivated - the token itself is never stored
+*   `invitedBy` / `invitedAt`, `redeemedAt`, `lastSeenAt` (at most once a minute), `deactivatedAt` / `deactivatedReason`
+
+`system/volunteerAuth` holds the shared volunteer account's stored sign-in: `{ refreshToken, email, connectedBy, connectedAt }`.
+
 ### Collection: `users` (server-only)
 
 Staff roles (`server/services/userService.ts`). Document ID = the lowercased @orns.org address.

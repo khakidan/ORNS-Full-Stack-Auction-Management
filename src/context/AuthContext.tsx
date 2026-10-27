@@ -6,6 +6,8 @@ interface AuthContextType {
   authenticated: boolean | null;
   /** Who is signed in, with their role; null while signed out or unknown. */
   user: AuthUser | null;
+  /** Why the browser is signed out, when the server says ("volunteer_access_ended"). */
+  signedOutReason?: string | null;
   /** Whether the signed-in person's role allows `capability` (false while unknown). */
   can: (capability: Capability) => boolean;
   handleLogin: () => Promise<void>;

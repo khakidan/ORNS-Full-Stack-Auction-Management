@@ -1,6 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { requirePermission } from '../middleware/requirePermission';
-import { getAuthenticatedClient } from '../services/oauth';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { registerWalkInBidder, checkInBidderWithBid, setBidderFlag, BIDDER_FLAG_COLUMNS } from '../services/bidderService';
@@ -8,8 +7,9 @@ import { recordWinningBid, checkoutMarkPaid, closeAuctionAndCleanup, goLiveAucti
 import { requireAuth } from '../middleware/requireAuth';
 import { saveSpecialWinner, SPECIAL_PRIZES } from '../services/specialWinnerService';
 import { getPaypalIsSandbox } from '../services/sharedConfig';
-import { sheetsFor } from '../utils/googleClients';
+import { sheetsFor, googleAuthFor } from '../utils/googleClients';
 import { logAction } from '../services/actionLog';
+import { deactivateAllVolunteers, forgetAuctionState } from '../services/volunteerService';
 
 export default function createBidRouter() {
   const router = Router();
@@ -107,7 +107,7 @@ export default function createBidRouter() {
 
     try {
       const outcome = await withIdempotency("auction/checkout-mark-paid", idempotencyKey, async () => {
-        const client = getAuthenticatedClient(req.session.tokens);
+        const client = googleAuthFor(req);
 
         const result = await checkoutMarkPaid(client, {
           bidderId: String(bidderId),
@@ -163,6 +163,7 @@ export default function createBidRouter() {
     try {
       const result = await goLiveAuction(sheetsFor(req), { spreadsheetId });
       clearCacheForSpreadsheet(spreadsheetId);
+      forgetAuctionState();
       await logAction(req, { area: "Bid Management", action: "Go Live", summary: "Took the auction Live", notUndoableReason: "the auction only moves forward; go back to Prep by editing Auction-Status!A2 by hand" });
       res.json(result);
     } catch (error: any) {
@@ -190,10 +191,18 @@ export default function createBidRouter() {
       });
 
       clearCacheForSpreadsheet(spreadsheetId);
+      forgetAuctionState();
+      // Volunteers' access ends with the auction. requireAuth's Live check
+      // would end it within 30 seconds anyway; this makes it immediate and
+      // records why on each volunteer.
+      const volunteersEnded = await deactivateAllVolunteers("auction_closed").catch((e) => {
+        console.error("[Volunteers] Couldn't deactivate volunteers on close:", e);
+        return 0;
+      });
       await logAction(req, {
         area: "Bid Management",
         action: "Close auction",
-        summary: `Closed the auction and checked out ${result.count} bidder(s) who won nothing`,
+        summary: `Closed the auction, checked out ${result.count} bidder(s) who won nothing, and ended ${volunteersEnded} volunteer(s)' access`,
         notUndoableReason: "the auction only moves forward; reopen it by editing Auction-Status!A2 by hand",
       });
 
@@ -208,7 +217,7 @@ export default function createBidRouter() {
   });
 
   // Update walk-in to be transactional across sheets
-  router.post("/bidders/walk-in", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/bidders/walk-in", requirePermission("bidders.walkIn"), async (req: Request, res: Response, next: NextFunction) => {
     const {
       firstName, 
       lastName, 
