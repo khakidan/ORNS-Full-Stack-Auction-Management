@@ -90,6 +90,18 @@ export function BidderRow({
             </Badge>
           )}
 
+          {bidder.ticketRef === "" && (
+            // Bidders follow their tickets (server bidderTicketSync.ts); this one
+            // couldn't be matched to any ticket, so their name won't update on its own.
+            <Badge
+              variant="outline"
+              className="text-amber-700 border-amber-200 bg-amber-50 w-fit text-xs font-normal"
+              title="Couldn't match this bidder to a ticket, so their name and email won't follow ticket changes. Check the Auction Tickets list for them."
+            >
+              <AlertCircle className="w-3 h-3 mr-1" /> No ticket link
+            </Badge>
+          )}
+
           {bidder.checkedOut ? (
             <Badge className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50 w-fit text-xs font-normal">
               <Gavel className="w-3 h-3 mr-1" /> Full Checkout

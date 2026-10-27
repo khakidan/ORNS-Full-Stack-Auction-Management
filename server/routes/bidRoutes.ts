@@ -221,13 +221,13 @@ export default function createBidRouter() {
 
   // Update walk-in to be transactional across sheets
   /**
-   * Brings every bidder's name and email in line with their ticket
-   * (bidderTicketSync.ts). The Bid Management page asks when it loads; it
+   * Brings every bidder's name and email in line with their ticket, and in
+   * Prep adds anyone new on the tickets (bidderTicketSync.ts). The Bid Management page asks when it loads; it
    * also runs after ticket changes and before receipts and checkout.
    */
   router.post("/bidders/sync-from-tickets", async (req: Request, res: Response) => {
-    const renamed = await syncBiddersFromTickets(req);
-    res.json({ renamed: renamed.length });
+    const { renamed, added, unlinked } = await syncBiddersFromTickets(req);
+    res.json({ renamed: renamed.length, added: added.length, unlinked });
   });
 
   router.post("/bidders/walk-in", requirePermission("bidders.walkIn"), async (req: Request, res: Response, next: NextFunction) => {

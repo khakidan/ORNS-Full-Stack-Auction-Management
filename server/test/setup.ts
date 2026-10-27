@@ -40,7 +40,7 @@ afterEach(async () => {
 // sync first. Tests never reach it unless they say so - it's a spy here,
 // and bidderTicketSync.test.ts covers the real module via vi.importActual.
 vi.mock('../services/bidderTicketSync', () => ({
-  syncBiddersFromTickets: vi.fn(async () => []),
+  syncBiddersFromTickets: vi.fn(async () => ({ renamed: [], added: [], unlinked: [] })),
   BACKGROUND_SYNC_INTERVAL_MS: 60000,
 }))
 

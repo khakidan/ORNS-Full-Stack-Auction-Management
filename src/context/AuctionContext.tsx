@@ -135,8 +135,8 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   const isStaff = !!user && user.role !== "volunteer";
   useEffect(() => {
     if (!isApiAuthenticated || !isStaff || !spreadsheetId || !ticketsSpreadsheetId) return;
-    postJson<{ renamed: number }>("/api/bidders/sync-from-tickets", {}, "Couldn't check bidders against the tickets")
-      .then(({ renamed }) => { if (renamed > 0) fetchBidders({ silent: true }); })
+    postJson<{ renamed: number; added: number }>("/api/bidders/sync-from-tickets", {}, "Couldn't check bidders against the tickets")
+      .then(({ renamed, added }) => { if (renamed + added > 0) fetchBidders({ silent: true }); })
       .catch((e) => console.warn(e.message));
   }, [isApiAuthenticated, isStaff, spreadsheetId, ticketsSpreadsheetId, fetchBidders]);
 

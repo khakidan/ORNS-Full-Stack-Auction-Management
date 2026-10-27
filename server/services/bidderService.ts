@@ -88,8 +88,8 @@ export function walkInGridValues(id: number, first: string, last: string, ticket
   ];
 }
 
-/** Merges and centres the walk-in's ID cell across their two columns and bolds their name row. */
-function walkInGridFormatRequests(sheetId: number | null | undefined, startCol: number): sheets_v4.Schema$Request[] {
+/** Merges and centres a bidder's ID cell across their two grid columns and bolds their name row (walk-ins, and bidders added from new tickets). */
+export function bidderColumnFormatRequests(sheetId: number | null | undefined, startCol: number): sheets_v4.Schema$Request[] {
   const columns = { sheetId, startColumnIndex: startCol, endColumnIndex: startCol + 2 };
   return [
     { mergeCells: { range: { ...columns, startRowIndex: 0, endRowIndex: 1 }, mergeType: "MERGE_ALL" } },
@@ -189,7 +189,7 @@ async function registerWalkInBidderLocked(
   ]);
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
-    requestBody: { requests: walkInGridFormatRequests(bmSheet.properties?.sheetId, startCol) }
+    requestBody: { requests: bidderColumnFormatRequests(bmSheet.properties?.sheetId, startCol) }
   });
 
   // 5. Add their ticket to the tickets spreadsheet. A failure here doesn't

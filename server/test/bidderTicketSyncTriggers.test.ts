@@ -23,10 +23,10 @@ describe("when bidders are brought in line with their tickets", () => {
     expect(syncBiddersFromTickets).toHaveBeenCalledTimes(1);
   });
 
-  it("when the Bid Management page asks, answering how many bidders changed", async () => {
-    vi.mocked(syncBiddersFromTickets).mockResolvedValueOnce([{ id: "101" } as any]);
+  it("when the Bid Management page asks, answering what changed and who is still untied", async () => {
+    vi.mocked(syncBiddersFromTickets).mockResolvedValueOnce({ renamed: [{ id: "101" } as any], added: [], unlinked: ["117"] });
     const res = await request(app).post("/api/bidders/sync-from-tickets").set(admin).send({});
-    expect(res.body).toEqual({ renamed: 1 });
+    expect(res.body).toEqual({ renamed: 1, added: 0, unlinked: ["117"] });
   });
 
   it("in the background, from staff screens' change-feed checks", async () => {
