@@ -4,9 +4,13 @@
  * made them and the old and new value, so Settings > Action History shows
  * them and a single-cell edit can be undone.
  *
- * Turned on from the app (Settings > Action History > Turn on edit
- * tracking), which runs apiEnableEditTracking through the Apps Script API.
- * That installs an on-edit trigger owned by the admin who clicked it.
+ * Turned on and off from the app (Settings > Action History > Turn on/off
+ * edit tracking), which runs apiEnableEditTracking / apiDisableEditTracking
+ * through the Apps Script API; apiEditTrackingStatus tells the app which
+ * label to show. Turning on installs an on-edit trigger owned by the admin
+ * who clicked it. Tracking is on while the script property is set:
+ * trackEdit does nothing without it, so turning off by clearing it also
+ * silences a trigger another admin installed.
  *
  * Rows use the same 15 columns as the app's own (server/services/
  * actionHistoryRows.ts) and the same "cells" Undo Data shape
@@ -34,6 +38,35 @@ function apiEnableEditTracking(actionHistorySpreadsheetId, sourceSpreadsheetId) 
       if (t.getHandlerFunction() === 'trackEdit') ScriptApp.deleteTrigger(t);
     });
     ScriptApp.newTrigger('trackEdit').forSpreadsheet(source).onEdit().create();
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: String(e && e.message || e) };
+  }
+}
+
+/**
+ * Whether edits are being recorded to the given Action History spreadsheet.
+ * Returns { success, on }.
+ */
+function apiEditTrackingStatus(actionHistorySpreadsheetId) {
+  try {
+    var id = PropertiesService.getScriptProperties().getProperty(ACTION_HISTORY_PROPERTY);
+    return { success: true, on: !!id && id === actionHistorySpreadsheetId };
+  } catch (e) {
+    return { success: false, error: String(e && e.message || e) };
+  }
+}
+
+/**
+ * Stops recording edits: clears the script property (which silences every
+ * admin's trigger) and removes the caller's own trigger. Returns { success, error? }.
+ */
+function apiDisableEditTracking() {
+  try {
+    PropertiesService.getScriptProperties().deleteProperty(ACTION_HISTORY_PROPERTY);
+    ScriptApp.getProjectTriggers().forEach(function (t) {
+      if (t.getHandlerFunction() === 'trackEdit') ScriptApp.deleteTrigger(t);
+    });
     return { success: true };
   } catch (e) {
     return { success: false, error: String(e && e.message || e) };

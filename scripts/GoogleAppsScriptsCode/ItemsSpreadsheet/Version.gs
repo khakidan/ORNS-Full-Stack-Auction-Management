@@ -6,7 +6,7 @@
  * apiGetVersion and compares it with the fingerprint the app was built
  * with, to show whether the live script matches the repo.
  */
-const SCRIPT_VERSION = '41d9e4d8761c';
+const SCRIPT_VERSION = '1f3b7b806deb';
 
 function apiGetVersion () {
     return { success: true, version: SCRIPT_VERSION };

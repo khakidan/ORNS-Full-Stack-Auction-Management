@@ -35,6 +35,8 @@ export function useActionHistoryState() {
   const [creating, setCreating] = useState(false);
   const [undoingId, setUndoingId] = useState<string | null>(null);
   const [enablingTracking, setEnablingTracking] = useState(false);
+  /** Whether direct edits in the Items and Tickets spreadsheets are recorded; null until known (or if the scripts can't say). */
+  const [trackingOn, setTrackingOn] = useState<boolean | null>(null);
   const [search, setSearch] = useState("");
   const [area, setArea] = useState(ALL);
   const [who, setWho] = useState(ALL);
@@ -59,9 +61,23 @@ export function useActionHistoryState() {
     }
   }, []);
 
+  const fetchTrackingStatus = useCallback(async () => {
+    try {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/action-history/edit-tracking`, { credentials: "include" });
+      const data = await res.json().catch(() => ({}));
+      setTrackingOn(res.ok && typeof data.on === "boolean" ? data.on : null);
+    } catch {
+      setTrackingOn(null);
+    }
+  }, []);
+
   useEffect(() => {
     fetchActions();
   }, [fetchActions]);
+
+  useEffect(() => {
+    if (configured) fetchTrackingStatus();
+  }, [configured, fetchTrackingStatus]);
 
   // Live refresh: new actions by anyone appear without reloading.
   useEffect(() => {
@@ -82,21 +98,26 @@ export function useActionHistoryState() {
     }
   };
 
-  /** Installs the on-edit trigger in the Items and Tickets spreadsheets, so edits made there directly are recorded too. */
-  const enableEditTracking = async (itemsSpreadsheetId: string, ticketsSpreadsheetId: string) => {
+  /**
+   * Turns recording of edits made directly in the Items and Tickets
+   * spreadsheets on or off (on installs the on-edit trigger in each).
+   */
+  const setEditTracking = async (enabled: boolean, itemsSpreadsheetId: string, ticketsSpreadsheetId: string) => {
+    const verb = enabled ? "on" : "off";
     setEnablingTracking(true);
     try {
       const data = await postJson<{ success: boolean; results: { name: string; success: boolean; error?: string }[] }>(
         "/api/action-history/edit-tracking",
-        { itemsSpreadsheetId, ticketsSpreadsheetId },
-        "Couldn't turn on edit tracking"
+        { enabled, itemsSpreadsheetId, ticketsSpreadsheetId },
+        `Couldn't turn ${verb} edit tracking`
       );
       const failed = data.results.filter((r) => !r.success);
-      if (failed.length) toast.error(`Edit tracking couldn't be turned on for ${failed.map((f) => `${f.name} (${f.error})`).join("; ")}`, { duration: 15000 });
-      else toast.success("Edits made directly in the Items and Tickets spreadsheets are now recorded.");
+      if (failed.length) toast.error(`Edit tracking couldn't be turned ${verb} for ${failed.map((f) => `${f.name} (${f.error})`).join("; ")}`, { duration: 15000 });
+      else toast.success(enabled ? "Edits made directly in the Items and Tickets spreadsheets are now recorded." : "Edits made directly in the Items and Tickets spreadsheets are no longer recorded.");
     } catch (e: any) {
       toast.error(e.message);
     } finally {
+      await fetchTrackingStatus();
       setEnablingTracking(false);
     }
   };
@@ -148,7 +169,8 @@ export function useActionHistoryState() {
     createSpreadsheet,
     undo,
     enablingTracking,
-    enableEditTracking,
+    trackingOn,
+    setEditTracking,
     filters: { search, setSearch, area, setArea, who, setWho, source, setSource, options },
   };
 }

@@ -6,6 +6,8 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **The edit tracking button now says Turn off when tracking is on.** Settings > Action History checks each script's state (`GET /api/action-history/edit-tracking`, which runs the new `apiEditTrackingStatus` in the Items and Tickets `ActionHistoryTracking.gs`) and shows Turn on or Turn off to match. Turn off (`POST` with `enabled: false`, new `apiDisableEditTracking`) clears the script property, which silences every admin's trigger, and removes the caller's own trigger. If a script can't say (not redeployed yet, or an older sign-in), the button shows Turn on. Backend 793 -> 796, frontend 770 -> 771, total 1563 -> 1567.
+
 - **A cancelled sign-in no longer shows a server error.** When Google returned to `/auth/callback` without a code (sign-in cancelled, or a permission declined - `error=access_denied`), `getToken` threw and the page showed a generic error. It now shows "Sign-in was cancelled, or a permission the app needs wasn't approved. Nothing was changed." with a link back (to Settings when connecting the volunteer account). Backend 787 -> 788, total 1553 -> 1554.
 
 - **Renamed the Configuration page to Settings, and its Settings tab to Configuration.** Sidebar, page header and the route (`/Settings`; an old `/Configuration` link still opens it) follow; the tab order is unchanged (Configuration, PayPal Integration, Google Apps Scripts, Bug Reports). Pointers in a few messages and comments now say Settings / the Configuration tab.
