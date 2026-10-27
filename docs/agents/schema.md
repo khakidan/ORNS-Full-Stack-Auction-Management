@@ -100,7 +100,7 @@ Firestore is utilized to synchronize system configuration, active operational pa
 
 ### Spreadsheet: Action History (`Actions` tab)
 
-Who did what this season (`server/services/actionHistoryRows.ts`). Created by **Settings > Action History > Create Action History spreadsheet** in the main auction folder; its ID is kept in Firestore `system/actionHistory` (`{ spreadsheetId, createdBy, createdAt }`, server-only - not in the shared Config, so `firestore.rules` didn't change). Archived as "{year} Action History" with the other spreadsheets, and cleared (`A2:O`) by Setup New Auction Year after the backup.
+Who did what this season (`server/services/actionHistoryRows.ts`). Created by **Settings > Action History > Create Action History spreadsheet** in the Auction/General Auction Info/Template Files folder (`DRIVE_TEMPLATE_FILES_FOLDER_ID`), next to the master Bid Management and Item Entry spreadsheets; its ID is kept in Firestore `system/actionHistory` (`{ spreadsheetId, createdBy, createdAt }`, server-only - not in the shared Config, so `firestore.rules` didn't change). Archived as "{year} Action History" with the other spreadsheets, and cleared (`A2:O`) by Setup New Auction Year after the backup.
 
 | Col | Header | Notes |
 |---|---|---|

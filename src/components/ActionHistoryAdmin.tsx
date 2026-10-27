@@ -109,7 +109,7 @@ export default function ActionHistoryAdmin() {
           <StatusStatePlaceholder
             icon={<History />}
             title="Action History isn't set up yet"
-            description="Create the Action History spreadsheet to start recording who adds, edits, deletes and bundles items, changes tickets, and runs the auction. It's created in the main auction folder, archived with the other spreadsheets, and cleared at the start of each new auction year. Until then, actions are only written to the server's logs."
+            description="Create the Action History spreadsheet to start recording who adds, edits, deletes and bundles items, changes tickets, and runs the auction. It's created in the Auction/General Auction Info/Template Files folder, next to the master spreadsheets, archived with the other spreadsheets, and cleared at the start of each new auction year. Until then, actions are only written to the server's logs."
             action={
               <LoadingButton loading={state.creating} onClick={state.createSpreadsheet} icon={<History className="w-4 h-4" />}>
                 Create Action History spreadsheet

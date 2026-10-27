@@ -86,7 +86,7 @@ describe("/api/action-history", () => {
     vi.restoreAllMocks();
   });
 
-  it("creates the spreadsheet in the main auction folder with the header row, and remembers it", async () => {
+  it("creates the spreadsheet in the Template Files folder (next to the master spreadsheets) with the header row, and remembers it", async () => {
     vi.mocked(getActionHistorySpreadsheetId).mockResolvedValue("");
     const calls: string[] = [];
     let header: unknown = null;
@@ -113,7 +113,7 @@ describe("/api/action-history", () => {
     expect(res.status).toBe(200);
     expect(res.body.spreadsheetId).toBe("new-log");
     expect(calls).toEqual([
-      "create Action History in test-drive-parent-folder-id as application/vnd.google-apps.spreadsheet",
+      "create Action History in test-template-files-folder-id as application/vnd.google-apps.spreadsheet",
       "format updateSheetProperties,repeatCell,addProtectedRange",
     ]);
     expect(header).toEqual([...ACTION_HISTORY_HEADER]);
@@ -201,6 +201,17 @@ describe("POST /api/action-history/edit-tracking", () => {
       ["test-item-entry-script-id", "apiEnableEditTracking", [LOG_ID, "it"]],
       ["test-tickets-script-id", "apiEnableEditTracking", [LOG_ID, "tk"]],
     ]);
+  });
+
+  it("says to sign in again, not Google's raw error, when the sign-in predates the trigger permission", async () => {
+    vi.mocked(getActionHistorySpreadsheetId).mockResolvedValue(LOG_ID);
+    server.use(http.post("https://script.googleapis.com/v1/scripts/:scriptId\\:run", () =>
+      HttpResponse.json({ response: { result: { success: false, error: "You do not have permission to call ScriptApp.getProjectTriggers. Required permissions: https://www.googleapis.com/auth/script.scriptapp" } } })));
+
+    const res = await request(app).post("/api/action-history/edit-tracking").set(admin).send({ itemsSpreadsheetId: "it", ticketsSpreadsheetId: "tk" });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("Your Google sign-in doesn't include the permission this needs yet. Sign out, sign in again and approve the new permission, then try again.");
   });
 
   it("refuses until the Action History spreadsheet exists", async () => {

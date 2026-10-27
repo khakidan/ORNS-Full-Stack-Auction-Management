@@ -2,7 +2,7 @@ import { drive_v3, sheets_v4 } from "googleapis";
 import { ACTION_HISTORY_HEADER, ACTIONS_RANGE, ACTIONS_SHEET, COL, ActionRecord, parseActionRows } from "./actionHistoryRows";
 
 /**
- * Creates the Action History spreadsheet in the main auction folder: one
+ * Creates the Action History spreadsheet in `folderId` (the Template Files folder): one
  * `Actions` tab with the header row frozen and bold, and a warning-only
  * protection so someone editing the log by hand is asked to confirm.
  * Returns its ID.
@@ -10,10 +10,10 @@ import { ACTION_HISTORY_HEADER, ACTIONS_RANGE, ACTIONS_SHEET, COL, ActionRecord,
 export async function createActionHistorySpreadsheet(
   drive: drive_v3.Drive,
   sheets: sheets_v4.Sheets,
-  parentFolderId: string
+  folderId: string
 ): Promise<string> {
   const file = await drive.files.create({
-    requestBody: { name: "Action History", mimeType: "application/vnd.google-apps.spreadsheet", parents: [parentFolderId] },
+    requestBody: { name: "Action History", mimeType: "application/vnd.google-apps.spreadsheet", parents: [folderId] },
     fields: "id",
     supportsAllDrives: true,
   });

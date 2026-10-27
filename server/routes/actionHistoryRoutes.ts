@@ -14,6 +14,19 @@ import { runAppsScript } from '../utils/appsScriptRun';
 
 const sheetUrl = (id: string) => `https://docs.google.com/spreadsheets/d/${id}`;
 
+/** Message shown when the signed-in person's Google sign-in predates the trigger permission. */
+export const SIGN_IN_AGAIN = "Your Google sign-in doesn't include the permission this needs yet. Sign out, sign in again and approve the new permission, then try again.";
+
+/**
+ * Installing a trigger needs the script.scriptapp permission. A sign-in
+ * from before it was added gets Google's raw "You do not have permission
+ * to call ScriptApp..." (or "The caller does not have permission") - say
+ * what to do instead.
+ */
+function explainScriptError(message: string): string {
+  return /script\.scriptapp|permission to call ScriptApp|caller does not have permission/i.test(message) ? SIGN_IN_AGAIN : message;
+}
+
 /** Settings > Action History: create the log spreadsheet, read it, and Undo (Full Administrator only). */
 export default function createActionHistoryRouter() {
   const router = Router();
@@ -28,14 +41,16 @@ export default function createActionHistoryRouter() {
   });
 
   /**
-   * Creates the spreadsheet in the main auction folder. Refused while the
+   * Creates the spreadsheet in the Template Files folder
+   * (DRIVE_TEMPLATE_FILES_FOLDER_ID), next to the master Bid Management and
+   * Item Entry spreadsheets. Refused while the
    * current one still opens, so the log can't be split by accident; if it
    * was deleted, this makes a new one.
    */
   router.post("/action-history/create", requirePermission("settings"), async (req: Request, res: Response, next: NextFunction) => {
-    const parentFolderId = process.env.DRIVE_PARENT_FOLDER_ID;
-    if (!parentFolderId) {
-      return res.status(500).json({ error: "DRIVE_PARENT_FOLDER_ID is not configured on the server." });
+    const templateFilesFolderId = process.env.DRIVE_TEMPLATE_FILES_FOLDER_ID;
+    if (!templateFilesFolderId) {
+      return res.status(500).json({ error: "DRIVE_TEMPLATE_FILES_FOLDER_ID (the Auction/General Auction Info/Template Files folder) is not configured on the server." });
     }
     try {
       const sheets = sheetsFor(req);
@@ -46,7 +61,7 @@ export default function createActionHistoryRouter() {
           return res.status(409).json({ error: "The Action History spreadsheet already exists.", spreadsheetId: existing, url: sheetUrl(existing) });
         }
       }
-      const spreadsheetId = await createActionHistorySpreadsheet(driveFor(req), sheets, parentFolderId);
+      const spreadsheetId = await createActionHistorySpreadsheet(driveFor(req), sheets, templateFilesFolderId);
       await setActionHistorySpreadsheetId(spreadsheetId, req.user!.email);
       await logAction(req, { area: "Settings", action: "Create Action History spreadsheet", summary: "Started recording actions in a new Action History spreadsheet", notUndoableReason: "the log itself" });
       res.json({ spreadsheetId, url: sheetUrl(spreadsheetId) });
@@ -79,10 +94,14 @@ export default function createActionHistoryRouter() {
         }
         try {
           const result = await runAppsScript(script, t.scriptId, "apiEnableEditTracking", [logId, t.spreadsheetId]);
-          results.push({ name: t.name, success: result?.success !== false, error: result?.error });
+          results.push({ name: t.name, success: result?.success !== false, error: result?.error && explainScriptError(result.error) });
         } catch (err: any) {
-          results.push({ name: t.name, success: false, error: err?.message || String(err) });
+          results.push({ name: t.name, success: false, error: explainScriptError(err?.message || String(err)) });
         }
+      }
+      const failures = results.filter((r) => !r.success);
+      if (failures.length && failures.every((r) => r.error === SIGN_IN_AGAIN)) {
+        return res.status(403).json({ error: SIGN_IN_AGAIN, results });
       }
       await logAction(req, {
         area: "Settings",
