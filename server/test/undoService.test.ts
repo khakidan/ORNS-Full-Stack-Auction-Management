@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../services/itemService", () => ({ updateItem: vi.fn(async () => ({})), deleteItem: vi.fn(async () => ({})) }));
 vi.mock("../services/bundleService", () => ({ restoreBundle: vi.fn(async () => ({})) }));
-vi.mock("../services/userService", () => ({ getRole: vi.fn(), setRole: vi.fn(async () => {}) }));
+vi.mock("../services/userService", async (importActual) => ({
+  roleChangeRefusal: (await importActual<typeof import("../services/userService")>()).roleChangeRefusal,
+  getRole: vi.fn(),
+  setRole: vi.fn(async () => {}),
+}));
 
 import { applyUndo, UndoRefusedError } from "../services/undoService";
 import { updateItem, deleteItem } from "../services/itemService";
@@ -71,9 +75,25 @@ describe("applyUndo - roles", () => {
     await expect(applyUndo(sheetsReturning([]), { kind: "role", email: "jane@orns.org", before: "user", after: "admin" }, "dan@orns.org"))
       .rejects.toBeInstanceOf(UndoRefusedError);
   });
+
+  it.each([
+    ["an address outside @orns.org", { email: "me@gmail.com", before: "full_admin", after: "user" }, "@orns.org"],
+    ["the person clicking Undo", { email: "dan@orns.org", before: "full_admin", after: "user" }, "your own role"],
+    ["a role that isn't one", { email: "jane@orns.org", before: "owner", after: "user" }, "Role must be"],
+  ])("refuses, as the Users tab does, to change %s", async (_label, change, message) => {
+    vi.mocked(getRole).mockResolvedValue("user");
+    await expect(applyUndo(sheetsReturning([]), { kind: "role", ...change } as any, "dan@orns.org")).rejects.toThrow(message);
+    expect(setRole).not.toHaveBeenCalled();
+  });
 });
 
 describe("applyUndo - cells", () => {
+  it("writes restored text starting with =, +, - or @ as text, but leaves numbers as numbers", async () => {
+    const sheets = sheetsReturning(["a", "b", "c", "d", "e"]);
+    await applyUndo(sheets, { kind: "cells", spreadsheetId: "it", range: "'x'!A1:E1", before: [["=SUM(A1)", "@x", "-5", "+1.5", "-A1"]], after: [["a", "b", "c", "d", "e"]] }, "dan@orns.org");
+    expect(sheets.spreadsheets.values.update).toHaveBeenCalledWith(expect.objectContaining({ requestBody: { values: [["'=SUM(A1)", "'@x", "-5", "+1.5", "'-A1"]] } }));
+  });
+
   it("treats TRUE/true, 150/'150' and blank/missing as the same when checking nothing changed", async () => {
     const sheets = sheetsReturning(["312", 150]);
     await applyUndo(sheets, { kind: "cells", spreadsheetId: "bm", range: "Bid-Management!A5:B5", before: [["", ""]], after: [[312, "150"]] }, "dan@orns.org");

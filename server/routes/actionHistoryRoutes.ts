@@ -2,8 +2,9 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { requirePermission } from '../middleware/requirePermission';
 import { driveFor, sheetsFor } from '../utils/googleClients';
 import { withLock } from '../utils/asyncLock';
-import { UndoSpec } from '../utils/undoSpec';
-import { getActionHistorySpreadsheetId, setActionHistorySpreadsheetId } from '../services/actionHistoryStore';
+import { readUndoData, TrustedSheets } from '../utils/undoData';
+import { getActionHistorySpreadsheetId, recordUndone, setActionHistorySpreadsheetId, wasUndone } from '../services/actionHistoryStore';
+import { getSharedConfig } from '../services/configService';
 import { createActionHistorySpreadsheet, findAction, listActions, markUndone } from '../services/actionHistoryService';
 import { COL } from '../services/actionHistoryRows';
 import { applyUndo, UndoRefusedError } from '../services/undoService';
@@ -14,6 +15,12 @@ import { getAuthenticatedClient } from '../services/oauth';
 import { runAppsScript } from '../utils/appsScriptRun';
 
 const sheetUrl = (id: string) => `https://docs.google.com/spreadsheets/d/${id}`;
+
+/** Where Sheet-edit rows (unsigned Undo Data) may be undone: this year's Items and Tickets spreadsheets. */
+async function trustedSheets(): Promise<TrustedSheets> {
+  const config = await getSharedConfig();
+  return { itemsSpreadsheetId: config.auctionItemsSpreadsheetId, ticketsSpreadsheetId: config.auctionTicketsSpreadsheetId };
+}
 
 /** Message shown when the signed-in person's Google sign-in predates the trigger permission. */
 export const SIGN_IN_AGAIN = "Your Google sign-in doesn't include the permission this needs yet. Sign out, sign in again and approve the new permission, then try again.";
@@ -150,7 +157,7 @@ export default function createActionHistoryRouter() {
     try {
       const spreadsheetId = await getActionHistorySpreadsheetId();
       if (!spreadsheetId) return res.json({ spreadsheetId: "", actions: [] });
-      res.json({ spreadsheetId, url: sheetUrl(spreadsheetId), actions: await listActions(sheetsFor(req), spreadsheetId) });
+      res.json({ spreadsheetId, url: sheetUrl(spreadsheetId), actions: await listActions(sheetsFor(req), spreadsheetId, await trustedSheets()) });
     } catch (error) {
       next(error);
     }
@@ -168,19 +175,21 @@ export default function createActionHistoryRouter() {
       const outcome = await withLock(`action-history-undo:${actionId}`, async () => {
         const found = await findAction(sheets, spreadsheetId, actionId);
         if (!found) return { status: 404, error: "That action isn't in the Action History." };
-        const { rowIndex, row } = found;
+        const { rowIndex, row, duplicated } = found;
         const cell = (c: number) => String(row[c] ?? "");
+        if (duplicated) return { status: 409, error: "More than one row in the Action History has this Action ID, so it can't be undone here." };
         if (cell(COL.undo)) return { status: 409, error: cell(COL.undo).startsWith("Undone") ? `This was already undone (${cell(COL.undo)}).` : cell(COL.undo) };
         if (!cell(COL.undoData)) return { status: 409, error: "This action can't be undone here." };
+        // The "Undone by" cell can be cleared by hand; Firestore can't.
+        if (await wasUndone(actionId)) return { status: 409, error: "This was already undone." };
 
-        let spec: UndoSpec;
-        try {
-          spec = JSON.parse(cell(COL.undoData));
-        } catch {
-          return { status: 409, error: "This action's undo data is unreadable, so it can't be undone here." };
-        }
+        // The spreadsheet is editable by all staff - only act on Undo Data the app wrote (undoData.ts).
+        const undoData = readUndoData(actionId, cell(COL.undoData), await trustedSheets());
+        if ("error" in undoData) return { status: 409, error: `This can't be undone here: ${undoData.error}.` };
+        const spec = undoData.spec;
 
         await applyUndo(sheets, spec, req.user!.email);
+        await recordUndone(actionId, req.user!.email);
         const when = new Date().toISOString();
         await markUndone(sheets, spreadsheetId, rowIndex, `Undone by ${req.user!.email} at ${when}`);
         noteChange(ACTION_HISTORY_KEY);

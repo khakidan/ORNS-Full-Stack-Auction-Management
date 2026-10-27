@@ -34,11 +34,6 @@ Read of everything changed on 2026-10-27 (`cf4ea05`..`bf7994a`: auction states, 
 
 Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 
-### High - fix before staff rely on Undo
-
-- **A1 - Undo trusts whatever the Action History spreadsheet says.** `POST /api/action-history/:id/undo` parses the row's Undo Data column and `applyUndo` (`server/services/undoService.ts`) carries it out with the Full Administrator's Google access. Every staff member can edit that spreadsheet (the app writes log rows as the person acting, so it must be shared with all staff; its protection is warning-only). So anyone on staff can add a row with a harmless-looking summary and Undo Data such as `{"kind":"role","email":"me@orns.org","before":"full_admin","after":"user"}` - when a Full Administrator clicks Undo, that person becomes a Full Administrator. The `role` case calls `setRole` directly, skipping the Users route's checks (only @orns.org, not a FULL_ADMIN_EMAILS address, not your own role). A `cells` row can write any values (as `USER_ENTERED`, so formulas too) to any range of any spreadsheet the admin can edit. The confirmation dialog shows the row's Before column, not what Undo will actually write.
-  - Fix: sign the Undo Data the server writes (an HMAC with a server-only secret, checked before undoing) and refuse rows whose signature doesn't match. Rows the Items/Tickets Apps Scripts write (Sheet edits) can't be signed - accept those only as kind `cells`, one cell, in the configured Items or Tickets spreadsheet. Write a restored text value starting with `=`, `+`, `-` or `@` as text. Give the `role` case the same checks as `PUT /api/users/:email/role`. Show what Undo will write, from the Undo Data, in the confirmation.
-
 ### Medium - before the auction
 
 - **A2 - A volunteer link isn't used up atomically.** `POST /auth/volunteer` looks the token up (`findVolunteerByToken`), then `redeemVolunteer` sets the record `active` without checking it still holds that token. A Revoke or Resend landing in between is overwritten back to `active` (a revoked volunteer gets in, or an old link still works after Resend), and two quick submissions both sign in. Fix: redeem in a Firestore transaction that requires `status: "invited"` and the same `tokenHash`.

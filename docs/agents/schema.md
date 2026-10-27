@@ -122,9 +122,9 @@ Who did what this season (`server/services/actionHistoryRows.ts`). Created by **
 | L | Location | Spreadsheet and range written |
 | M | Undo | Blank (undoable), `Undone by ... at ...`, or `Can't be undone: <reason>` |
 | N | Undo of | On an Undo row: the Action ID it reversed |
-| O | Undo Data | JSON `UndoSpec` (`server/utils/undoSpec.ts`) - what Undo needs; blank = not undoable |
+| O | Undo Data | What Undo needs (`UndoSpec`, `server/utils/undoSpec.ts`); blank = not undoable. App rows: `v1:<HMAC>:<JSON>`, signed over the Action ID and JSON with a key derived from `SESSION_SECRET` (`server/utils/undoData.ts`) - a hand-edited or copied row fails the check. Sheet-edit rows: plain JSON, accepted only as one cell of the configured Items or Tickets spreadsheet |
 
-Written RAW by the app (typed text is never run as a formula). If the spreadsheet isn't set up or a write fails, the row goes to Cloud Logging (`jsonPayload.actionLog`) instead.
+Written RAW by the app (typed text is never run as a formula). Anyone on staff can edit this spreadsheet, so Undo never trusts it alone: see Undo Data above, and Firestore `undoneActions/{actionId}` (server-only) records each action already undone, so clearing column M can't make it undoable again. If the spreadsheet isn't set up or a write fails, the row goes to Cloud Logging (`jsonPayload.actionLog`) instead.
 
 ### Collection: `volunteers` (server-only)
 
