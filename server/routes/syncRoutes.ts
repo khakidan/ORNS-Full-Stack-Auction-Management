@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { sheetsFor } from '../utils/googleClients';
-import { performSheetSync } from '../services/syncService';
+import { sheetsFor, respondIfNotFound } from '../utils/googleClients';
+import { performSheetSync, isBidManagementSetUp } from '../services/syncService';
 
 /** Builds Bidder-Numbers / Bid-Management from the ticket sheets (syncService.ts). */
 export default function createSyncRouter() {
@@ -24,6 +24,19 @@ export default function createSyncRouter() {
       if (error.message.includes("Cannot re-sync") || error.message.includes("Missing '")) {
         return res.status(400).json({ error: error.message });
       }
+      next(error);
+    }
+  });
+
+  router.get("/bidders/setup-status", async (req: Request, res: Response, next: NextFunction) => {
+    const spreadsheetId = req.query.spreadsheetId;
+    if (typeof spreadsheetId !== "string" || !spreadsheetId) {
+      return res.status(400).json({ error: "spreadsheetId is required." });
+    }
+    try {
+      res.json({ setUp: await isBidManagementSetUp(sheetsFor(req), spreadsheetId) });
+    } catch (error: any) {
+      if (respondIfNotFound(error, res)) return;
       next(error);
     }
   });

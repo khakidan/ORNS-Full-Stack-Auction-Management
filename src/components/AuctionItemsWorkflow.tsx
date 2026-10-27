@@ -6,7 +6,7 @@ import DocumentCreationTab from "./DocumentCreationTab";
 
 export default function AuctionItemsWorkflow() {
   const { config } = useConfig();
-  const { isAuctionClosed } = useAuction();
+  const { auctionState } = useAuction();
   const spreadsheetId = config.auctionItemsSpreadsheetId;
 
   return (
@@ -14,7 +14,7 @@ export default function AuctionItemsWorkflow() {
       title="Auction Items Management"
       description="The database for all auction items. Assign categories, bundle items, and generate documents."
       spreadsheetId={spreadsheetId}
-      isAuctionClosed={isAuctionClosed}
+      auctionState={auctionState}
       defaultTab="auction_items"
       tabs={[
         { value: "auction_items", label: "Auction Items", content: <AuctionItemsTab /> },

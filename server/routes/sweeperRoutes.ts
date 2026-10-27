@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { getSweeperStatus, runPaypalSweep } from '../services/paypalSweeperJob';
 
 /**
- * The Configuration page's PayPal sweeper card: its status (stored
+ * The Settings page's PayPal sweeper card: its status (stored
  * background credential, last runs) and a Run Now button, so the sweeper
  * can be checked from the app instead of only from server logs.
  */

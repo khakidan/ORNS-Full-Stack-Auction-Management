@@ -46,7 +46,10 @@ describe("useAuctionStatusData", () => {
       ['the string "FALSE"', "FALSE", true],
       ["the boolean true", true, false],
       ['the string "TRUE"', "TRUE", false],
-      ['an unrelated string like "false" (lowercase)', "false", false],
+      ['the lowercase string "false"', "false", true],
+      ['"Closed"', "Closed", true],
+      ['"Prep"', "Prep", false],
+      ['"Live"', "Live", false],
     ])("treats %s as %s for isAuctionClosed", async (_label, cellValue, expectedClosed) => {
       mockedGetSheetData.mockResolvedValue({ values: [[cellValue]] } as any);
 
@@ -57,6 +60,20 @@ describe("useAuctionStatusData", () => {
       });
 
       expect(result.current.isAuctionClosed).toBe(expectedClosed);
+    });
+
+    it.each([
+      [true, "prep"], ["TRUE", "prep"], ["Prep", "prep"], ["Live", "live"], [false, "closed"], ["Closed", "closed"],
+    ])("reads the cell %s as the %s state, so a sheet from before the three states still works", async (cellValue, expectedState) => {
+      mockedGetSheetData.mockResolvedValue({ values: [[cellValue]] } as any);
+
+      const { result } = renderHook(() => useAuctionStatusData(SPREADSHEET_ID, BID_MGMT_SHEET, BIDDER_NUMBERS_SHEET));
+
+      await act(async () => {
+        await result.current.fetchAuctionStatus();
+      });
+
+      expect(result.current.auctionState).toBe(expectedState);
     });
 
     it("does nothing when spreadsheetId is empty", async () => {
@@ -185,6 +202,55 @@ describe("useAuctionStatusData", () => {
 
       expect(returned).toBe(false);
       expect(fetchWithRetry).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("requestGoLive", () => {
+    it("posts to go-live and moves to the Live state", async () => {
+      mockedFetchWithRetry.mockResolvedValue({ ok: true, status: 200, json: async () => ({ state: "live" }) } as any);
+      const { result } = renderHook(() => useAuctionStatusData(SPREADSHEET_ID, BID_MGMT_SHEET, BIDDER_NUMBERS_SHEET));
+
+      let ok = false;
+      await act(async () => { ok = await result.current.requestGoLive(); });
+
+      expect(ok).toBe(true);
+      expect(mockedFetchWithRetry).toHaveBeenCalledWith(expect.stringContaining("/api/auction/go-live"), expect.objectContaining({ method: "POST" }));
+      expect(result.current.auctionState).toBe("live");
+      expect(result.current.isAuctionClosed).toBe(false);
+    });
+
+    it("stays in Prep and reports the reason when the server refuses (for example it was already Closed)", async () => {
+      mockedFetchWithRetry.mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: "The auction is already Closed; it can only go Live from Prep." }) } as any);
+      const { result } = renderHook(() => useAuctionStatusData(SPREADSHEET_ID, BID_MGMT_SHEET, BIDDER_NUMBERS_SHEET));
+
+      let ok = true;
+      await act(async () => { ok = await result.current.requestGoLive(); });
+
+      expect(ok).toBe(false);
+      expect(result.current.auctionState).toBe("prep");
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("already Closed"));
+    });
+  });
+
+  describe("fetchSetupStatus", () => {
+    it.each([[true], [false]])("reports setUp=%s from the server", async (setUp) => {
+      mockedFetchWithRetry.mockResolvedValue({ ok: true, status: 200, json: async () => ({ setUp }) } as any);
+      const { result } = renderHook(() => useAuctionStatusData(SPREADSHEET_ID, BID_MGMT_SHEET, BIDDER_NUMBERS_SHEET));
+      expect(result.current.isBidManagementSetUp).toBeNull();
+
+      await act(async () => { await result.current.fetchSetupStatus(); });
+
+      expect(mockedFetchWithRetry).toHaveBeenCalledWith(expect.stringContaining(`setup-status?spreadsheetId=${SPREADSHEET_ID}`), expect.anything());
+      expect(result.current.isBidManagementSetUp).toBe(setUp);
+    });
+
+    it("stays unknown (null), so the header offers neither Set Up nor Go Live, when the check fails", async () => {
+      mockedFetchWithRetry.mockRejectedValue(new Error("network down"));
+      const { result } = renderHook(() => useAuctionStatusData(SPREADSHEET_ID, BID_MGMT_SHEET, BIDDER_NUMBERS_SHEET));
+
+      await act(async () => { await result.current.fetchSetupStatus(); });
+
+      expect(result.current.isBidManagementSetUp).toBeNull();
     });
   });
 });

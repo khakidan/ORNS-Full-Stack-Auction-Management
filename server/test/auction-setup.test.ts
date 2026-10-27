@@ -144,8 +144,8 @@ describe("setupRoutes - /api/auction/setup-new", () => {
       const deletedSheetIds = bidMgmtDeletes[0].requests.map((r: any) => r.deleteSheet.sheetId).sort();
       expect(deletedSheetIds).toEqual([101, 102]);
 
-      // Auction-Status!A2 reset back to true (open), not left cleared/false.
-      expect(lastBulkWritePayload).toEqual([[true]]);
+      // Auction-Status!A2 reset back to "Prep", not left cleared or Closed.
+      expect(lastBulkWritePayload).toEqual([["Prep"]]);
 
       // Special-Winners and Follow-Up cleared on Bid-Management specifically.
       expect(clearedRanges).toContainEqual({ spreadsheetId: "bidmgmt-id", range: "'Special-Winners'!B2:B3" });
@@ -225,7 +225,7 @@ describe("setupRoutes - /api/auction/setup-new", () => {
       // the whole setup run (the subsequent Auction-Status reset and
       // Special-Winners/Follow-Up clears still ran).
       expect(results).toContainEqual(expect.objectContaining({ success: true }));
-      expect(lastBulkWritePayload).toEqual([[true]]);
+      expect(lastBulkWritePayload).toEqual([["Prep"]]);
     });
   });
 });

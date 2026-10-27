@@ -48,7 +48,7 @@ export function FolderFilesCard({ files, loadingFiles, isInvalidFolder, onRefres
             description={
               <>
                 For Print Folder ID not configured.
-                <p className="text-xs mt-1">Set it in the Configuration {'>'} Styling & Files section.</p>
+                <p className="text-xs mt-1">Set it in Settings {'>'} Configuration.</p>
               </>
             }
           />

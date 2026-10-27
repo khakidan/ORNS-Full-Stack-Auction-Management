@@ -6,7 +6,7 @@ import TicketDocumentCreationTab from "./TicketDocumentCreationTab";
 
 export default function AuctionTicketsWorkflow() {
   const { config } = useConfig();
-  const { isAuctionClosed } = useAuction();
+  const { auctionState } = useAuction();
   const spreadsheetId = config.auctionTicketsSpreadsheetId;
 
   return (
@@ -14,7 +14,7 @@ export default function AuctionTicketsWorkflow() {
       title="Auction Tickets"
       description="Manage bidders, check-ins, and prepare bidder documents for the day of the auction."
       spreadsheetId={spreadsheetId}
-      isAuctionClosed={isAuctionClosed}
+      auctionState={auctionState}
       defaultTab="auction_tickets"
       headerAlign="center"
       tabs={[

@@ -9,7 +9,7 @@ import { useAuction } from "@/context/AuctionContext";
 import ArchivedYearPanel from "./ArchivedYearPanel";
 
 export default function ArchivedAuctionsWorkflow() {
-  const { isAuctionClosed } = useAuction();
+  const { auctionState } = useAuction();
   const [auctions, setAuctions] = useState<ArchivedAuction[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +53,7 @@ export default function ArchivedAuctionsWorkflow() {
       title="Archived Auctions"
       description="Look back at the past two auctions: attendance, bidders, and the auction catalog."
       spreadsheetId=""
-      isAuctionClosed={isAuctionClosed}
+      auctionState={auctionState}
       defaultTab={String(auctions![0].year)}
       tabs={auctions!.map((a) => ({
         value: String(a.year),

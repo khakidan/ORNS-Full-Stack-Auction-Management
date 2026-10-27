@@ -249,11 +249,12 @@ describe("ConfigSettings", () => {
     expect(toast.success).not.toHaveBeenCalledWith("Settings saved locally and synced to cloud");
   });
 
-  it("splits the page into Settings / PayPal Integration / Google Apps Scripts / Bug Reports tabs, each showing only its own content", async () => {
+  it("splits the Settings page into Configuration / PayPal Integration / Google Apps Scripts / Bug Reports tabs, each showing only its own content", async () => {
     const user = userEvent.setup();
     render(<ConfigSettings />);
 
-    expect(screen.getByRole("heading", { name: "Configuration" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Configuration" })).toBeInTheDocument();
     expect(screen.getByText("Ticket Pricing")).toBeInTheDocument();
     expect(screen.queryByText("Apps Script Versions")).not.toBeInTheDocument();
 

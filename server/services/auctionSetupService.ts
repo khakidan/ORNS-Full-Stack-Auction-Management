@@ -2,6 +2,7 @@ import { drive_v3, sheets_v4 } from "googleapis";
 import { AUCTION_TICKETS_ITEM_ID } from "../utils/categoryHelpers";
 import { currentAuctionYear } from "../utils/auctionYear";
 import { archiveAuctionSpreadsheets } from "./archiveService";
+import { AUCTION_STATE_CELL } from "../utils/auctionState";
 
 export interface SetupAuctionParams {
   ticketsSpreadsheetId: string;
@@ -266,7 +267,7 @@ export async function setupNewAuction(
         spreadsheetId: bidManagementSpreadsheetId,
         range: "'Auction-Status'!A2",
         valueInputOption: "USER_ENTERED",
-        requestBody: { values: [[true]] }
+        requestBody: { values: [[AUCTION_STATE_CELL.prep]] }
       }).catch(err => onLog(`Failed to reset Auction-Status: ${err.message}`));
 
       await sheets.spreadsheets.values.clear({

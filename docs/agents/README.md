@@ -179,7 +179,7 @@ The job (`paypal-sweeper`, region us-east1):
     `https://orns-auction-manager.cloud.run/internal/paypal-sweep`, method
     POST, header `X-Sweeper-Secret: <the secret>`, no auth header.
 *   **Resume it before checkout opens; pause it after the auction.** The
-    Configuration page's PayPal Sweeper card shows "Running" while it's
+    Settings page's PayPal Sweeper card shows "Running" while it's
     firing and "Paused" otherwise.
 
 Cloud Scheduler's free tier covers 3 jobs per billing account, and each

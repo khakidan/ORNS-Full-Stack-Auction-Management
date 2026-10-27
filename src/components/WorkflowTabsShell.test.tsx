@@ -22,7 +22,7 @@ describe("WorkflowTabsShell - header", () => {
         title="Auction Items Management"
         description="The database for all auction items."
         spreadsheetId=""
-        isAuctionClosed={false}
+        auctionState="prep"
         defaultTab="one"
         tabs={tabs}
       />
@@ -32,33 +32,36 @@ describe("WorkflowTabsShell - header", () => {
     expect(screen.getByText("The database for all auction items.")).toBeInTheDocument();
   });
 
-  it("shows the Auction Closed badge only when isAuctionClosed", () => {
-    const { rerender } = render(
-      <WorkflowTabsShell title="T" description="D" spreadsheetId="" isAuctionClosed={false} defaultTab="one" tabs={tabs} />
+  it.each([
+    ["prep", "Prep Mode"],
+    ["live", "Auction Live"],
+    ["closed", "Auction Closed"],
+  ] as const)("shows only the %s badge (%s)", (state, label) => {
+    render(
+      <WorkflowTabsShell title="T" description="D" spreadsheetId="" auctionState={state} defaultTab="one" tabs={tabs} />
     );
-    expect(screen.queryByText("Auction Closed")).not.toBeInTheDocument();
 
-    rerender(
-      <WorkflowTabsShell title="T" description="D" spreadsheetId="" isAuctionClosed={true} defaultTab="one" tabs={tabs} />
-    );
-    expect(screen.getByText("Auction Closed")).toBeInTheDocument();
+    expect(screen.getByText(label)).toBeInTheDocument();
+    for (const other of ["Prep Mode", "Auction Live", "Auction Closed"].filter((l) => l !== label)) {
+      expect(screen.queryByText(other)).not.toBeInTheDocument();
+    }
   });
 
   it("shows the Open Spreadsheet button only when spreadsheetId is set", () => {
     const { rerender } = render(
-      <WorkflowTabsShell title="T" description="D" spreadsheetId="" isAuctionClosed={false} defaultTab="one" tabs={tabs} />
+      <WorkflowTabsShell title="T" description="D" spreadsheetId="" auctionState="prep" defaultTab="one" tabs={tabs} />
     );
     expect(screen.queryByText("Open Spreadsheet")).not.toBeInTheDocument();
 
     rerender(
-      <WorkflowTabsShell title="T" description="D" spreadsheetId="sheet-123" isAuctionClosed={false} defaultTab="one" tabs={tabs} />
+      <WorkflowTabsShell title="T" description="D" spreadsheetId="sheet-123" auctionState="prep" defaultTab="one" tabs={tabs} />
     );
     expect(screen.getByText("Open Spreadsheet")).toBeInTheDocument();
   });
 
   it("defaults headerAlign to sm:items-end", () => {
     render(
-      <WorkflowTabsShell title="T" description="D" spreadsheetId="" isAuctionClosed={false} defaultTab="one" tabs={tabs} />
+      <WorkflowTabsShell title="T" description="D" spreadsheetId="" auctionState="prep" defaultTab="one" tabs={tabs} />
     );
     const header = screen.getByText("T").closest("div")?.parentElement;
     expect(header?.className).toContain("sm:items-end");
@@ -66,7 +69,7 @@ describe("WorkflowTabsShell - header", () => {
 
   it("uses sm:items-center when headerAlign is 'center'", () => {
     render(
-      <WorkflowTabsShell title="T" description="D" spreadsheetId="" isAuctionClosed={false} defaultTab="one" tabs={tabs} headerAlign="center" />
+      <WorkflowTabsShell title="T" description="D" spreadsheetId="" auctionState="prep" defaultTab="one" tabs={tabs} headerAlign="center" />
     );
     const header = screen.getByText("T").closest("div")?.parentElement;
     expect(header?.className).toContain("sm:items-center");
@@ -77,7 +80,7 @@ describe("WorkflowTabsShell - header", () => {
 describe("WorkflowTabsShell - tabs", () => {
   it("renders a trigger per tab and shows the defaultTab's content initially", () => {
     render(
-      <WorkflowTabsShell title="T" description="D" spreadsheetId="" isAuctionClosed={false} defaultTab="two" tabs={tabs} />
+      <WorkflowTabsShell title="T" description="D" spreadsheetId="" auctionState="prep" defaultTab="two" tabs={tabs} />
     );
 
     expect(screen.getByRole("tab", { name: "Tab One" })).toBeInTheDocument();
@@ -88,7 +91,7 @@ describe("WorkflowTabsShell - tabs", () => {
   it("switches content when a different tab is clicked", async () => {
     const user = userEvent.setup();
     render(
-      <WorkflowTabsShell title="T" description="D" spreadsheetId="" isAuctionClosed={false} defaultTab="one" tabs={tabs} />
+      <WorkflowTabsShell title="T" description="D" spreadsheetId="" auctionState="prep" defaultTab="one" tabs={tabs} />
     );
 
     await user.click(screen.getByRole("tab", { name: "Tab Two" }));

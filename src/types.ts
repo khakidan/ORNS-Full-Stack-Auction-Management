@@ -149,7 +149,7 @@ export type PaypalSweepOutcome =
 
 /**
  * GET /api/paypal-sweeper/status's response shape - drives the
- * Configuration page's sweeper status card, the only way to confirm
+ * Settings page's sweeper status card, the only way to confirm
  * from inside the app (rather than server logs) that the two manual-only
  * steps from Code Hardening item #2 have actually happened: an admin
  * signing in once (credentialConfigured), and the background job running

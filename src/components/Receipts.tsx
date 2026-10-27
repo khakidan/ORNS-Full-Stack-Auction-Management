@@ -68,7 +68,7 @@ export default function Receipts() {
       <ConfigErrorCard
         icon={<FileText />}
         title="No Folder Configured"
-        description="Please correctly configure the Receipt Folder ID in the Settings tab to view generated receipts."
+        description="Please correctly configure the Receipt Folder ID in the Configuration tab to view generated receipts."
       />
     );
   }

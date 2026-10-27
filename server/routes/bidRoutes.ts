@@ -3,7 +3,7 @@ import { getAuthenticatedClient } from '../services/oauth';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { registerWalkInBidder, checkInBidderWithBid, setBidderFlag, BIDDER_FLAG_COLUMNS } from '../services/bidderService';
-import { recordWinningBid, checkoutMarkPaid, closeAuctionAndCleanup } from '../services/auctionService';
+import { recordWinningBid, checkoutMarkPaid, closeAuctionAndCleanup, goLiveAuction, AuctionStateError } from '../services/auctionService';
 import { requireAuth } from '../middleware/requireAuth';
 import { saveSpecialWinner, SPECIAL_PRIZES } from '../services/specialWinnerService';
 import { getPaypalIsSandbox } from '../services/sharedConfig';
@@ -128,6 +128,25 @@ export default function createBidRouter() {
       console.error("[Route Error] checkout-mark-paid:", error);
       if (error.message.includes("not found") || error.message.includes("is not configured")) {
         return res.status(error.message.includes("configured") ? 500 : 400).json({ error: error.message });
+      }
+      next(error);
+    }
+  });
+
+  router.post("/auction/go-live", async (req: Request, res: Response, next: NextFunction) => {
+    const { spreadsheetId } = req.body;
+    if (!spreadsheetId) {
+      return res.status(400).json({ error: "Missing the Bid Management spreadsheet ID." });
+    }
+
+    try {
+      const result = await goLiveAuction(sheetsFor(req), { spreadsheetId });
+      clearCacheForSpreadsheet(spreadsheetId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("[Route Error] go-live:", error);
+      if (error instanceof AuctionStateError) {
+        return res.status(409).json({ error: error.message });
       }
       next(error);
     }

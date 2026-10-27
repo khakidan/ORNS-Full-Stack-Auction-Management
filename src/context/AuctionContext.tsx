@@ -8,6 +8,7 @@ import { useAuctionItems } from "@/hooks/useAuctionItems";
 import { useAttendeesData } from "@/hooks/useAttendeesData";
 import { useWinnersData } from "@/hooks/useWinnersData";
 import { useAuctionStatusData } from "@/hooks/useAuctionStatusData";
+import { AuctionState } from "@/lib/auctionState";
 
 interface AuctionContextType {
   bidders: Bidder[];
@@ -30,7 +31,11 @@ interface AuctionContextType {
   addAttendee: (sheet: string, data: string[]) => Promise<void>;
   removeAttendee: (attendee: Attendee) => Promise<void>;
   recordWinningBid: (bidderId: string, itemId: string, price: number) => Promise<string | void>;
+  auctionState: AuctionState;
   isAuctionClosed: boolean;
+  /** null while unknown. */
+  isBidManagementSetUp: boolean | null;
+  goLive: () => Promise<void>;
   closeAuction: () => Promise<void>;
 }
 
@@ -58,12 +63,16 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   const { fetchBidders, setLoading } = biddersData;
   const { refresh: refreshItems } = itemsData;
   const { fetchAttendees } = attendeesData;
-  const { fetchAuctionStatus, requestCloseAuction } = auctionStatusData;
+  const { fetchAuctionStatus, fetchSetupStatus, requestCloseAuction } = auctionStatusData;
 
   const fetchAllData = useCallback(async () => {
     setLoading(true);
-    await Promise.all([fetchBidders(), refreshItems(), fetchAttendees(), fetchAuctionStatus()]);
-  }, [setLoading, fetchBidders, refreshItems, fetchAttendees, fetchAuctionStatus]);
+    await Promise.all([fetchBidders(), refreshItems(), fetchAttendees(), fetchAuctionStatus(), fetchSetupStatus()]);
+  }, [setLoading, fetchBidders, refreshItems, fetchAttendees, fetchAuctionStatus, fetchSetupStatus]);
+
+  const goLive = useCallback(async () => {
+    await auctionStatusData.requestGoLive();
+  }, [auctionStatusData.requestGoLive]);
 
   const closeAuction = useCallback(async () => {
     const succeeded = await requestCloseAuction();
@@ -111,7 +120,10 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     addAttendee: attendeesData.addAttendee,
     removeAttendee: attendeesData.removeAttendee,
     recordWinningBid: winnersData.recordWinningBid,
+    auctionState: auctionStatusData.auctionState,
     isAuctionClosed: auctionStatusData.isAuctionClosed,
+    isBidManagementSetUp: auctionStatusData.isBidManagementSetUp,
+    goLive,
     closeAuction
   };
 

@@ -70,7 +70,7 @@ export interface PaypalSweepResult {
 export type PaypalSweepOutcome = PaypalSweepResult | { skipped: string };
 
 /**
- * In-process cache of the sweeper's last run, for the Configuration page's
+ * In-process cache of the sweeper's last run, for the Settings page's
  * status card (Code Hardening item #2's two manual-only steps - "an admin
  * must sign in once" and "confirm the Node job is running reliably" - were
  * otherwise unverifiable from inside the app itself; see
@@ -354,7 +354,7 @@ let inFlight: Promise<PaypalSweepOutcome> | null = null;
 /**
  * Public entry point - runs the sweep and records the outcome. Called by
  * Cloud Scheduler via POST /internal/paypal-sweep (`"scheduler"`) and by
- * the Configuration page's "Run Sweep Now" button (`"manual"`).
+ * the Settings page's "Run Sweep Now" button (`"manual"`).
  *
  * One sweep at a time: a call that arrives while one is running shares
  * its result instead of starting a second pass over the same rows.

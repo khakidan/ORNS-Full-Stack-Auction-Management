@@ -6,7 +6,7 @@ import { toast } from "sonner";
 const POLL_INTERVAL_MS = 30000;
 
 /**
- * Drives the Configuration page's PayPal sweeper status card - the only
+ * Drives the Settings page's PayPal sweeper status card - the only
  * way to confirm, from inside the app rather than server logs, that the
  * two manual-only steps from Code Hardening item #2 have actually
  * happened: an admin signing in once (credentialConfigured) and the

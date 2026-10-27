@@ -82,7 +82,7 @@ export default function BugReportsAdmin() {
       <ConfigErrorCard
         icon={<Bug />}
         title="No Bug Reports Spreadsheet Configured"
-        description="Please configure the Bug Reports Spreadsheet ID in the Settings tab to view open reports."
+        description="Please configure the Bug Reports Spreadsheet ID in the Configuration tab to view open reports."
       />
     );
   }

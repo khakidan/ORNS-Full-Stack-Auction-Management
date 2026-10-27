@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { Loader2, LayoutDashboard, RefreshCw, Users, ShoppingBag, CreditCard, Handshake, WalletCards, Settings, LogOut, FileText, Ticket, Package, ClipboardList, PanelLeftClose, Menu, ArrowUp, AlertCircle, ExternalLink, Archive } from "lucide-react";
+import { Loader2, LayoutDashboard, RefreshCw, Users, ShoppingBag, CreditCard, Handshake, WalletCards, Settings, LogOut, FileText, Ticket, Package, ClipboardList, PanelLeftClose, Menu, ArrowUp, AlertCircle, ExternalLink, Archive, CircleDot } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import Dashboard from "./components/Dashboard";
@@ -21,6 +21,7 @@ import BidEntry from "./components/BidEntry";
 import Checkout from "./components/Checkout";
 import Receipts from "./components/Receipts";
 import { BugReportButton } from "./components/BugReportButton";
+import { AuctionStateBadge } from "./components/AuctionStateBadge";
 import { useAuction } from "./context/AuctionContext";
 import { SyncStatusBanner, SavedBidsSidebarBadge } from "./components/SyncStatusBanner";
 import { useOutboxReplay } from "./hooks/useOutboxReplay";
@@ -37,7 +38,7 @@ const WORKFLOW_PATHS: Record<WorkflowType, string> = {
   items: "/AuctionItemsWorkflow",
   tickets: "/AuctionTicketsWorkflow",
   bids: "/BidManagement",
-  settings: "/Configuration",
+  settings: "/Settings",
   archive: "/ArchivedAuctions"
 };
 
@@ -86,7 +87,7 @@ function BackToTop() {
 
 export default function App() {
   const { config } = useConfig();
-  const { isAuctionClosed, closeAuction } = useAuction();
+  const { auctionState, isAuctionClosed, isBidManagementSetUp, closeAuction, goLive } = useAuction();
   const { authenticated, handleLogin, handleLogout } = useAuth();
   const [activeWorkflow, setActiveWorkflow] = useState<WorkflowType>(() => {
     const pathWorkflow = getWorkflowFromPath(window.location.pathname);
@@ -210,7 +211,7 @@ export default function App() {
              {activeWorkflow === 'items' && "Items"}
              {activeWorkflow === 'tickets' && "Tickets"}
              {activeWorkflow === 'bids' && "Bids"}
-             {activeWorkflow === 'settings' && "Config"}
+             {activeWorkflow === 'settings' && "Settings"}
              {activeWorkflow === 'archive' && "Archive"}
            </span>
            <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
@@ -302,10 +303,10 @@ export default function App() {
             variant={activeWorkflow === 'settings' ? 'secondary' : 'ghost'}
             className={cn("justify-start gap-3 h-10", (isSidebarOpen || isMobileMenuOpen) ? "w-full" : "w-10 px-0 justify-center")}
             onClick={() => { setActiveWorkflow('settings'); setIsMobileMenuOpen(false); }}
-            title="Configuration"
+            title="Settings"
           >
             <Settings className="w-5 h-5 shrink-0" />
-            {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Configuration</span>}
+            {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Settings</span>}
           </Button>
         </div>
 
@@ -352,36 +353,49 @@ export default function App() {
                       </p>
                     </div>
                     <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
-                      {isAuctionClosed && (
-                        <div className="flex items-center gap-2 px-3 py-1 bg-amber-100 text-amber-700 border border-amber-200 rounded-md font-bold text-xs uppercase tracking-wider animate-pulse whitespace-nowrap order-first sm:order-none mb-2 sm:mb-0">
-                          <AlertCircle className="w-4 h-4" />
-                          Auction Closed
-                        </div>
-                      )}
+                      <AuctionStateBadge state={auctionState} className="order-first sm:order-none mb-2 sm:mb-0" />
                       {!isAuctionClosed && (
                         <>
-                          <Button
-                            onClick={() => {
-                              if (window.confirm("Are you sure you want to CLOSE the auction? This will disable further bid entries.")) {
-                                closeAuction();
-                              }
-                            }}
-                            size="sm"
-                            variant="destructive"
-                            className="gap-2 w-full sm:w-auto shrink-0"
-                          >
-                            <AlertCircle className="w-4 h-4" />
-                            Close Auction
-                          </Button>
-                          <Button
-                            onClick={handleSyncBidders}
-                            disabled={isSyncing}
-                            size="sm"
-                            className="gap-2 w-full sm:w-auto shrink-0 bg-slate-900 text-slate-50 hover:bg-slate-900/90"
-                          >
-                            {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                            {isSyncing ? "Setting up..." : "Set Up Bid Management App"}
-                          </Button>
+                          {auctionState === "prep" && isBidManagementSetUp === true && (
+                            <Button
+                              onClick={() => {
+                                if (window.confirm("Take the auction LIVE? There's no way back to Prep from the app.")) {
+                                  goLive();
+                                }
+                              }}
+                              size="sm"
+                              className="gap-2 w-full sm:w-auto shrink-0 bg-emerald-600 text-white hover:bg-emerald-600/90"
+                            >
+                              <CircleDot className="w-4 h-4" />
+                              Go Live
+                            </Button>
+                          )}
+                          {auctionState === "live" && (
+                            <Button
+                              onClick={() => {
+                                if (window.confirm("Are you sure you want to CLOSE the auction? This will disable further bid entries.")) {
+                                  closeAuction();
+                                }
+                              }}
+                              size="sm"
+                              variant="destructive"
+                              className="gap-2 w-full sm:w-auto shrink-0"
+                            >
+                              <AlertCircle className="w-4 h-4" />
+                              Close Auction
+                            </Button>
+                          )}
+                          {isBidManagementSetUp === false && (
+                            <Button
+                              onClick={handleSyncBidders}
+                              disabled={isSyncing}
+                              size="sm"
+                              className="gap-2 w-full sm:w-auto shrink-0 bg-slate-900 text-slate-50 hover:bg-slate-900/90"
+                            >
+                              {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                              {isSyncing ? "Setting up..." : "Set Up Bid Management App"}
+                            </Button>
+                          )}
                         </>
                       )}
                       {config.bidManagementSpreadsheetId && (

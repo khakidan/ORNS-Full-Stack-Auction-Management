@@ -28,6 +28,10 @@ This sheet tracks all event registrations, active bidders, and their checkout/pa
 | **Column M** | `Receipt Emailed At` | String (ISO) | **Automated Field**: when this bidder's receipt was last emailed (`emailService.ts`'s `recordReceiptEmailed`) |
 | **Column N** | `Receipt Emailed Invoice` | String | **Automated Field**: the invoice link that email carried. Email All skips a bidder whose Column N equals their current Column J, so a re-run never re-sends an unchanged receipt. Clear it to force a re-send |
 
+### Sheet: 'Auction-Status'
+
+`A2` holds the auction's state as text: `Prep`, `Live` or `Closed` (`server/utils/auctionState.ts`, mirrored in `src/lib/auctionState.ts`). It only moves forward from the app: **Go Live** (`POST /api/auction/go-live`, Prep -> Live only) and **Close Auction** (`/api/auction/close-and-cleanup`, writes `Closed`); Setup New Auction Year resets it to `Prep`. Going back is a manual edit of the cell. A sheet from before the three states holds a checkbox boolean: `TRUE` reads as Prep and `FALSE` as Closed; blank or unrecognized reads as Prep. Live behaves exactly like Prep for now - it is there for the user-role work in `ROADMAP.md`.
+
 ### Sheet: 'Bug-Reports'
 
 A separate, dedicated spreadsheet (its ID lives in `Config.bugReportsSpreadsheetId`, not the Bid-Management one) - the central catalog every in-app bug report (the floating button/Ctrl-Cmd-Shift-B dialog, `src/hooks/useBugReportState.ts`) writes to via `POST /api/bug-reports` (`server/routes/bugReportRoutes.ts`). See `AGENTS.md`'s "Bug Report Lifecycle" section for how to close one out once fixed.
