@@ -31,6 +31,22 @@ export async function setActionHistorySpreadsheetId(spreadsheetId: string, creat
   cached = { id: spreadsheetId, readAt: Date.now() };
 }
 
+/**
+ * Actions already undone: Firestore `undoneActions/{actionId}`
+ * `{ undoneBy, undoneAt }`. The "Undone by" text in the spreadsheet can be
+ * cleared by anyone on staff, so this is what stops one action being
+ * undone twice (a replay - ROADMAP A1).
+ */
+const UNDONE = (actionId: string) => getAdminFirestore().collection("undoneActions").doc(encodeURIComponent(actionId));
+
+export async function wasUndone(actionId: string): Promise<boolean> {
+  return (await UNDONE(actionId).get()).exists;
+}
+
+export async function recordUndone(actionId: string, undoneBy: string): Promise<void> {
+  await UNDONE(actionId).set({ undoneBy, undoneAt: new Date().toISOString() });
+}
+
 /** Test-only. */
 export function _resetActionHistoryStoreForTesting(): void {
   cached = null;

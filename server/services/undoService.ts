@@ -5,7 +5,7 @@ import { ITEM_COL } from "../utils/sheetColumns";
 import { UndoSpec } from "../utils/undoSpec";
 import { deleteItem, updateItem } from "./itemService";
 import { restoreBundle } from "./bundleService";
-import { getRole, setRole } from "./userService";
+import { getRole, roleChangeRefusal, setRole } from "./userService";
 
 /** Undo can't (or won't) reverse this action - the route answers 409 with the message. */
 export class UndoRefusedError extends Error {}
@@ -26,6 +26,16 @@ function sameCells(current: unknown[][], expected: unknown[][]): boolean {
     }
   }
   return true;
+}
+
+/**
+ * Undo writes USER_ENTERED (so "150" goes back as a number), which would
+ * run a restored "=..." as a formula. Text starting with =, +, - or @ is
+ * written as text instead ("'" prefix), unless it is just a number.
+ */
+function asText(v: unknown): unknown {
+  if (typeof v !== "string" || !/^[=+\-@]/.test(v) || /^[+-]?(\d+\.?\d*|\.\d+)$/.test(v)) return v ?? "";
+  return `'${v}`;
 }
 
 /** Fields of an item row that an item undo compares (ID is left out - renumbering changes it). */
@@ -50,7 +60,7 @@ export async function applyUndo(sheets: sheets_v4.Sheets, spec: UndoSpec, actorE
           spreadsheetId: spec.spreadsheetId,
           range: spec.range,
           valueInputOption: "USER_ENTERED",
-          requestBody: { values: spec.before.map((row) => row.map((v) => v ?? "")) },
+          requestBody: { values: spec.before.map((row) => row.map(asText)) },
         });
         clearCacheForSpreadsheet(spec.spreadsheetId);
       };
@@ -93,6 +103,8 @@ export async function applyUndo(sheets: sheets_v4.Sheets, spec: UndoSpec, actorE
     }
 
     case "role": {
+      const refusal = roleChangeRefusal(spec.email, spec.before, actorEmail);
+      if (refusal) throw new UndoRefusedError(refusal);
       if ((await getRole(spec.email)) !== spec.after) throw new UndoRefusedError(`${spec.email}'s role: ${CHANGED_SINCE}`);
       await setRole(spec.email, spec.before, actorEmail);
       return;

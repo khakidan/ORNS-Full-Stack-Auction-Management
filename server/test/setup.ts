@@ -47,11 +47,20 @@ vi.mock('../services/bidderTicketSync', () => ({
 // Where the Action History spreadsheet is (Firestore system/actionHistory).
 // Not set up unless a test says otherwise; actionHistoryStore.test.ts
 // covers the real module via vi.importActual.
-vi.mock('../services/actionHistoryStore', () => ({
-  getActionHistorySpreadsheetId: vi.fn(async () => ''),
-  setActionHistorySpreadsheetId: vi.fn(async () => {}),
-  _resetActionHistoryStoreForTesting: () => {},
-}))
+vi.mock('../services/actionHistoryStore', () => {
+  const undone = new Set<string>()
+  return {
+    getActionHistorySpreadsheetId: vi.fn(async () => ''),
+    setActionHistorySpreadsheetId: vi.fn(async () => {}),
+    wasUndone: vi.fn(async (id: string) => undone.has(id)),
+    recordUndone: vi.fn(async (id: string) => { undone.add(id) }),
+    _resetActionHistoryStoreForTesting: () => undone.clear(),
+  }
+})
+afterEach(async () => {
+  const store = await import('../services/actionHistoryStore')
+  store._resetActionHistoryStoreForTesting()
+})
 
 // Closing the auction ends every volunteer's access (Firestore). Route tests
 // get a spy instead; volunteers.test.ts covers the real function.

@@ -8,6 +8,15 @@ import { buildActionRow, parseActionRows, ACTION_HISTORY_HEADER } from "../servi
 import { getActionHistorySpreadsheetId, setActionHistorySpreadsheetId } from "../services/actionHistoryStore";
 import { logAction } from "../services/actionLog";
 import { changesSince } from "../utils/changeFeed";
+import { signUndoData } from "../utils/undoData";
+import * as userService from "../services/userService";
+
+// Sheet-edit rows (unsigned Undo Data) may only be undone in this year's Items and Tickets spreadsheets.
+vi.mock("../services/configService", async (importActual) => ({
+  ...(await importActual<typeof import("../services/configService")>()),
+  getSharedConfig: vi.fn(async () => ({ auctionItemsSpreadsheetId: "it-sheet", auctionTicketsSpreadsheetId: "tk-sheet" })),
+}));
+const TRUSTED = { itemsSpreadsheetId: "it-sheet", ticketsSpreadsheetId: "tk-sheet" };
 
 const tokens = { access_token: "t", refresh_token: "r", expiry_date: Date.now() + 3600000 };
 const admin = authCookieHeader(tokens);
@@ -26,14 +35,35 @@ describe("Action History rows", () => {
     expect(row[0]).toMatch(/^20260314-180212-[0-9a-f]{6}$/);
     expect(row.slice(1, 12)).toEqual(["2026-03-14T18:02:12.000Z", "kim@yahoo.com", "Volunteer", "App", "Bid Management", "Check in", "Bidder 104", "Checked in bidder 104", "false", "true", "Bid Management 'Bidder-Numbers'!E7"]);
     expect(row[12]).toBe("");
-    expect(JSON.parse(row[14])).toMatchObject({ kind: "cells", range: "'Bidder-Numbers'!E7" });
+    // Signed with the server's secret and the Action ID, so a hand-typed or edited Undo Data is refused.
+    const [, sig, json] = /^v1:([0-9a-f]{64}):(.*)$/s.exec(row[14])!;
+    expect(row[14]).toBe(signUndoData(row[0], json));
+    expect(sig).toHaveLength(64);
+    expect(JSON.parse(json)).toMatchObject({ kind: "cells", range: "'Bidder-Numbers'!E7" });
+
+    const listed = parseActionRows([[...ACTION_HISTORY_HEADER], row], TRUSTED)[0];
+    expect(listed.undoable).toBe(true);
+    expect(listed.undoPreview).toBe("Writes false to 'Bidder-Numbers'!E7 in spreadsheet bm.");
+  });
+
+  it("doesn't offer Undo for Undo Data typed or changed in the spreadsheet, and says why", () => {
+    const row = buildActionRow({ who: "a@orns.org", role: "User", source: "App", area: "Users", action: "Change role", summary: "x",
+      undo: { kind: "role", email: "sam@orns.org", before: "user", after: "admin" } });
+    const edited = [...row];
+    edited[14] = row[14].replace('"before":"user"', '"before":"full_admin"');
+    const forged = [...row];
+    forged[14] = JSON.stringify({ kind: "role", email: "sam@orns.org", before: "full_admin", after: "user" });
+
+    const [e, f] = parseActionRows([[...ACTION_HISTORY_HEADER], edited, forged], TRUSTED);
+    expect(e).toMatchObject({ undoable: false, undoPreview: "", undo: "Can't be undone: its Undo Data was changed in the spreadsheet by hand" });
+    expect(f).toMatchObject({ undoable: false, undo: "Can't be undone: its Undo Data wasn't written by the app" });
   });
 
   it("says why an action can't be undone, and leaves its Undo Data empty", () => {
     const row = buildActionRow({ who: "a@orns.org", role: "User", source: "App", area: "Bid Management", action: "Email receipt", summary: "x", notUndoableReason: "emails have gone out" });
     expect(row[12]).toBe("Can't be undone: emails have gone out");
     expect(row[14]).toBe("");
-    expect(parseActionRows([[...ACTION_HISTORY_HEADER], row])[0].undoable).toBe(false);
+    expect(parseActionRows([[...ACTION_HISTORY_HEADER], row], TRUSTED)[0].undoable).toBe(false);
   });
 });
 
@@ -129,10 +159,12 @@ describe("/api/action-history", () => {
 
   describe("undo", () => {
     const undoCells = { kind: "cells", spreadsheetId: "bm", range: "'Bidder-Numbers'!E7", before: [[false]], after: [[true]] };
-    function logRows(undo: string, undoData: unknown) {
+    /** `signed: false` is Undo Data as the Apps Scripts (or someone typing in the sheet) write it. */
+    function logRows(undo: string, undoData: unknown, { signed = true, id = "act-1" } = {}) {
+      const json = undoData ? JSON.stringify(undoData) : "";
       return [
         [...ACTION_HISTORY_HEADER],
-        ["act-1", "t", "kim@yahoo.com", "Volunteer", "App", "Bid Management", "Check in", "Bidder 104", "Checked in bidder 104", "false", "true", "loc", undo, "", undoData ? JSON.stringify(undoData) : ""],
+        [id, "t", "kim@yahoo.com", "Volunteer", "App", "Bid Management", "Check in", "Bidder 104", "Checked in bidder 104", "false", "true", "loc", undo, "", json && signed ? signUndoData(id, json) : json],
       ];
     }
     function sheetsWith(rows: unknown[][], currentCell: unknown) {
@@ -184,6 +216,66 @@ describe("/api/action-history", () => {
       const res = await request(app).post("/api/action-history/act-1/undo").set(admin);
       expect(res.status).toBe(409);
       expect(res.body.error).toContain(message);
+      expect(writes).toEqual([]);
+    });
+
+    it("refuses Undo Data typed into the spreadsheet - e.g. a role \"undo\" that makes someone a Full Administrator", async () => {
+      const setRole = vi.spyOn(userService, "setRole").mockResolvedValue();
+      const writes = sheetsWith(logRows("", { kind: "role", email: "sam@orns.org", before: "full_admin", after: "user" }, { signed: false }), true);
+      const res = await request(app).post("/api/action-history/act-1/undo").set(admin);
+      expect(res.status).toBe(409);
+      expect(res.body.error).toContain("wasn't written by the app");
+      expect(setRole).not.toHaveBeenCalled();
+      expect(writes).toEqual([]);
+      setRole.mockRestore();
+    });
+
+    it("refuses signed Undo Data that was edited, or copied onto another Action ID", async () => {
+      const rows = logRows("", undoCells);
+      const writes = sheetsWith([rows[0], [...rows[1].slice(0, 14), String(rows[1][14]).replace('"before":[[false]]', '"before":[["=IMPORTRANGE()"]]')]], true);
+      expect((await request(app).post("/api/action-history/act-1/undo").set(admin)).body.error).toContain("changed in the spreadsheet by hand");
+
+      sheetsWith([rows[0], ["act-2", ...rows[1].slice(1)]], true);
+      expect((await request(app).post("/api/action-history/act-2/undo").set(admin)).body.error).toContain("changed in the spreadsheet by hand");
+      expect(writes).toEqual([]);
+    });
+
+    it("undoes a one-cell Sheet edit of the Items spreadsheet, writing a restored formula-like value as text, under the items lock", async () => {
+      const edit = { kind: "cells", spreadsheetId: "it-sheet", range: "'Auction-Items'!C5", before: [["=HYPERLINK(\"x\")"]], after: [["Vase"]] };
+      const writes = sheetsWith(logRows("", edit, { signed: false }), "Vase");
+      const res = await request(app).post("/api/action-history/act-1/undo").set(admin);
+      expect(res.status).toBe(200);
+      expect(writes[0]).toEqual({ range: "it-sheet 'Auction-Items'!C5", values: [["'=HYPERLINK(\"x\")"]] });
+    });
+
+    it.each([
+      ["another spreadsheet", { kind: "cells", spreadsheetId: "bm", range: "'Bidder-Numbers'!E7", before: [[false]], after: [[true]] }],
+      ["more than one cell", { kind: "cells", spreadsheetId: "tk-sheet", range: "'tickets'!A1:Z9", before: [[""]], after: [["x"]] }],
+      ["a kind other than cells", { kind: "item-add", spreadsheetId: "it-sheet", rowIndex: 5, name: "Vase" }],
+    ])("refuses unsigned Undo Data for %s", async (_label, data) => {
+      const writes = sheetsWith(logRows("", data, { signed: false }), true);
+      const res = await request(app).post("/api/action-history/act-1/undo").set(admin);
+      expect(res.status).toBe(409);
+      expect(writes).toEqual([]);
+    });
+
+    it("won't undo the same action twice, even if its \"Undone by\" cell is cleared by hand", async () => {
+      sheetsWith(logRows("", undoCells), true);
+      expect((await request(app).post("/api/action-history/act-1/undo").set(admin)).status).toBe(200);
+
+      const writes = sheetsWith(logRows("", undoCells), true);
+      const res = await request(app).post("/api/action-history/act-1/undo").set(admin);
+      expect(res.status).toBe(409);
+      expect(res.body.error).toContain("already undone");
+      expect(writes).toEqual([]);
+    });
+
+    it("refuses an Action ID that appears on more than one row", async () => {
+      const rows = logRows("", undoCells);
+      const writes = sheetsWith([...rows, rows[1]], true);
+      const res = await request(app).post("/api/action-history/act-1/undo").set(admin);
+      expect(res.status).toBe(409);
+      expect(res.body.error).toContain("More than one row");
       expect(writes).toEqual([]);
     });
 

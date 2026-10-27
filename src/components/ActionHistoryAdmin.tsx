@@ -177,7 +177,7 @@ export default function ActionHistoryAdmin() {
         open={!!confirming}
         onOpenChange={(open) => !open && setConfirming(null)}
         title="Undo this action?"
-        description={confirming ? `"${confirming.summary}" (by ${confirming.who}). This puts back: ${pretty(confirming.before)}` : ""}
+        description={confirming ? `"${confirming.summary}" (by ${confirming.who}). ${confirming.undoPreview}` : ""}
         confirmLabel="Undo"
         isLoading={!!confirming && state.undoingId === confirming.id}
         onConfirm={async () => {

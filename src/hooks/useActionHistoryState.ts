@@ -22,6 +22,8 @@ export interface ActionRecord {
   undo: string;
   undoOf: string;
   undoable: boolean;
+  /** What Undo will write, worked out by the server from the row's Undo Data. */
+  undoPreview: string;
 }
 
 export const ALL = "all";

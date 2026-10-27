@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { UndoSpec } from "../utils/undoSpec";
+import { describeUndo, readUndoData, signUndoData, TrustedSheets } from "../utils/undoData";
 
 /** The `Actions` tab's columns (schema.md). The Apps Scripts write the same columns - keep them in step. */
 export const ACTION_HISTORY_HEADER = [
@@ -42,9 +43,10 @@ function json(value: unknown): string {
 }
 
 export function buildActionRow(input: ActionRowInput, now = new Date()): string[] {
+  const id = newActionId(now);
   const undoStatus = input.undo ? "" : `Can't be undone: ${input.notUndoableReason || "this action can't be reversed in the app"}`;
   return [
-    newActionId(now),
+    id,
     now.toISOString(),
     input.who,
     input.role,
@@ -58,7 +60,8 @@ export function buildActionRow(input: ActionRowInput, now = new Date()): string[
     input.location || "",
     input.undoOf ? "" : undoStatus,
     input.undoOf || "",
-    input.undo ? json(input.undo) : "",
+    // Signed so Undo can tell it from Undo Data typed into the sheet (undoData.ts).
+    input.undo ? signUndoData(id, json(input.undo)) : "",
   ];
 }
 
@@ -78,13 +81,18 @@ export interface ActionRecord {
   location: string;
   undo: string;
   undoOf: string;
-  /** True when Undo can be offered: has Undo Data and hasn't been undone or refused. */
+  /** True when Undo can be offered: has Undo Data Undo can trust, and hasn't been undone or refused. */
   undoable: boolean;
+  /** What Undo will write (from the Undo Data), for the confirmation; "" when not undoable. */
+  undoPreview: string;
 }
 
-export function parseActionRows(values: unknown[][]): ActionRecord[] {
+export function parseActionRows(values: unknown[][], trusted: TrustedSheets): ActionRecord[] {
   return values.slice(1).map((row, i) => {
     const cell = (c: number) => String(row?.[c] ?? "");
+    const pending = !!cell(COL.undoData) && !cell(COL.undo);
+    const undoData = pending ? readUndoData(cell(COL.id), cell(COL.undoData), trusted) : null;
+    const untrusted = undoData && "error" in undoData ? `Can't be undone: ${undoData.error}` : "";
     return {
       rowIndex: i + 2,
       id: cell(COL.id),
@@ -99,9 +107,10 @@ export function parseActionRows(values: unknown[][]): ActionRecord[] {
       before: cell(COL.before),
       after: cell(COL.after),
       location: cell(COL.location),
-      undo: cell(COL.undo),
+      undo: cell(COL.undo) || untrusted,
       undoOf: cell(COL.undoOf),
-      undoable: !!cell(COL.undoData) && !cell(COL.undo),
+      undoable: !!undoData && "spec" in undoData,
+      undoPreview: undoData && "spec" in undoData ? describeUndo(undoData.spec) : "",
     };
   }).filter((r) => r.id);
 }

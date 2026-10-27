@@ -38,9 +38,9 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogFooter: ({ children }: any) => <div>{children}</div>,
 }));
 
-const base = { timestamp: "2026-03-14T23:42:00Z", role: "", location: "", before: "", after: "", undoOf: "", undo: "" };
+const base = { timestamp: "2026-03-14T23:42:00Z", role: "", location: "", before: "", after: "", undoOf: "", undo: "", undoPreview: "" };
 const ACTIONS = [
-  { ...base, id: "a3", who: "kim@yahoo.com", source: "App", area: "Bid Management", action: "Record winning bid", target: "Item 312", summary: "Bidder 104 won item 312 for $150.00", undoable: true, after: '{"itemId":"312","price":150}' },
+  { ...base, id: "a3", who: "kim@yahoo.com", source: "App", area: "Bid Management", action: "Record winning bid", target: "Item 312", summary: "Bidder 104 won item 312 for $150.00", undoable: true, after: '{"itemId":"312","price":150}', before: '"nothing to see"', undoPreview: "Writes \"\", \"\" to 'Bid-Management'!A5:B5 in spreadsheet bm." },
   { ...base, id: "a2", who: "jane@orns.org", source: "App", area: "Auction Items", action: "Edit item", target: "Vase", summary: "Edited \"Vase\": value", undoable: true },
   { ...base, id: "a1", who: "director@orns.org", source: "Sheet edit", area: "Tickets", action: "Sheet edit", target: "tickets!F57", summary: "Edited F57", undoable: false, undo: "Can't be undone: several cells were edited at once" },
 ];
@@ -103,6 +103,10 @@ describe("ActionHistoryAdmin", () => {
     vi.mocked(postJson).mockResolvedValueOnce({ success: true });
     render(<ActionHistoryAdmin />);
     await userEvent.click(within(await screen.findByTestId("action-row-a3")).getByRole("button", { name: /Undo/ }));
+
+    // The dialog says what Undo will actually write (from the Undo Data), not the row's Before column.
+    expect(within(screen.getByRole("dialog")).getByText(/Writes "", "" to 'Bid-Management'!A5:B5/)).toBeInTheDocument();
+    expect(within(screen.getByRole("dialog")).queryByText(/nothing to see/)).toBeNull();
 
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(postJson).toHaveBeenCalledWith("/api/action-history/a3/undo", {}, expect.any(String)));

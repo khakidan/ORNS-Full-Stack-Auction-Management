@@ -1,4 +1,5 @@
 import { drive_v3, sheets_v4 } from "googleapis";
+import { TrustedSheets } from "../utils/undoData";
 import { ACTION_HISTORY_HEADER, ACTIONS_RANGE, ACTIONS_SHEET, COL, ActionRecord, parseActionRows } from "./actionHistoryRows";
 
 /**
@@ -59,22 +60,27 @@ export async function createActionHistorySpreadsheet(
   return spreadsheetId;
 }
 
-/** Every recorded action, newest first. */
-export async function listActions(sheets: sheets_v4.Sheets, spreadsheetId: string): Promise<ActionRecord[]> {
+/** Every recorded action, newest first. `trusted`: where Sheet-edit rows may be undone (undoData.ts). */
+export async function listActions(sheets: sheets_v4.Sheets, spreadsheetId: string, trusted: TrustedSheets): Promise<ActionRecord[]> {
   const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: ACTIONS_RANGE });
-  return parseActionRows(res.data.values || []).reverse();
+  return parseActionRows(res.data.values || [], trusted).reverse();
 }
 
-/** One action's full row (including Undo Data), or null if no row has that ID. */
+/**
+ * One action's full row (including Undo Data), or null if no row has that
+ * ID. `duplicated` is true when more than one row has it - a copied row,
+ * which Undo refuses rather than guess which one is real.
+ */
 export async function findAction(
   sheets: sheets_v4.Sheets,
   spreadsheetId: string,
   actionId: string
-): Promise<{ rowIndex: number; row: string[] } | null> {
+): Promise<{ rowIndex: number; row: string[]; duplicated: boolean } | null> {
   const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: ACTIONS_RANGE });
   const values = (res.data.values || []) as string[][];
-  const i = values.findIndex((row, idx) => idx > 0 && String(row[COL.id] ?? "") === actionId);
-  return i === -1 ? null : { rowIndex: i + 1, row: values[i] };
+  const matches = values.flatMap((row, idx) => (idx > 0 && String(row[COL.id] ?? "") === actionId ? [idx] : []));
+  if (!matches.length) return null;
+  return { rowIndex: matches[0] + 1, row: values[matches[0]], duplicated: matches.length > 1 };
 }
 
 /** Fills an action's Undo column ("Undone by ... at ..."). */
