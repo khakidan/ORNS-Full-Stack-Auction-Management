@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Browsers never read or write Firestore. Only the server
     // (firebase-admin, which bypasses these rules) does: the shared Config
-    // (`settings/global`, served by GET/PUT /api/config so every signed-in
+    // (`settings/global`, served by GET/POST /api/config so every signed-in
     // person gets it and only Full Administrators can change it), staff
     // roles (`users`), volunteers, `system/*` and `idempotency/*`.
     match /{document=**} {

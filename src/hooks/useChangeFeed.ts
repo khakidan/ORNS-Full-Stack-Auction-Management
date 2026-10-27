@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { getBaseUrl } from "@/services/google-api";
 
 const POLL_MS = 5000;
@@ -12,13 +13,18 @@ const POLL_MS = 5000;
  * have changed. Returns `checkNow`, for right after an action (an Undo)
  * whose effect this tab should show without waiting.
  *
+ * Notices (an Undo, say) are shown as a toast on every screen except that
+ * of `myEmail`, the person who caused them - theirs already said so.
+ *
  * Plain fetch, not fetchWithRetry: a missed check is simply retried on the
  * next tick, and must not show the "saving..." sync banner.
  */
-export function useChangeFeed(enabled: boolean, onChange: (changed: Set<string>, reset: boolean) => void): () => Promise<void> {
+export function useChangeFeed(enabled: boolean, onChange: (changed: Set<string>, reset: boolean) => void, myEmail?: string): () => Promise<void> {
   const since = useRef<number | null>(null);
   const callback = useRef(onChange);
   callback.current = onChange;
+  const me = useRef(myEmail);
+  me.current = myEmail;
   const inFlight = useRef(false);
 
   const checkNow = useCallback(async () => {
@@ -27,11 +33,15 @@ export function useChangeFeed(enabled: boolean, onChange: (changed: Set<string>,
     try {
       const res = await fetch(`${getBaseUrl()}/api/changes?since=${since.current ?? 0}`, { credentials: "include" });
       if (!res.ok) return;
-      const data: { version: number; changed: string[]; reset: boolean } = await res.json();
+      const data: { version: number; changed: string[]; notices?: { message: string; by: string }[]; reset: boolean } = await res.json();
       const first = since.current === null;
       since.current = data.version;
       // The first answer only sets the starting point - the page has just loaded everything.
-      if (!first && (data.reset || data.changed.length > 0)) callback.current(new Set(data.changed), data.reset);
+      if (first) return;
+      for (const notice of data.notices ?? []) {
+        if (notice.by !== me.current) toast.info(notice.message, { duration: 15000 });
+      }
+      if (data.reset || data.changed.length > 0) callback.current(new Set(data.changed), data.reset);
     } catch {
       // Offline or the server is restarting - the next tick tries again.
     } finally {
