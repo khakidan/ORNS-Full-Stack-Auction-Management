@@ -13,9 +13,9 @@ const money = (n: number) => `$${n.toFixed(2)}`;
  * entering bids can record it anyway after checking the bid sheet.
  *
  * - Below the opening bid: usually a dropped digit (150 typed as 15).
- * - More than the opening bid but by less than the minimum raise: a bid
- *   sheet can't end there (each bid must beat the last by at least the
- *   minimum raise). Larger raises are allowed, so other amounts pass.
+ * - Not the opening bid plus a whole number of minimum raises: bids go up
+ *   only in those steps (a $10 opener with a $5 raise ends at $10, $15,
+ *   $20...), so $22 can't be a winning bid.
  * - More than VALUE_MULTIPLE_LIMIT x the value: usually an extra digit.
  *
  * A field the item doesn't have (blank or $0) skips its check.
@@ -32,8 +32,12 @@ export function bidWarnings(item: AuctionItem, price: number): string[] {
 
   if (opening > 0 && price < opening - EPS) {
     warnings.push(`${money(price)} is below the opening bid of ${money(opening)}. Missing a digit?`);
-  } else if (opening > 0 && minRaise > 0 && price > opening + EPS && price < opening + minRaise - EPS) {
-    warnings.push(`${money(price)} is more than the opening bid (${money(opening)}) by less than the minimum raise of ${money(minRaise)}, so it can't be a winning bid. The lowest possible after the opening bid is ${money(opening + minRaise)}.`);
+  } else if (opening > 0 && minRaise > 0) {
+    const steps = (price - opening) / minRaise;
+    const below = opening + Math.floor(steps + EPS / minRaise) * minRaise;
+    if (price - below > EPS) {
+      warnings.push(`${money(price)} isn't a possible winning bid: bids start at ${money(opening)} and go up in steps of ${money(minRaise)}. The nearest are ${money(below)} and ${money(below + minRaise)}.`);
+    }
   }
   if (value > 0 && price > value * VALUE_MULTIPLE_LIMIT + EPS) {
     warnings.push(`${money(price)} is more than ${VALUE_MULTIPLE_LIMIT} times the item's value of ${money(value)}. An extra digit?`);

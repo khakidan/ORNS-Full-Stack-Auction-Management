@@ -9,7 +9,7 @@ const item = (overrides: Partial<AuctionItem> = {}): AuctionItem => ({
 });
 
 describe("bidWarnings", () => {
-  it.each([45, 50, 72, 150, 300])("accepts a believable amount ($%s)", (price) => {
+  it.each([45, 50, 55, 150, 300])("accepts a possible amount ($%s)", (price) => {
     expect(bidWarnings(item(), price)).toEqual([]);
   });
 
@@ -17,8 +17,12 @@ describe("bidWarnings", () => {
     expect(bidWarnings(item(), 15)).toEqual([expect.stringContaining("below the opening bid of $45.00")]);
   });
 
-  it("flags an amount above the opening bid by less than the minimum raise", () => {
-    expect(bidWarnings(item(), 47)).toEqual([expect.stringContaining("lowest possible after the opening bid is $50.00")]);
+  it("flags an amount that isn't the opening bid plus whole minimum raises", () => {
+    const tenAndFive = item({ openingBid: "$10.00", minRaise: "$5.00", value: "$40.00" });
+    expect(bidWarnings(tenAndFive, 22)).toEqual([expect.stringContaining("The nearest are $20.00 and $25.00")]);
+    expect(bidWarnings(tenAndFive, 12)).toEqual([expect.stringContaining("The nearest are $10.00 and $15.00")]);
+    expect(bidWarnings(item(), 72)).toHaveLength(1);
+    expect(bidWarnings(tenAndFive, 25)).toEqual([]);
   });
 
   it("flags an amount more than 3 times the value (an extra digit)", () => {
