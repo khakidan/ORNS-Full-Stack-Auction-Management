@@ -10,6 +10,8 @@ interface UseDashboardStateArgs {
   winners: Record<string, string>;
   spreadsheetId: string;
   isAuctionClosed: boolean;
+  /** AuctionContext's live-refresh counter: re-read the special winners when data changed elsewhere. */
+  dataVersion?: number;
 }
 
 /**
@@ -19,7 +21,7 @@ interface UseDashboardStateArgs {
  * separate from Dashboard.tsx so that component stays focused on
  * composing/rendering the split-out widget pieces.
  */
-export function useDashboardState({ bidders, items, winners, spreadsheetId, isAuctionClosed }: UseDashboardStateArgs) {
+export function useDashboardState({ bidders, items, winners, spreadsheetId, isAuctionClosed, dataVersion }: UseDashboardStateArgs) {
   const [followUpRecords, setFollowUpRecords] = useState<string[][]>([]);
   const [loadingFollowUp, setLoadingFollowUp] = useState(false);
 
@@ -49,8 +51,9 @@ export function useDashboardState({ bidders, items, winners, spreadsheetId, isAu
         const data = await getSheetData(spreadsheetId, "Special-Winners!A2:B3");
         if (data.values) {
           const rows = data.values;
-          if (rows[0] && rows[0][1]) setGiftCardWinnerId(rows[0][1].toString());
-          if (rows[1] && rows[1][1]) setRaffleWinnerId(rows[1][1].toString());
+          // Blank too, so an undone or cleared winner disappears on a live refresh.
+          setGiftCardWinnerId(rows[0]?.[1]?.toString() || "");
+          setRaffleWinnerId(rows[1]?.[1]?.toString() || "");
         }
       } catch (err) {
         console.error("Failed to fetch special winners", err);
@@ -61,7 +64,7 @@ export function useDashboardState({ bidders, items, winners, spreadsheetId, isAu
     if (isAuctionClosed && spreadsheetId) {
       fetchFollowUpRecords();
     }
-  }, [spreadsheetId, isAuctionClosed]);
+  }, [spreadsheetId, isAuctionClosed, dataVersion]);
 
   // The gift card and raffle saves differ only in which prize they are.
   // The server writes Special-Winners (and a Follow-Up row for a winner

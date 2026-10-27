@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { errorTextFrom, fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { postJson } from "@/services/apiClient";
+import { useAuction } from "@/context/AuctionContext";
 
 /** One row of the Action History spreadsheet, as GET /api/action-history returns it. */
 export interface ActionRecord {
@@ -39,8 +40,11 @@ export function useActionHistoryState() {
   const [who, setWho] = useState(ALL);
   const [source, setSource] = useState(ALL);
 
-  const fetchActions = useCallback(async () => {
-    setLoading(true);
+  const { dataVersion, lastChangedKeys, checkForChanges } = useAuction();
+
+  /** `silent`: a live refresh (someone acted elsewhere) - no loading state. */
+  const fetchActions = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setLoading(true);
     try {
       const res = await fetchWithRetry(`${getBaseUrl()}/api/action-history`, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
@@ -58,6 +62,12 @@ export function useActionHistoryState() {
   useEffect(() => {
     fetchActions();
   }, [fetchActions]);
+
+  // Live refresh: new actions by anyone appear without reloading.
+  useEffect(() => {
+    if (!dataVersion || !lastChangedKeys) return;
+    if (lastChangedKeys.includes("*") || lastChangedKeys.includes("action-history")) fetchActions({ silent: true });
+  }, [dataVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const createSpreadsheet = async () => {
     setCreating(true);
@@ -98,6 +108,9 @@ export function useActionHistoryState() {
       await postJson(`/api/action-history/${encodeURIComponent(action.id)}/undo`, {}, "Couldn't undo that");
       toast.success(`Undid "${action.summary}"`);
       await fetchActions();
+      // Reload whatever the Undo changed (bidders, items, tickets...) on
+      // this screen now, rather than on the next live-refresh tick.
+      checkForChanges?.();
       return true;
     } catch (e: any) {
       toast.error(e.message, { duration: 10000 });

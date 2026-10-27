@@ -16,9 +16,10 @@ export function useBiddersData(spreadsheetId: string, bidderNumbersSheet: string
   const [bidders, setBidders] = useState<Bidder[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchBidders = useCallback(async () => {
+  /** `silent`: a live refresh (someone else changed something) - no loading spinner. */
+  const fetchBidders = useCallback(async (options?: { silent?: boolean }) => {
     if (!spreadsheetId) return;
-    setLoading(true);
+    if (!options?.silent) setLoading(true);
     try {
       const data = await getSheetData(spreadsheetId, `${bidderNumbersSheet}!A:L`);
 

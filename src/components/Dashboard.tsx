@@ -8,11 +8,11 @@ import { SpecialWinnersCard } from "@/components/SpecialWinnersCard";
 import { useDashboardState } from "@/hooks/useDashboardState";
 
 export default function Dashboard() {
-  const { bidders, items, totalRaised, isAuctionClosed, winners } = useAuction();
+  const { bidders, items, totalRaised, isAuctionClosed, winners, dataVersion } = useAuction();
   const { config } = useConfig();
   const spreadsheetId = config.bidManagementSpreadsheetId;
 
-  const state = useDashboardState({ bidders, items, winners, spreadsheetId, isAuctionClosed });
+  const state = useDashboardState({ bidders, items, winners, spreadsheetId, isAuctionClosed, dataVersion });
 
   return (
     <div className="space-y-6 text-left">

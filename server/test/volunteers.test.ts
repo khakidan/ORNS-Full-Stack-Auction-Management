@@ -127,6 +127,11 @@ describe("what a signed-in volunteer can do", () => {
     expect(sheetReads).toContain("bm 'Bidder-Numbers'!A:L as Bearer mock-access-token");
   });
 
+  it("can ask what changed, so their screen refreshes live like staff's", async () => {
+    const res = await request(app).get("/api/changes?since=0").set(volunteerSession());
+    expect(res.status).toBe(200);
+  });
+
   it.each([
     ["another spreadsheet", "GET", `/api/sheets/other-sheet/${encodeURIComponent("A1:B2")}`, {}],
     ["Settings", "GET", "/api/paypal-sweeper/status", {}],

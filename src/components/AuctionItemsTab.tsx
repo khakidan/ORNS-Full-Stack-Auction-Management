@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useConfig } from "@/context/ConfigContext";
 import { useAuction } from "@/context/AuctionContext";
 import { ListPageCard } from "@/components/ui/ListPageCard";
@@ -23,7 +23,7 @@ import { AuctionItem } from "@/types";
 
 export default function AuctionItemsTab() {
   const { config } = useConfig();
-  const { isAuctionClosed } = useAuction();
+  const { isAuctionClosed, dataVersion, lastChangedKeys } = useAuction();
   const spreadsheetId = config.auctionItemsSpreadsheetId;
   const {
     items,
@@ -35,6 +35,14 @@ export default function AuctionItemsTab() {
   } = useAuctionItems(spreadsheetId);
 
   const table = useAuctionItemsTableState(items, setItems, spreadsheetId, valueCalculations, fetchData);
+
+  // Live refresh: this page reads the items itself, so re-read them when
+  // someone else (or an Undo) changed the Auction Items spreadsheet.
+  useEffect(() => {
+    if (!dataVersion || !lastChangedKeys) return;
+    if (lastChangedKeys.includes("*") || lastChangedKeys.includes(spreadsheetId)) fetchData({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataVersion]);
 
   // Single-item edit dialog state - replaces the 9 separate per-field
   // EditableCell inline editors that used to live in AuctionItemRow.tsx,

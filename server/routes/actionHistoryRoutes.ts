@@ -7,6 +7,7 @@ import { getActionHistorySpreadsheetId, setActionHistorySpreadsheetId } from '..
 import { createActionHistorySpreadsheet, findAction, listActions, markUndone } from '../services/actionHistoryService';
 import { COL } from '../services/actionHistoryRows';
 import { applyUndo, UndoRefusedError } from '../services/undoService';
+import { ACTION_HISTORY_KEY, noteChange } from '../utils/changeFeed';
 import { logAction, ActionArea } from '../services/actionLog';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
@@ -152,6 +153,7 @@ export default function createActionHistoryRouter() {
         await applyUndo(sheets, spec, req.user!.email);
         const when = new Date().toISOString();
         await markUndone(sheets, spreadsheetId, rowIndex, `Undone by ${req.user!.email} at ${when}`);
+        noteChange(ACTION_HISTORY_KEY);
         await logAction(req, {
           area: (cell(COL.area) || "Settings") as ActionArea,
           action: `Undo: ${cell(COL.action)}`,

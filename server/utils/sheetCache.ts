@@ -1,3 +1,4 @@
+import { noteChange } from "./changeFeed";
 import crypto from "crypto";
 
 // Shared server-side Google Sheets cache to handle write-to-read consistency
@@ -22,8 +23,13 @@ export function sheetCacheKey(
   return `${spreadsheetId}:${user}:${range}`;
 }
 
+/**
+ * Called after every write to a spreadsheet: drops its cached reads and
+ * records the change for the browsers' live refresh (changeFeed.ts).
+ */
 export function clearCacheForSpreadsheet(spreadsheetId: string) {
   if (!spreadsheetId) return;
+  noteChange(spreadsheetId);
   console.log(`[Cache Invalidation] Invalidating cached ranges for spreadsheet: ${spreadsheetId}`);
   for (const key of sheetCache.keys()) {
     if (key.startsWith(`${spreadsheetId}:`)) {

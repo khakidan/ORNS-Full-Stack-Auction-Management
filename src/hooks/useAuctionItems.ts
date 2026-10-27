@@ -67,8 +67,9 @@ export function useAuctionItems(spreadsheetId: string | undefined) {
     }
   }, [spreadsheetId]);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  /** `silent`: a live refresh (someone else changed something) - no loading spinner. */
+  const refresh = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setLoading(true);
     await Promise.all([fetchData(), fetchCategories(), fetchValueCalculations()]);
     setLoading(false);
   }, [fetchData, fetchCategories, fetchValueCalculations]);

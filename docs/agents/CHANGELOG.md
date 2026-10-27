@@ -20,6 +20,14 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Added
 
+- **Live refresh: every open screen picks up changes made elsewhere.** Undoing a volunteer's check-in from Action History left the bidder showing as checked in until a hard refresh, and other people's screens never updated at all.
+  - The server keeps a running change count (`server/utils/changeFeed.ts`): every write already ends in `clearCacheForSpreadsheet`, which now records the spreadsheet, and Action History writes record `action-history`. In memory, which is correct because the service runs as one Cloud Run instance; a restart is reported as `reset`.
+  - `GET /api/changes?since=N` answers from memory (no Google calls). Each browser asks every 5 seconds while its tab is visible, and when the tab comes back into view (`useChangeFeed.ts`, plain fetch so no sync banner).
+  - `AuctionContext` then quietly reloads just what changed - bidders, winners and auction status for Bid Management, items, attendees - with no loading spinners (new `silent` option on `fetchBidders`, `fetchAttendees` and the items `refresh`), and exposes `dataVersion` / `lastChangedKeys` / `checkForChanges` for pages with their own reads: the Dashboard's special winners, the Auction Items table and the Action History list.
+  - After an Undo, the screen checks immediately instead of waiting for the next tick. Volunteers get live refresh too.
+  - Edits made directly in Google Sheets don't pass through the server, so they show on the next normal load, as before.
+  - Backend 788 -> 793, frontend 766 -> 770, total 1554 -> 1563.
+
 - **Volunteers: Bid Management access for non-ORNS helpers while the auction is Live** (User Permissions, part 3; the `ROADMAP.md` User Permissions section is now done).
   - **Settings > Users > Volunteers** (Full Administrator): connect the shared volunteer Google account (`VOLUNTEER_GOOGLE_ACCOUNT`, `/auth/volunteer-account/connect` - stores its sign-in in `system/volunteerAuth` without touching the admin's own session), invite by name and email (`POST /api/volunteers`, emailed from the inviting admin's Gmail), resend a new link, revoke, and clear ended records. The list shows Invited / Active / Ended / Revoked, when each signed in, and when last seen.
   - **One-time link** (`/auth/volunteer`, `server/routes/volunteerAuthRoutes.ts`, rate-limited per IP): opening it only shows a "Sign in as ..." button (so email scanners can't burn it); the button uses it up and starts a volunteer session. Before Go Live it says the auction isn't live yet and stays valid. A used or revoked link says to ask for a new one. Only a hash of the token is stored.
