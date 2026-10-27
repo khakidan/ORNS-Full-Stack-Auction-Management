@@ -21,6 +21,8 @@ const ROUTES: VolunteerRoute[] = [
   { method: "GET", path: /^\/api\/sheets\/[^/]+\/[^/]+$/ },
   { method: "GET", path: /^\/api\/bidders\/setup-status$/ },
   { method: "GET", path: /^\/api\/config\/runtime$/ },
+  // Live refresh: which spreadsheets changed (no data, just IDs).
+  { method: "GET", path: /^\/api\/changes$/ },
   { method: "POST", path: /^\/api\/bidders\/set-flag$/ },
   { method: "POST", path: /^\/api\/auction\/check-in-with-bid$/ },
   { method: "POST", path: /^\/api\/auction\/special-winner$/ },

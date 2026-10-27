@@ -12,9 +12,10 @@ export function useAttendeesData(ticketsSpreadsheetId: string) {
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchAttendees = useCallback(async () => {
+  /** `silent`: a live refresh (someone else changed something) - no loading spinner. */
+  const fetchAttendees = useCallback(async (options?: { silent?: boolean }) => {
     if (!ticketsSpreadsheetId) return;
-    setLoading(true);
+    if (!options?.silent) setLoading(true);
     try {
       let allAttendees: Attendee[] = [];
 

@@ -15,6 +15,9 @@ vi.mock("@/services/google-api", () => ({
 }));
 vi.mock("@/services/apiClient", () => ({ postJson: vi.fn() }));
 const CONFIG = { auctionItemsSpreadsheetId: "it-sheet", auctionTicketsSpreadsheetId: "tk-sheet" };
+const mockCheckForChanges = vi.fn(async () => {});
+let mockAuction = { dataVersion: 0, lastChangedKeys: [] as string[], checkForChanges: mockCheckForChanges };
+vi.mock("@/context/AuctionContext", () => ({ useAuction: () => mockAuction }));
 vi.mock("@/context/ConfigContext", () => ({ useConfig: () => ({ config: CONFIG }) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/components/ui/select", () => ({
@@ -47,6 +50,8 @@ describe("ActionHistoryAdmin", () => {
   beforeEach(() => {
     vi.mocked(fetchWithRetry).mockReset().mockResolvedValue(json({ spreadsheetId: "log", url: "https://docs/log", actions: ACTIONS }));
     vi.mocked(postJson).mockReset();
+    mockCheckForChanges.mockClear();
+    mockAuction = { dataVersion: 0, lastChangedKeys: [], checkForChanges: mockCheckForChanges };
   });
 
   it("offers to create the spreadsheet when there isn't one yet", async () => {
@@ -101,6 +106,8 @@ describe("ActionHistoryAdmin", () => {
 
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(postJson).toHaveBeenCalledWith("/api/action-history/a3/undo", {}, expect.any(String)));
+    // The undone change shows on this screen straight away, not on the next live-refresh tick.
+    await waitFor(() => expect(mockCheckForChanges).toHaveBeenCalled());
 
     vi.mocked(postJson).mockRejectedValueOnce(new Error("This has changed since, so undoing it would overwrite a later change."));
     await userEvent.click(within(screen.getByTestId("action-row-a2")).getByRole("button", { name: /Undo/ }));
@@ -117,5 +124,20 @@ describe("ActionHistoryAdmin", () => {
 
     expect(postJson).toHaveBeenCalledWith("/api/action-history/edit-tracking", { itemsSpreadsheetId: "it-sheet", ticketsSpreadsheetId: "tk-sheet" }, expect.any(String));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("now recorded")));
+  });
+
+  it("reloads the list quietly when someone else's action arrives (live refresh)", async () => {
+    const { rerender } = render(<ActionHistoryAdmin />);
+    await screen.findByTestId("action-row-a3");
+    vi.mocked(fetchWithRetry).mockClear();
+
+    mockAuction = { ...mockAuction, dataVersion: 1, lastChangedKeys: ["bm-sheet"] };
+    rerender(<ActionHistoryAdmin />);
+    expect(fetchWithRetry).not.toHaveBeenCalled();
+
+    mockAuction = { ...mockAuction, dataVersion: 2, lastChangedKeys: ["action-history"] };
+    rerender(<ActionHistoryAdmin />);
+    await waitFor(() => expect(fetchWithRetry).toHaveBeenCalledWith("/api/action-history", expect.anything()));
+    expect(screen.getByTestId("action-row-a3")).toBeInTheDocument();
   });
 });

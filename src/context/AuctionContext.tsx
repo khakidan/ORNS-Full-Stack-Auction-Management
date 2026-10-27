@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useEffect } from "react";
+import React, { createContext, useContext, useCallback, useEffect, useRef, useState } from "react";
 import { useConfig } from "./ConfigContext";
 import { useAuth } from "./AuthContext";
 import { Bidder, AuctionItem, Attendee } from "@/types";
@@ -9,6 +9,7 @@ import { useAttendeesData } from "@/hooks/useAttendeesData";
 import { useWinnersData } from "@/hooks/useWinnersData";
 import { useAuctionStatusData } from "@/hooks/useAuctionStatusData";
 import { AuctionState } from "@/lib/auctionState";
+import { useChangeFeed } from "@/hooks/useChangeFeed";
 
 interface AuctionContextType {
   bidders: Bidder[];
@@ -36,6 +37,16 @@ interface AuctionContextType {
   /** null while unknown. */
   isBidManagementSetUp: boolean | null;
   goLive: () => Promise<void>;
+  /**
+   * Live refresh: goes up each time data changed elsewhere (another
+   * person, another tab, an Undo) was reloaded. Pages with their own reads
+   * re-read when it changes; `lastChangedKeys` says what changed (spreadsheet
+   * IDs or "action-history"; "*" = everything).
+   */
+  dataVersion: number;
+  lastChangedKeys: string[];
+  /** Checks for changes now instead of on the next tick (after an Undo). */
+  checkForChanges: () => Promise<void>;
   closeAuction: () => Promise<void>;
 }
 
@@ -69,6 +80,31 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     await Promise.all([fetchBidders(), refreshItems(), fetchAttendees(), fetchAuctionStatus(), fetchSetupStatus()]);
   }, [setLoading, fetchBidders, refreshItems, fetchAttendees, fetchAuctionStatus, fetchSetupStatus]);
+
+  // Live refresh (useChangeFeed.ts): when another person, another tab or
+  // an Undo changes a spreadsheet this page shows, reload just that data -
+  // quietly, without loading spinners.
+  const [dataVersion, setDataVersion] = useState(0);
+  const [lastChangedKeys, setLastChangedKeys] = useState<string[]>([]);
+  const fetchWinnersRef = useRef(winnersData.fetchWinners);
+  fetchWinnersRef.current = winnersData.fetchWinners;
+  const onRemoteChange = useCallback(async (changed: Set<string>, reset: boolean) => {
+    const touched = (id: string) => !!id && (reset || changed.has(id));
+    const reloads: Promise<unknown>[] = [];
+    if (touched(spreadsheetId)) {
+      reloads.push(
+        fetchBidders({ silent: true }).then(() => fetchWinnersRef.current()),
+        fetchAuctionStatus(),
+        fetchSetupStatus()
+      );
+    }
+    if (touched(config.auctionItemsSpreadsheetId)) reloads.push(refreshItems({ silent: true }));
+    if (touched(ticketsSpreadsheetId)) reloads.push(fetchAttendees({ silent: true }));
+    await Promise.all(reloads);
+    setLastChangedKeys(reset ? ["*"] : [...changed]);
+    setDataVersion((v) => v + 1);
+  }, [spreadsheetId, config.auctionItemsSpreadsheetId, ticketsSpreadsheetId, fetchBidders, fetchAuctionStatus, fetchSetupStatus, refreshItems, fetchAttendees]);
+  const checkForChanges = useChangeFeed(isApiAuthenticated === true, onRemoteChange);
 
   const goLive = useCallback(async () => {
     await auctionStatusData.requestGoLive();
@@ -124,6 +160,9 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     isAuctionClosed: auctionStatusData.isAuctionClosed,
     isBidManagementSetUp: auctionStatusData.isBidManagementSetUp,
     goLive,
+    dataVersion,
+    lastChangedKeys,
+    checkForChanges,
     closeAuction
   };
 

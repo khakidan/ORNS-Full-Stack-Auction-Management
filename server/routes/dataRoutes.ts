@@ -11,6 +11,7 @@ import createUserRouter from './userRoutes';
 import createAttendeeRouter from './attendeeRoutes';
 import createActionHistoryRouter from './actionHistoryRoutes';
 import createVolunteerRouter from './volunteerRoutes';
+import createChangesRouter from './changesRoutes';
 
 /**
  * The signed-in "/api" routes that aren't live-auction transactions
@@ -31,5 +32,6 @@ export default function createDataRouter() {
   router.use(createAttendeeRouter());
   router.use(createActionHistoryRouter());
   router.use(createVolunteerRouter());
+  router.use(createChangesRouter());
   return router;
 }

@@ -4,6 +4,7 @@ import { ROLE_LABELS } from "../utils/permissions";
 import { UndoSpec } from "../utils/undoSpec";
 import { getActionHistorySpreadsheetId } from "./actionHistoryStore";
 import { ACTIONS_RANGE, buildActionRow, ActionRowInput } from "./actionHistoryRows";
+import { ACTION_HISTORY_KEY, noteChange } from "../utils/changeFeed";
 
 /** How long a request waits for its log row before answering anyway. */
 const LOG_TIMEOUT_MS = 5000;
@@ -63,6 +64,7 @@ export async function logAction(req: Request, entry: ActionEntry): Promise<void>
       }),
       new Promise((_, reject) => setTimeout(() => reject(new Error(`timed out after ${LOG_TIMEOUT_MS}ms`)), LOG_TIMEOUT_MS)),
     ]);
+    noteChange(ACTION_HISTORY_KEY);
   } catch (err: any) {
     writeToCloudLogging(`Couldn't write to the Action History spreadsheet: ${err?.message || err}`, row);
   }
