@@ -1,7 +1,8 @@
 /**
  * A small in-memory stand-in for the firebase-admin Firestore calls this
  * app makes: collection().doc(id?).get/set(merge)/delete, and
- * collection().where(field, "==" | "in", value).limit(n).get(). Use with
+ * collection().where(field, "==" | "in", value).limit(n).get(), and
+ * runTransaction(tx => ...) with tx.get/set/update/delete. Use with
  * `vi.mock("../services/firebaseAdmin", () => ({ getAdminFirestore: () => fake.db }))`.
  */
 export function createFakeFirestore() {
@@ -20,6 +21,10 @@ export function createFakeFirestore() {
     },
     set: async (value: Record<string, any>, opts?: { merge?: boolean }) => {
       coll(name).set(id, opts?.merge ? { ...(coll(name).get(id) || {}), ...value } : { ...value });
+    },
+    update: async (value: Record<string, any>) => {
+      if (!coll(name).has(id)) throw new Error(`NOT_FOUND: ${name}/${id}`);
+      coll(name).set(id, { ...coll(name).get(id), ...value });
     },
     delete: async () => {
       coll(name).delete(id);
@@ -40,11 +45,34 @@ export function createFakeFirestore() {
     },
   });
 
+  // Transactions run one at a time, so a read-then-write inside one can't
+  // interleave with another (as Firestore's would retry on contention).
+  let txChain: Promise<unknown> = Promise.resolve();
+  type Ref = ReturnType<typeof docRef>;
+  const runTransaction = <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
+    const run = txChain.then(() => {
+      const writes: (() => Promise<void>)[] = [];
+      const tx = {
+        get: (ref: Ref) => ref.get(),
+        set: (ref: Ref, value: Record<string, any>, opts?: { merge?: boolean }) => writes.push(() => ref.set(value, opts)),
+        update: (ref: Ref, value: Record<string, any>) => writes.push(() => ref.update(value)),
+        delete: (ref: Ref) => writes.push(() => ref.delete()),
+      };
+      return fn(tx).then(async (result) => {
+        for (const w of writes) await w();
+        return result;
+      });
+    });
+    txChain = run.catch(() => {});
+    return run;
+  };
+
   const db = {
     collection: (name: string) => ({
       doc: (id?: string) => docRef(name, id ?? `auto-${nextId++}`),
       ...query(name, []),
     }),
+    runTransaction,
   };
 
   return {

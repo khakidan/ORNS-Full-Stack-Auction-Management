@@ -137,11 +137,25 @@ export async function findVolunteerByToken(token: string): Promise<Volunteer | n
   return toVolunteer(snap.docs[0].id, snap.docs[0].data() as VolunteerDoc);
 }
 
-/** Uses up the link: the record becomes active and the token is forgotten. */
-export async function redeemVolunteer(id: string): Promise<void> {
-  const now = new Date().toISOString();
-  await volunteers().doc(id).set({ status: "active", tokenHash: "", redeemedAt: now, lastSeenAt: now }, { merge: true });
+/**
+ * Uses up the link: the record becomes active and the token is forgotten.
+ * In a transaction that requires the record to be still "invited" with this
+ * same token, so a Revoke or Resend landing after the lookup isn't
+ * overwritten and two quick submissions can't both sign in (ROADMAP A2).
+ * Returns false (nothing changed) if the link is no longer good.
+ */
+export async function redeemVolunteer(id: string, token: string): Promise<boolean> {
+  const ref = volunteers().doc(id);
+  const redeemed = await getAdminFirestore().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const d = snap.data() as VolunteerDoc | undefined;
+    if (!snap.exists || d?.status !== "invited" || !d.tokenHash || d.tokenHash !== hashToken(token)) return false;
+    const now = new Date().toISOString();
+    tx.update(ref, { status: "active", tokenHash: "", redeemedAt: now, lastSeenAt: now });
+    return true;
+  });
   statusCache.delete(id);
+  return redeemed;
 }
 
 // ---- Per-request checks -----------------------------------------------

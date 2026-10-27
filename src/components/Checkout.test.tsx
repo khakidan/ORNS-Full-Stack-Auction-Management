@@ -12,7 +12,6 @@ vi.mock("@/services/google-api", async (importOriginal) => ({
   postOnce: vi.fn(),
   getBaseUrl: vi.fn(() => "http://localhost:3000"),
   getSheetData: vi.fn(),
-  updateSheetData: vi.fn()
 }));
 
 vi.mock("@/context/ConfigContext", () => ({

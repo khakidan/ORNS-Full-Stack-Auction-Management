@@ -79,7 +79,6 @@ vi.mock("@/hooks/useBundling", () => ({
 // AuctionItemsTab.bundling.test.tsx's convention for useBundling.
 vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
-  updateSheetData: vi.fn().mockResolvedValue({}),
   getBaseUrl: vi.fn(() => "http://localhost:3000"),
   deleteAuctionItem: vi.fn(),
 }));
@@ -88,9 +87,8 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-import { updateSheetData, fetchWithRetry } from "@/services/google-api";
+import { fetchWithRetry } from "@/services/google-api";
 
-const mockedUpdateSheetData = vi.mocked(updateSheetData);
 const mockedFetchWithRetry = vi.mocked(fetchWithRetry);
 
 describe("AuctionItemsTab - real single-item edit wiring", () => {
@@ -99,7 +97,6 @@ describe("AuctionItemsTab - real single-item edit wiring", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedFetchWithRetry.mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
-    mockedUpdateSheetData.mockResolvedValue({});
     user = userEvent.setup();
   });
 
@@ -137,7 +134,7 @@ describe("AuctionItemsTab - real single-item edit wiring", () => {
       changes: { donor: "Donor Z" },
       expectedName: "Food 1",
     });
-    expect(mockedUpdateSheetData).not.toHaveBeenCalled();
+    expect(mockedFetchWithRetry.mock.calls.some(([url]) => String(url).includes("/api/sheets/"))).toBe(false);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 

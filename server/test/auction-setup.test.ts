@@ -11,6 +11,11 @@ import { http, HttpResponse } from "msw";
 import { resetHandlersState, clearedRanges, sheetBatchUpdateRequests, lastBulkWritePayload, bundleWritePayload } from "./handlers";
 import { AUCTION_TICKETS_ITEM_ID } from "../utils/categoryHelpers";
 import { authCookieHeader } from "./helpers/session";
+import { createFakeFirestore } from "./helpers/fakeFirestore";
+import { _resetConfigCacheForTesting } from "../services/configService";
+
+const fake = createFakeFirestore();
+vi.mock("../services/firebaseAdmin", () => ({ getAdminFirestore: () => fake.db }));
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -22,6 +27,40 @@ const authHeader = authCookieHeader(mockTokens);
 describe("setupRoutes - /api/auction/setup-new", () => {
   beforeEach(() => {
     resetHandlersState();
+    fake.clear();
+    _resetConfigCacheForTesting();
+  });
+
+  const setupBody = { ticketsSpreadsheetId: "s1", itemEntrySpreadsheetId: "s2", bidManagementSpreadsheetId: "s3" };
+  const finalLine = (text: string) => JSON.parse(text.trim().split("\n").pop()!);
+
+  it("saves the new year's Bidder Receipts and For Print folders in the Config itself, keeping the other settings (ROADMAP A5)", async () => {
+    fake.docs("settings").set("global", { bidManagementSpreadsheetId: "s3", receiptFolderId: "last-year-receipts", forPrintFolderId: "last-year-print", ticketPrice: "40" });
+
+    const response = await request(app).post("/api/auction/setup-new").set(authHeader).send(setupBody);
+
+    const result = finalLine(response.text);
+    expect(result.success).toBe(true);
+    expect(result.configSaveError).toBeUndefined();
+    expect(result.bidderReceiptsFolderId).toBeTruthy();
+    expect(fake.docs("settings").get("global")).toMatchObject({
+      receiptFolderId: result.bidderReceiptsFolderId,
+      forPrintFolderId: result.forPrintFolderId,
+      bidManagementSpreadsheetId: "s3",
+      ticketPrice: "40",
+    });
+  });
+
+  it("says which folder IDs to set by hand if the Config can't be saved", async () => {
+    vi.spyOn(fake.db, "collection").mockImplementation(() => { throw new Error("Firestore is down"); });
+
+    const response = await request(app).post("/api/auction/setup-new").set(authHeader).send(setupBody);
+
+    const result = finalLine(response.text);
+    vi.restoreAllMocks();
+    expect(result.success).toBe(true);
+    expect(result.configSaveError).toContain("Firestore is down");
+    expect(result.configSaveError).toContain(result.bidderReceiptsFolderId);
   });
 
   it("returns 401 when unauthenticated", async () => {

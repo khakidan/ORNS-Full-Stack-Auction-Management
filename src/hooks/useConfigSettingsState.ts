@@ -35,7 +35,7 @@ async function syncSettingToCloud(spreadsheetId: string, key: string, value: str
 }
 
 export function useConfigSettingsState() {
-  const { config: remoteConfig, saveConfig } = useConfig();
+  const { config: remoteConfig, saveConfig, reloadConfig } = useConfig();
   const [config, setConfig] = useState<Config>(remoteConfig);
   // Tracks the last remoteConfig value this draft was synced from. A field
   // edit always replaces `config` with a fresh object (never mutates in
@@ -129,26 +129,19 @@ export function useConfigSettingsState() {
       if (data.success) {
         toast.dismiss(toastId);
 
-        // Auto-assign new folder IDs
-        const newReceipts = data.bidderReceiptsFolderId || config.receiptFolderId;
-        const newPrint = data.forPrintFolderId || config.forPrintFolderId;
-
-        const updatedConfig = {
-          ...config,
-          receiptFolderId: newReceipts,
-          forPrintFolderId: newPrint
-        };
-
-        setConfig(updatedConfig);
-
-        try {
-          await saveConfig(updatedConfig);
-        } catch (e) {
-          console.error("Auto-save failed", e);
+        // The server saved the new folder IDs in the Config; load them. A
+        // draft with unsaved edits isn't replaced by the reload, so give it
+        // the new folders too - saving it later mustn't put last year's back.
+        if (!data.configSaveError) {
+          setConfig((current) => current === lastSyncedRemoteConfigRef.current
+            ? current
+            : { ...current, receiptFolderId: data.bidderReceiptsFolderId, forPrintFolderId: data.forPrintFolderId });
         }
+        await reloadConfig();
 
-        // Show success and open dialog
-        toast.success(`Success! New folders created. IDs updated.`, { duration: 5000 });
+        // Show the outcome and open dialog
+        if (data.configSaveError) toast.error(data.configSaveError, { duration: Infinity });
+        else toast.success(`Success! New folders created. IDs updated.`, { duration: 5000 });
         setAuctionYear(data.auctionYear);
         setShowManualCopyDialog(true);
       } else {

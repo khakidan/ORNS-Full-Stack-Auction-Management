@@ -43,8 +43,6 @@ vi.mock("@/components/ui/ConfirmationDialog", () => ({
 vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn(),
   getSheetData: vi.fn(() => Promise.resolve({ values: [] })),
-  updateSheetData: vi.fn(() => Promise.resolve({ success: true })),
-  appendSheetData: vi.fn(() => Promise.resolve({ success: true })),
 }));
 
 vi.mock("sonner", () => ({

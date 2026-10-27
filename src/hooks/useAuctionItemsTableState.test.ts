@@ -25,7 +25,6 @@ import { AuctionItem } from "@/types";
 
 vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn(),
-  updateSheetData: vi.fn(),
   getBaseUrl: vi.fn(() => "http://localhost:3000"),
   deleteAuctionItem: vi.fn(),
 }));
@@ -37,7 +36,7 @@ vi.mock("sonner", () => ({
   },
 }));
 
-import { fetchWithRetry, updateSheetData } from "@/services/google-api";
+import { fetchWithRetry } from "@/services/google-api";
 
 const mockedFetchWithRetry = vi.mocked(fetchWithRetry);
 
@@ -135,6 +134,6 @@ describe("useAuctionItemsTableState.executeBulkUpdate", () => {
       field: "itemType",
       value: "Physical",
     });
-    expect(updateSheetData).not.toHaveBeenCalled();
+    expect(vi.mocked(fetchWithRetry).mock.calls.some(([url]) => String(url).includes("/api/sheets/"))).toBe(false);
   });
 });

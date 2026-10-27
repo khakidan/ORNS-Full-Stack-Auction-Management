@@ -130,40 +130,6 @@ export async function getSheetData(spreadsheetId: string, range: string) {
   return res.json();
 }
 
-export async function updateSheetData(spreadsheetId: string, range: string, values: any[][]) {
-  if (!isConfiguredId(spreadsheetId)) {
-    throw new Error("Invalid Spreadsheet ID");
-  }
-  const res = await fetchWithRetry(`${getBaseUrl()}/api/sheets/${spreadsheetId}/${encodeURIComponent(range)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ values }),
-    credentials: "include"
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || "Failed to update sheet data");
-  }
-  return res.json();
-}
-
-export async function appendSheetData(spreadsheetId: string, range: string, values: any[][]) {
-  if (!isConfiguredId(spreadsheetId)) {
-    throw new Error("Invalid Spreadsheet ID");
-  }
-  const res = await fetchWithRetry(`${getBaseUrl()}/api/sheets/${spreadsheetId}/${encodeURIComponent(range)}/append`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ values }),
-    credentials: "include"
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || "Failed to append sheet data");
-  }
-  return res.json();
-}
-
 export async function deleteAuctionItem(spreadsheetId: string, rowIndex: number) {
   if (!spreadsheetId) throw new Error("Invalid Spreadsheet ID");
   // idempotencyKey generated once here, before fetchWithRetry's internal
@@ -223,21 +189,6 @@ export async function getAppsScriptVersions(): Promise<AppsScriptVersionStatus[]
   return data.scripts;
 }
 
-export async function clearSheetData(spreadsheetId: string, range: string) {
-  if (!isConfiguredId(spreadsheetId)) {
-    throw new Error("Invalid Spreadsheet ID");
-  }
-  const res = await fetchWithRetry(`${getBaseUrl()}/api/sheets/${spreadsheetId}/${encodeURIComponent(range)}/clear`, {
-    method: "POST",
-    credentials: "include"
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || "Failed to clear sheet data");
-  }
-  return res.json();
-}
-
 /** The past two auctions' archived spreadsheets on Drive (newest year first). */
 export async function getArchivedAuctions(): Promise<ArchivedAuction[]> {
   const res = await fetchWithRetry(`${getBaseUrl()}/api/archive/auctions`, { credentials: "include" });
@@ -266,12 +217,16 @@ export async function updateAttendeeCells(spreadsheetId: string, range: string, 
   return res.json();
 }
 
+/**
+ * One key per add, made before fetchWithRetry's retries reuse the body, so
+ * a resent add returns the first result instead of adding the row twice.
+ */
 export async function appendAttendeeRow(spreadsheetId: string, sheet: string, row: any[]) {
   if (!isConfiguredId(spreadsheetId)) throw new Error("Invalid Spreadsheet ID");
   const res = await fetchWithRetry(`${getBaseUrl()}/api/attendees/add`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ spreadsheetId, sheet, row }),
+    body: JSON.stringify({ spreadsheetId, sheet, row, idempotencyKey: window.crypto.randomUUID() }),
     credentials: "include"
   });
   if (!res.ok) {

@@ -31,7 +31,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── settingsRoutes.ts  #   POST /settings/update (_Settings key)
 │   │   ├── configRoutes.ts    #   GET /config (everyone signed in), POST /config (Full Administrators)
 │   │   ├── itemRoutes.ts      #   Auction item add / update / bulk-update / delete
-│   │   ├── sheetsProxyRoutes.ts # Generic Sheets read (cached) and write/append/clear (refuses locked sheets)
+│   │   ├── sheetsProxyRoutes.ts # Generic Sheets read (cached per user); no generic writes
 │   │   ├── driveRoutes.ts     #   GET /drive/files/:folderId
 │   │   ├── health.ts          # GET /api/health
 │   │   ├── bugReportRoutes.ts # POST /api/bug-reports (open) emails the admin via services/adminNotifications.ts; list/resolve are admin-only

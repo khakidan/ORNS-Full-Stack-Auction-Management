@@ -106,7 +106,7 @@ export default function createVolunteerAuthRouter() {
       const blocked = await blockedPage();
       if (blocked) return res.send(blocked);
 
-      await redeemVolunteer(volunteer.id);
+      if (!(await redeemVolunteer(volunteer.id, token))) return res.status(410).send(LINK_INVALID);
       // A fresh session: a volunteer, with no staff sign-in mixed in.
       req.session = { volunteer: { id: volunteer.id, email: volunteer.email } };
       res.redirect(303, "/BidManagement");

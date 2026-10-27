@@ -100,6 +100,19 @@ export async function saveSharedConfig(config: SharedConfig, updatedBy: string, 
   return before;
 }
 
+/**
+ * Changes some fields, keeping the rest as Firestore has them now (not as
+ * the cache does, so a save from another screen isn't lost). Used by
+ * Setup New Auction Year for the new folder IDs. Returns what it replaced.
+ */
+export async function updateSharedConfigFields(fields: Partial<SharedConfig>, updatedBy: string, now = Date.now()): Promise<SharedConfig> {
+  const before = fromDocument((await DOC().get()).data() || {});
+  const config = { ...before, ...fields };
+  await DOC().set({ ...config, updatedAt: new Date(now), updatedBy });
+  cached = { config, readAt: now };
+  return before;
+}
+
 /** Test-only. */
 export function _resetConfigCacheForTesting(): void {
   cached = null;
