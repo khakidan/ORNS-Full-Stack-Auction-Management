@@ -6,6 +6,8 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **A cancelled sign-in no longer shows a server error.** When Google returned to `/auth/callback` without a code (sign-in cancelled, or a permission declined - `error=access_denied`), `getToken` threw and the page showed a generic error. It now shows "Sign-in was cancelled, or a permission the app needs wasn't approved. Nothing was changed." with a link back (to Settings when connecting the volunteer account). Backend 787 -> 788, total 1553 -> 1554.
+
 - **Renamed the Configuration page to Settings, and its Settings tab to Configuration.** Sidebar, page header and the route (`/Settings`; an old `/Configuration` link still opens it) follow; the tab order is unchanged (Configuration, PayPal Integration, Google Apps Scripts, Bug Reports). Pointers in a few messages and comments now say Settings / the Configuration tab.
 
 - **Removed the "Google Apps Script Workflows" note from Auction Configuration.** It only said the script IDs can't be changed on the page; the server's `SCRIPT_ID_*` settings are covered in `schema.md`, and the Google Apps Scripts tab shows whether each script is current.

@@ -156,10 +156,19 @@ describe('Auth Routes workflow', () => {
       expect(status.body.authenticated).toBe(false);
     });
 
-    it('Missing code parameter', async () => {
+    it('Missing code parameter - a clear page, not a server error', async () => {
       const { agent, state } = await startSignIn();
       const response = await agent.get(`/auth/callback?state=${encodeURIComponent(state)}`);
-      expect(response.status).toBe(500);
+      expect(response.status).toBe(400);
+      expect(response.text).toContain("Nothing was changed");
+    });
+
+    it('A cancelled sign-in or a declined permission (error=access_denied) says so and changes nothing', async () => {
+      const { agent, state } = await startSignIn();
+      const response = await agent.get(`/auth/callback?error=access_denied&state=${encodeURIComponent(state)}`);
+      expect(response.status).toBe(400);
+      expect(response.text).toContain("cancelled, or a permission the app needs wasn't approved");
+      expect((await agent.get('/auth/status')).body.authenticated).toBe(false);
     });
 
     it('Rejects a callback with no state, a wrong state, or no sign-in started from this browser (login CSRF, ROADMAP.md M2)', async () => {

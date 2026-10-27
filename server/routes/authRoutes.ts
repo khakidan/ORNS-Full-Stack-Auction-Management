@@ -45,7 +45,7 @@ router.get("/auth/url", (req, res, next) => {
 });
 
 router.get("/auth/callback", async (req, res, next) => {
-  const { code, state } = req.query;
+  const { code, state, error: googleError } = req.query;
   const expectedState = req.session?.oauthState;
   const purpose = req.session?.oauthPurpose;
   if (req.session) {
@@ -54,6 +54,16 @@ router.get("/auth/callback", async (req, res, next) => {
   }
   if (!sameState(state, expectedState)) {
     return res.status(403).send(`<html><body>This sign-in link has expired or was started in another browser. <a href="/">Return to the app</a> and sign in again.</body></html>`);
+  }
+  // Google comes back without a code when the sign-in was cancelled or a
+  // permission was declined (error=access_denied) - say so, rather than
+  // failing inside getToken.
+  if (typeof code !== "string" || !code) {
+    const back = purpose === "volunteer-account" ? "/Settings" : "/";
+    const declined = googleError === "access_denied";
+    return res.status(400).send(`<html><body style="font-family: sans-serif; text-align: center; padding-top: 80px;">
+      <p>${declined ? "Sign-in was cancelled, or a permission the app needs wasn't approved." : "Google didn't finish the sign-in."} Nothing was changed.</p>
+      <p><a href="${back}">Return to the app</a> and try again${declined ? ", approving every permission it asks for" : ""}.</p></body></html>`);
   }
   try {
     const client = getOAuthClient(req);
