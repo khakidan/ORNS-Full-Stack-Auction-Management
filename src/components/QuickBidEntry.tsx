@@ -5,7 +5,8 @@ import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/LoadingButton";
 import { StatusStatePlaceholder } from "@/components/ui/StatusStatePlaceholder";
 import { cn } from "@/lib/utils";
-import { AlertCircle, CheckCircle2, Clock, Gavel, Repeat, Search, User, XCircle } from "lucide-react";
+import { AlertCircle, AlertTriangle, ArrowRight, CheckCircle2, Clock, Gavel, Repeat, Search, User, XCircle } from "lucide-react";
+import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { OutboxEntry, useBidOutbox } from "@/lib/bidOutbox";
 import { useQuickBidEntryState } from "@/hooks/useQuickBidEntryState";
 import { AuctionItem, Bidder } from "@/types";
@@ -122,14 +123,57 @@ export function QuickBidEntry({ items, bidders, winners, recordWinningBid }: Qui
             />
           </div>
 
+          {state.selectedItem && state.selectedBidder && state.price.trim() && (
+            // All three side by side, large, to compare with the bid sheet in one look.
+            <div
+              data-testid="bid-summary"
+              className={cn(
+                "rounded-lg border p-3 space-y-2",
+                state.warnings.length > 0 ? "border-amber-300 bg-amber-50/60" : "bg-muted/40"
+              )}
+            >
+              <div className="flex items-center gap-2 flex-wrap text-lg font-bold">
+                <span className="font-mono">#{state.selectedItem.id}</span>
+                <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="font-mono">Bidder {state.selectedBidder.id}</span>
+                <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="tabular-nums">${(parseFloat(state.price) || 0).toFixed(2)}</span>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {state.selectedItem.name} &middot; {state.selectedBidder.firstName} {state.selectedBidder.lastName}
+              </div>
+              {state.warnings.map((w) => (
+                <p key={w} className="text-sm text-amber-800 flex items-start gap-1.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {w}
+                </p>
+              ))}
+            </div>
+          )}
+
           <LoadingButton
             className="w-full h-12 text-base bg-orns-red text-white hover:bg-orns-red/90"
             loading={state.submitting}
             loadingText="Recording..."
-            onClick={state.handleSubmit}
+            onClick={() => state.handleSubmit()}
           >
             Record Winning Bid
           </LoadingButton>
+
+          <ConfirmationDialog
+            open={state.confirmingWarnings}
+            onOpenChange={(open) => { if (!open) state.cancelWarnings(); }}
+            title="Check the bid sheet"
+            icon={<AlertTriangle className="w-5 h-5 text-amber-600" />}
+            description={
+              <span className="block space-y-2">
+                {state.warnings.map((w) => <span key={w} className="block">{w}</span>)}
+                <span className="block">If the bid sheet really says this, record it anyway.</span>
+              </span>
+            }
+            cancelLabel="Fix it"
+            confirmLabel="Record anyway"
+            onConfirm={() => state.handleSubmit({ confirmed: true })}
+          />
         </CardContent>
       </Card>
 

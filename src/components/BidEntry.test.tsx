@@ -42,6 +42,7 @@ vi.mock("@/context/AuctionContext", () => ({
     items: [
       { id: "1301", name: "Sample Item" },
       { id: "1502", name: "Raffle Ticket", allowMultipleWinners: true },
+      { id: "1601", name: "Wine Basket", value: "$100.00", openingBid: "$45.00", minRaise: "$5.00" },
       // Same data-quality edge case for items - e.g. an inactive/bundled
       // row whose id was blanked out but is still present in the array.
       { id: "", name: "New Art Bundle" }
@@ -95,6 +96,22 @@ describe("BidEntry", () => {
         body: expect.stringContaining("150")
       })
     );
+  });
+
+  it("shows the three entries together, and asks before recording an amount that looks mistyped", async () => {
+    render(<BidEntry />);
+    await userEvent.type(screen.getByPlaceholderText("e.g. 1301"), "1601");
+    await userEvent.type(screen.getByPlaceholderText("e.g. 142"), "142");
+    await userEvent.type(screen.getByPlaceholderText("150.00"), "1500{Enter}");
+
+    expect(screen.getByTestId("bid-summary")).toHaveTextContent("#1601Bidder 142$1500.00");
+    expect(screen.getByTestId("bid-summary")).toHaveTextContent("more than 3 times the item's value");
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Check the bid sheet");
+    expect(mockRecordWinningBid).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Record anyway" }));
+    await waitFor(() => expect(mockRecordWinningBid).toHaveBeenCalledWith("142", "1601", 1500));
   });
 
   it("blank fields — shows toast error and does not call recordWinningBid", async () => {

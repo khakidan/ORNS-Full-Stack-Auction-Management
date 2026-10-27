@@ -170,3 +170,47 @@ describe("useQuickBidEntryState - duplicate/repeatable handling", () => {
     expect(recordWinningBid).toHaveBeenCalledWith("142", "1301", 150);
   });
 });
+
+describe("useQuickBidEntryState - amount checks", () => {
+  beforeEach(() => vi.clearAllMocks());
+  const pricedItem = () => makeItem({ value: "$100.00", openingBid: "$45.00", minRaise: "$5.00" });
+
+  it("shows a warning as you type, asks before recording, and records once confirmed", async () => {
+    const recordWinningBid = vi.fn().mockResolvedValue("key");
+    const { result } = renderHook(() => useQuickBidEntryState({ items: [pricedItem()], bidders: [makeBidder()], winners: {}, recordWinningBid }));
+
+    act(() => { result.current.setItemId("1301"); result.current.setBidderId("142"); result.current.setPrice("15"); });
+    expect(result.current.warnings).toEqual([expect.stringContaining("below the opening bid")]);
+
+    await act(async () => { await result.current.handleSubmit(); });
+    expect(result.current.confirmingWarnings).toBe(true);
+    expect(recordWinningBid).not.toHaveBeenCalled();
+
+    await act(async () => { await result.current.handleSubmit({ confirmed: true }); });
+    expect(recordWinningBid).toHaveBeenCalledWith("142", "1301", 15);
+    expect(result.current.confirmingWarnings).toBe(false);
+  });
+
+  it("'Fix it' closes the question without recording", async () => {
+    const recordWinningBid = vi.fn();
+    const { result } = renderHook(() => useQuickBidEntryState({ items: [pricedItem()], bidders: [makeBidder()], winners: {}, recordWinningBid }));
+
+    act(() => { result.current.setItemId("1301"); result.current.setBidderId("142"); result.current.setPrice("1500"); });
+    await act(async () => { await result.current.handleSubmit(); });
+    act(() => { result.current.cancelWarnings(); });
+
+    expect(result.current.confirmingWarnings).toBe(false);
+    expect(recordWinningBid).not.toHaveBeenCalled();
+  });
+
+  it("records a believable amount straight away, with no question", async () => {
+    const recordWinningBid = vi.fn().mockResolvedValue("key");
+    const { result } = renderHook(() => useQuickBidEntryState({ items: [pricedItem()], bidders: [makeBidder()], winners: {}, recordWinningBid }));
+
+    act(() => { result.current.setItemId("1301"); result.current.setBidderId("142"); result.current.setPrice("150"); });
+    await act(async () => { await result.current.handleSubmit(); });
+
+    expect(result.current.confirmingWarnings).toBe(false);
+    expect(recordWinningBid).toHaveBeenCalledWith("142", "1301", 150);
+  });
+});

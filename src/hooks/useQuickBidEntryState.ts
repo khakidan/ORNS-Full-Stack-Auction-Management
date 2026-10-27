@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { AuctionItem, Bidder } from "@/types";
+import { bidWarnings } from "@/lib/bidSanityChecks";
 
 export interface QuickEntryFeedRow {
   id: string;
@@ -43,6 +44,8 @@ export function useQuickBidEntryState({ items, bidders, winners, recordWinningBi
   const [price, setPrice] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [feed, setFeed] = useState<QuickEntryFeedRow[]>([]);
+  // Open while asking "are you sure?" about an amount that looks mistyped.
+  const [confirmingWarnings, setConfirmingWarnings] = useState(false);
 
   const itemInputRef = useRef<HTMLInputElement>(null);
   const bidderInputRef = useRef<HTMLInputElement>(null);
@@ -62,11 +65,16 @@ export function useQuickBidEntryState({ items, bidders, winners, recordWinningBi
     ? feed.filter(f => f.itemId === selectedItem.id && f.outcome === "recorded").length
     : 0;
 
+  // Shown as you type, and asked about before recording (bidSanityChecks.ts).
+  const priceValue = parseFloat(price);
+  const warnings = selectedItem && price.trim() ? bidWarnings(selectedItem, priceValue) : [];
+
   const focusItem = () => itemInputRef.current?.focus();
   const focusBidder = () => bidderInputRef.current?.focus();
   const focusPrice = () => priceInputRef.current?.focus();
 
-  const handleSubmit = async () => {
+  /** `confirmed`: the person checked the bid sheet and chose "Record anyway". */
+  const handleSubmit = async (options?: { confirmed?: boolean }) => {
     if (!selectedItem) {
       toast.error("Please fill in a valid item number");
       return;
@@ -102,6 +110,12 @@ export function useQuickBidEntryState({ items, bidders, winners, recordWinningBi
       toast.error(`Item #${selectedItem.id} already has a winning bid (${existingWinner}) - not recorded.`);
       return;
     }
+
+    if (warnings.length > 0 && !options?.confirmed) {
+      setConfirmingWarnings(true);
+      return;
+    }
+    setConfirmingWarnings(false);
 
     setSubmitting(true);
     try {
@@ -140,5 +154,12 @@ export function useQuickBidEntryState({ items, bidders, winners, recordWinningBi
     selectedItem, selectedBidder,
     isRepeatable, existingWinner, soldCountThisSession,
     handleSubmit,
+    warnings,
+    confirmingWarnings,
+    /** "Fix it": close the question and put the cursor back in the price. */
+    cancelWarnings: () => {
+      setConfirmingWarnings(false);
+      setTimeout(focusPrice, 0);
+    },
   };
 }

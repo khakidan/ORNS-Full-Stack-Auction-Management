@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { IconButton } from "@/components/ui/IconButton";
 import { LoadingButton } from "@/components/ui/LoadingButton";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, Plus, Repeat, Trash2, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Plus, Repeat, Trash2, XCircle } from "lucide-react";
 import { useBatchBidEntryState } from "@/hooks/useBatchBidEntryState";
 import { AuctionItem, Bidder } from "@/types";
 
@@ -18,6 +18,7 @@ const STATUS_ROW_CLASS: Record<string, string> = {
   ready: "border-l-4 border-l-green-500",
   "ready-repeat": "border-l-4 border-l-blue-500",
   duplicate: "border-l-4 border-l-amber-500",
+  check: "border-l-4 border-l-yellow-400 bg-yellow-50/50",
   error: "border-l-4 border-l-orns-red",
   empty: "border-l-4 border-l-transparent",
 };
@@ -28,6 +29,7 @@ export function BatchBidEntry({ items, bidders, winners, recordWinningBid }: Bat
   const readyCount = state.resolved.filter(r => r.status === "ready" || r.status === "ready-repeat").length;
   const duplicateCount = state.resolved.filter(r => r.status === "duplicate").length;
   const errorCount = state.resolved.filter(r => r.status === "error").length;
+  const checkCount = state.resolved.filter(r => r.status === "check").length;
 
   return (
     <Card>
@@ -77,7 +79,7 @@ export function BatchBidEntry({ items, bidders, winners, recordWinningBid }: Bat
                     {r.item && r.status === "duplicate" && (
                       <span className="text-amber-600 flex items-center gap-1"><XCircle className="w-3 h-3" /> {winners[r.item.id] ? `Already won by ${winners[r.item.id]}` : "Duplicate in this batch"}</span>
                     )}
-                    {r.item && (r.status === "ready" || r.status === "ready-repeat") && (
+                    {r.item && (r.status === "ready" || r.status === "ready-repeat" || r.status === "check") && (
                       <span className="text-green-600 flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3" /> {r.item.name}
                         {r.status === "ready-repeat" && (
@@ -114,6 +116,22 @@ export function BatchBidEntry({ items, bidders, winners, recordWinningBid }: Bat
                       onChange={e => state.updateRow(r.row.key, "price", e.target.value)}
                       placeholder="&hellip;"
                     />
+                    {r.status === "check" && (
+                      <div className="mt-1 space-y-1 max-w-64">
+                        {r.warnings.map(w => (
+                          <p key={w} className="text-xxs text-amber-800 flex items-start gap-1">
+                            <AlertTriangle className="w-3 h-3 shrink-0 mt-px" /> {w}
+                          </p>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => state.confirmRow(r.row.key)}
+                          className="text-xxs font-semibold underline text-amber-900 hover:text-foreground"
+                        >
+                          Looks right - the bid sheet says this
+                        </button>
+                      </div>
+                    )}
                   </td>
                   <td className="px-2 py-1.5">
                     {r.hasAnyInput && (
@@ -135,6 +153,7 @@ export function BatchBidEntry({ items, bidders, winners, recordWinningBid }: Bat
         <div className="flex items-center justify-between gap-4 flex-wrap px-4 py-3 bg-muted/40 border-t">
           <div className="flex gap-4 text-xs font-medium">
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500" /> {readyCount} ready</span>
+            {checkCount > 0 && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-400" /> {checkCount} to check</span>}
             {duplicateCount > 0 && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500" /> {duplicateCount} duplicate</span>}
             {errorCount > 0 && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-orns-red" /> {errorCount} unresolved</span>}
           </div>

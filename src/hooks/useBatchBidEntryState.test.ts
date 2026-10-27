@@ -208,3 +208,31 @@ describe("useBatchBidEntryState - submitReady", () => {
     expect(toast.success).not.toHaveBeenCalled();
   });
 });
+
+describe("useBatchBidEntryState - amount checks", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("holds back a row whose amount looks mistyped until 'Looks right', and asks again after an edit", async () => {
+    const recordWinningBid = vi.fn().mockResolvedValue(undefined);
+    const item = makeItem({ value: "$100.00", openingBid: "$45.00", minRaise: "$5.00" });
+    const { result } = renderHook(() =>
+      useBatchBidEntryState({ items: [item], bidders: [makeBidder()], winners: {}, recordWinningBid })
+    );
+    const key = result.current.rows[0].key;
+
+    act(() => { result.current.updateRow(key, "itemId", "1301"); });
+    act(() => { result.current.updateRow(key, "bidderId", "142"); });
+    act(() => { result.current.updateRow(key, "price", "1500"); });
+    expect(result.current.resolved[0].status).toBe("check");
+    expect(result.current.readyRows).toHaveLength(0);
+
+    act(() => { result.current.confirmRow(key); });
+    expect(result.current.resolved[0].status).toBe("ready");
+
+    act(() => { result.current.updateRow(key, "price", "15"); });
+    expect(result.current.resolved[0].status).toBe("check");
+
+    act(() => { result.current.updateRow(key, "price", "150"); });
+    expect(result.current.resolved[0].status).toBe("ready");
+  });
+});
