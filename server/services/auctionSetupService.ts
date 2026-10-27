@@ -1,5 +1,7 @@
 import { drive_v3, sheets_v4 } from "googleapis";
 import { AUCTION_TICKETS_ITEM_ID } from "../utils/categoryHelpers";
+import { currentAuctionYear } from "../utils/auctionYear";
+import { archiveAuctionSpreadsheets } from "./archiveService";
 
 export interface SetupAuctionParams {
   ticketsSpreadsheetId: string;
@@ -82,19 +84,15 @@ export async function setupNewAuction(
   }
 
   // 1. Calculate dates
-  const today = new Date();
-  let auctionYear = today.getFullYear();
-  // getMonth() is 0-indexed: > 3 means May or later, so default to next year's auction
-  if (today.getMonth() > 3) {
-    auctionYear += 1;
-  }
+  const auctionYear = currentAuctionYear();
   const lastYear = auctionYear - 1;
   const maxArchiveYear = auctionYear - 2;
   const baseFolderName = `${auctionYear} Auction`;
 
   onLog(`Starting setup for auction year: ${auctionYear}`);
 
-  // 2. Archive old folders && check for new folder existence
+  // 2. Check for the new folder's existence and find last year's folder (old
+  // folders are moved after the backup below, so a failed backup changes nothing)
   onLog(`Scanning parent directory for existing folders...`);
   const folderRes = await drive.files.list({
     q: `'${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
@@ -107,6 +105,7 @@ export async function setupNewAuction(
   
   const folders = folderRes.data.files || [];
   let lastYearFolderId: string | undefined;
+  const foldersToArchive: { id: string; name: string }[] = [];
   
   for (const folder of folders) {
     if (folder.name === baseFolderName) {
@@ -121,19 +120,47 @@ export async function setupNewAuction(
         lastYearFolderId = folder.id!;
       }
       if (folderYear <= maxArchiveYear) {
-        onLog(`Archiving old folder: ${folder.name}`);
-        await drive.files.update({
-          fileId: folder.id!,
-          addParents: archivedFolderId,
-          removeParents: parentFolderId,
-          fields: 'id',
-          supportsAllDrives: true
-        });
+        foldersToArchive.push({ id: folder.id!, name: folder.name! });
       }
     }
   }
-  
-  // 3. Create new folder and subfolders
+
+  // 3. Back up the master spreadsheets into last year's folder (created if
+  // it's missing). This comes before anything else changes because step 6
+  // permanently clears them: if any copy fails the whole setup stops here,
+  // with nothing moved, created or cleared, so it can simply be run again
+  // (copies that did succeed are kept and skipped next time). Names and
+  // folder come from archiveAuctionSpreadsheets, which is what the Archived
+  // Auctions page looks for; anything already archived with "Archive This
+  // Auction" is left as it is.
+  onLog(`Backing up master spreadsheets to last year's folder (${lastYear})...`);
+  const backup = await archiveAuctionSpreadsheets(drive, {
+    year: lastYear,
+    parentFolderId,
+    folderId: lastYearFolderId,
+    spreadsheets: { tickets: ticketsSpreadsheetId, items: itemEntrySpreadsheetId, bidManagement: bidManagementSpreadsheetId },
+    replaceExisting: false,
+  }, onLog);
+  const failedBackups = backup.results.filter((r) => r.status === "failed");
+  if (failedBackups.length > 0) {
+    throw new Error(
+      `Setup stopped before changing anything because the backup failed (${failedBackups.map((f) => `${f.name}: ${f.error}`).join("; ")}). ` +
+      `Your spreadsheets are untouched - fix the problem and run setup again.`
+    );
+  }
+
+  for (const folder of foldersToArchive) {
+    onLog(`Archiving old folder: ${folder.name}`);
+    await drive.files.update({
+      fileId: folder.id,
+      addParents: archivedFolderId,
+      removeParents: parentFolderId,
+      fields: 'id',
+      supportsAllDrives: true
+    });
+  }
+
+  // 4. Create new folder and subfolders
   onLog(`Creating new base folder: ${baseFolderName}`);
   const createFolder = async (name: string, parentId: string) => {
     const resp = await drive.files.create({
@@ -151,7 +178,7 @@ export async function setupNewAuction(
   await createFolder("Software Development", newBaseFolderId);
   const volunteerDocsFolderId = await createFolder("Helpful Volunteer Documents", newBaseFolderId);
   
-  // 4. Copy specific template files
+  // 5. Copy specific template files
   onLog(`Copying template files...`);
   const templateFiles = [  
     { id: process.env.TEMPLATE_VOLUNTEER_BUSINESS_FOLLOWUP_FAQS_ID!, parent: volunteerDocsFolderId }, 
@@ -181,39 +208,6 @@ export async function setupNewAuction(
     } catch (err: any) {
       onLog(`Failed to copy file ${f.id}: ${err.message}`);
     }
-  }
-  
-  // 5. Backup master spreadsheets dynamically if they exist, into lastYearFolderId
-  if (lastYearFolderId) {
-    onLog(`Backing up master spreadsheets to last year's folder (${lastYear})...`);
-    if (ticketsSpreadsheetId) {
-      onLog(`Backing up Tickets spreadsheet...`);
-      await drive.files.copy({
-        fileId: ticketsSpreadsheetId,
-        requestBody: { name: `${lastYear} Auction Tickets`, parents: [lastYearFolderId] },
-        supportsAllDrives: true
-      }).catch(err => onLog(`Error backing up Tickets: ${err.message}`));
-    }
-    
-    if (itemEntrySpreadsheetId) {
-      onLog(`Backing up Item Entry spreadsheet...`);
-      await drive.files.copy({
-        fileId: itemEntrySpreadsheetId,
-        requestBody: { name: `${lastYear} Auction Items`, parents: [lastYearFolderId] },
-        supportsAllDrives: true
-      }).catch(err => onLog(`Error backing up Items: ${err.message}`));
-    }
-    
-    if (bidManagementSpreadsheetId) {
-      onLog(`Backing up Bid Management spreadsheet...`);
-      await drive.files.copy({
-        fileId: bidManagementSpreadsheetId,
-        requestBody: { name: `${lastYear} Bid Management`, parents: [lastYearFolderId] },
-        supportsAllDrives: true
-      }).catch(err => onLog(`Error backing up Bid Management: ${err.message}`));
-    }
-  } else {
-    onLog(`No folder found for ${lastYear} Auction, skipping spreadsheet backups.`);
   }
   
   // 6. Clean master spreadsheets

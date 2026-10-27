@@ -8,6 +8,8 @@ import { RowIdTile } from "@/components/RowIdTile";
 interface ItemRowProps {
   item: AuctionItem;
   winnerName?: string;
+  /** Shown when there's no winner; archived auctions say "No winner" since nothing is pending. */
+  unwonLabel?: string;
 }
 
 /**
@@ -31,7 +33,7 @@ interface ItemRowProps {
  * BidderRow.tsx, which preserved its pre-existing motion.tr) the old
  * table row this replaces never animated either.
  */
-export function ItemRow({ item, winnerName }: ItemRowProps) {
+export function ItemRow({ item, winnerName, unwonLabel = "Not yet won" }: ItemRowProps) {
   const hasFinancials = !!(item.value || item.openingBid || item.minRaise || item.donor);
   const isBundled = !!item.bundleId && item.status === "Active";
   const typeStyle = item.itemType ? ITEM_TYPE_STYLES[item.itemType] : undefined;
@@ -65,7 +67,7 @@ export function ItemRow({ item, winnerName }: ItemRowProps) {
         </div>
 
         {item.description && (
-          <p className="text-sm text-muted-foreground line-clamp-2">{item.description}</p>
+          <p className="text-sm text-muted-foreground whitespace-pre-line break-words">{item.description}</p>
         )}
 
         {hasFinancials && (
@@ -91,7 +93,7 @@ export function ItemRow({ item, winnerName }: ItemRowProps) {
             <span className="truncate">{winnerName}</span>
           </span>
         ) : (
-          <span className="text-muted-foreground text-sm italic">Not yet won</span>
+          <span className="text-muted-foreground text-sm italic">{unwonLabel}</span>
         )}
       </div>
     </div>

@@ -168,3 +168,12 @@ export interface SweeperStatus {
   lastRunAt: string | null;
   lastResult: PaypalSweepOutcome | null;
 }
+
+/** One past auction's archived spreadsheets on Drive (server/services/archiveService.ts). Null = not found. */
+export interface ArchivedAuction {
+  year: number;
+  folderId: string | null;
+  folderLink: string | null;
+  bidManagementSpreadsheetId: string | null;
+  itemsSpreadsheetId: string | null;
+}

@@ -88,7 +88,7 @@ export function AuctionItemRow({
         </div>
 
         {item.description && (
-          <p className="text-sm text-muted-foreground line-clamp-2">{item.description}</p>
+          <p className="text-sm text-muted-foreground whitespace-pre-line break-words">{item.description}</p>
         )}
 
         {hasFinancials && (
