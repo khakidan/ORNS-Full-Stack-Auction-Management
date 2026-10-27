@@ -245,3 +245,38 @@ export async function getArchivedAuctions(): Promise<ArchivedAuction[]> {
   if (!res.ok) throw new Error(errorTextFrom(data, "Couldn't look up the archived auctions."));
   return data.auctions || [];
 }
+
+/**
+ * Attendee List writes go through their own routes (not the generic sheets
+ * proxy, which refuses the ticket tabs) so each one is recorded in Action
+ * History. `range` is "<ticket tab>!<cells in one row>".
+ */
+export async function updateAttendeeCells(spreadsheetId: string, range: string, values: any[][]) {
+  if (!isConfiguredId(spreadsheetId)) throw new Error("Invalid Spreadsheet ID");
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/attendees/update`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ spreadsheetId, range, values }),
+    credentials: "include"
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to update the attendee");
+  }
+  return res.json();
+}
+
+export async function appendAttendeeRow(spreadsheetId: string, sheet: string, row: any[]) {
+  if (!isConfiguredId(spreadsheetId)) throw new Error("Invalid Spreadsheet ID");
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/attendees/add`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ spreadsheetId, sheet, row }),
+    credentials: "include"
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to add the attendee");
+  }
+  return res.json();
+}

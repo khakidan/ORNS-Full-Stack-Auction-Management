@@ -60,6 +60,7 @@ vi.mock("@/context/AuctionContext", () => ({
 // BugReportsAdmin has its own tests; it only needs to render here.
 vi.mock("./BugReportsAdmin", () => ({ default: () => <div>BugReportsAdmin</div> }));
 vi.mock("./UsersAdmin", () => ({ default: () => <div>UsersAdmin</div> }));
+vi.mock("./ActionHistoryAdmin", () => ({ default: () => <div>ActionHistoryAdmin</div> }));
 
 const mockSaveConfig = vi.fn().mockResolvedValue(undefined);
 const mockLoginToFirebase = vi.fn();

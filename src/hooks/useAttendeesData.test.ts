@@ -33,7 +33,7 @@ import { Attendee } from "@/types";
 
 vi.mock("@/services/google-api", () => ({
   getSheetData: vi.fn(),
-  appendSheetData: vi.fn(),
+  appendAttendeeRow: vi.fn(),
 }));
 
 vi.mock("@/services/apiClient", () => ({ postJson: vi.fn() }));
@@ -45,12 +45,12 @@ vi.mock("sonner", () => ({
   },
 }));
 
-import { getSheetData, appendSheetData } from "@/services/google-api";
+import { getSheetData, appendAttendeeRow } from "@/services/google-api";
 import { postJson } from "@/services/apiClient";
 import { toast } from "sonner";
 
 const mockedGetSheetData = vi.mocked(getSheetData);
-const mockedAppendSheetData = vi.mocked(appendSheetData);
+const mockedAppendSheetData = vi.mocked(appendAttendeeRow);
 const mockedDeleteAttendee = vi.mocked(postJson);
 
 function makeAttendee(overrides: Partial<Attendee> = {}): Attendee {
@@ -177,7 +177,7 @@ describe("useAttendeesData.addAttendee", () => {
       await result.current.addAttendee("tickets", ["Alice", "One"]);
     });
 
-    expect(appendSheetData).not.toHaveBeenCalled();
+    expect(appendAttendeeRow).not.toHaveBeenCalled();
     expect(result.current.attendees).toEqual([]);
   });
 
@@ -224,7 +224,7 @@ describe("useAttendeesData.addAttendee", () => {
     });
   });
 
-  it("on success, calls appendSheetData with the real payload, re-fetches, and shows a success toast", async () => {
+  it("on success, sends the row to the attendee add route (recorded in Action History), re-fetches, and shows a success toast", async () => {
     mockedAppendSheetData.mockResolvedValue(undefined);
     const row = ["Alice", "One", "alice@example.com"];
 
@@ -234,7 +234,7 @@ describe("useAttendeesData.addAttendee", () => {
     });
 
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Attendee record synced successfully"));
-    expect(appendSheetData).toHaveBeenCalledWith("ss-id", "tickets!A:A", [row]);
+    expect(appendAttendeeRow).toHaveBeenCalledWith("ss-id", "tickets", row);
     expect(getSheetData).toHaveBeenCalled(); // fetchAttendees() re-fetch after success
   });
 

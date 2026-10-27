@@ -36,6 +36,6 @@ If step 7 doesn't check out, cash/check checkouts will still work (the code fall
 
 ### User Permissions
 
-Item 1 (staff roles) is done - see `CHANGELOG.md`. Next: an Action History spreadsheet with Undo, then item 2 below.
+Item 1 (staff roles) and the Action History spreadsheet with Undo are done - see `CHANGELOG.md`. Next: item 2 below (volunteers), whose actions will be recorded in Action History under each volunteer's own email.
 
 2. We should also look in to allowing access to the Bid Management page to non ORNS accounts but giving them only the bare minimum permissions to be able to check in bidders/mark them as proxy, view the Dashboard and enter Special Winners, enter Winning Bids, Checkout bidders, and access printed receipts. This will mean we will need to have some kind of user creation process that would send the user their login credentials, but will only allow the user to have access to the app while the auction is live. Once the auction is closed, their credentials will expire.

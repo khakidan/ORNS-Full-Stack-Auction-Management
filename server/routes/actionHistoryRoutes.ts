@@ -1,0 +1,158 @@
+import { Router, Request, Response, NextFunction } from 'express';
+import { requirePermission } from '../middleware/requirePermission';
+import { driveFor, sheetsFor } from '../utils/googleClients';
+import { withLock } from '../utils/asyncLock';
+import { UndoSpec } from '../utils/undoSpec';
+import { getActionHistorySpreadsheetId, setActionHistorySpreadsheetId } from '../services/actionHistoryStore';
+import { createActionHistorySpreadsheet, findAction, listActions, markUndone } from '../services/actionHistoryService';
+import { COL } from '../services/actionHistoryRows';
+import { applyUndo, UndoRefusedError } from '../services/undoService';
+import { logAction, ActionArea } from '../services/actionLog';
+import { google } from 'googleapis';
+import { getAuthenticatedClient } from '../services/oauth';
+import { runAppsScript } from '../utils/appsScriptRun';
+
+const sheetUrl = (id: string) => `https://docs.google.com/spreadsheets/d/${id}`;
+
+/** Settings > Action History: create the log spreadsheet, read it, and Undo (Full Administrator only). */
+export default function createActionHistoryRouter() {
+  const router = Router();
+
+  router.get("/action-history/status", requirePermission("settings"), async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const spreadsheetId = await getActionHistorySpreadsheetId();
+      res.json({ spreadsheetId, url: spreadsheetId ? sheetUrl(spreadsheetId) : "" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * Creates the spreadsheet in the main auction folder. Refused while the
+   * current one still opens, so the log can't be split by accident; if it
+   * was deleted, this makes a new one.
+   */
+  router.post("/action-history/create", requirePermission("settings"), async (req: Request, res: Response, next: NextFunction) => {
+    const parentFolderId = process.env.DRIVE_PARENT_FOLDER_ID;
+    if (!parentFolderId) {
+      return res.status(500).json({ error: "DRIVE_PARENT_FOLDER_ID is not configured on the server." });
+    }
+    try {
+      const sheets = sheetsFor(req);
+      const existing = await getActionHistorySpreadsheetId();
+      if (existing) {
+        const stillThere = await sheets.spreadsheets.get({ spreadsheetId: existing, fields: "spreadsheetId" }).then(() => true, (e: any) => e?.code !== 404);
+        if (stillThere) {
+          return res.status(409).json({ error: "The Action History spreadsheet already exists.", spreadsheetId: existing, url: sheetUrl(existing) });
+        }
+      }
+      const spreadsheetId = await createActionHistorySpreadsheet(driveFor(req), sheets, parentFolderId);
+      await setActionHistorySpreadsheetId(spreadsheetId, req.user!.email);
+      await logAction(req, { area: "Settings", action: "Create Action History spreadsheet", summary: "Started recording actions in a new Action History spreadsheet", notUndoableReason: "the log itself" });
+      res.json({ spreadsheetId, url: sheetUrl(spreadsheetId) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * Installs the on-edit trigger in the Items and Tickets spreadsheets'
+   * scripts (ActionHistoryTracking.gs), so edits made directly in those
+   * spreadsheets are recorded too. The trigger belongs to the admin who
+   * clicks this.
+   */
+  router.post("/action-history/edit-tracking", requirePermission("settings"), async (req: Request, res: Response, next: NextFunction) => {
+    const { itemsSpreadsheetId, ticketsSpreadsheetId } = req.body || {};
+    try {
+      const logId = await getActionHistorySpreadsheetId();
+      if (!logId) return res.status(409).json({ error: "Create the Action History spreadsheet first." });
+      const script = google.script({ version: "v1", auth: getAuthenticatedClient(req.session!.tokens!) });
+      const targets = [
+        { name: "Auction Items", scriptId: process.env.SCRIPT_ID_ITEM_ENTRY, spreadsheetId: itemsSpreadsheetId },
+        { name: "Auction Tickets", scriptId: process.env.SCRIPT_ID_TICKETS, spreadsheetId: ticketsSpreadsheetId },
+      ];
+      const results = [];
+      for (const t of targets) {
+        if (!t.scriptId || !t.spreadsheetId) {
+          results.push({ name: t.name, success: false, error: !t.scriptId ? "Its script ID isn't set on the server." : "Its spreadsheet ID isn't configured." });
+          continue;
+        }
+        try {
+          const result = await runAppsScript(script, t.scriptId, "apiEnableEditTracking", [logId, t.spreadsheetId]);
+          results.push({ name: t.name, success: result?.success !== false, error: result?.error });
+        } catch (err: any) {
+          results.push({ name: t.name, success: false, error: err?.message || String(err) });
+        }
+      }
+      await logAction(req, {
+        area: "Settings",
+        action: "Turn on edit tracking",
+        summary: `Edit tracking: ${results.map((r) => `${r.name} ${r.success ? "on" : `failed (${r.error})`}`).join("; ")}`,
+        notUndoableReason: "turn it on again to change it",
+      });
+      res.json({ success: results.every((r) => r.success), results });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/action-history", requirePermission("settings"), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const spreadsheetId = await getActionHistorySpreadsheetId();
+      if (!spreadsheetId) return res.json({ spreadsheetId: "", actions: [] });
+      res.json({ spreadsheetId, url: sheetUrl(spreadsheetId), actions: await listActions(sheetsFor(req), spreadsheetId) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /** Reverses one action, then marks it "Undone by ..." and records the Undo itself. */
+  router.post("/action-history/:actionId/undo", requirePermission("settings"), async (req: Request, res: Response, next: NextFunction) => {
+    const { actionId } = req.params;
+    try {
+      const spreadsheetId = await getActionHistorySpreadsheetId();
+      if (!spreadsheetId) return res.status(404).json({ error: "There is no Action History spreadsheet yet." });
+      const sheets = sheetsFor(req);
+
+      // One undo of a given action at a time, so two admins can't both reverse it.
+      const outcome = await withLock(`action-history-undo:${actionId}`, async () => {
+        const found = await findAction(sheets, spreadsheetId, actionId);
+        if (!found) return { status: 404, error: "That action isn't in the Action History." };
+        const { rowIndex, row } = found;
+        const cell = (c: number) => String(row[c] ?? "");
+        if (cell(COL.undo)) return { status: 409, error: cell(COL.undo).startsWith("Undone") ? `This was already undone (${cell(COL.undo)}).` : cell(COL.undo) };
+        if (!cell(COL.undoData)) return { status: 409, error: "This action can't be undone here." };
+
+        let spec: UndoSpec;
+        try {
+          spec = JSON.parse(cell(COL.undoData));
+        } catch {
+          return { status: 409, error: "This action's undo data is unreadable, so it can't be undone here." };
+        }
+
+        await applyUndo(sheets, spec, req.user!.email);
+        const when = new Date().toISOString();
+        await markUndone(sheets, spreadsheetId, rowIndex, `Undone by ${req.user!.email} at ${when}`);
+        await logAction(req, {
+          area: (cell(COL.area) || "Settings") as ActionArea,
+          action: `Undo: ${cell(COL.action)}`,
+          target: cell(COL.target),
+          summary: `Undid "${cell(COL.summary)}" (by ${cell(COL.who)})`,
+          before: cell(COL.after) || undefined,
+          after: cell(COL.before) || undefined,
+          location: cell(COL.location),
+          undoOf: actionId,
+        });
+        return { status: 200 };
+      });
+
+      if (outcome.status !== 200) return res.status(outcome.status).json({ error: outcome.error });
+      res.json({ success: true });
+    } catch (error: any) {
+      if (error instanceof UndoRefusedError) return res.status(409).json({ error: error.message });
+      next(error);
+    }
+  });
+
+  return router;
+}

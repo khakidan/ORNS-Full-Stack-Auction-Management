@@ -16,6 +16,14 @@ function sheetNameOf(range: string): string {
   return range.split("!")[0].trim().replace(/^'(.*)'$/, "$1").trim().toLowerCase();
 }
 
+// Attendee changes go through /api/attendees/* instead, which record each
+// one in Action History and check the delete permission.
+function refuseTicketSheet(range: string, res: Response): boolean {
+  if (!TICKET_SHEETS.includes(sheetNameOf(range))) return false;
+  res.status(403).json({ error: "Attendees can only be changed through the Attendee List." });
+  return true;
+}
+
 function refuseLockedSheet(range: string, res: Response): boolean {
   const sheetName = sheetNameOf(range);
   if (!LOCKED_SHEETS.has(sheetName)) return false;
@@ -63,6 +71,7 @@ export default function createSheetsProxyRouter() {
       const { spreadsheetId, range } = req.params;
       const decodedRange = decodeURIComponent(range);
       if (refuseLockedSheet(decodedRange, res)) return;
+      if (refuseTicketSheet(decodedRange, res)) return;
 
       const result = await sheetsFor(req).spreadsheets.values.update({
         spreadsheetId,
@@ -88,6 +97,7 @@ export default function createSheetsProxyRouter() {
       const { spreadsheetId, range } = req.params;
       const decodedRange = decodeURIComponent(range);
       if (refuseLockedSheet(decodedRange, res)) return;
+      if (refuseTicketSheet(decodedRange, res)) return;
 
       const result = await sheetsFor(req).spreadsheets.values.append({
         spreadsheetId,
@@ -109,12 +119,7 @@ export default function createSheetsProxyRouter() {
       const { spreadsheetId, range } = req.params;
       const decodedRange = decodeURIComponent(range);
       if (refuseLockedSheet(decodedRange, res)) return;
-      // Clearing an attendee row is deleting the attendee, which needs a
-      // permission check - that goes through POST /api/attendees/delete.
-      if (TICKET_SHEETS.includes(sheetNameOf(decodedRange))) {
-        res.status(403).json({ error: "Attendees can only be deleted through the Attendee List." });
-        return;
-      }
+      if (refuseTicketSheet(decodedRange, res)) return;
 
       const result = await sheetsFor(req).spreadsheets.values.clear({
         spreadsheetId,

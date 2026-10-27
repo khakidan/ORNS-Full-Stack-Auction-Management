@@ -306,19 +306,23 @@ export interface SetBidderFlagParams {
  * writer (patterns.md), so the row lookup and the write can't interleave
  * with a walk-in registration or checkout on the same sheet.
  */
-export async function setBidderFlag(sheets: sheets_v4.Sheets, params: SetBidderFlagParams): Promise<{ success: boolean }> {
+/** `range` is the cell ticked and `before` its old value, for Action History. */
+export async function setBidderFlag(sheets: sheets_v4.Sheets, params: SetBidderFlagParams): Promise<{ success: boolean; range: string; before: boolean }> {
   return withLock(`bidder-numbers:${params.spreadsheetId}`, async () => {
     const { spreadsheetId, bidderNumbersSheet, bidderId, flag } = params;
-    const search = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${bidderNumbersSheet}'!A:A` });
-    const rowIndex = findBidderRowIndex(search.data.values || [], bidderId) + 1;
+    const search = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${bidderNumbersSheet}'!A:F` });
+    const rows = search.data.values || [];
+    const rowIndex = findBidderRowIndex(rows, bidderId) + 1;
     if (rowIndex < 2) throw new Error(`Bidder ${bidderId} not found in ${bidderNumbersSheet}`);
+    const oldCell = rows[rowIndex - 1]?.[BIDDER_FLAG_COLUMNS[flag].charCodeAt(0) - 65];
+    const range = `'${bidderNumbersSheet}'!${BIDDER_FLAG_COLUMNS[flag]}${rowIndex}`;
 
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `'${bidderNumbersSheet}'!${BIDDER_FLAG_COLUMNS[flag]}${rowIndex}`,
+      range,
       valueInputOption: "USER_ENTERED",
       requestBody: { values: [[true]] },
     });
-    return { success: true };
+    return { success: true, range, before: oldCell === true || String(oldCell ?? "").toUpperCase() === "TRUE" };
   });
 }

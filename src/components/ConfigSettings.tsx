@@ -12,6 +12,7 @@ import AppsScriptVersionsCard from "./AppsScriptVersionsCard";
 import ManualCopyDialog from "./ManualCopyDialog";
 import BugReportsAdmin from "./BugReportsAdmin";
 import UsersAdmin from "./UsersAdmin";
+import ActionHistoryAdmin from "./ActionHistoryAdmin";
 import { WorkflowTabsShell } from "@/components/WorkflowTabsShell";
 import { useAuction } from "@/context/AuctionContext";
 
@@ -114,6 +115,7 @@ export default function ConfigSettings() {
         },
         { value: "bug_reports", label: "Bug Reports", content: <BugReportsAdmin /> },
         { value: "users", label: "Users", content: <UsersAdmin /> },
+        { value: "action_history", label: "Action History", content: <ActionHistoryAdmin /> },
       ]}
     />
   );

@@ -30,6 +30,7 @@ describe("findArchivedAuctions", () => {
       folderLink: "https://drive/f2026",
       bidManagementSpreadsheetId: "bm26",
       itemsSpreadsheetId: "it26",
+      actionHistorySpreadsheetId: null,
     });
     expect(result[1]).toMatchObject({
       year: 2025,
@@ -64,7 +65,7 @@ describe("findArchivedAuctions", () => {
     const result = await findArchivedAuctions(drive, "parent", "archive", [2026]);
 
     expect(result).toEqual([
-      { year: 2026, folderId: null, folderLink: null, bidManagementSpreadsheetId: null, itemsSpreadsheetId: null },
+      { year: 2026, folderId: null, folderLink: null, bidManagementSpreadsheetId: null, itemsSpreadsheetId: null, actionHistorySpreadsheetId: null },
     ]);
   });
 

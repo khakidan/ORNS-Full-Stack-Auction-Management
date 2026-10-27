@@ -701,7 +701,7 @@ describe("Delete Auction Item workflow", () => {
       .send({ spreadsheetId, rowIndex: 2 });
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ success: true });
+    expect(response.body).toEqual({ success: true, name: "Pizza Night", before: { status: "Active" } });
 
     expect(lastBulkWritePayload).toBeDefined();
 

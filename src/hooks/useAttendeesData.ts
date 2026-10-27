@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { appendSheetData, getSheetData } from "@/services/google-api";
+import { appendAttendeeRow, getSheetData } from "@/services/google-api";
 import { postJson } from "@/services/apiClient";
 import { parseAttendeeRows } from "@/lib/attendeeParsing";
 import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
@@ -65,7 +65,7 @@ export function useAttendeesData(ticketsSpreadsheetId: string) {
     setAttendees(prev => [...prev, newAttendee]);
 
     // 2. Background Sync
-    appendSheetData(ticketsSpreadsheetId, `${sheetName}!A:A`, [rowData])
+    appendAttendeeRow(ticketsSpreadsheetId, sheetName, rowData)
       .then(() => {
         // Re-fetch to get correct IDs/indices from the source of truth
         fetchAttendees();

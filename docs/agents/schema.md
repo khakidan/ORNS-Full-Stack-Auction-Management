@@ -98,6 +98,29 @@ Firestore is utilized to synchronize system configuration, active operational pa
     components not yet reading from context directly. `saveConfig()`
     requires an authenticated Firebase user and rejects writes otherwise.
 
+### Spreadsheet: Action History (`Actions` tab)
+
+Who did what this season (`server/services/actionHistoryRows.ts`). Created by **Settings > Action History > Create Action History spreadsheet** in the main auction folder; its ID is kept in Firestore `system/actionHistory` (`{ spreadsheetId, createdBy, createdAt }`, server-only - not in the shared Config, so `firestore.rules` didn't change). Archived as "{year} Action History" with the other spreadsheets, and cleared (`A2:O`) by Setup New Auction Year after the backup.
+
+| Col | Header | Notes |
+|---|---|---|
+| A | Action ID | `yyyymmdd-hhmmss-xxxxxx`, unique |
+| B | Timestamp | ISO |
+| C | Who | Signed-in address (a volunteer's own email, later) |
+| D | Role | Full Administrator / Administrator / User; "Spreadsheet editor" for sheet edits |
+| E | Source | `App`, or `Sheet edit` (written by the Items/Tickets scripts' `ActionHistoryTracking.gs` on-edit trigger) |
+| F | Area | Bid Management / Auction Items / Tickets / Settings / Users |
+| G | Action | e.g. Record winning bid, Edit item, Bundle items, Edit attendee |
+| H | Target | e.g. Item 312, Bidder 104, `'tickets'!F57` |
+| I | Summary | One readable line |
+| J / K | Before / After | Values (JSON when not plain text) |
+| L | Location | Spreadsheet and range written |
+| M | Undo | Blank (undoable), `Undone by ... at ...`, or `Can't be undone: <reason>` |
+| N | Undo of | On an Undo row: the Action ID it reversed |
+| O | Undo Data | JSON `UndoSpec` (`server/utils/undoSpec.ts`) - what Undo needs; blank = not undoable |
+
+Written RAW by the app (typed text is never run as a formula). If the spreadsheet isn't set up or a write fails, the row goes to Cloud Logging (`jsonPayload.actionLog`) instead.
+
 ### Collection: `users` (server-only)
 
 Staff roles (`server/services/userService.ts`). Document ID = the lowercased @orns.org address.

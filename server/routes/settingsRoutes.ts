@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { logAction } from '../services/actionLog';
 import { requirePermission } from '../middleware/requirePermission';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { sheetsFor, respondIfNotFound } from '../utils/googleClients';
@@ -15,6 +16,7 @@ export default function createSettingsRouter() {
     try {
       const outcome = await withIdempotency("settings/update", idempotencyKey, async () => {
         await upsertSetting(sheetsFor(req), { spreadsheetId, key, value, description });
+        await logAction(req, { area: "Settings", action: "Save setting", target: key, summary: `Saved setting ${key}`, after: value, notUndoableReason: "save the setting again to change it" });
         return { success: true };
       });
       res.json(idempotentBody(outcome));

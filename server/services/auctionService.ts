@@ -31,6 +31,8 @@ export interface WinningBidResult {
   followUpAdded: boolean;
   /** This exact bid (same bidder, same price) was already in the sheet, so nothing was written. */
   alreadyRecorded?: boolean;
+  /** The two grid cells written (item number, price), for Action History. */
+  range?: string;
 }
 
 export interface CheckoutParams {
@@ -121,10 +123,11 @@ async function recordWinningBidLocked(
 
   // 4. Write the bid in the bidder's first empty row (and the Follow-Up row).
   const rowIndex = firstEmptyBidRow(values, colIndex);
+  const range = `${bidManagementSheet}!${getColumnLetter(colIndex)}${rowIndex}:${getColumnLetter(colIndex + 1)}${rowIndex}`;
   const operations: SheetOp[] = [{
     type: 'UPDATE',
     spreadsheetId,
-    range: `${bidManagementSheet}!${getColumnLetter(colIndex)}${rowIndex}:${getColumnLetter(colIndex + 1)}${rowIndex}`,
+    range,
     newValues: [[itemId, price]]
   }];
   if (isCheckedOut) {
@@ -133,7 +136,7 @@ async function recordWinningBidLocked(
   }
 
   await executeGoogleSheetsTransaction(sheets, operations);
-  return { success: true, followUpAdded: isCheckedOut };
+  return { success: true, followUpAdded: isCheckedOut, range };
 }
 
 /**

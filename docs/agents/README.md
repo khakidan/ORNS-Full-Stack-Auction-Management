@@ -150,6 +150,8 @@ The three Apps Script projects (`scripts/GoogleAppsScriptsCode/<project>/`) do *
 2.  `npm run gas:deploy` (or `npm run gas:deploy BidManagementSpreadsheet`) - pushes from the repo folder, creates a version, and points the deployment at it. Needs clasp signed in once: `npx @google/clasp@3.4.1 login`, as an account that owns the scripts.
 3.  `npm run gas:check` - downloads each deployed version and compares it file by file with the repo.
 
+The Items and Tickets scripts' `ActionHistoryTracking.gs` needs the `script.scriptapp` scope (to install its on-edit trigger), which is also in the app's sign-in scopes (`server/services/oauth.ts`). After deploying a script whose manifest scopes changed, staff must sign in again before the app can run that script.
+
 The Settings page's **Apps Script Versions** card shows whether each live script reports the fingerprint the running app expects. "Out of date" right after a merge usually just means step 2 hasn't been run yet.
 
 Production configuration (all the environment variables above, with

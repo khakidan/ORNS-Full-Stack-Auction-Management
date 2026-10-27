@@ -97,4 +97,15 @@ describe("setupNewAuction - archiving last year's spreadsheets", () => {
 
     expect(clear).toHaveBeenCalled();
   });
+
+  it("also backs up the Action History as \"{year} Action History\", then clears it so the new season starts empty", async () => {
+    const { getActionHistorySpreadsheetId } = await import("../services/actionHistoryStore");
+    vi.mocked(getActionHistorySpreadsheetId).mockResolvedValueOnce("log");
+    const { drive, sheets, copied, clear } = fakes([{ id: "last", name: `${lastYear} Auction` }]);
+
+    await setupNewAuction(drive, sheets, params, () => {});
+
+    expect(copied).toContainEqual({ fileId: "log", name: `${lastYear} Action History`, parents: ["last"] });
+    expect(clear).toHaveBeenCalledWith(expect.objectContaining({ spreadsheetId: "log", range: "'Actions'!A2:O" }));
+  });
 });

@@ -76,6 +76,7 @@ describe("ArchivedYearPanel", () => {
     expect(await screen.findByText("chart:Checked In=1,No-Show=2,Proxy=1")).toBeInTheDocument();
     expect(screen.getByText("$50.00")).toBeInTheDocument();
     expect(screen.getByText("67% of bidders expected in person")).toBeInTheDocument();
+    expect(screen.queryByText("Open 2026 Action History")).not.toBeInTheDocument();
     // 101 (won) and 103 (no bid) are the auction items; 1501 is multi-winner, 102 inactive.
     expect(screen.getByText("of 2 auction items")).toBeInTheDocument();
   });
@@ -123,5 +124,11 @@ describe("ArchivedYearPanel", () => {
     expect(screen.queryByTestId("item-row-101")).not.toBeInTheDocument();
     expect(screen.queryByTestId("item-row-102")).not.toBeInTheDocument();
     expect(screen.queryByTestId("item-row-1501")).not.toBeInTheDocument();
+  });
+
+  it("links to that year's archived Action History when there is one", async () => {
+    mockSheets();
+    render(<ArchivedYearPanel auction={{ ...full, actionHistorySpreadsheetId: "ah26" }} />);
+    expect(await screen.findByText("Open 2026 Action History")).toBeInTheDocument();
   });
 });

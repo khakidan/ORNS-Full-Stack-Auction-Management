@@ -9,6 +9,7 @@ import createDriveRouter from './driveRoutes';
 import createArchiveRouter from './archiveRoutes';
 import createUserRouter from './userRoutes';
 import createAttendeeRouter from './attendeeRoutes';
+import createActionHistoryRouter from './actionHistoryRoutes';
 
 /**
  * The signed-in "/api" routes that aren't live-auction transactions
@@ -27,5 +28,6 @@ export default function createDataRouter() {
   router.use(createArchiveRouter());
   router.use(createUserRouter());
   router.use(createAttendeeRouter());
+  router.use(createActionHistoryRouter());
   return router;
 }

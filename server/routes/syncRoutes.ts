@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { logAction } from '../services/actionLog';
 import { requirePermission } from '../middleware/requirePermission';
 import { sheetsFor, respondIfNotFound } from '../utils/googleClients';
 import { performSheetSync, isBidManagementSetUp } from '../services/syncService';
@@ -15,6 +16,12 @@ export default function createSyncRouter() {
 
     try {
       const result = await performSheetSync(sheetsFor(req), spreadsheetId, auctionTicketSheetsID);
+      await logAction(req, {
+        area: "Bid Management",
+        action: "Set Up Bid Management App",
+        summary: "Rebuilt Bidder-Numbers and the bid sheet from the ticket spreadsheet (the previous tabs were kept as backups)",
+        notUndoableReason: "the previous tabs were kept as renamed backups in the spreadsheet",
+      });
       res.json({ success: true, result });
     } catch (error: any) {
       console.error(`[Sync Route Error] Native synchronization flow failed:`, error);

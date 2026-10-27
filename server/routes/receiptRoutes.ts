@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { logAction } from '../services/actionLog';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
 import { processEmail } from '../services/emailService';
@@ -50,6 +51,7 @@ export default function createReceiptsRouter() {
         // passing that on as a 200 showed "Receipt Doc created!" for a
         // receipt that was never made.
         if (isAppsScriptFailure(result)) return res.status(400).json({ error: result.error || "The receipt couldn't be created." });
+        await logAction(req, { area: "Bid Management", action: "Print receipt", target: `Bidder ${bidderId}`, summary: `Created bidder ${bidderId}'s receipt`, notUndoableReason: "receipts and emails have already gone out" });
         res.json({ success: true, ...result });
       });
     } catch (error) {
@@ -98,6 +100,7 @@ export default function createReceiptsRouter() {
         const script = google.script({ version: "v1", auth: client });
         const result = await createAllReceipts(script, scriptId, slice, fileName);
         if (isAppsScriptFailure(result)) return res.status(400).json({ error: result.error || `${fileName} couldn't be created.` });
+        await logAction(req, { area: "Bid Management", action: "Print all receipts", target: `Part ${part} of ${totalParts}`, summary: `Printed ${fileName} (${slice.length} bidder(s))`, notUndoableReason: "receipts and emails have already gone out" });
 
         res.json({ success: true, part, totalParts, bidderCount: receipts.length, fileName });
       });
@@ -119,6 +122,7 @@ export default function createReceiptsRouter() {
         const client = getAuthenticatedClient(req.session.tokens);
         const paypal = new PayPalService({ isSandbox: await getPaypalIsSandbox() });
         const result = await processAllEmails(client, spreadsheetId, itemsSpreadsheetId, paypal, sheetNamesFromBody(req.body));
+        await logAction(req, { area: "Bid Management", action: "Email all receipts", summary: "Emailed receipts to every winning bidder not already sent theirs", after: result, notUndoableReason: "receipts and emails have already gone out" });
         return { success: true, ...result };
       });
       res.json(idempotentBody(outcome));
@@ -138,6 +142,7 @@ export default function createReceiptsRouter() {
 
       if (result.success === false) return res.status(400).json({ error: result.error });
 
+      await logAction(req, { area: "Bid Management", action: "Email receipt", target: `Bidder ${bidderId}`, summary: `Emailed bidder ${bidderId}'s receipt`, notUndoableReason: "receipts and emails have already gone out" });
       res.json({ success: true, result });
     } catch (error) {
       next(error);

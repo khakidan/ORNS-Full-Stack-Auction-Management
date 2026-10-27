@@ -1,7 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { logAction } from '../services/actionLog';
 import { requirePermission } from '../middleware/requirePermission';
-import { isBootstrapAdmin, listUsers, normalizeEmail, setRole } from '../services/userService';
-import { isRole } from '../utils/permissions';
+import { getRole, isBootstrapAdmin, listUsers, normalizeEmail, setRole } from '../services/userService';
+import { isRole, ROLE_LABELS } from '../utils/permissions';
 
 const ORNS_EMAIL = /^[^\s@]+@orns\.org$/i;
 
@@ -38,7 +39,17 @@ export default function createUserRouter() {
       return res.status(400).json({ error: "You can't change your own role." });
     }
     try {
+      const before = await getRole(email);
       await setRole(email, role, req.user!.email);
+      await logAction(req, {
+        area: "Users",
+        action: "Change role",
+        target: email,
+        summary: `${email}: ${ROLE_LABELS[before]} -> ${ROLE_LABELS[role]}`,
+        before: before,
+        after: role,
+        undo: { kind: "role", email, before, after: role },
+      });
       res.json({ success: true, email, role });
     } catch (error) {
       next(error);

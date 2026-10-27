@@ -176,4 +176,6 @@ export interface ArchivedAuction {
   folderLink: string | null;
   bidManagementSpreadsheetId: string | null;
   itemsSpreadsheetId: string | null;
+  /** "{year} Action History" - who did what that season (absent from older lookups). */
+  actionHistorySpreadsheetId?: string | null;
 }

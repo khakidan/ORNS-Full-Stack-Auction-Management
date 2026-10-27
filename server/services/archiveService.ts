@@ -13,6 +13,8 @@ export interface ArchivedAuction {
   bidManagementSpreadsheetId: string | null;
   /** "{year} Auction Items" - holds the Auction-Items sheet. */
   itemsSpreadsheetId: string | null;
+  /** "{year} Action History" - who did what that season. */
+  actionHistorySpreadsheetId: string | null;
 }
 
 async function findChildren(drive: drive_v3.Drive, parentId: string, mimeType: string): Promise<drive_v3.Schema$File[]> {
@@ -56,7 +58,7 @@ export async function findArchivedAuctions(
     years.map(async (year): Promise<ArchivedAuction> => {
       const folder = folders.find((f) => f.name === `${year} Auction`);
       if (!folder?.id) {
-        return { year, folderId: null, folderLink: null, bidManagementSpreadsheetId: null, itemsSpreadsheetId: null };
+        return { year, folderId: null, folderLink: null, bidManagementSpreadsheetId: null, itemsSpreadsheetId: null, actionHistorySpreadsheetId: null };
       }
       const sheets = await findChildren(drive, folder.id, SHEET_MIME);
       // The rollover names them exactly "{year} Bid Management" etc.; a file
@@ -71,6 +73,7 @@ export async function findArchivedAuctions(
         folderLink: folder.webViewLink ?? `https://drive.google.com/drive/folders/${folder.id}`,
         bidManagementSpreadsheetId: idOf("Bid Management"),
         itemsSpreadsheetId: idOf("Auction Items"),
+        actionHistorySpreadsheetId: idOf("Action History"),
       };
     })
   );
@@ -80,6 +83,7 @@ export interface ArchiveSpreadsheets {
   tickets?: string;
   items?: string;
   bidManagement?: string;
+  actionHistory?: string;
 }
 
 export interface ArchiveCopyResult {
@@ -137,6 +141,7 @@ export async function archiveAuctionSpreadsheets(
     [spreadsheets.tickets, `${year} Auction Tickets`],
     [spreadsheets.items, `${year} Auction Items`],
     [spreadsheets.bidManagement, `${year} Bid Management`],
+    [spreadsheets.actionHistory, `${year} Action History`],
   ];
 
   const results: ArchiveCopyResult[] = [];
