@@ -59,6 +59,7 @@ vi.mock("@/context/AuctionContext", () => ({
 
 // BugReportsAdmin has its own tests; it only needs to render here.
 vi.mock("./BugReportsAdmin", () => ({ default: () => <div>BugReportsAdmin</div> }));
+vi.mock("./UsersAdmin", () => ({ default: () => <div>UsersAdmin</div> }));
 
 const mockSaveConfig = vi.fn().mockResolvedValue(undefined);
 const mockLoginToFirebase = vi.fn();
@@ -264,6 +265,9 @@ describe("ConfigSettings", () => {
 
     await user.click(screen.getByRole("tab", { name: "Bug Reports" }));
     expect(screen.getByText("BugReportsAdmin")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Users" }));
+    expect(screen.getByText("UsersAdmin")).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "PayPal Integration" }));
     expect(screen.getByText("Save Configuration")).toBeInTheDocument();

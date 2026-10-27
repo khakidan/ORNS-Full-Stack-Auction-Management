@@ -47,6 +47,8 @@ are set on the service itself and there is no `.env`.
 *   `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET`: PayPal Invoicing API credentials (sandbox credentials locally)
 *   `SWEEPER_TRIGGER_SECRET`: Shared secret Cloud Scheduler sends to `POST /internal/paypal-sweep` to run the PayPal sweep (see "Deployment"). Production only; leave it empty locally, which turns that endpoint off
 *   `APPS_SCRIPT_DEV_MODE` (optional): `true` makes Apps Script calls run each script's latest *saved* editor code instead of its deployed API-executable version - only works for the script's owner; for trying `.gs` edits locally before deploying them. Default (unset/`false`) runs the deployed version - see "Deployment"
+*   `FULL_ADMIN_EMAILS`: Comma-separated @orns.org addresses that are always **Full Administrators** (`server/services/userService.ts`). They can't be demoted in the app, so nobody can lock every admin out; every other @orns.org address is a User unless given a role in Settings > Users. Leave it empty and nobody can open Settings - set at least one address
+*   `VOLUNTEER_GOOGLE_ACCOUNT`: The shared Google account volunteers' requests will run as (`auction-volunteers@orns.org`). It is refused as a normal app sign-in
 *   `PORT` (optional): Port to bind to, default `3000`. Cloud Run sets it automatically
 
 `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and

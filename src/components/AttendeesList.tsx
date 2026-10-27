@@ -7,6 +7,8 @@ interface AttendeesListProps {
   attendees: Attendee[];
   loading: boolean;
   isAuctionClosed: boolean;
+  /** Whether the signed-in person may delete attendees (Administrators and up). */
+  canDelete: boolean;
   onEdit: (attendee: Attendee) => void;
   onUpdatePaymentStatus: (attendee: Attendee, newStatus: string) => void;
   onDeleteRequest: (attendee: Attendee) => void;
@@ -23,6 +25,7 @@ export function AttendeesList({
   attendees,
   loading,
   isAuctionClosed,
+  canDelete,
   onEdit,
   onUpdatePaymentStatus,
   onDeleteRequest,
@@ -38,6 +41,7 @@ export function AttendeesList({
           key={attendee.id}
           attendee={attendee}
           isAuctionClosed={isAuctionClosed}
+          canDelete={canDelete}
           onEdit={onEdit}
           onUpdatePaymentStatus={onUpdatePaymentStatus}
           onDeleteRequest={onDeleteRequest}

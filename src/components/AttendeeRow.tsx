@@ -20,6 +20,8 @@ const SOURCE_LABELS: Record<string, string> = {
 interface AttendeeRowProps {
   attendee: Attendee;
   isAuctionClosed: boolean;
+  /** Whether the signed-in person may delete attendees (Administrators and up). */
+  canDelete: boolean;
   onEdit: (attendee: Attendee) => void;
   onUpdatePaymentStatus: (attendee: Attendee, newStatus: string) => void;
   onDeleteRequest: (attendee: Attendee) => void;
@@ -36,6 +38,7 @@ interface AttendeeRowProps {
 export function AttendeeRow({
   attendee: a,
   isAuctionClosed,
+  canDelete,
   onEdit,
   onUpdatePaymentStatus,
   onDeleteRequest,
@@ -133,7 +136,7 @@ export function AttendeeRow({
             onClick={() => onEdit(a)}
           />
         )}
-        {!isAuctionClosed && (
+        {!isAuctionClosed && canDelete && (
           <IconButton
             variant="ghost"
             aria-label={`Delete ${a.firstName} ${a.lastName}`}

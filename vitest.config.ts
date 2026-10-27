@@ -36,6 +36,10 @@ export default defineConfig({
       PAYPAL_CLIENT_ID: "test-paypal-client-id",
       PAYPAL_CLIENT_SECRET: "test-paypal-client-secret",
       PAYPAL_IS_SANDBOX: "true",
+      // The default test session (server/test/helpers/session.ts) signs in
+      // as this address, so it is a Full Administrator without Firestore.
+      FULL_ADMIN_EMAILS: "test-admin@orns.org",
+      VOLUNTEER_GOOGLE_ACCOUNT: "auction-volunteers@orns.org",
       NODE_ENV: "test",
     },
     // @ts-ignore

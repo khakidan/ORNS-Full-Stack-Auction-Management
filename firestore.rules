@@ -2,6 +2,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // Phase 0: Global Safety Net
+    // Also what keeps browsers out of the server-only collections: `users`
+    // (staff roles), `system/*` and `idempotency/*` - only the server
+    // (firebase-admin, which bypasses these rules) reads or writes them.
     match /{document=**} {
       allow read, write: if false;
     }

@@ -83,6 +83,7 @@ For the complete guidelines and background, see [`/docs/agents/patterns.md`](./d
 3.  **Session Cookie Rules**: The session cookie **MUST** remain named **`orns_session`** - renaming it signs every user out. Do not revert it to the legacy `__session`.
 4.  **Code Splitting Rules**: The `manualChunks` function inside `vite.config.ts` must use the dynamic functional matcher structure.
 5.  **PayPal Surcharges**: NEVER calculate fees client-side; the surcharge is computed only server-side, by `calculatePayPalSurcharge` in `server/utils/financeUtils.ts`.
+6.  **Every new `/api` route declares who may use it.** Roles (Full Administrator, Administrator, User) are enforced on the server: `requireAuth` sets `req.user`, and `requirePermission(capability)` (`server/middleware/requirePermission.ts`, capabilities in `server/utils/permissions.ts`, mirrored in `src/lib/permissions.ts`) guards anything beyond everyday work. Add it per route - not with `router.use()` on a router mounted at a shared prefix like `/api/auction`, which would also gate other routers' routes. Hiding a button is never the protection.
 
 ---
 

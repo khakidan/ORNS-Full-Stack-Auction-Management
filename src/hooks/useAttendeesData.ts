@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { appendSheetData, clearSheetData, getSheetData } from "@/services/google-api";
+import { appendSheetData, getSheetData } from "@/services/google-api";
+import { postJson } from "@/services/apiClient";
 import { parseAttendeeRows } from "@/lib/attendeeParsing";
 import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { Attendee } from "@/types";
@@ -86,7 +87,7 @@ export function useAttendeesData(ticketsSpreadsheetId: string) {
     setAttendees(prev => prev.filter(a => a.id !== attendee.id));
 
     // 2. Background Sync
-    clearSheetData(ticketsSpreadsheetId, `${attendee.sheet}!A${attendee.rowIndex}:Z${attendee.rowIndex}`)
+    postJson("/api/attendees/delete", { spreadsheetId: ticketsSpreadsheetId, sheet: attendee.sheet, rowIndex: attendee.rowIndex }, "Failed to delete attendee")
       .then(() => toast.success("Attendee record cleared in spreadsheet"))
       .catch((e: any) => {
         // 3. Rollback - scoped to just re-adding this one attendee back,

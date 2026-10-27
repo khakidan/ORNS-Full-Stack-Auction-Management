@@ -22,7 +22,15 @@ export function sessionCookie(session: Record<string, unknown>): string {
   return `orns_session=${value}; orns_session.sig=${sig}`;
 }
 
-/** `{ Cookie: ... }` for supertest's `.set()`, carrying the given OAuth tokens as a logged-in session. */
-export function authCookieHeader(tokens: Record<string, unknown>): { Cookie: string } {
-  return { Cookie: sessionCookie({ tokens }) };
+/**
+ * The address every test session signs in as unless one is given. It is
+ * listed in FULL_ADMIN_EMAILS (vitest.config.ts), so it is a Full
+ * Administrator without any Firestore read - existing route tests keep
+ * full access; permission tests pass their own address.
+ */
+export const TEST_ADMIN_EMAIL = "test-admin@orns.org";
+
+/** `{ Cookie: ... }` for supertest's `.set()`, carrying the given OAuth tokens as a logged-in session for `email`. */
+export function authCookieHeader(tokens: Record<string, unknown>, email: string = TEST_ADMIN_EMAIL): { Cookie: string } {
+  return { Cookie: sessionCookie({ tokens, email }) };
 }

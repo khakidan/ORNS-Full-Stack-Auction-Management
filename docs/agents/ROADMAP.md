@@ -12,7 +12,7 @@ This document holds the **ORNS Charity Auction Manager**'s outstanding work: the
 
 Steps:
 
-1. Confirm the app is in PayPal sandbox mode (Config's `paypalIsSandbox`, or check the PayPal Integration card in Configuration).
+1. Confirm the app is in PayPal sandbox mode (Config's `paypalIsSandbox`, or check the PayPal Integration tab in Settings).
 2. Pick a test bidder who's won at least one item but hasn't checked out.
 3. Print or email that bidder's receipt first, so a PayPal invoice exists for them (Checkout page, or Bidders page).
 4. Log into the PayPal sandbox dashboard and find that invoice; note its total (it should include the processing fee).
@@ -33,3 +33,9 @@ If step 7 doesn't check out, cash/check checkouts will still work (the code fall
 ### Webhooks with Fluent Forms
 
 1. Look into implementing some kind of redundant feature to ensure that tickets don't get messed up.
+
+### User Permissions
+
+Item 1 (staff roles) is done - see `CHANGELOG.md`. Next: an Action History spreadsheet with Undo, then item 2 below.
+
+2. We should also look in to allowing access to the Bid Management page to non ORNS accounts but giving them only the bare minimum permissions to be able to check in bidders/mark them as proxy, view the Dashboard and enter Special Winners, enter Winning Bids, Checkout bidders, and access printed receipts. This will mean we will need to have some kind of user creation process that would send the user their login credentials, but will only allow the user to have access to the app while the auction is live. Once the auction is closed, their credentials will expire.

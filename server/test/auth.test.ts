@@ -13,6 +13,14 @@ vi.mock("../services/paypalSweeperJob", () => ({
   persistSweeperCredential: (...args: unknown[]) => mockPersistSweeperCredential(...args),
 }));
 
+// The callback's best-effort sign-in record (userService.recordLogin) would
+// otherwise try real Firestore.
+const mockRecordLogin = vi.fn().mockResolvedValue(undefined);
+vi.mock("../services/userService", async (importActual) => ({
+  ...(await importActual<typeof import("../services/userService")>()),
+  recordLogin: (...args: unknown[]) => mockRecordLogin(...args),
+}));
+
 import { app } from "../app";
 import { authCookieHeader } from "./helpers/session";
 

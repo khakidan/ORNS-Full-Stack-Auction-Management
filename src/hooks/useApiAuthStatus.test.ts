@@ -34,6 +34,17 @@ describe("useApiAuthStatus", () => {
     await waitFor(() => expect(result.current.isApiAuthenticated).toBe(true));
   });
 
+  it("keeps the signed-in person reported by /auth/status, and clears it when signed out", async () => {
+    const user = { email: "jane@orns.org", role: "admin", roleLabel: "Administrator", capabilities: ["auction.stage"] };
+    mockedGetAuthStatus.mockResolvedValue({ authenticated: true, user });
+    const { result } = renderHook(() => useApiAuthStatus());
+    await waitFor(() => expect(result.current.user).toEqual(user));
+
+    mockedGetAuthStatus.mockResolvedValue({ authenticated: false });
+    await act(async () => { await result.current.checkProviderAuth(); });
+    expect(result.current.user).toBeNull();
+  });
+
   it("reflects a false auth status", async () => {
     mockedGetAuthStatus.mockResolvedValue({ authenticated: false });
     const { result } = renderHook(() => useApiAuthStatus());

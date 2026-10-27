@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { requirePermission } from '../middleware/requirePermission';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { sheetsFor, respondIfNotFound } from '../utils/googleClients';
 import { upsertSetting } from '../services/settingsService';
@@ -7,7 +8,7 @@ import { upsertSetting } from '../services/settingsService';
 export default function createSettingsRouter() {
   const router = Router();
 
-  router.post("/settings/update", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/settings/update", requirePermission("settings"), async (req: Request, res: Response, next: NextFunction) => {
     const { spreadsheetId, key, value, description, idempotencyKey } = req.body;
     if (!spreadsheetId || !key) return res.status(400).json({ error: "Missing required fields" });
 

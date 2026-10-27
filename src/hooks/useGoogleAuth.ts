@@ -12,7 +12,7 @@ import { useApiAuthStatus } from "@/hooks/useApiAuthStatus";
  * /auth/status request.
  */
 export function useGoogleAuth() {
-  const { isApiAuthenticated: authenticated, checkProviderAuth } = useApiAuthStatus();
+  const { isApiAuthenticated: authenticated, user, checkProviderAuth } = useApiAuthStatus();
 
   // Mirrors `authenticated` for the poll below to read without being in
   // its dependency array (which would tear down/recreate the interval
@@ -67,5 +67,5 @@ export function useGoogleAuth() {
     await checkProviderAuth();
   };
 
-  return { authenticated, handleLogin, handleLogout };
+  return { authenticated, user, handleLogin, handleLogout };
 }

@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import { google } from 'googleapis';
 import { getOAuthClient, SCOPES } from '../services/oauth';
 import { persistSweeperCredential } from '../services/paypalSweeperJob';
+import { getRole, normalizeEmail, recordLogin } from '../services/userService';
+import { capabilitiesFor, ROLE_LABELS } from '../utils/permissions';
 
 const router = Router();
 
@@ -61,6 +63,12 @@ router.get("/auth/callback", async (req, res, next) => {
     if (!email.endsWith(`@${ORG_DOMAIN}`) || userInfo.data.hd !== ORG_DOMAIN || userInfo.data.verified_email === false) {
       return res.status(403).send(`<html><body>Access Denied: @orns.org required.</body></html>`);
     }
+    // The shared volunteer account is a robot login the server uses for
+    // volunteers, not a person - it never signs in to the app itself.
+    const volunteerAccount = process.env.VOLUNTEER_GOOGLE_ACCOUNT;
+    if (volunteerAccount && normalizeEmail(email) === normalizeEmail(volunteerAccount)) {
+      return res.status(403).send(`<html><body>${escapeHtml(email)} is the shared volunteer account and can't sign in to the app directly. <a href="/">Sign in with your own @orns.org account</a>.</body></html>`);
+    }
 
     if (!req.session) {
       req.session = { tokens: null };
@@ -70,6 +78,13 @@ router.get("/auth/callback", async (req, res, next) => {
     delete slimTokens.id_token;
     delete slimTokens.scope;
     req.session.tokens = slimTokens;
+    req.session.email = normalizeEmail(email);
+
+    // Best-effort, like the sweeper credential below: lets the Users tab
+    // list everyone who has signed in. Never blocks or fails the login.
+    recordLogin(email).catch((e) => {
+      console.error("[Users] Failed to record sign-in:", e);
+    });
 
     // Best-effort: persist this login's refresh token as the credential
     // the PayPal sweeper background job (Code Hardening item #2, Step 4)
@@ -112,8 +127,22 @@ router.get("/auth/callback", async (req, res, next) => {
   }
 });
 
-router.get("/auth/status", (req, res) => {
-  res.json({ authenticated: req.session && !!req.session.tokens });
+router.get("/auth/status", async (req, res, next) => {
+  const email = req.session?.email;
+  // A session from before roles existed has tokens but no email - it
+  // counts as signed out, so the person signs in once more.
+  if (!req.session?.tokens || !email) {
+    return res.json({ authenticated: false });
+  }
+  try {
+    const role = await getRole(email);
+    res.json({
+      authenticated: true,
+      user: { email, role, roleLabel: ROLE_LABELS[role], capabilities: capabilitiesFor(role) },
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.post("/auth/logout", (req, res) => {

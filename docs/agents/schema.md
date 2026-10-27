@@ -98,6 +98,17 @@ Firestore is utilized to synchronize system configuration, active operational pa
     components not yet reading from context directly. `saveConfig()`
     requires an authenticated Firebase user and rejects writes otherwise.
 
+### Collection: `users` (server-only)
+
+Staff roles (`server/services/userService.ts`). Document ID = the lowercased @orns.org address.
+
+*   `email`: the address
+*   `role`: `"full_admin"` or `"admin"` (or `"user"` after a role is removed). No document, or no role, means User
+*   `assignedBy` / `assignedAt`: who gave the role, and when
+*   `lastLoginAt`: set on every sign-in, so the Users tab lists everyone who has used the app
+
+`FULL_ADMIN_EMAILS` addresses are Full Administrators whatever this collection says. Only the server reads or writes it (firebase-admin); `firestore.rules`' default deny keeps browsers out.
+
 ---
 
 ## 3. Transactional APIs & Surcharge Computations

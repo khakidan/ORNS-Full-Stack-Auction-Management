@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { requirePermission } from '../middleware/requirePermission';
 import { sheetsFor, respondIfNotFound } from '../utils/googleClients';
 import { performSheetSync, isBidManagementSetUp } from '../services/syncService';
 
@@ -6,7 +7,7 @@ import { performSheetSync, isBidManagementSetUp } from '../services/syncService'
 export default function createSyncRouter() {
   const router = Router();
 
-  router.post("/bidders/sync", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/bidders/sync", requirePermission("auction.stage"), async (req: Request, res: Response, next: NextFunction) => {
     const { spreadsheetId, auctionTicketSheetsID } = req.body;
     if (!spreadsheetId) {
       return res.status(400).json({ error: "spreadsheetId is required to sync and setup bid management." });

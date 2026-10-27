@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { requirePermission } from '../middleware/requirePermission';
 import { getAuthenticatedClient } from '../services/oauth';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
@@ -133,7 +134,7 @@ export default function createBidRouter() {
     }
   });
 
-  router.post("/auction/go-live", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/auction/go-live", requirePermission("auction.stage"), async (req: Request, res: Response, next: NextFunction) => {
     const { spreadsheetId } = req.body;
     if (!spreadsheetId) {
       return res.status(400).json({ error: "Missing the Bid Management spreadsheet ID." });
@@ -152,7 +153,7 @@ export default function createBidRouter() {
     }
   });
 
-  router.post("/auction/close-and-cleanup", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/auction/close-and-cleanup", requirePermission("auction.stage"), async (req: Request, res: Response, next: NextFunction) => {
     const { spreadsheetId, bidderNumbersSheet, bidManagementSheet } = req.body;
     if (!spreadsheetId || !bidderNumbersSheet || !bidManagementSheet) {
       return res.status(400).json({ error: "Missing required spreadsheet parameters for cleanup." });

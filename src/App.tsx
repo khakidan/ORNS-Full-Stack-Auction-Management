@@ -88,7 +88,7 @@ function BackToTop() {
 export default function App() {
   const { config } = useConfig();
   const { auctionState, isAuctionClosed, isBidManagementSetUp, closeAuction, goLive } = useAuction();
-  const { authenticated, handleLogin, handleLogout } = useAuth();
+  const { authenticated, user, can, handleLogin, handleLogout } = useAuth();
   const [activeWorkflow, setActiveWorkflow] = useState<WorkflowType>(() => {
     const pathWorkflow = getWorkflowFromPath(window.location.pathname);
     if (pathWorkflow) return pathWorkflow;
@@ -105,6 +105,14 @@ export default function App() {
   useOutboxReplay(authenticated === true);
 
   // Sync state to URL and localStorage
+  // Settings is Full Administrator only: someone else who lands there (a
+  // remembered tab, an old link) goes to Bid Management instead.
+  useEffect(() => {
+    if (user && activeWorkflow === 'settings' && !can("settings")) {
+      setActiveWorkflow('bids');
+    }
+  }, [user, activeWorkflow, can]);
+
   useEffect(() => {
     localStorage.setItem("activeWorkflow", activeWorkflow);
     const targetPath = WORKFLOW_PATHS[activeWorkflow];
@@ -299,6 +307,7 @@ export default function App() {
             {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Archived Auctions</span>}
           </Button>
 
+          {can("settings") && (
           <Button
             variant={activeWorkflow === 'settings' ? 'secondary' : 'ghost'}
             className={cn("justify-start gap-3 h-10", (isSidebarOpen || isMobileMenuOpen) ? "w-full" : "w-10 px-0 justify-center")}
@@ -308,10 +317,17 @@ export default function App() {
             <Settings className="w-5 h-5 shrink-0" />
             {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Settings</span>}
           </Button>
+          )}
         </div>
 
         <div className="p-3 border-t shrink-0 flex flex-col items-center">
           <SavedBidsSidebarBadge expanded={isSidebarOpen || isMobileMenuOpen} />
+          {user && (isSidebarOpen || isMobileMenuOpen) && (
+            <div className="w-full px-3 pb-2 text-xs" data-testid="signed-in-user">
+              <div className="truncate font-medium" title={user.email}>{user.email}</div>
+              <div className="text-muted-foreground">{user.roleLabel}</div>
+            </div>
+          )}
           <Button 
             variant="ghost" 
             className={cn("justify-start gap-3 text-muted-foreground hover:text-destructive", (isSidebarOpen || isMobileMenuOpen) ? "w-full" : "w-10 px-0 justify-center")}
@@ -340,7 +356,7 @@ export default function App() {
                 {activeWorkflow === 'tickets' && <AuctionTicketsWorkflow />}
                 {activeWorkflow === 'items' && <AuctionItemsWorkflow />}
                 
-                {activeWorkflow === 'settings' && <ConfigSettings />}
+                {activeWorkflow === 'settings' && can("settings") && <ConfigSettings />}
                 {activeWorkflow === 'archive' && <ArchivedAuctionsWorkflow />}
 
                 {activeWorkflow === 'bids' && (
@@ -354,7 +370,7 @@ export default function App() {
                     </div>
                     <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
                       <AuctionStateBadge state={auctionState} className="order-first sm:order-none mb-2 sm:mb-0" />
-                      {!isAuctionClosed && (
+                      {!isAuctionClosed && can("auction.stage") && (
                         <>
                           {auctionState === "prep" && isBidManagementSetUp === true && (
                             <Button

@@ -7,6 +7,8 @@ import createItemRouter from './itemRoutes';
 import createSheetsProxyRouter from './sheetsProxyRoutes';
 import createDriveRouter from './driveRoutes';
 import createArchiveRouter from './archiveRoutes';
+import createUserRouter from './userRoutes';
+import createAttendeeRouter from './attendeeRoutes';
 
 /**
  * The signed-in "/api" routes that aren't live-auction transactions
@@ -23,5 +25,7 @@ export default function createDataRouter() {
   router.use(createSheetsProxyRouter());
   router.use(createDriveRouter());
   router.use(createArchiveRouter());
+  router.use(createUserRouter());
+  router.use(createAttendeeRouter());
   return router;
 }

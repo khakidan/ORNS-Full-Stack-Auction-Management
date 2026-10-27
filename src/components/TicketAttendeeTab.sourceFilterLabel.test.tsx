@@ -55,6 +55,10 @@ vi.mock("@/context/ConfigContext", () => ({
   useConfig: () => ({ config: { auctionTicketsSpreadsheetId: "test-tickets-spreadsheet-id" } }),
 }));
 
+vi.mock("@/context/AuthContext", () => ({
+  useAuth: () => ({ can: () => true }),
+}));
+
 vi.mock("@/context/AuctionContext", () => ({
   useAuction: () => ({
     attendees: [],

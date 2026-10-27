@@ -34,8 +34,9 @@ import { Attendee } from "@/types";
 vi.mock("@/services/google-api", () => ({
   getSheetData: vi.fn(),
   appendSheetData: vi.fn(),
-  clearSheetData: vi.fn(),
 }));
+
+vi.mock("@/services/apiClient", () => ({ postJson: vi.fn() }));
 
 vi.mock("sonner", () => ({
   toast: {
@@ -44,12 +45,13 @@ vi.mock("sonner", () => ({
   },
 }));
 
-import { getSheetData, appendSheetData, clearSheetData } from "@/services/google-api";
+import { getSheetData, appendSheetData } from "@/services/google-api";
+import { postJson } from "@/services/apiClient";
 import { toast } from "sonner";
 
 const mockedGetSheetData = vi.mocked(getSheetData);
 const mockedAppendSheetData = vi.mocked(appendSheetData);
-const mockedClearSheetData = vi.mocked(clearSheetData);
+const mockedDeleteAttendee = vi.mocked(postJson);
 
 function makeAttendee(overrides: Partial<Attendee> = {}): Attendee {
   return {
@@ -308,12 +310,12 @@ describe("useAttendeesData.removeAttendee", () => {
       await result.current.removeAttendee(makeAttendee());
     });
 
-    expect(clearSheetData).not.toHaveBeenCalled();
+    expect(postJson).not.toHaveBeenCalled();
   });
 
   it("applies the optimistic removal immediately", async () => {
     let resolveClear: (v: any) => void;
-    mockedClearSheetData.mockReturnValue(new Promise((resolve) => { resolveClear = resolve; }));
+    mockedDeleteAttendee.mockReturnValue(new Promise((resolve) => { resolveClear = resolve; }));
 
     const { result } = renderHook(() => useAttendeesData("ss-id"));
     act(() => {
@@ -331,8 +333,8 @@ describe("useAttendeesData.removeAttendee", () => {
     });
   });
 
-  it("on success, calls clearSheetData with the real range and shows a success toast", async () => {
-    mockedClearSheetData.mockResolvedValue(undefined);
+  it("on success, asks the server to delete that sheet row (the permission-checked route) and shows a success toast", async () => {
+    mockedDeleteAttendee.mockResolvedValue(undefined);
     const { result } = renderHook(() => useAttendeesData("ss-id"));
     act(() => {
       result.current.setAttendees([makeAttendee({ id: "a1", sheet: "tickets", rowIndex: 5 })]);
@@ -342,12 +344,12 @@ describe("useAttendeesData.removeAttendee", () => {
       await result.current.removeAttendee(makeAttendee({ id: "a1", sheet: "tickets", rowIndex: 5 }));
     });
 
-    expect(clearSheetData).toHaveBeenCalledWith("ss-id", "tickets!A5:Z5");
+    expect(postJson).toHaveBeenCalledWith("/api/attendees/delete", { spreadsheetId: "ss-id", sheet: "tickets", rowIndex: 5 }, expect.any(String));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Attendee record cleared in spreadsheet"));
   });
 
   it("rolls back (re-adds) the removed attendee on a failed sync", async () => {
-    mockedClearSheetData.mockRejectedValue(new Error("clear failed"));
+    mockedDeleteAttendee.mockRejectedValue(new Error("clear failed"));
     const attendee = makeAttendee({ id: "a1" });
     const { result } = renderHook(() => useAttendeesData("ss-id"));
     act(() => {
@@ -368,7 +370,7 @@ describe("useAttendeesData.removeAttendee", () => {
 
     let resolveFirst: (v: any) => void;
     let rejectSecond: (e: any) => void;
-    mockedClearSheetData
+    mockedDeleteAttendee
       .mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
       .mockReturnValueOnce(new Promise((_resolve, reject) => { rejectSecond = reject; }));
 

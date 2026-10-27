@@ -24,9 +24,17 @@ declare global {
     interface Request {
       session: {
         tokens?: import('../src/types').GoogleTokens;
+        /** The signed-in staff member's @orns.org address, set by /auth/callback. */
+        email?: string;
         /** One-time OAuth `state`, set by /auth/url and consumed by /auth/callback. */
         oauthState?: string;
       } | null;
+      /** Who is asking - set by requireAuth. */
+      user?: {
+        email: string;
+        role: import('./utils/permissions').Role;
+        capabilities: import('./utils/permissions').Capability[];
+      };
     }
   }
 }

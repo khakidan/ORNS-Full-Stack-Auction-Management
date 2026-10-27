@@ -1,8 +1,13 @@
-import React, { createContext, useContext } from "react";
+import React, { createContext, useCallback, useContext } from "react";
 import { useGoogleAuth } from "@/hooks/useGoogleAuth";
+import type { AuthUser, Capability } from "@/lib/permissions";
 
 interface AuthContextType {
   authenticated: boolean | null;
+  /** Who is signed in, with their role; null while signed out or unknown. */
+  user: AuthUser | null;
+  /** Whether the signed-in person's role allows `capability` (false while unknown). */
+  can: (capability: Capability) => boolean;
   handleLogin: () => Promise<void>;
   handleLogout: () => Promise<void>;
 }
@@ -23,7 +28,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const auth = useGoogleAuth();
-  return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>;
+  const { user } = auth;
+  const can = useCallback((capability: Capability) => !!user?.capabilities.includes(capability), [user]);
+  return <AuthContext.Provider value={{ ...auth, can }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

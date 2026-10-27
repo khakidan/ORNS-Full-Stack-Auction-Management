@@ -3,6 +3,7 @@ import { IDEMPOTENT_POST_RETRY } from '../utils/googleRetry';
 import { sheetCache, CACHE_TTL, clearCacheForSpreadsheet, sheetCacheKey } from '../utils/sheetCache';
 import { normalizeRange } from '../utils/rangeUtils';
 import { sheetsFor, respondIfNotFound } from '../utils/googleClients';
+import { TICKET_SHEETS } from './attendeeRoutes';
 
 // The write/append/clear passthrough takes no lock, so it refuses the tabs
 // that have their own locked routes (patterns.md's locking rule): writing
@@ -11,8 +12,12 @@ import { sheetsFor, respondIfNotFound } from '../utils/googleClients';
 // sends these here.
 const LOCKED_SHEETS = new Set(["auction-items", "bidder-numbers", "bid-management", "special-winners", "follow-up", "paypal-follow-up"]);
 
+function sheetNameOf(range: string): string {
+  return range.split("!")[0].trim().replace(/^'(.*)'$/, "$1").trim().toLowerCase();
+}
+
 function refuseLockedSheet(range: string, res: Response): boolean {
-  const sheetName = range.split("!")[0].trim().replace(/^'(.*)'$/, "$1").trim().toLowerCase();
+  const sheetName = sheetNameOf(range);
   if (!LOCKED_SHEETS.has(sheetName)) return false;
   res.status(403).json({ error: `The ${range.split("!")[0]} sheet can only be changed through the app's own save actions.` });
   return true;
@@ -104,6 +109,12 @@ export default function createSheetsProxyRouter() {
       const { spreadsheetId, range } = req.params;
       const decodedRange = decodeURIComponent(range);
       if (refuseLockedSheet(decodedRange, res)) return;
+      // Clearing an attendee row is deleting the attendee, which needs a
+      // permission check - that goes through POST /api/attendees/delete.
+      if (TICKET_SHEETS.includes(sheetNameOf(decodedRange))) {
+        res.status(403).json({ error: "Attendees can only be deleted through the Attendee List." });
+        return;
+      }
 
       const result = await sheetsFor(req).spreadsheets.values.clear({
         spreadsheetId,

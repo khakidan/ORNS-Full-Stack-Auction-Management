@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { requirePermission } from '../middleware/requirePermission';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
 import { setupNewAuction } from '../services/auctionSetupService';
@@ -10,7 +11,7 @@ export default function createSetupRouter() {
   const router = Router();
   router.use(requireAuth);
 
-  router.post("/setup-new", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/setup-new", requirePermission("settings"), async (req: Request, res: Response, next: NextFunction) => {
     const {
       ticketsSpreadsheetId, 
       itemEntrySpreadsheetId, 
@@ -77,7 +78,7 @@ export default function createSetupRouter() {
    * named for the Archived Auctions page, and clears nothing. Safe to run
    * again - the earlier copy goes to the Drive trash.
    */
-  router.post("/archive", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/archive", requirePermission("settings"), async (req: Request, res: Response, next: NextFunction) => {
     const { year, ticketsSpreadsheetId, itemEntrySpreadsheetId, bidManagementSpreadsheetId } = req.body || {};
     const parentFolderId = process.env.DRIVE_PARENT_FOLDER_ID;
 

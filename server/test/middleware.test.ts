@@ -207,14 +207,25 @@ describe("middleware - requireAuth", () => {
     return { req, res, next, jsonMock };
   }
 
-  it("calls next() and does not respond when session tokens are present", () => {
-    const { req, res, next, jsonMock } = createAuthMocks({ tokens: { access_token: "abc" } });
+  it("calls next() with req.user set when the session has tokens and an email (a bootstrap Full Admin needs no Firestore read)", async () => {
+    const { req, res, next, jsonMock } = createAuthMocks({ tokens: { access_token: "abc" }, email: "test-admin@orns.org" });
 
-    requireAuth(req, res, next);
+    await requireAuth(req, res, next);
 
     expect(next).toHaveBeenCalledOnce();
     expect(res.status).not.toHaveBeenCalled();
     expect(jsonMock).not.toHaveBeenCalled();
+    expect((req as any).user).toMatchObject({ email: "test-admin@orns.org", role: "full_admin" });
+  });
+
+  it("returns 401 for a session from before roles existed (tokens but no email), so that person signs in again", async () => {
+    const { req, res, next, jsonMock } = createAuthMocks({ tokens: { access_token: "abc" } });
+
+    await requireAuth(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(jsonMock).toHaveBeenCalledWith({ error: "Unauthorized" });
+    expect(next).not.toHaveBeenCalled();
   });
 
   it("returns 401 Unauthorized and does not call next() when session is null", () => {
