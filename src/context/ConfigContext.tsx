@@ -1,164 +1,91 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getFirebase } from '@/services/firebase';
-import type { User } from 'firebase/auth';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { errorTextFrom, fetchWithRetry, getBaseUrl } from '@/services/google-api';
+import { postJson } from '@/services/apiClient';
+import { useAuth } from './AuthContext';
 
 import { Config } from '@/types';
 
 interface ConfigContextType {
   config: Config;
   loading: boolean;
+  /** Saves the shared Config (Full Administrators only - the server refuses anyone else). */
   saveConfig: (newConfig: Config) => Promise<void>;
-  firebaseUser: User | null;
-  loginToFirebase: () => Promise<void>;
-  /**
-   * Merges Config fields read from the server (GET /api/config/runtime) -
-   * how a volunteer, who can't read Firestore, gets the spreadsheet IDs.
-   */
-  applyServerConfig: (fields: Partial<Config>) => void;
+  /** Re-reads the Config, quietly (live refresh after someone else saved it). */
+  reloadConfig: () => Promise<void>;
 }
 
 const defaultConfig: Config = {
-  auctionItemsSpreadsheetId: localStorage.getItem("auctionItemsSpreadsheetId") || import.meta.env.VITE_AUCTION_ITEMS_SPREADSHEET_ID || "",
-  auctionTicketsSpreadsheetId: localStorage.getItem("auctionTicketsSpreadsheetId") || import.meta.env.VITE_AUCTION_TICKETS_SPREADSHEET_ID || "",
-  bidManagementSpreadsheetId: localStorage.getItem("bidManagementSpreadsheetId") || localStorage.getItem("spreadsheetId") || import.meta.env.VITE_BID_MANAGEMENT_SPREADSHEET_ID || "",
-  bidderNumbersSheet: localStorage.getItem("bidderNumbersSheet") || import.meta.env.VITE_BIDDER_NUMBERS_SHEET || "Bidder-Numbers",
-  bidManagementSheet: localStorage.getItem("bidManagementSheet") || import.meta.env.VITE_BID_MANAGEMENT_SHEET || "Bid-Management",
-  receiptFolderId: localStorage.getItem("receiptFolderId") || import.meta.env.VITE_RECEIPT_FOLDER_ID || "",
-  forPrintFolderId: localStorage.getItem("forPrintFolderId") || import.meta.env.VITE_FOR_PRINT_FOLDER_ID || "",
-  ornsLogoId: localStorage.getItem("ornsLogoId") || import.meta.env.VITE_ORNS_LOGO_ID || "",
-  ticketPrice: localStorage.getItem("ticketPrice") || import.meta.env.VITE_TICKET_PRICE || "35",
-  auctionItemsScriptId: localStorage.getItem("auctionItemsScriptId") || import.meta.env.VITE_AUCTION_ITEMS_SCRIPT_ID || "",
-  auctionTicketsScriptId: localStorage.getItem("auctionTicketsScriptId") || import.meta.env.VITE_AUCTION_TICKETS_SCRIPT_ID || "",
-  bidManagementScriptId: localStorage.getItem("bidManagementScriptId") || localStorage.getItem("googleScriptId") || import.meta.env.VITE_BID_MANAGEMENT_SCRIPT_ID || "",
-  bugReportsSpreadsheetId: localStorage.getItem("bugReportsSpreadsheetId") || import.meta.env.VITE_BUG_REPORTS_SPREADSHEET_ID || "",
-  bugReportsFolderId: localStorage.getItem("bugReportsFolderId") || import.meta.env.VITE_BUG_REPORTS_FOLDER_ID || "",
-  // Only an explicit "false" opts into production mode - any other/missing
-  // value (including a stale non-boolean localStorage entry) stays sandbox.
-  paypalIsSandbox: localStorage.getItem("paypalIsSandbox") !== "false",
+  auctionItemsSpreadsheetId: "",
+  auctionTicketsSpreadsheetId: "",
+  bidManagementSpreadsheetId: "",
+  bidderNumbersSheet: "Bidder-Numbers",
+  bidManagementSheet: "Bid-Management",
+  receiptFolderId: "",
+  forPrintFolderId: "",
+  ornsLogoId: "",
+  ticketPrice: "35",
+  auctionItemsScriptId: "",
+  auctionTicketsScriptId: "",
+  bidManagementScriptId: "",
+  bugReportsSpreadsheetId: "",
+  bugReportsFolderId: "",
+  paypalIsSandbox: true,
 };
+
+/**
+ * Copies only the keys Config declares, over the defaults, so a missing
+ * field gets its default (not `undefined`, which trips Base UI's
+ * uncontrolled-to-controlled warning) and nothing extra rides along.
+ */
+function toConfig(raw: Record<string, unknown>): Config {
+  const config = { ...defaultConfig };
+  (Object.keys(defaultConfig) as (keyof Config)[]).forEach((key) => {
+    if (raw[key] !== undefined) (config as any)[key] = raw[key];
+  });
+  return config;
+}
 
 const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
 
+/**
+ * The auction's shared Config (which spreadsheets and folders this year
+ * uses, ticket price, PayPal mode), read from the server
+ * (GET /api/config, server/services/configService.ts) as soon as someone
+ * is signed in - staff of every role and volunteers alike, with no
+ * separate sign-in. Saving goes back through the server.
+ */
 export function ConfigProvider({ children }: { children: React.ReactNode }) {
+  const { authenticated } = useAuth();
   const [config, setConfig] = useState<Config>(defaultConfig);
   const [loading, setLoading] = useState(true);
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    let unsubscribe: (() => void) | undefined;
-    // Held in the outer scope (not a local inside the onAuthStateChanged
-    // callback) so it can actually be torn down - a `return () => ...`
-    // from inside that nested callback is not a real effect cleanup;
-    // Firebase ignores it, so the listener it created was never
-    // unsubscribed on sign-out/re-sign-in or unmount.
-    let unsubConfig: (() => void) | undefined;
-
-    getFirebase().then(({ auth, db, onAuthStateChanged, onSnapshot, doc }) => {
-      if (cancelled) return;
-      unsubscribe = onAuthStateChanged(auth, (user) => {
-        // Tear down any previous config listener before starting a new
-        // one, so a sign-out -> sign-in cycle doesn't stack listeners.
-        unsubConfig?.();
-        unsubConfig = undefined;
-
-        setFirebaseUser(user);
-        if (user) {
-          // Subscribe to global config
-          unsubConfig = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
-            if (docSnap.exists()) {
-              // Merged over defaultConfig field-by-field - not a blind
-              // `{...defaultConfig, ...docSnap.data()}` spread, and not a
-              // blind cast either. A Firestore doc written before a
-              // Config field was added (e.g. paypalIsSandbox) won't have
-              // that key at all, which would otherwise leave it
-              // `undefined` here instead of its default and trip Base
-              // UI's uncontrolled-to-controlled warning on that field's
-              // Input - defaultConfig covers that. The other direction
-              // matters just as much: a doc written before a field was
-              // REMOVED from Config (e.g. the old auctionItemsSheet) can
-              // still carry that stale key, and a blind spread would let
-              // it silently ride along into local state and back out on
-              // the next save - firestore.rules' strict key-count check
-              // on `settings/global` then rejects the write outright.
-              // Only ever copying keys `defaultConfig` actually declares
-              // drops anything stale automatically.
-              const rawData = docSnap.data() as Record<string, unknown>;
-              const data = { ...defaultConfig };
-              (Object.keys(defaultConfig) as (keyof Config)[]).forEach((key) => {
-                if (rawData[key] !== undefined) {
-                  (data as any)[key] = rawData[key];
-                }
-              });
-              setConfig(data);
-
-              // Mirror to localStorage for components yet to be migrated
-              Object.entries(data).forEach(([key, value]) => {
-                localStorage.setItem(key, value as string);
-              });
-              // Legacy key
-              localStorage.setItem("spreadsheetId", data.bidManagementSpreadsheetId);
-              localStorage.setItem("googleScriptId", data.bidManagementScriptId);
-            }
-            setLoading(false);
-          }, (error) => {
-            console.error("Firestore Error:", error);
-            if (error.code === 'permission-denied') {
-              toast.error("Permission denied: Sync is only available for @orns.org users.");
-            }
-            setLoading(false);
-          });
-        } else {
-          setLoading(false);
-        }
-      });
-    });
-
-    return () => {
-      cancelled = true;
-      unsubscribe?.();
-      unsubConfig?.();
-    };
+  const fetchConfig = useCallback(async (options?: { silent?: boolean }) => {
+    try {
+      const res = await fetchWithRetry(`${getBaseUrl()}/api/config`, { credentials: "include" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(errorTextFrom(data, `status ${res.status}`));
+      setConfig(toConfig(data));
+    } catch (e: any) {
+      console.error("Couldn't load the auction settings:", e);
+      if (!options?.silent) toast.error("Couldn't load the auction's settings. Reload the page to try again.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const loginToFirebase = async () => {
-    const { auth, GoogleAuthProvider, signInWithPopup, signOut } = await getFirebase();
-    const provider = new GoogleAuthProvider();
-    // Suggest domain restriction to Google
-    provider.setCustomParameters({
-      hd: 'orns.org',
-      prompt: 'select_account'
-    });
+  useEffect(() => {
+    if (authenticated === true) fetchConfig();
+    else if (authenticated === false) setLoading(false);
+  }, [authenticated, fetchConfig]);
 
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const email = result.user.email;
-      if (email && !email.endsWith('@orns.org')) {
-        toast.error("Access restricted: Please use an @orns.org account.");
-        await signOut(auth);
-      }
-    } catch (error) {
-      console.error("Firebase Login Error:", error);
-      toast.error("Failed to sign in to sync service.");
-    }
-  };
+  const reloadConfig = useCallback(() => fetchConfig({ silent: true }), [fetchConfig]);
 
   const saveConfig = async (newConfig: Config) => {
-    if (!firebaseUser) {
-      toast.error("You must be signed in to save shared settings.");
-      return;
-    }
-
     try {
-      const { db, doc, setDoc, serverTimestamp } = await getFirebase();
-      await setDoc(doc(db, 'settings', 'global'), {
-        ...newConfig,
-        updatedAt: serverTimestamp(),
-        updatedBy: firebaseUser.email
-      });
-      setConfig(newConfig);
-      toast.success("Settings saved and synced across devices!");
+      const saved = await postJson<Record<string, unknown>>("/api/config", newConfig, "Couldn't save the settings");
+      setConfig(toConfig(saved));
+      toast.success("Settings saved for everyone.");
     } catch (error: any) {
       console.error("Error saving config:", error);
       toast.error(`Error saving settings: ${error.message}`);
@@ -166,12 +93,8 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const applyServerConfig = React.useCallback((fields: Partial<Config>) => {
-    setConfig((prev) => ({ ...prev, ...fields }));
-  }, []);
-
   return (
-    <ConfigContext.Provider value={{ config, loading, saveConfig, firebaseUser, loginToFirebase, applyServerConfig }}>
+    <ConfigContext.Provider value={{ config, loading, saveConfig, reloadConfig }}>
       {children}
     </ConfigContext.Provider>
   );

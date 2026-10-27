@@ -20,7 +20,8 @@ const ROUTES: VolunteerRoute[] = [
   // Reads of the auction's own spreadsheets (checked below).
   { method: "GET", path: /^\/api\/sheets\/[^/]+\/[^/]+$/ },
   { method: "GET", path: /^\/api\/bidders\/setup-status$/ },
-  { method: "GET", path: /^\/api\/config\/runtime$/ },
+  // The auction's Config - for a volunteer, only the Bid Management fields.
+  { method: "GET", path: /^\/api\/config$/ },
   // Live refresh: which spreadsheets changed (no data, just IDs).
   { method: "GET", path: /^\/api\/changes$/ },
   { method: "POST", path: /^\/api\/bidders\/set-flag$/ },

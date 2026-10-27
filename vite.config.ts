@@ -88,9 +88,6 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules/lucide-react')) {
               return 'vendor-lucide';
             }
-            if (id.includes('node_modules/firebase') || id.includes('node_modules/@firebase')) {
-              return 'vendor-firebase';
-            }
             if (id.includes('node_modules/@base-ui/react')) {
               return 'vendor-base-ui';
             }

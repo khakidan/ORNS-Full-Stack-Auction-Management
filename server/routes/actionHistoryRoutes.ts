@@ -72,43 +72,73 @@ export default function createActionHistoryRouter() {
   });
 
   /**
-   * Installs the on-edit trigger in the Items and Tickets spreadsheets'
-   * scripts (ActionHistoryTracking.gs), so edits made directly in those
-   * spreadsheets are recorded too. The trigger belongs to the admin who
-   * clicks this.
+   * Runs one ActionHistoryTracking.gs function in the Items and Tickets
+   * spreadsheets' scripts and collects each one's result. `params` gives
+   * each script's arguments, or a reason it can't be run.
+   */
+  async function runOnTrackedScripts(req: Request, functionName: string, params: (spreadsheetId: string | undefined) => unknown[] | string) {
+    const script = google.script({ version: "v1", auth: getAuthenticatedClient(req.session!.tokens!) });
+    const { itemsSpreadsheetId, ticketsSpreadsheetId } = req.body || {};
+    const targets = [
+      { name: "Auction Items", scriptId: process.env.SCRIPT_ID_ITEM_ENTRY, spreadsheetId: itemsSpreadsheetId },
+      { name: "Auction Tickets", scriptId: process.env.SCRIPT_ID_TICKETS, spreadsheetId: ticketsSpreadsheetId },
+    ];
+    const results: { name: string; success: boolean; error?: string; on?: boolean }[] = [];
+    for (const t of targets) {
+      const args = t.scriptId ? params(t.spreadsheetId) : "Its script ID isn't set on the server.";
+      if (typeof args === "string") {
+        results.push({ name: t.name, success: false, error: args });
+        continue;
+      }
+      try {
+        const result = await runAppsScript(script, t.scriptId!, functionName, args);
+        results.push({ name: t.name, success: result?.success !== false, error: result?.error && explainScriptError(result.error), on: result?.on });
+      } catch (err: any) {
+        results.push({ name: t.name, success: false, error: explainScriptError(err?.message || String(err)) });
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Whether edits made directly in the Items and Tickets spreadsheets are
+   * being recorded. `on` is null when either script couldn't say (not
+   * deployed yet, or the sign-in lacks the permission).
+   */
+  router.get("/action-history/edit-tracking", requirePermission("settings"), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const logId = await getActionHistorySpreadsheetId();
+      if (!logId) return res.json({ on: false, results: [] });
+      const results = await runOnTrackedScripts(req, "apiEditTrackingStatus", () => [logId]);
+      res.json({ on: results.every((r) => r.success) ? results.every((r) => r.on) : null, results });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * Turns edit tracking on (`enabled`, the default) or off. On installs the
+   * on-edit trigger in the Items and Tickets spreadsheets' scripts
+   * (ActionHistoryTracking.gs), owned by the admin who clicks it; off stops
+   * every admin's trigger from recording.
    */
   router.post("/action-history/edit-tracking", requirePermission("settings"), async (req: Request, res: Response, next: NextFunction) => {
-    const { itemsSpreadsheetId, ticketsSpreadsheetId } = req.body || {};
+    const enabled = req.body?.enabled !== false;
     try {
       const logId = await getActionHistorySpreadsheetId();
       if (!logId) return res.status(409).json({ error: "Create the Action History spreadsheet first." });
-      const script = google.script({ version: "v1", auth: getAuthenticatedClient(req.session!.tokens!) });
-      const targets = [
-        { name: "Auction Items", scriptId: process.env.SCRIPT_ID_ITEM_ENTRY, spreadsheetId: itemsSpreadsheetId },
-        { name: "Auction Tickets", scriptId: process.env.SCRIPT_ID_TICKETS, spreadsheetId: ticketsSpreadsheetId },
-      ];
-      const results = [];
-      for (const t of targets) {
-        if (!t.scriptId || !t.spreadsheetId) {
-          results.push({ name: t.name, success: false, error: !t.scriptId ? "Its script ID isn't set on the server." : "Its spreadsheet ID isn't configured." });
-          continue;
-        }
-        try {
-          const result = await runAppsScript(script, t.scriptId, "apiEnableEditTracking", [logId, t.spreadsheetId]);
-          results.push({ name: t.name, success: result?.success !== false, error: result?.error && explainScriptError(result.error) });
-        } catch (err: any) {
-          results.push({ name: t.name, success: false, error: explainScriptError(err?.message || String(err)) });
-        }
-      }
+      const results = enabled
+        ? await runOnTrackedScripts(req, "apiEnableEditTracking", (spreadsheetId) => (spreadsheetId ? [logId, spreadsheetId] : "Its spreadsheet ID isn't configured."))
+        : await runOnTrackedScripts(req, "apiDisableEditTracking", () => []);
       const failures = results.filter((r) => !r.success);
       if (failures.length && failures.every((r) => r.error === SIGN_IN_AGAIN)) {
         return res.status(403).json({ error: SIGN_IN_AGAIN, results });
       }
       await logAction(req, {
         area: "Settings",
-        action: "Turn on edit tracking",
-        summary: `Edit tracking: ${results.map((r) => `${r.name} ${r.success ? "on" : `failed (${r.error})`}`).join("; ")}`,
-        notUndoableReason: "turn it on again to change it",
+        action: enabled ? "Turn on edit tracking" : "Turn off edit tracking",
+        summary: `Edit tracking: ${results.map((r) => `${r.name} ${r.success ? (enabled ? "on" : "off") : `failed (${r.error})`}`).join("; ")}`,
+        notUndoableReason: `turn it ${enabled ? "off" : "on"} again to change it`,
       });
       res.json({ success: results.every((r) => r.success), results });
     } catch (error) {

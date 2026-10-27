@@ -11,8 +11,8 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 ├── package.json               # Dependencies and npm scripts (see docs/agents/README.md "Key Scripts")
 ├── vite.config.ts             # React build, PWA plugin, functional manualChunks vendor splitting
 ├── vitest.config.ts           # Test runner config
-├── firestore.rules            # Firestore security rules
-├── firebase-applet-config.json# Firebase web client config (public identifiers, not secrets)
+├── firestore.rules            # Firestore security rules (browsers denied everything)
+├── firebase-applet-config.json# Firebase project/database IDs (read by firebaseAdmin.ts)
 ├── server.ts                  # Express entry point: .env load, validateEnv(), startServer(), PayPal sweeper schedule
 │
 ├── server/                    # Express Backend Layer
@@ -29,6 +29,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── syncRoutes.ts      #   POST /bidders/sync ("Set Up Bid Management App")
 │   │   ├── sweeperRoutes.ts   #   PayPal sweeper status / run-now
 │   │   ├── settingsRoutes.ts  #   POST /settings/update (_Settings key)
+│   │   ├── configRoutes.ts    #   GET /config (everyone signed in), POST /config (Full Administrators)
 │   │   ├── itemRoutes.ts      #   Auction item add / update / bulk-update / delete
 │   │   ├── sheetsProxyRoutes.ts # Generic Sheets read (cached) and write/append/clear (refuses locked sheets)
 │   │   ├── driveRoutes.ts     #   GET /drive/files/:folderId
@@ -54,7 +55,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── bundleService.ts         # Gemini bundle suggestions, bundle process/restore + resequencing
 │   │   ├── driveService.ts          # Drive folder file list (isDriveId guard)
 │   │   ├── emailService.ts          # Receipt email HTML/MIME + Gmail send
-│   │   ├── firebaseAdmin.ts         # Admin Firestore (sweeper credential/status, settings/global reads)
+│   │   ├── firebaseAdmin.ts         # Admin Firestore - the only Firestore access (browsers have none)
 │   │   ├── genai.ts                 # Gemini SDK client
 │   │   ├── idempotencyStore.ts      # Durable (Firestore, 24 h) idempotency records for record-winning-bid
 │   │   ├── google.ts                # googleapis global retry config (no POST retries)
@@ -66,7 +67,8 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── receiptDataService.ts    # Won-item resolution and invoice get-or-create for receipts
 │   │   ├── receiptService.ts        # Apps Script receipt calls; batch email loop
 │   │   ├── settingsService.ts       # _Settings key upsert (settings: lock)
-│   │   ├── sharedConfig.ts          # Server-side settings/global reads (PayPal sandbox/live)
+│   │   ├── configService.ts         # The shared Config (settings/global): cached read, validated save
+│   │   ├── sharedConfig.ts          # PayPal sandbox/live, read from the shared Config
 │   │   ├── sheetsService.ts         # Staged multi-op Sheets "transaction" with rollback; ensureSheetTab
 │   │   ├── specialWinnerService.ts  # Dashboard gift card / raffle winner + Follow-Up row (bidder-numbers lock)
 │   │   └── syncService.ts           # Bidder-Numbers / Bid-Management sheet build from ticket sheets
@@ -105,7 +107,6 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
     ├── types.ts               # Shared types (Config, GoogleTokens, bug report shapes, ...)
     ├── context/               # AuctionContext, AuthContext, ConfigContext
     ├── services/
-    │   ├── firebase.ts        # Lazy Firebase app/auth/Firestore init
     │   ├── google-api.ts      # fetchWithRetry (reports retries; throws ServerUnreachableError), postOnce (no retries, for Apps Script runs), sheet read/write helpers
     │   └── apiClient.ts       # postJson (JSON POST + the server's error text, throws HttpError with the status)
     ├── hooks/                 # One hook per view/state concern (useCheckoutState, useGoogleAuth, ...); useOutboxReplay sends saved bids

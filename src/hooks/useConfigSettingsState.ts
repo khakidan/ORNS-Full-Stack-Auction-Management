@@ -35,15 +35,15 @@ async function syncSettingToCloud(spreadsheetId: string, key: string, value: str
 }
 
 export function useConfigSettingsState() {
-  const { config: remoteConfig, saveConfig, firebaseUser, loginToFirebase } = useConfig();
+  const { config: remoteConfig, saveConfig } = useConfig();
   const [config, setConfig] = useState<Config>(remoteConfig);
   // Tracks the last remoteConfig value this draft was synced from. A field
   // edit always replaces `config` with a fresh object (never mutates in
   // place - see AuctionConfigurationCard.tsx/TicketPricingCard.tsx's
   // setConfig calls), so `config !== lastSyncedRemoteConfigRef.current`
   // means the user has unsaved edits in progress. Only accept a new
-  // remoteConfig (the initial async load, a same-identity Firestore
-  // re-fire, or a real cross-device change) while the draft is still
+  // remoteConfig (the initial async load, or a live refresh after another
+  // admin saved) while the draft is still
   // clean - otherwise this would silently overwrite whatever the user is
   // mid-typing, which is the exact bug this replaced.
   const lastSyncedRemoteConfigRef = useRef<Config>(remoteConfig);
@@ -143,8 +143,6 @@ export function useConfigSettingsState() {
 
         try {
           await saveConfig(updatedConfig);
-          localStorage.setItem("receiptFolderId", newReceipts);
-          localStorage.setItem("forPrintFolderId", newPrint);
         } catch (e) {
           console.error("Auto-save failed", e);
         }
@@ -180,29 +178,8 @@ export function useConfigSettingsState() {
     const bugReportsSpreadsheetId = extractId(config.bugReportsSpreadsheetId);
     const bugReportsFolderId = extractId(config.bugReportsFolderId);
 
-    localStorage.setItem("bidManagementSpreadsheetId", bidMgtId);
-    // Legacy support for older components that might still read 'spreadsheetId'
-    localStorage.setItem("spreadsheetId", bidMgtId);
-
-    localStorage.setItem("auctionItemsSpreadsheetId", auctionItemsId);
-    localStorage.setItem("auctionTicketsSpreadsheetId", auctionTicketsId);
-
-    localStorage.setItem("bidderNumbersSheet", config.bidderNumbersSheet);
-    localStorage.setItem("bidManagementSheet", config.bidManagementSheet);
-    localStorage.setItem("receiptFolderId", receiptFolderId);
-    localStorage.setItem("forPrintFolderId", forPrintFolderId);
-    localStorage.setItem("ornsLogoId", ornsLogoId);
-    localStorage.setItem("ticketPrice", config.ticketPrice);
-    localStorage.setItem("auctionItemsScriptId", auctionItemsScriptId);
-    localStorage.setItem("auctionTicketsScriptId", auctionTicketsScriptId);
-    localStorage.setItem("bidManagementScriptId", bidManagementScriptId);
-    // Legacy support
-    localStorage.setItem("googleScriptId", bidManagementScriptId);
-    localStorage.setItem("bugReportsSpreadsheetId", bugReportsSpreadsheetId);
-    localStorage.setItem("bugReportsFolderId", bugReportsFolderId);
-    localStorage.setItem("paypalIsSandbox", String(config.paypalIsSandbox));
-
-    // Save to Firebase for cross-device sync
+    // Save for everyone (the server's shared Config).
+    let saved = true;
     try {
       await saveConfig({
         ...config,
@@ -218,12 +195,17 @@ export function useConfigSettingsState() {
         bugReportsSpreadsheetId,
         bugReportsFolderId
       });
-    } catch (err) {
-      console.error("Firebase sync failed:", err);
-      // We don't block saving locally if Firebase fails, but we already toasted in saveConfig
+    } catch {
+      // saveConfig already showed why.
+      saved = false;
     }
 
-    // Sync to Bid Management Spreadsheet (Legacy cloud sync)
+    if (!saved) {
+      setSavingSettings(false);
+      return;
+    }
+
+    // Also copy to the Bid Management spreadsheet's _Settings tab, which its Apps Script reads.
     let cloudSyncFailed = false;
     if (bidMgtId) {
       try {
@@ -241,9 +223,7 @@ export function useConfigSettingsState() {
 
     setSavingSettings(false);
     if (cloudSyncFailed) {
-      toast.error("Settings saved locally, but failed to sync to the Bid-Management spreadsheet's cloud settings. Check your Bid Management Spreadsheet ID.");
-    } else {
-      toast.success("Settings saved locally and synced to cloud");
+      toast.error("Settings saved, but couldn't be copied to the Bid-Management spreadsheet's _Settings tab. Check your Bid Management Spreadsheet ID.");
     }
     setTimeout(() => window.location.reload(), 1000);
   };
@@ -251,8 +231,6 @@ export function useConfigSettingsState() {
   return {
     config,
     setConfig,
-    firebaseUser,
-    loginToFirebase,
     savingSettings,
     isSettingUpNewAuction,
     showManualCopyDialog,

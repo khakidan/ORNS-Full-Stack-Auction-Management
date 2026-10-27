@@ -6,6 +6,15 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **Every signed-in person sees the current auction; the Cloud Sync sign-in is gone.** A User (who can't open Settings) saw an empty Bid Management page: the browser read the shared Config straight from Firestore, and only after the separate Firebase "Cloud Sync" sign-in on the Settings page. Now only the server touches Firestore:
+  - `server/services/configService.ts` reads `settings/global` (cached 30 seconds, replaced on save) and validates saves. `GET /api/config` gives every signed-in staff member the whole Config and a volunteer only the Bid Management fields (replaces `/api/config/runtime`); `POST /api/config` (Full Administrators) saves it, records the changed fields in Action History, and tells open screens through the change feed (`config`), which reload it.
+  - `getPaypalIsSandbox` and the volunteer checks read through the same cache, so a save takes effect at once.
+  - `ConfigContext.tsx` loads from the server once signed in (`AuthProvider` now wraps `ConfigProvider`); its `localStorage` copies and the `VITE_*` Config fallbacks are gone. The Cloud Sync card, `src/services/firebase.ts` and the browser `firebase` package are removed (the lazy ~160 kB gzipped chunk with it).
+  - `firestore.rules` now denies browsers everything. Before, any @orns.org address signed in to Cloud Sync could change the Config, whatever their role. Needs `npx firebase-tools deploy --only firestore:rules`.
+  - Backend 796 -> 804, frontend 771 -> 763 (the Firebase listener tests replaced), total 1567.
+
+- **The edit tracking button now says Turn off when tracking is on.** Settings > Action History checks each script's state (`GET /api/action-history/edit-tracking`, which runs the new `apiEditTrackingStatus` in the Items and Tickets `ActionHistoryTracking.gs`) and shows Turn on or Turn off to match. Turn off (`POST` with `enabled: false`, new `apiDisableEditTracking`) clears the script property, which silences every admin's trigger, and removes the caller's own trigger. If a script can't say (not redeployed yet, or an older sign-in), the button shows Turn on. Backend 793 -> 796, frontend 770 -> 771, total 1563 -> 1567.
+
 - **A cancelled sign-in no longer shows a server error.** When Google returned to `/auth/callback` without a code (sign-in cancelled, or a permission declined - `error=access_denied`), `getToken` threw and the page showed a generic error. It now shows "Sign-in was cancelled, or a permission the app needs wasn't approved. Nothing was changed." with a link back (to Settings when connecting the volunteer account). Backend 787 -> 788, total 1553 -> 1554.
 
 - **Renamed the Configuration page to Settings, and its Settings tab to Configuration.** Sidebar, page header and the route (`/Settings`; an old `/Configuration` link still opens it) follow; the tab order is unchanged (Configuration, PayPal Integration, Google Apps Scripts, Bug Reports). Pointers in a few messages and comments now say Settings / the Configuration tab.

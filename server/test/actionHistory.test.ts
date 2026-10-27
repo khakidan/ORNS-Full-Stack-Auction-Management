@@ -214,10 +214,51 @@ describe("POST /api/action-history/edit-tracking", () => {
     expect(res.body.error).toBe("Your Google sign-in doesn't include the permission this needs yet. Sign out, sign in again and approve the new permission, then try again.");
   });
 
+  it("turns tracking off in both scripts when enabled is false", async () => {
+    vi.mocked(getActionHistorySpreadsheetId).mockResolvedValue(LOG_ID);
+    const runs: any[] = [];
+    server.use(http.post("https://script.googleapis.com/v1/scripts/:scriptId\\:run", async ({ params, request }) => {
+      runs.push({ scriptId: params.scriptId, ...((await request.json()) as any) });
+      return HttpResponse.json({ response: { result: { success: true } } });
+    }));
+
+    const res = await request(app).post("/api/action-history/edit-tracking").set(admin).send({ enabled: false });
+
+    expect(res.body.success).toBe(true);
+    expect(runs.map((r) => [r.scriptId, r.function])).toEqual([
+      ["test-item-entry-script-id", "apiDisableEditTracking"],
+      ["test-tickets-script-id", "apiDisableEditTracking"],
+    ]);
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: "Turn off edit tracking" }));
+  });
+
   it("refuses until the Action History spreadsheet exists", async () => {
     vi.mocked(getActionHistorySpreadsheetId).mockResolvedValue("");
     const res = await request(app).post("/api/action-history/edit-tracking").set(admin).send({ itemsSpreadsheetId: "it", ticketsSpreadsheetId: "tk" });
     expect(res.status).toBe(409);
+  });
+});
+
+describe("GET /api/action-history/edit-tracking", () => {
+  const statusFrom = (byScript: Record<string, any>) =>
+    server.use(http.post("https://script.googleapis.com/v1/scripts/:scriptId\\:run", ({ params }) => HttpResponse.json(byScript[params.scriptId as string])));
+
+  it("is on only when both scripts are recording to the Action History", async () => {
+    vi.mocked(getActionHistorySpreadsheetId).mockResolvedValue(LOG_ID);
+    statusFrom({ "test-item-entry-script-id": { response: { result: { success: true, on: true } } }, "test-tickets-script-id": { response: { result: { success: true, on: true } } } });
+    expect((await request(app).get("/api/action-history/edit-tracking").set(admin)).body.on).toBe(true);
+
+    statusFrom({ "test-item-entry-script-id": { response: { result: { success: true, on: true } } }, "test-tickets-script-id": { response: { result: { success: true, on: false } } } });
+    expect((await request(app).get("/api/action-history/edit-tracking").set(admin)).body.on).toBe(false);
+  });
+
+  it("is unknown (null) when a script can't say, e.g. it hasn't been redeployed", async () => {
+    vi.mocked(getActionHistorySpreadsheetId).mockResolvedValue(LOG_ID);
+    statusFrom({
+      "test-item-entry-script-id": { error: { message: "ScriptError", details: [{ errorMessage: "Script function not found: apiEditTrackingStatus" }] } },
+      "test-tickets-script-id": { response: { result: { success: true, on: true } } },
+    });
+    expect((await request(app).get("/api/action-history/edit-tracking").set(admin)).body.on).toBeNull();
   });
 });
 

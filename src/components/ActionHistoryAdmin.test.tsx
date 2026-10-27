@@ -122,8 +122,20 @@ describe("ActionHistoryAdmin", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: /Turn on edit tracking/ }));
 
-    expect(postJson).toHaveBeenCalledWith("/api/action-history/edit-tracking", { itemsSpreadsheetId: "it-sheet", ticketsSpreadsheetId: "tk-sheet" }, expect.any(String));
+    expect(postJson).toHaveBeenCalledWith("/api/action-history/edit-tracking", { enabled: true, itemsSpreadsheetId: "it-sheet", ticketsSpreadsheetId: "tk-sheet" }, expect.any(String));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("now recorded")));
+  });
+
+  it("offers Turn off when edit tracking is already on, and turns it off", async () => {
+    vi.mocked(fetchWithRetry).mockImplementation(async (url: any) =>
+      String(url).endsWith("/edit-tracking") ? json({ on: true }) : json({ spreadsheetId: "log", url: "https://docs/log", actions: ACTIONS }));
+    vi.mocked(postJson).mockResolvedValueOnce({ success: true, results: [{ name: "Auction Items", success: true }, { name: "Auction Tickets", success: true }] });
+    render(<ActionHistoryAdmin />);
+
+    await userEvent.click(await screen.findByRole("button", { name: /Turn off edit tracking/ }));
+
+    expect(postJson).toHaveBeenCalledWith("/api/action-history/edit-tracking", { enabled: false, itemsSpreadsheetId: "it-sheet", ticketsSpreadsheetId: "tk-sheet" }, expect.any(String));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("no longer recorded")));
   });
 
   it("reloads the list quietly when someone else's action arrives (live refresh)", async () => {

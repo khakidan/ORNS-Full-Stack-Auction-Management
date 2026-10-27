@@ -141,10 +141,12 @@ export default function ActionHistoryAdmin() {
               variant="outline"
               size="sm"
               loading={state.enablingTracking}
-              title="Records edits made directly in the Items and Tickets spreadsheets (not through the app). Run it again if the Items or Tickets spreadsheet changes."
-              onClick={() => state.enableEditTracking(extractId(config.auctionItemsSpreadsheetId), extractId(config.auctionTicketsSpreadsheetId))}
+              title={state.trackingOn
+                ? "Edits made directly in the Items and Tickets spreadsheets (not through the app) are being recorded. Turn off to stop recording them."
+                : "Records edits made directly in the Items and Tickets spreadsheets (not through the app). Run it again if the Items or Tickets spreadsheet changes."}
+              onClick={() => state.setEditTracking(!state.trackingOn, extractId(config.auctionItemsSpreadsheetId), extractId(config.auctionTicketsSpreadsheetId))}
             >
-              Turn on edit tracking
+              {state.trackingOn ? "Turn off edit tracking" : "Turn on edit tracking"}
             </LoadingButton>
             {state.spreadsheetUrl && (
               <Button variant="outline" size="sm" className="gap-2" onClick={() => window.open(state.spreadsheetUrl, "_blank", "noopener,noreferrer")}>

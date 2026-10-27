@@ -74,9 +74,8 @@ export interface Config {
   ticketPrice: string;
   /**
    * Unused: the server runs the scripts by its SCRIPT_ID_* environment
-   * settings. Kept (and saved through unchanged) only because
-   * firestore.rules requires exactly these keys in settings/global;
-   * dropping them means deploying new rules alongside.
+   * settings. Kept (and saved through unchanged) in settings/global
+   * (server/services/configService.ts) for now.
    */
   auctionItemsScriptId: string;
   auctionTicketsScriptId: string;

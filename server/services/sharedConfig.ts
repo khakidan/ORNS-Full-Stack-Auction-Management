@@ -1,4 +1,4 @@
-import { getAdminFirestore } from "./firebaseAdmin";
+import { getSharedConfig, _resetConfigCacheForTesting } from "./configService";
 
 /**
  * Server-side reads of the shared Config document (Firestore
@@ -11,30 +11,17 @@ import { getAdminFirestore } from "./firebaseAdmin";
  * PayPal environment that the sweeper then looked for in the other. Now
  * every PayPal caller asks here, so they all agree.
  *
- * The value is cached for CACHE_TTL_MS so a busy checkout line isn't a
- * Firestore read per request. If a refresh fails, the last value read is
- * kept (with a warning); if there has never been a successful read, the
- * call throws rather than guessing - guessing wrong means real invoices
- * in the wrong environment.
+ * Read through configService.ts's cached Config (30 seconds, replaced at
+ * once by a save), so a busy checkout line isn't a Firestore read per
+ * request. If a refresh fails, the last value read is kept (with a
+ * warning); if there has never been a successful read, the call throws
+ * rather than guessing - guessing wrong means real invoices in the wrong
+ * environment.
  */
-const CACHE_TTL_MS = 30 * 1000;
-
-let cached: { isSandbox: boolean; readAt: number } | null = null;
-
 export async function getPaypalIsSandbox(now = Date.now()): Promise<boolean> {
-  if (cached && now - cached.readAt < CACHE_TTL_MS) return cached.isSandbox;
   try {
-    const snap = await getAdminFirestore().collection("settings").doc("global").get();
-    // Same default as the client's Config and the sweeper: anything but an
-    // explicit `false` means sandbox, so a missing field never means live.
-    const isSandbox = snap.data()?.paypalIsSandbox !== false;
-    cached = { isSandbox, readAt: now };
-    return isSandbox;
+    return (await getSharedConfig(now)).paypalIsSandbox;
   } catch (err: any) {
-    if (cached) {
-      console.warn("[sharedConfig] Couldn't refresh PayPal mode from Firestore; using the last value read:", err?.message || err);
-      return cached.isSandbox;
-    }
     throw new Error(
       `Couldn't read the PayPal sandbox/live setting from Firestore (settings/global), so no PayPal request was made. ` +
       `Locally, run \`gcloud auth application-default login\`. Cause: ${err?.message || err}`
@@ -44,5 +31,5 @@ export async function getPaypalIsSandbox(now = Date.now()): Promise<boolean> {
 
 /** Test-only: forget the cached value. */
 export function _resetSharedConfigForTesting(): void {
-  cached = null;
+  _resetConfigCacheForTesting();
 }

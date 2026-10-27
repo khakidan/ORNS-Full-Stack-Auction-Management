@@ -1,7 +1,6 @@
 import { LoadingButton } from "@/components/ui/LoadingButton";
 import { Save } from "lucide-react";
 import { useConfigSettingsState } from "@/hooks/useConfigSettingsState";
-import CloudSyncStatusCard from "./CloudSyncStatusCard";
 import SetupNewAuctionCard from "./SetupNewAuctionCard";
 import AuctionConfigurationCard from "./AuctionConfigurationCard";
 import TicketPricingCard from "./TicketPricingCard";
@@ -20,8 +19,6 @@ export default function ConfigSettings() {
   const {
     config,
     setConfig,
-    firebaseUser,
-    loginToFirebase,
     savingSettings,
     isSettingUpNewAuction,
     showManualCopyDialog,
@@ -61,13 +58,11 @@ export default function ConfigSettings() {
   );
 
   // Like the Dashboard tab: cards sit side by side and each is only as tall
-  // as its content (items-start). Cloud Sync spans the full width, the two
-  // archive cards share a row, and Auction Configuration takes the rest of
-  // the last row beside Ticket Pricing (one third).
+  // as its content (items-start). The two archive cards share a row, and
+  // Auction Configuration takes the rest of the last row beside Ticket
+  // Pricing (one third).
   const configurationTab = (
     <div className="space-y-6">
-      <CloudSyncStatusCard firebaseUser={firebaseUser} loginToFirebase={loginToFirebase} />
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <ArchiveAuctionCard config={config} />
 

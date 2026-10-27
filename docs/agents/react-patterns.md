@@ -19,7 +19,7 @@ The real frontend layering is:
 
 ```text
 src/lib/        (mostly pure helpers: parsing, pricing, formatting)
-src/services/   (network and SDK clients: google-api.ts, apiClient.ts, firebase.ts)
+src/services/   (network clients: google-api.ts, apiClient.ts)
     ↓
 src/context/    (AuctionContext.tsx, ConfigContext.tsx, AuthContext.tsx)
     ↓
@@ -37,8 +37,9 @@ data in and hand data back. The exceptions are deliberate:
 `errorBuffer.ts` keeps recent console errors for bug reports. Other
 network and SDK code lives in `src/services/`:
 `google-api.ts` (`fetchWithRetry`, `getBaseUrl`, the Sheets/Drive
-helpers), `apiClient.ts` (`postJson` and `HttpError` for JSON POSTs to the
-backend) and `firebase.ts` (the lazily initialized Firestore/Auth SDK).
+helpers) and `apiClient.ts` (`postJson` and `HttpError` for JSON POSTs to the
+backend). The browser has no Firebase SDK: the shared Config comes from
+`GET /api/config` (`ConfigContext.tsx`).
 Requests authenticate with the `orns_session` cookie
 (`credentials: "include"`) - the browser never holds OAuth tokens. New
 networked logic belongs in `src/services/`, not `src/lib/`.
