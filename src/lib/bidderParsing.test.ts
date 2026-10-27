@@ -4,7 +4,7 @@ import { parseBidderRows } from "./bidderParsing";
 describe("parseBidderRows", () => {
   it("parses a full row into a Bidder object with 1-based-plus-header rowIndex", () => {
     const rows = [
-      ["101", "Dan", "Sage", "dan@example.com", "TRUE", "FALSE", "TRUE", "TRUE", "Cash", "url", "50", "2026-01-01T00:00:00Z"],
+      ["101", "Dan", "Sage", "dan@example.com", "TRUE", "FALSE", "TRUE", "TRUE", "Cash", "url", "50", "2026-01-01T00:00:00Z", "", "", "tickets!7"],
     ];
 
     const [bidder] = parseBidderRows(rows);
@@ -20,6 +20,7 @@ describe("parseBidderRows", () => {
       paid: true,
       paymentMethod: "Cash",
       checkoutTimestamp: "2026-01-01T00:00:00Z",
+      ticketRef: "tickets!7",
       rowIndex: 2,
     });
   });

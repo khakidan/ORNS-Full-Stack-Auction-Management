@@ -1,19 +1,20 @@
 import { sheets_v4 } from "googleapis";
 import { BIDDER_NUMBERS_HEADERS } from "../utils/bidderNumbersHeaders";
 import { BIDDER_COL, TICKETS_COL, WALK_IN_PAYMENT_METHOD } from "../utils/sheetColumns";
-import { guestRowIndicesForSheet } from "../../src/lib/attendeeSheetColumns";
+import { SheetRows, bidderEmail, bidderName, collectTicketPeople } from "./ticketPeople";
 
-/** Rows as the Sheets API returns them (cells may be strings, numbers, booleans or missing). */
-type SheetRows = unknown[][];
-
-/** One built Bidder-Numbers row, A-K: ID, First, Last, Email, 4 blank checkboxes, 3 blank strings. */
-type BidderNumbersRow = [number, string, string, string, boolean, boolean, boolean, boolean, string, string, string];
+/**
+ * One built Bidder-Numbers row, A-O: ID, First, Last, Email, 4 blank
+ * checkboxes, 6 blank strings (I-N), and O - where their ticket is
+ * (ticketPeople.ts), which keeps them tied to it.
+ */
+type BidderNumbersRow = [number, string, string, string, boolean, boolean, boolean, boolean, string, string, string, string, string, string, string];
 
 
 const cell = (row: unknown[] | undefined, index: number): string => String(row?.[index] ?? "").trim();
 
 /** Reads the staff/tickets/sponsor rows from the external Auction Tickets spreadsheet. A missing tab reads as empty. */
-async function fetchTicketSheetRows(sheets: sheets_v4.Sheets, auctionTicketSheetsID: string): Promise<{ ticketsRows: SheetRows; staffRows: SheetRows; sponsorRows: SheetRows }> {
+export async function fetchTicketSheetRows(sheets: sheets_v4.Sheets, auctionTicketSheetsID: string): Promise<{ ticketsRows: SheetRows; staffRows: SheetRows; sponsorRows: SheetRows }> {
   const read = async (range: string): Promise<SheetRows> => {
     try {
       const res = await sheets.spreadsheets.values.get({ spreadsheetId: auctionTicketSheetsID, range });
@@ -43,65 +44,19 @@ async function fetchTicketSheetRows(sheets: sheets_v4.Sheets, auctionTicketSheet
  * that could quietly drift apart.
  */
 export function computeBidderNumbersRows(staffRows: SheetRows, ticketsRows: SheetRows, sponsorRows: SheetRows): BidderNumbersRow[] {
-  const collectedBidders: [string, string, string][] = [];
-
-  // Staff, primary ticket buyers and sponsors all start [First, Last, Email].
-  const collectPeople = (rows: SheetRows) => {
-    for (let i = 1; i < rows.length; i++) {
-      const row = rows[i];
-      if (row && (row[0] || row[1])) {
-        collectedBidders.push([cell(row, 0), cell(row, 1), cell(row, 2)]);
-      }
-    }
-  };
-
-  // Guests who asked for their own bidder number. A guest is real whenever
-  // their own name is present - matches src/lib/attendeeParsing.ts's own
-  // inclusion check, which never reads column G (row[6]). That used to
-  // also require the separate "guest marker" checkbox in G, which silently
-  // dropped any guest who opted in but never had it ticked, so their
-  // labels were never generated.
-  const collectGuests = (guestIndex: 1 | 2 | 3) => {
-    const cols = guestRowIndicesForSheet("tickets")[guestIndex];
-    const ownBidderCol = cols.ownBidderNumber!;
-    for (let i = 1; i < ticketsRows.length; i++) {
-      const row = ticketsRows[i];
-      if (!row || row.length <= ownBidderCol) continue;
-      const guestFirst = cell(row, cols.firstName);
-      if (guestFirst !== "" && cell(row, ownBidderCol).toLowerCase() === "yes") {
-        collectedBidders.push([guestFirst, cell(row, cols.lastName), cell(row, cols.email)]);
-      }
-    }
-  };
-
-  collectPeople(staffRows);
-  collectPeople(ticketsRows);
-  collectGuests(1);
-  collectGuests(2);
-  collectGuests(3);
-  collectPeople(sponsorRows);
-
-  // Drop repeats of the same person (same formatted name and email).
-  const formatName = (str: string) => {
-    const cleaned = str.trim();
-    if (!cleaned) return "";
-    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
-  };
-
   const finalBidders: BidderNumbersRow[] = [];
   const seenKey = new Set<string>();
 
-  collectedBidders.forEach((b) => {
-    const first = formatName(b[0]);
-    const last = formatName(b[1]);
-    const email = b[2].toLowerCase().trim();
-    const hash = first + "|" + last + "|" + email;
-    if (!seenKey.has(hash)) {
-      seenKey.add(hash);
-      finalBidders.push([101 + finalBidders.length, first, last, email, false, false, false, false, "", "", ""]);
-    }
-  });
-
+  // Drop repeats of the same person (same name and email), keeping the first ticket.
+  for (const person of collectTicketPeople(staffRows, ticketsRows, sponsorRows)) {
+    const first = bidderName(person.firstName);
+    const last = bidderName(person.lastName);
+    const email = bidderEmail(person.email);
+    const key = `${first.toLowerCase()}|${last.toLowerCase()}|${email}`;
+    if (seenKey.has(key)) continue;
+    seenKey.add(key);
+    finalBidders.push([101 + finalBidders.length, first, last, email, false, false, false, false, "", "", "", "", "", "", person.ref]);
+  }
   return finalBidders;
 }
 

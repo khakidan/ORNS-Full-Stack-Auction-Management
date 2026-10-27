@@ -10,7 +10,7 @@ describe("sheetColumns", () => {
       id: "ID", firstName: "First Name", lastName: "Last Name", email: "Email",
       checkedIn: "Checked In", proxy: "Proxy Bidder", checkedOut: "Checked Out", paid: "Paid",
       paymentMethod: "Payment Method", invoiceUrl: "Invoice URL", invoicedAmount: "Invoiced Amount",
-      paypalPendingSince: "PayPal Pending Since", receiptEmailedAt: "Receipt Emailed At", receiptEmailedInvoice: "Receipt Emailed Invoice",
+      paypalPendingSince: "PayPal Pending Since", receiptEmailedAt: "Receipt Emailed At", receiptEmailedInvoice: "Receipt Emailed Invoice", ticketRef: "Ticket",
     };
     for (const [field, header] of Object.entries(expected)) {
       expect(BIDDER_NUMBERS_HEADERS[BIDDER_COL[field as keyof typeof BIDDER_COL]]).toBe(header);

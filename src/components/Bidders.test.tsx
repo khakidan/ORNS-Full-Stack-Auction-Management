@@ -297,6 +297,20 @@ describe('Bidders - walk-ins', () => {
 // under the page header, and the 4 filter selects (Status/Payment/Source/
 // Sort) wrapping onto multiple lines instead of staying on one row. See
 // docs/agents/CHANGELOG.md.
+describe('Bidders - ticket links', () => {
+  it("flags a bidder the sync couldn't match to any ticket, and only that one", () => {
+    const alice = mockBidders[2] as any;
+    alice.ticketRef = "";
+    try {
+      render(<Bidders />);
+      expect(screen.getAllByText("No ticket link")).toHaveLength(1);
+      expect(screen.getByTestId("bidder-row-103")).toHaveTextContent("No ticket link");
+    } finally {
+      delete alice.ticketRef;
+    }
+  });
+});
+
 describe('Bidders - Layout', () => {
   it('keeps the filter selects on one row instead of wrapping', () => {
     render(<Bidders />);

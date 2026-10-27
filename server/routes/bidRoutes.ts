@@ -10,6 +10,7 @@ import { getPaypalIsSandbox } from '../services/sharedConfig';
 import { sheetsFor, googleAuthFor } from '../utils/googleClients';
 import { logAction } from '../services/actionLog';
 import { deactivateAllVolunteers, forgetAuctionState } from '../services/volunteerService';
+import { syncBiddersFromTickets } from '../services/bidderTicketSync';
 
 export default function createBidRouter() {
   const router = Router();
@@ -106,6 +107,8 @@ export default function createBidRouter() {
     }
 
     try {
+      // The invoice and receipt carry the bidder's name and email - make sure they match the ticket first.
+      await syncBiddersFromTickets(req);
       const outcome = await withIdempotency("auction/checkout-mark-paid", idempotencyKey, async () => {
         const client = googleAuthFor(req);
 
@@ -217,6 +220,16 @@ export default function createBidRouter() {
   });
 
   // Update walk-in to be transactional across sheets
+  /**
+   * Brings every bidder's name and email in line with their ticket, and in
+   * Prep adds anyone new on the tickets (bidderTicketSync.ts). The Bid Management page asks when it loads; it
+   * also runs after ticket changes and before receipts and checkout.
+   */
+  router.post("/bidders/sync-from-tickets", async (req: Request, res: Response) => {
+    const { renamed, added, unlinked } = await syncBiddersFromTickets(req);
+    res.json({ renamed: renamed.length, added: added.length, unlinked });
+  });
+
   router.post("/bidders/walk-in", requirePermission("bidders.walkIn"), async (req: Request, res: Response, next: NextFunction) => {
     const {
       firstName, 
@@ -259,6 +272,8 @@ export default function createBidRouter() {
           after: { firstName, lastName, email, ticketPrice },
           notUndoableReason: "a walk-in adds a ticket, a bidder and a bid sheet column together",
         });
+        // Ties the new bidder to the ticket just added.
+        if (result.ticketAppended) await syncBiddersFromTickets(req);
         return result;
       });
       res.json(idempotentBody(outcome));

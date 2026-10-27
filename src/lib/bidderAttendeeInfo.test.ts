@@ -189,4 +189,18 @@ describe("getBidderAttendeeInfo - multiple guests and attendees", () => {
 
     expect(getBidderAttendeeInfo(bidder, [unrelatedHost, realHost])).toEqual({ attendee: realHost, isGuest: true });
   });
+
+  it("matches by the ticket Bidder-Numbers ties them to, even after the ticket's name changed", () => {
+    const bidder = makeBidder({ firstName: "Amy/chris", lastName: "Jimieson", ticketRef: "staff tickets!3" });
+    const ticket = makeAttendee({ id: "staff-3", sheet: "staff tickets", rowIndex: 3, firstName: "Amy & Chris", lastName: "Jimieson", paymentStatus: "Paid" });
+
+    expect(getBidderAttendeeInfo(bidder, [makeAttendee(), ticket])).toEqual({ attendee: ticket, isGuest: false });
+  });
+
+  it("a tie to a guest slot marks the bidder as that ticket's guest", () => {
+    const bidder = makeBidder({ firstName: "Someone", lastName: "Renamed", ticketRef: "tickets!2#1" });
+    const ticket = makeAttendee({ rowIndex: 2 });
+
+    expect(getBidderAttendeeInfo(bidder, [ticket])).toEqual({ attendee: ticket, isGuest: true });
+  });
 });

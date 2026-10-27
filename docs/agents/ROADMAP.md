@@ -28,6 +28,55 @@ If step 7 doesn't check out, cash/check checkouts will still work (the code fall
 
 ---
 
+## 2026-10-27 Audit Backlog (today's changes)
+
+Read of everything changed on 2026-10-27 (`cf4ea05`..`bf7994a`: auction states, staff roles, Action History and Undo, volunteers, live refresh, server-served Config, edit-tracking toggle, Bid Entry checks - about 6,400 lines in 148 files), measured against the same criteria as the 2026-10-21 code audit (bugs, security, data integrity, operations) and the 2026-10-22 refactor audit (`AGENTS.md` and the guides under `docs/agents/`). Each item was confirmed by reading the cited code unless marked **(plausible - not reproduced)**. At audit time the suite was green (805 backend / 780 frontend) and lint was clean - none of these are caught by the existing tests.
+
+Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
+
+### High - fix before staff rely on Undo
+
+- **A1 - Undo trusts whatever the Action History spreadsheet says.** `POST /api/action-history/:id/undo` parses the row's Undo Data column and `applyUndo` (`server/services/undoService.ts`) carries it out with the Full Administrator's Google access. Every staff member can edit that spreadsheet (the app writes log rows as the person acting, so it must be shared with all staff; its protection is warning-only). So anyone on staff can add a row with a harmless-looking summary and Undo Data such as `{"kind":"role","email":"me@orns.org","before":"full_admin","after":"user"}` - when a Full Administrator clicks Undo, that person becomes a Full Administrator. The `role` case calls `setRole` directly, skipping the Users route's checks (only @orns.org, not a FULL_ADMIN_EMAILS address, not your own role). A `cells` row can write any values (as `USER_ENTERED`, so formulas too) to any range of any spreadsheet the admin can edit. The confirmation dialog shows the row's Before column, not what Undo will actually write.
+  - Fix: sign the Undo Data the server writes (an HMAC with a server-only secret, checked before undoing) and refuse rows whose signature doesn't match. Rows the Items/Tickets Apps Scripts write (Sheet edits) can't be signed - accept those only as kind `cells`, one cell, in the configured Items or Tickets spreadsheet. Write a restored text value starting with `=`, `+`, `-` or `@` as text. Give the `role` case the same checks as `PUT /api/users/:email/role`. Show what Undo will write, from the Undo Data, in the confirmation.
+
+### Medium - before the auction
+
+- **A2 - A volunteer link isn't used up atomically.** `POST /auth/volunteer` looks the token up (`findVolunteerByToken`), then `redeemVolunteer` sets the record `active` without checking it still holds that token. A Revoke or Resend landing in between is overwritten back to `active` (a revoked volunteer gets in, or an old link still works after Resend), and two quick submissions both sign in. Fix: redeem in a Firestore transaction that requires `status: "invited"` and the same `tokenHash`.
+- **A3 - The generic sheets proxy's write routes can skip the ticket-tab and locked-tab refusals.** `refuseTicketSheet` / `refuseLockedSheet` (`server/routes/sheetsProxyRoutes.ts`) match the tab name in the range, but a range without one (`A5:Z5`) writes to the spreadsheet's first tab - so a User can clear an attendee row without the `attendees.delete` permission or an Action History row, or write a Bid Management tab without its lock. The app no longer calls these routes (`updateSheetData`, `appendSheetData` and `clearSheetData` in `src/services/google-api.ts` have no callers). Fix: remove the three write routes and those three client helpers; keep the cached read.
+- **A4 - Adding an attendee can add them twice.** `appendAttendeeRow` (`src/services/google-api.ts`) posts `/api/attendees/add` through `fetchWithRetry`, which repeats a POST after a 5xx, a 429 or a dropped connection - if the first append landed, the retry appends the row again. Fix: an idempotency key (`withIdempotency`, as the bid routes use) or `postOnce`.
+- **A5 - Setup New Auction Year's new folder IDs are saved by the browser, after the rollover.** The server creates the new For Print and Bidder Receipts folders, then `useConfigSettingsState.ts` saves their IDs with `saveConfig`. If that save fails (tab closed, connection lost), Config keeps last year's folders and receipts and print documents go there. Now that the server owns the Config (`configService.ts`), the setup route should save them itself.
+
+### Low
+
+- **A6 - A staff sign-in can stay a volunteer.** `/auth/callback` adds `tokens` and `email` to the existing session but leaves a `volunteer` field from an earlier volunteer link in the same browser, and `requireAuth` checks `volunteer` first. Fix: delete `req.session.volunteer` on a staff sign-in.
+- **A7 - Other POSTs that shouldn't repeat go through `postJson` (which retries):** volunteer invite and resend (a second email; the first link then fails), Undo (a retry reports "already undone" though it worked), Create Action History (a retry reports "already exists"). Use `postOnce`, or have the server answer a repeat as success.
+- **A8 - Undo marks the row it found before undoing.** `markUndone` writes `M{rowIndex}` from the earlier `findAction`; a row inserted or a sort done by hand in between marks the wrong action. Re-find the row by Action ID just before marking.
+- **A9 - Volunteers receive every Undo notice.** `GET /api/changes` is open to volunteers and returns all `notices`, including Settings, Users and Tickets undos with staff emails and attendee names. Send volunteers only Bid Management notices.
+- **A10 - `touchVolunteer` can bring back a deleted record (plausible - not reproduced).** It writes `lastSeenAt` with `set(..., { merge: true })`; if Clear deactivated removes the record as a last request arrives, a blank record appears in the Volunteers table as "invited". Use `update()`.
+- **A11 - "Edit tracking on" only means the script property is set.** `apiEditTrackingStatus` doesn't check that an on-edit trigger exists - triggers belong to the admin who installed them, and if that trigger is removed (account removed, trigger deleted by hand) the button still says Turn off while nothing is recorded. Record who turned it on and when, and show it next to the button.
+- **A12 - Bid Entry's step check on repeatable and Live items (plausible - not reproduced).** `bidWarnings` applies the opening-bid-plus-raises rule to every item. Raffle tickets, Open Appeal tiers (`allowMultipleWinners`) and Live-auction items may not follow it if their sheet carries an Opening Bid and Minimum Raise. Check those items' figures; if needed, skip the step check for them.
+
+### Structure - refactor
+
+- **A13 - Routes still take spreadsheet IDs, tab names and the ticket price from the browser.** `bidRoutes.ts`, `receiptRoutes.ts`, `attendeeRoutes.ts`, Go Live and Close read `spreadsheetId`, `bidderNumbersSheet`, `bidManagementSheet`, `ticketPrice` etc. from the request body, though the server now has them (`getSharedConfig`). Read them on the server (body as a fallback during the change). This removes stale-browser bugs and lets `volunteerAccess.ts` drop its per-field ID checks.
+- **A14 - Components over the 50-250 line guide, and state set in effects** (`component-standards.md`, `react-patterns.md`): `App.tsx` is 529 lines and redirects volunteers and non-admins with `setActiveWorkflow` inside effects - work out the allowed workflow during render in a `useWorkflowNavigation` hook. `ArchivedYearPanel.tsx` is 293 lines - split it by section.
+- **A15 - The Action History list sends the whole log every time.** `listActions` returns every row, Undo Data included, on each load and on every live refresh (each logged action reloads every open Action History tab). Return the newest few hundred, page the rest, and leave Undo Data out of the list.
+
+### Tests
+
+- **A16 - Client gaps:** no test that `App.tsx` shows a volunteer only Bid Management (five tabs, no stage buttons) and the thank-you screen, and none that `AuctionContext`'s live refresh reloads the right data (`onRemoteChange` -> bidders, items, attendees, `reloadConfig`).
+
+### Confirmed fine (don't "fix")
+
+- `requireAuth` / `requirePermission` deny by default; the volunteer allowlist's regexes are case- and trailing-slash-strict, so a mismatch refuses rather than allows.
+- `trust proxy` is 1, so the volunteer-link limiter sees the real client IP on Cloud Run.
+- `firestore.rules` denies browsers everything; deployed and read back on 2026-10-27.
+- Action History rows are written `RAW`; the Apps Scripts prefix `=`, `+`, `@` with `'` in the display columns.
+- The in-memory change feed is correct: the service is limited to one instance (service-level `maxScale: 1`).
+- Go Live only moves from Prep; Close ends volunteer access; each volunteer request re-checks their status and the Live state (30-second cache).
+
+---
+
 ## Feature Milestones (Staging)
 
 ### Webhooks with Fluent Forms

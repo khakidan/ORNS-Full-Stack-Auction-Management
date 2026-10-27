@@ -14,6 +14,7 @@ export function parseBidderRows(rows: string[][]): Bidder[] {
       paid: row[7] === "TRUE" || row[7] === "true",
       paymentMethod: row[8]?.toString() || "",
       checkoutTimestamp: row[11]?.toString() || "",
+      ticketRef: row[14]?.toString() || "",
       rowIndex: idx + 2,
     }))
     .filter(b => b.id);

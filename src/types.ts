@@ -9,6 +9,8 @@ export interface Bidder {
   paid: boolean;
   paymentMethod?: string;
   checkoutTimestamp?: string;
+  /** Where their ticket is ("tickets!12", "tickets!12#2" for a guest) - src/lib/ticketRef.ts. */
+  ticketRef?: string;
   rowIndex: number;
 }
 

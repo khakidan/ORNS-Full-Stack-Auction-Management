@@ -206,7 +206,7 @@ export async function processEmail(
 
   const sheets = google.sheets({ version: "v4", auth: client });
   await recordReceiptEmailed(sheets, spreadsheetId, attached.rowIndex, attached.receipt.paymentUrl, sheetNames.bidderNumbers);
-  await ensureTrackingHeaders(sheets, spreadsheetId, sheetNames.bidderNumbers).catch((e) => console.warn("[processEmail] Could not label Bidder-Numbers L1:N1:", e?.message || e));
+  await ensureTrackingHeaders(sheets, spreadsheetId, sheetNames.bidderNumbers).catch((e) => console.warn("[processEmail] Could not label Bidder-Numbers L1:O1:", e?.message || e));
 
   return { success: true };
 }

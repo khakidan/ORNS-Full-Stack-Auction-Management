@@ -66,17 +66,26 @@ describe("computeBidderNumbersRows", () => {
     const rows = computeBidderNumbersRows(staffRows, ticketsRows, [["Header"]]);
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toEqual([101, "Alice", "One", "alice@example.com", false, false, false, false, "", "", ""]);
+    // Column O ties the bidder to the first ticket they appear on.
+    expect(rows[0]).toEqual([101, "Alice", "One", "alice@example.com", false, false, false, false, "", "", "", "", "", "", "staff tickets!2"]);
   });
 
-  it("formats names as capitalized-first/lowercased-rest and emails as lowercased/trimmed, matching syncService.ts's own formatName", () => {
-    const staffRows = [["Header"], ["ALICE", "oNE", "  Alice@Example.COM  "]];
+  it("tidies all-capitals and all-lowercase words but keeps a typed mix (McDonald, Amy/Chris); emails lowercased/trimmed", () => {
+    const staffRows = [["Header"], ["ALICE", "mcDonald", "  Alice@Example.COM  "], ["amy/Chris", "O'NEIL", ""]];
 
     const rows = computeBidderNumbersRows(staffRows, [["Header"]], [["Header"]]);
 
-    expect(rows[0]).toEqual([101, "Alice", "One", "alice@example.com", false, false, false, false, "", "", ""]);
+    expect(rows.map((r) => [r[1], r[2], r[3]])).toEqual([["Alice", "mcDonald", "alice@example.com"], ["amy/Chris", "O'neil", ""]]);
   });
-});
+
+  it("records where each bidder's ticket is in column O, guests included", () => {
+    const ticketsRows = [["Header"], ticketRow({ 0: "Alice", 1: "One", 7: "Bob", 8: "Guest", 10: "yes" })];
+    const sponsorRows = [["Header"], ["Sue", "Sponsor", ""]];
+
+    const rows = computeBidderNumbersRows([["Header"]], ticketsRows, sponsorRows);
+
+    expect(rows.map((r) => r[14])).toEqual(["tickets!2", "tickets!2#1", "sponsor tickets!2"]);
+  });});
 
 describe("ensureBidderNumbersSheet", () => {
   it("throws a real, actionable error when the Auction Tickets spreadsheet ID is missing", async () => {
