@@ -106,3 +106,16 @@ describe("AuctionItemRow - bundle restore", () => {
     expect(screen.queryByRole("button", { name: /restore items/i })).not.toBeInTheDocument();
   });
 });
+
+describe("AuctionItemRow - description", () => {
+  // jsdom has no layout, so truncation can't be measured; a line-clamp or
+  // truncate class is what cuts a description off in the browser.
+  it("shows the whole description, never clamped or truncated", () => {
+    const description = "Line one of a long description. ".repeat(20) + "THE END";
+    renderRow({ item: { ...ITEM, description } });
+
+    const el = screen.getByText(/THE END$/);
+    expect(el.textContent).toBe(description);
+    expect(el.className).not.toMatch(/line-clamp|truncate|overflow-hidden/);
+  });
+});

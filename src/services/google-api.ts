@@ -1,4 +1,4 @@
-import { SweeperStatus, PaypalSweepOutcome } from "@/types";
+import { SweeperStatus, PaypalSweepOutcome, ArchivedAuction } from "@/types";
 import { newRequestId, reportDone, reportRetry } from "@/lib/syncStatus";
 import { isConfiguredId } from "@/lib/configuredId";
 
@@ -236,4 +236,12 @@ export async function clearSheetData(spreadsheetId: string, range: string) {
     throw new Error(errorData.error || "Failed to clear sheet data");
   }
   return res.json();
+}
+
+/** The past two auctions' archived spreadsheets on Drive (newest year first). */
+export async function getArchivedAuctions(): Promise<ArchivedAuction[]> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/archive/auctions`, { credentials: "include" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(errorTextFrom(data, "Couldn't look up the archived auctions."));
+  return data.auctions || [];
 }

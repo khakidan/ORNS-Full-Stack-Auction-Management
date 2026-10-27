@@ -130,3 +130,16 @@ describe("ItemRow - donor placement", () => {
     expect(donorText.closest("div")).toBe(valueText.closest("div"));
   });
 });
+
+describe("ItemRow - description", () => {
+  // jsdom has no layout, so truncation can't be measured; a line-clamp or
+  // truncate class is what cuts a description off in the browser.
+  it("shows the whole description, never clamped or truncated", () => {
+    const description = "Line one of a long description. ".repeat(20) + "THE END";
+    render(<ItemRow item={makeItem({ description })} />);
+
+    const el = screen.getByText(/THE END$/);
+    expect(el.textContent).toBe(description);
+    expect(el.className).not.toMatch(/line-clamp|truncate|overflow-hidden/);
+  });
+});

@@ -61,7 +61,6 @@ export function useConfigSettingsState() {
   const [showManualCopyDialog, setShowManualCopyDialog] = useState(false);
   const [auctionYear, setAuctionYear] = useState<number | null>(null);
   const [isAuctionConfigOpen, setIsAuctionConfigOpen] = useState(false);
-  const [isSetupNewAuctionOpen, setIsSetupNewAuctionOpen] = useState(false);
 
   const handleSetupNewAuction = async () => {
     if (!window.confirm("Are you SURE you want to create a new auction instance? This will clear all data in the master spreadsheets!")) {
@@ -261,8 +260,6 @@ export function useConfigSettingsState() {
     auctionYear,
     isAuctionConfigOpen,
     setIsAuctionConfigOpen,
-    isSetupNewAuctionOpen,
-    setIsSetupNewAuctionOpen,
     handleSetupNewAuction,
     handleSave,
   };

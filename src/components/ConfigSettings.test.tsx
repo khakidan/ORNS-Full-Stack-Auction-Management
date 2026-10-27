@@ -4,6 +4,7 @@
 import React from "react";
 import "@testing-library/jest-dom";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import ConfigSettings from "./ConfigSettings";
 import { fetchWithRetry } from "@/services/google-api";
@@ -51,6 +52,13 @@ const mockConfig = {
   bugReportsSpreadsheetId: "mock-bug-reports-id",
   bugReportsFolderId: "mock-bug-reports-folder",
 };
+
+vi.mock("@/context/AuctionContext", () => ({
+  useAuction: () => ({ isAuctionClosed: false }),
+}));
+
+// BugReportsAdmin has its own tests; it only needs to render here.
+vi.mock("./BugReportsAdmin", () => ({ default: () => <div>BugReportsAdmin</div> }));
 
 const mockSaveConfig = vi.fn().mockResolvedValue(undefined);
 const mockLoginToFirebase = vi.fn();
@@ -128,12 +136,13 @@ describe("ConfigSettings", () => {
     expect(screen.getByLabelText("Bug Reports Screenshots Folder ID")).toBeInTheDocument();
   });
 
-  it("has no Script ID boxes - the server uses its own SCRIPT_ID_* settings, so editing them here changed nothing", () => {
+  it("has no Script ID boxes or Apps Script section - the server uses its own SCRIPT_ID_* settings, so editing them here changed nothing", () => {
     render(<ConfigSettings />);
     fireEvent.click(screen.getByText("Auction Configuration"));
 
     expect(screen.queryByLabelText(/Script ID/)).not.toBeInTheDocument();
-    expect(screen.getByText(/They can't be changed here/)).toBeInTheDocument();
+    expect(screen.queryByText("Google Apps Script Workflows")).not.toBeInTheDocument();
+    expect(screen.queryByText(/They can't be changed here/)).not.toBeInTheDocument();
   });
 
   it("fields display current config values from useConfig", () => {
@@ -238,5 +247,24 @@ describe("ConfigSettings", () => {
       );
     });
     expect(toast.success).not.toHaveBeenCalledWith("Settings saved locally and synced to cloud");
+  });
+
+  it("splits the page into Settings / PayPal Integration / Google Apps Scripts / Bug Reports tabs, each showing only its own content", async () => {
+    const user = userEvent.setup();
+    render(<ConfigSettings />);
+
+    expect(screen.getByRole("heading", { name: "Configuration" })).toBeInTheDocument();
+    expect(screen.getByText("Ticket Pricing")).toBeInTheDocument();
+    expect(screen.queryByText("Apps Script Versions")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Google Apps Scripts" }));
+    expect(screen.getByText("Apps Script Versions")).toBeInTheDocument();
+    expect(screen.queryByText("Ticket Pricing")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Bug Reports" }));
+    expect(screen.getByText("BugReportsAdmin")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "PayPal Integration" }));
+    expect(screen.getByText("Save Configuration")).toBeInTheDocument();
   });
 });

@@ -28,49 +28,8 @@ If step 7 doesn't check out, cash/check checkouts will still work (the code fall
 
 ---
 
-## 2026-10-21 Code Audit Backlog
-
-Full read of `server/**` (~6K lines), `firestore.rules`, and the client auth/API layer (`src/services/google-api.ts`, `src/hooks/useApiAuthStatus.ts`, `src/context/ConfigContext.tsx`), measured against the docs under `docs/agents/`. Every item below was confirmed by direct read of the cited code unless marked **(plausible - not reproduced)**. At audit time the suite was green (505 backend / 646 frontend) and `tsc --noEmit` was clean - none of these are caught by the existing tests.
-
-Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
-
-### High - money path / data integrity
-
-Nothing outstanding - H1-H7 are all fixed (see `CHANGELOG.md`).
-
-### Medium - security hardening / operational
-
-Nothing outstanding - M1-M7 are all fixed (see `CHANGELOG.md`).
-
-### Low
-
-Nothing outstanding - L1-L9 are all fixed (see `CHANGELOG.md`).
-
-### Confirmed fine (don't "fix")
-
-- The Firebase web `apiKey` in `firebase-applet-config.json` is a public client identifier by design, not a leaked secret.
-- `firestore.rules` is tight: default-deny, `@orns.org` + `email_verified` gate, strict 17-key `Config` shape that matches `src/types.ts`'s `Config`.
-
----
-
-## 2026-10-22 Refactor Audit Backlog
-
-Whole-codebase read against `AGENTS.md` and every guide under `docs/agents/` (component-standards, patterns, performance, react-patterns, style_guide, tailwind-style-guide, testing-philosophy), at commit `b67bd17`. Each item was confirmed in the code. Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
-
-### Before the auction - unlocked writes
-
-Nothing outstanding - R1-R4 are fixed (see `CHANGELOG.md`).
-
-### After the auction - structure
-
-Nothing outstanding - R5-R11 are fixed (see `CHANGELOG.md`).
-
-### Small cleanups
-
-Nothing outstanding - R12-R20 are fixed (see `CHANGELOG.md`).
-
----
-
 ## Feature Milestones (Staging)
 
-Nothing outstanding.
+### Webhooks with Fluent Forms
+
+1. Look into implementing some kind of redundant feature to ensure that tickets don't get messed up.

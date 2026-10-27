@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { Loader2, LayoutDashboard, RefreshCw, Users, ShoppingBag, CreditCard, Handshake, WalletCards, Settings, LogOut, FileText, Ticket, Package, ClipboardList, PanelLeftClose, Menu, ArrowUp, AlertCircle, ExternalLink, Bug } from "lucide-react";
+import { Loader2, LayoutDashboard, RefreshCw, Users, ShoppingBag, CreditCard, Handshake, WalletCards, Settings, LogOut, FileText, Ticket, Package, ClipboardList, PanelLeftClose, Menu, ArrowUp, AlertCircle, ExternalLink, Archive } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import Dashboard from "./components/Dashboard";
@@ -29,25 +29,25 @@ import { postJson } from "@/services/apiClient";
 const ConfigSettings = lazy(() => import("./components/ConfigSettings"));
 const AuctionTicketsWorkflow = lazy(() => import("./components/AuctionTicketsWorkflow"));
 const AuctionItemsWorkflow = lazy(() => import("./components/AuctionItemsWorkflow"));
-const BugReportsAdmin = lazy(() => import("./components/BugReportsAdmin"));
+const ArchivedAuctionsWorkflow = lazy(() => import("./components/ArchivedAuctionsWorkflow"));
 
-type WorkflowType = 'tickets' | 'items' | 'bids' | 'settings' | 'bugReports';
+type WorkflowType = 'tickets' | 'items' | 'bids' | 'settings' | 'archive';
 
 const WORKFLOW_PATHS: Record<WorkflowType, string> = {
   items: "/AuctionItemsWorkflow",
   tickets: "/AuctionTicketsWorkflow",
   bids: "/BidManagement",
   settings: "/Configuration",
-  bugReports: "/BugReports"
+  archive: "/ArchivedAuctions"
 };
 
 const getWorkflowFromPath = (path: string): WorkflowType | null => {
   const cleanPath = path.toLowerCase();
+  if (cleanPath.includes("archive")) return "archive";
   if (cleanPath.includes("items")) return "items";
   if (cleanPath.includes("tickets")) return "tickets";
-  if (cleanPath.includes("bugreports")) return "bugReports";
   if (cleanPath.includes("bid")) return "bids";
-  if (cleanPath.includes("config") || cleanPath.includes("settings") || cleanPath.includes("configuration")) return "settings";
+  if (cleanPath.includes("config") || cleanPath.includes("bugreports") || cleanPath.includes("settings") || cleanPath.includes("configuration")) return "settings";
   return null;
 };
 
@@ -211,7 +211,7 @@ export default function App() {
              {activeWorkflow === 'tickets' && "Tickets"}
              {activeWorkflow === 'bids' && "Bids"}
              {activeWorkflow === 'settings' && "Config"}
-             {activeWorkflow === 'bugReports' && "Bugs"}
+             {activeWorkflow === 'archive' && "Archive"}
            </span>
            <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
              {isMobileMenuOpen ? <PanelLeftClose className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -289,13 +289,13 @@ export default function App() {
           {(isSidebarOpen || isMobileMenuOpen) && <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">System</p>}
 
           <Button
-            variant={activeWorkflow === 'bugReports' ? 'secondary' : 'ghost'}
+            variant={activeWorkflow === 'archive' ? 'secondary' : 'ghost'}
             className={cn("justify-start gap-3 h-10", (isSidebarOpen || isMobileMenuOpen) ? "w-full" : "w-10 px-0 justify-center")}
-            onClick={() => { setActiveWorkflow('bugReports'); setIsMobileMenuOpen(false); }}
-            title="Bug Reports"
+            onClick={() => { setActiveWorkflow('archive'); setIsMobileMenuOpen(false); }}
+            title="Archived Auctions"
           >
-            <Bug className="w-5 h-5 shrink-0" />
-            {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Bug Reports</span>}
+            <Archive className="w-5 h-5 shrink-0" />
+            {(isSidebarOpen || isMobileMenuOpen) && <span className="truncate">Archived Auctions</span>}
           </Button>
 
           <Button
@@ -325,7 +325,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <div className="p-4 md:p-10 max-w-7xl mx-auto w-full flex-1 min-w-0">
+        <div className="p-4 md:p-10 w-full flex-1 min-w-0">
           <SyncStatusBanner onSignIn={handleLogin} />
           <AnimatePresence mode="wait">
             <motion.div
@@ -340,7 +340,7 @@ export default function App() {
                 {activeWorkflow === 'items' && <AuctionItemsWorkflow />}
                 
                 {activeWorkflow === 'settings' && <ConfigSettings />}
-                {activeWorkflow === 'bugReports' && <BugReportsAdmin />}
+                {activeWorkflow === 'archive' && <ArchivedAuctionsWorkflow />}
 
                 {activeWorkflow === 'bids' && (
                 <div className="space-y-6">

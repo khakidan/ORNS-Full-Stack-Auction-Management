@@ -229,3 +229,19 @@ describe("setupRoutes - /api/auction/setup-new", () => {
     });
   });
 });
+describe("setupRoutes - POST /api/auction/archive", () => {
+  it("returns 401 when unauthenticated", async () => {
+    const response = await request(app).post("/api/auction/archive").send({});
+    expect(response.status).toBe(401);
+  });
+
+  it("rejects a missing year or a spreadsheet ID that isn't a plain Drive ID before touching Drive", async () => {
+    const noYear = await request(app).post("/api/auction/archive").set(authHeader)
+      .send({ ticketsSpreadsheetId: "a", itemEntrySpreadsheetId: "b", bidManagementSpreadsheetId: "c" });
+    expect(noYear.status).toBe(400);
+
+    const badId = await request(app).post("/api/auction/archive").set(authHeader)
+      .send({ year: 2026, ticketsSpreadsheetId: "a", itemEntrySpreadsheetId: "b' or '1'='1", bidManagementSpreadsheetId: "c" });
+    expect(badId.status).toBe(400);
+  });
+});

@@ -96,18 +96,6 @@ export default function AuctionConfigurationCard({ config, setConfig, isOpen, on
             </div>
           </div>
 
-          <div className="space-y-4 border rounded-lg p-4 bg-slate-50/50">
-            <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Google Apps Script Workflows</h3>
-            {/* No Script ID boxes: the server runs the three scripts by the
-                IDs in its own environment (SCRIPT_ID_*), never these. The
-                boxes used to be here and changed nothing. */}
-            <p className="text-sm text-muted-foreground">
-              The app runs the Item Entry, Tickets and Bid Management scripts using Script IDs set on the server
-              (the Cloud Run settings <code>SCRIPT_ID_ITEM_ENTRY</code>, <code>SCRIPT_ID_TICKETS</code> and{" "}
-              <code>SCRIPT_ID_BID_MANAGEMENT</code>). They can't be changed here.
-            </p>
-          </div>
-
           {/* Hidden Fields kept for state management */}
           <div className="hidden">
             <Input value={config.bidderNumbersSheet} onChange={(e) => setConfig({ ...config, bidderNumbersSheet: e.target.value })} />
