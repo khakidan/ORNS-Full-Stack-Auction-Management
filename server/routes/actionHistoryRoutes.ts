@@ -7,7 +7,7 @@ import { getActionHistorySpreadsheetId, setActionHistorySpreadsheetId } from '..
 import { createActionHistorySpreadsheet, findAction, listActions, markUndone } from '../services/actionHistoryService';
 import { COL } from '../services/actionHistoryRows';
 import { applyUndo, UndoRefusedError } from '../services/undoService';
-import { ACTION_HISTORY_KEY, noteChange } from '../utils/changeFeed';
+import { ACTION_HISTORY_KEY, announce, noteChange } from '../utils/changeFeed';
 import { logAction, ActionArea } from '../services/actionLog';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
@@ -194,6 +194,9 @@ export default function createActionHistoryRouter() {
           location: cell(COL.location),
           undoOf: actionId,
         });
+        // Everyone else's screen reloads the data (the change feed) and is
+        // told why, so a bidder suddenly back to "waiting" isn't a mystery.
+        announce(`${req.user!.email} undid an action: ${cell(COL.summary)}${cell(COL.who) ? ` (done by ${cell(COL.who)})` : ""}. It's back to how it was before.`, req.user!.email);
         return { status: 200 };
       });
 

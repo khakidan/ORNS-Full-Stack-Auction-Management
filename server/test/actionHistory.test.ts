@@ -7,6 +7,7 @@ import { app } from "../app";
 import { buildActionRow, parseActionRows, ACTION_HISTORY_HEADER } from "../services/actionHistoryRows";
 import { getActionHistorySpreadsheetId, setActionHistorySpreadsheetId } from "../services/actionHistoryStore";
 import { logAction } from "../services/actionLog";
+import { changesSince } from "../utils/changeFeed";
 
 const tokens = { access_token: "t", refresh_token: "r", expiry_date: Date.now() + 3600000 };
 const admin = authCookieHeader(tokens);
@@ -149,10 +150,18 @@ describe("/api/action-history", () => {
 
     it("puts the old value back, marks the action undone, and records the Undo", async () => {
       const writes = sheetsWith(logRows("", undoCells), true);
+      const version = changesSince(0).version;
 
       const res = await request(app).post("/api/action-history/act-1/undo").set(admin);
 
       expect(res.status).toBe(200);
+      // Every open screen showing Bid Management is told to reload it (live refresh).
+      expect(changesSince(version).changed).toContain("bm");
+      // ...and told why, with who undid what.
+      expect(changesSince(version).notices).toEqual([expect.objectContaining({
+        by: TEST_ADMIN_EMAIL,
+        message: `${TEST_ADMIN_EMAIL} undid an action: Checked in bidder 104 (done by kim@yahoo.com). It's back to how it was before.`,
+      })]);
       expect(writes[0]).toEqual({ range: "bm 'Bidder-Numbers'!E7", values: [[false]] });
       expect(writes[1].range).toBe(`${LOG_ID} 'Actions'!M2`);
       expect(String((writes[1].values as any)[0][0])).toMatch(new RegExp(`^Undone by ${TEST_ADMIN_EMAIL} at `));

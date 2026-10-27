@@ -6,6 +6,8 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **Everyone is told when an action is undone.** An Undo already made every open screen reload what it changed (live refresh); now each of those screens also shows a toast, for example "dan@orns.org undid an action: Checked in bidder 104 (done by sam@orns.org). It's back to how it was before.", so a bidder suddenly back to waiting isn't a mystery. The change feed carries notices (`announce` in `server/utils/changeFeed.ts`, returned by `GET /api/changes` as `notices`); `useChangeFeed` shows them, except on the screen of whoever did the Undo. Added a test that an Undo announces the changed spreadsheet. The firestore.rules comment now says GET/POST (no behavior change). Backend 804 -> 805, frontend 763 -> 764, total 1567 -> 1569.
+
 - **Every signed-in person sees the current auction; the Cloud Sync sign-in is gone.** A User (who can't open Settings) saw an empty Bid Management page: the browser read the shared Config straight from Firestore, and only after the separate Firebase "Cloud Sync" sign-in on the Settings page. Now only the server touches Firestore:
   - `server/services/configService.ts` reads `settings/global` (cached 30 seconds, replaced on save) and validates saves. `GET /api/config` gives every signed-in staff member the whole Config and a volunteer only the Bid Management fields (replaces `/api/config/runtime`); `POST /api/config` (Full Administrators) saves it, records the changed fields in Action History, and tells open screens through the change feed (`config`), which reload it.
   - `getPaypalIsSandbox` and the volunteer checks read through the same cache, so a save takes effect at once.

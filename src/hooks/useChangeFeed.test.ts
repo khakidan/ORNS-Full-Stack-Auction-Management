@@ -6,6 +6,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useChangeFeed } from "./useChangeFeed";
 
 vi.mock("@/services/google-api", () => ({ getBaseUrl: () => "" }));
+vi.mock("sonner", () => ({ toast: { info: vi.fn() } }));
+import { toast } from "sonner";
 
 const answer = (body: unknown) => ({ ok: true, json: async () => body }) as Response;
 
@@ -51,6 +53,20 @@ describe("useChangeFeed", () => {
     await act(async () => { await result.current(); });
 
     expect(onChange).toHaveBeenCalledWith(new Set(), true);
+  });
+
+  it("shows other people's notices (an Undo) as a toast, but not your own or ones from before the page loaded", async () => {
+    const undo = (by: string) => ({ version: 0, message: `${by} undid an action: Checked in bidder 104.`, by });
+    fetchMock
+      .mockResolvedValueOnce(answer({ version: 3, changed: [], notices: [undo("old@orns.org")], reset: false }))
+      .mockResolvedValueOnce(answer({ version: 5, changed: ["bm"], notices: [undo("dan@orns.org"), undo("sam@orns.org")], reset: false }));
+
+    const { result } = renderHook(() => useChangeFeed(true, vi.fn(), "sam@orns.org"));
+    await act(async () => {});
+    await act(async () => { await result.current(); });
+
+    expect(toast.info).toHaveBeenCalledTimes(1);
+    expect(toast.info).toHaveBeenCalledWith("dan@orns.org undid an action: Checked in bidder 104.", expect.anything());
   });
 
   it("does nothing while signed out", async () => {
