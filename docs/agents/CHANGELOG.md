@@ -31,6 +31,12 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Added
 
+- **Bid Entry checks the amount before recording it.** The biggest Bid Entry risk is a typing slip, so `src/lib/bidSanityChecks.ts` compares each winning bid with the item's own figures and asks "are you sure?" when it's below the opening bid (a dropped digit), above the opening bid by less than the minimum raise (a bid sheet can't end there; larger raises are fine), or more than 3 times the value (an extra digit). Items missing a figure skip that check.
+  - Quick Entry shows the item #, bidder # and amount large and side by side, with the item and bidder names and any warning, as you type. Enter on a flagged amount opens **Check the bid sheet** (Fix it, focused, or Record anyway).
+  - Batch Entry marks a flagged row "to check" (yellow), keeps it out of Record Ready Bids until **Looks right** is clicked, and asks again after any edit.
+  - Removed the camera bid-sheet scanning idea from ROADMAP.md: reading handwriting (Gemini) is possible, but checking its answer takes about as long as typing, its misreads are easier to miss than typos, and it would need a connection for every sheet.
+  - Frontend 764 -> 780, total 1569 -> 1585.
+
 - **Live refresh: every open screen picks up changes made elsewhere.** Undoing a volunteer's check-in from Action History left the bidder showing as checked in until a hard refresh, and other people's screens never updated at all.
   - The server keeps a running change count (`server/utils/changeFeed.ts`): every write already ends in `clearCacheForSpreadsheet`, which now records the spreadsheet, and Action History writes record `action-history`. In memory, which is correct because the service runs as one Cloud Run instance; a restart is reported as `reset`.
   - `GET /api/changes?since=N` answers from memory (no Google calls). Each browser asks every 5 seconds while its tab is visible, and when the tab comes back into view (`useChangeFeed.ts`, plain fetch so no sync banner).

@@ -1,15 +1,19 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AuctionItem, Bidder } from "@/types";
+import { bidWarnings } from "@/lib/bidSanityChecks";
 
 export interface BatchRow {
   key: string;
   itemId: string;
   bidderId: string;
   price: string;
+  /** "Looks right" was clicked for this row's price warnings; any edit clears it. */
+  confirmed?: boolean;
 }
 
-export type BatchRowStatus = "empty" | "ready" | "ready-repeat" | "duplicate" | "error";
+/** "check": the amount looks mistyped (bidSanityChecks.ts) and hasn't been confirmed. */
+export type BatchRowStatus = "empty" | "ready" | "ready-repeat" | "duplicate" | "check" | "error";
 
 interface UseBatchBidEntryStateArgs {
   items: AuctionItem[];
@@ -37,7 +41,7 @@ export function useBatchBidEntryState({ items, bidders, winners, recordWinningBi
 
   const updateRow = (key: string, field: keyof Omit<BatchRow, "key">, value: string) => {
     setRows(prev => {
-      const next = prev.map(r => (r.key === key ? { ...r, [field]: value } : r));
+      const next = prev.map(r => (r.key === key ? { ...r, [field]: value, confirmed: false } : r));
       // Auto-append a fresh trailing row once the last row has any input,
       // so the grid always has room to keep transcribing without an
       // explicit "Add Row" click for every single line.
@@ -58,6 +62,8 @@ export function useBatchBidEntryState({ items, bidders, winners, recordWinningBi
 
   const addRow = () => setRows(prev => [...prev, makeEmptyRow()]);
 
+  const confirmRow = (key: string) => setRows(prev => prev.map(r => (r.key === key ? { ...r, confirmed: true } : r)));
+
   const resolved = useMemo(() => {
     // Item IDs appearing more than once within the batch itself, for a
     // non-repeatable item - two paper slips for the same lot turned in
@@ -75,6 +81,7 @@ export function useBatchBidEntryState({ items, bidders, winners, recordWinningBi
       const bidder = row.bidderId.trim() ? bidders.find(b => b.id === row.bidderId) : undefined;
 
       let status: BatchRowStatus = "empty";
+      const warnings = item && row.price.trim() ? bidWarnings(item, parseFloat(row.price)) : [];
       if (hasAnyInput) {
         const isRepeatable = !!item?.allowMultipleWinners;
         const existingWinner = item ? winners[item.id] : undefined;
@@ -84,6 +91,8 @@ export function useBatchBidEntryState({ items, bidders, winners, recordWinningBi
           status = "error";
         } else if (!isRepeatable && (existingWinner || duplicateWithinBatch)) {
           status = "duplicate";
+        } else if (warnings.length > 0 && !row.confirmed) {
+          status = "check";
         } else if (isRepeatable) {
           status = "ready-repeat";
         } else {
@@ -91,7 +100,7 @@ export function useBatchBidEntryState({ items, bidders, winners, recordWinningBi
         }
       }
 
-      return { row, item, bidder, status, hasAnyInput };
+      return { row, item, bidder, status, hasAnyInput, warnings };
     });
   }, [rows, items, bidders, winners]);
 
@@ -133,6 +142,7 @@ export function useBatchBidEntryState({ items, bidders, winners, recordWinningBi
     updateRow,
     removeRow,
     addRow,
+    confirmRow,
     submitReady,
   };
 }

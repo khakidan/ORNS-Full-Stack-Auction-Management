@@ -30,7 +30,10 @@ This application is designed to streamline the operation of live and online char
 2. Identify the **Item #** being sold.
 3. Enter the **Paddle Number** of the winning bidder.
 4. Enter the final **Price**.
-5. Submit the bid to record it against the spreadsheet.
+5. Compare the large summary (item #, bidder #, amount, with the item and bidder names) with the bid sheet.
+6. Submit the bid to record it against the spreadsheet.
+
+The app asks **Check the bid sheet** before recording an amount that looks mistyped: below the item's opening bid, above the opening bid by less than the minimum raise, or more than 3 times the item's value. Choose **Fix it** to correct the amount, or **Record anyway** if the sheet really says that. In Batch Entry, such a row is marked "to check" and isn't recorded until you click **Looks right** on it.
 
 ### 3. Checking Out a Bidder
 1. Go to the **Checkout** page.
