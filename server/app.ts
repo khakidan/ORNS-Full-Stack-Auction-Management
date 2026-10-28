@@ -1,5 +1,6 @@
 import express from "express";
 import cookieSession from "cookie-session";
+import { sealSessionTokens } from './utils/sealedSessionTokens';
 
 // Routers
 import healthRouter from './routes/health';
@@ -100,6 +101,8 @@ app.use(
     maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
   })
 );
+// The Google tokens in the cookie are encrypted, not just signed (ROADMAP B6).
+app.use(sealSessionTokens);
 
 // Setup Base Routes (Mounting everything cleanly)
 app.use("/api/health", healthRouter);

@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { sealTokens } from "../../utils/sealedSessionTokens";
 
 /**
  * Builds the Cookie header a real login leaves in the browser: an
@@ -11,7 +12,10 @@ import crypto from "crypto";
  * signature (HMAC-SHA1 over "name=value", base64url without padding).
  */
 export function sessionCookie(session: Record<string, unknown>): string {
-  const value = Buffer.from(JSON.stringify(session)).toString("base64");
+  // The app keeps the Google tokens encrypted in `sealedTokens` (sealedSessionTokens.ts).
+  const { tokens, ...rest } = session;
+  const stored = tokens === undefined ? rest : { ...rest, sealedTokens: sealTokens(tokens) };
+  const value = Buffer.from(JSON.stringify(stored)).toString("base64");
   const sig = crypto
     .createHmac("sha1", process.env.SESSION_SECRET as string)
     .update(`orns_session=${value}`)

@@ -4,6 +4,8 @@ import { getOAuthClient } from "./oauth";
 import { getAdminFirestore } from "./firebaseAdmin";
 import { PayPalService, isPaidInvoiceStatus } from "./paypalService";
 import { withLock } from "../utils/asyncLock";
+import { clearCacheForSpreadsheet } from "../utils/sheetCache";
+import { logSystemAction } from "./actionLog";
 import { BIDDER_COL } from "../utils/sheetColumns";
 
 /**
@@ -236,12 +238,42 @@ async function runPaypalSweepInner(): Promise<PaypalSweepOutcome> {
       );
       if (outcome === "resolved") resolved++;
       if (outcome === "escalated") escalated++;
+      if (outcome === "resolved" || outcome === "escalated") await logSweepResult(sheets, outcome, snapshotRow, invoiceId, liveStatus);
     } catch (rowErr: any) {
       console.error(`[PayPalSweeper] Row ${rowNumber} failed: ${rowErr.message || rowErr}`);
     }
   }
 
+  // Every server write ends with this: the sheet cache would otherwise keep
+  // showing these bidders unpaid, and open screens wouldn't reload
+  // (AGENTS.md rule 7, ROADMAP B5). A pending row may also have had its
+  // timestamp seeded, so any pending row counts.
+  if (pending > 0) clearCacheForSpreadsheet(spreadsheetId);
+
   return { pending, resolved, escalated };
+}
+
+/** Records a confirmed payment or an escalation in Action History, as the sweeper. */
+async function logSweepResult(sheets: ReturnType<typeof google.sheets>, outcome: "resolved" | "escalated", row: any[], invoiceId: string, liveStatus: string): Promise<void> {
+  const bidderId = String(row[BIDDER_COL.id] ?? "");
+  const name = `${row[BIDDER_COL.firstName] ?? ""} ${row[BIDDER_COL.lastName] ?? ""}`.trim() || `bidder ${bidderId}`;
+  await logSystemAction(sheets, "PayPal sweeper", outcome === "resolved"
+    ? {
+      area: "Bid Management",
+      action: "PayPal payment confirmed",
+      target: `Bidder ${bidderId}`,
+      summary: `PayPal confirmed ${name}'s invoice ${invoiceId} as paid; marked checked out and paid`,
+      after: { paid: true, paymentMethod: "Credit Card / PayPal" },
+      notUndoableReason: "the payment was confirmed by PayPal",
+    }
+    : {
+      area: "Bid Management",
+      action: "PayPal payment not confirmed",
+      target: `Bidder ${bidderId}`,
+      summary: `PayPal still said '${liveStatus}' for ${name}'s invoice ${invoiceId} after 10 minutes; moved to ${PAYPAL_FOLLOW_UP_SHEET} for follow-up`,
+      after: { paid: false, paymentMethod: "Failed Verification - Follow Up Required" },
+      notUndoableReason: "follow it up in the PayPal-Follow-Up tab",
+    });
 }
 
 

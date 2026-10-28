@@ -99,7 +99,7 @@ describe("ensureBidderNumbersSheet", () => {
  * so the function can be restructured without changing what it writes.
  */
 describe("performSheetSync - full rebuild", () => {
-  function fakeSheets(opts: { walkIn?: boolean } = {}) {
+  function fakeSheets(opts: { walkIn?: boolean; state?: string } = {}) {
     const calls: { op: string; args: any }[] = [];
     let tabs = [
       { properties: { title: "Bid-Management", sheetId: 1 } },
@@ -107,6 +107,7 @@ describe("performSheetSync - full rebuild", () => {
       { properties: { title: "_Settings", sheetId: 3 } },
     ];
     const ranges: Record<string, any[][]> = {
+      "'Auction-Status'!A2": [[opts.state ?? "Prep"]],
       "_Settings!A:C": [["Setting Key", "Value"], ["auctionTicketSheetsID", "tickets-id"], ["ticketPrice", "40"]],
       "'tickets'!A:T": [["First"], ["Pat", "Lee", "pat@x.org", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", opts.walkIn ? "Auction Checkout" : ""]],
       "'tickets'!A:S": [["First"], ["Pat", "Lee", "pat@x.org", "2", "yes", "", "", "Sam", "Lee", "sam@x.org", "yes"]],
@@ -158,6 +159,45 @@ describe("performSheetSync - full rebuild", () => {
     await expect(performSheetSync(sheets, "bm-id")).resolves.toEqual({ success: true });
 
     expect(calls).toMatchSnapshot();
+  });
+
+  it.each(["Live", "Closed"])("refuses to rebuild (renumbering every bidder) once the auction is %s, before changing anything (ROADMAP B3)", async (state) => {
+    const { sheets, calls } = fakeSheets({ state });
+    await expect(performSheetSync(sheets, "bm-id")).rejects.toThrow(/Cannot re-sync: the auction is/);
+    expect(calls.filter((c) => c.op !== "get")).toEqual([]);
+  });
+
+  it("waits for the Bidder-Numbers lock, so a check-in in progress isn't overwritten by the rebuild (ROADMAP B3)", async () => {
+    const { withLock } = await import("../utils/asyncLock");
+    const { sheets, calls } = fakeSheets();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    let release!: () => void;
+    const held = withLock("bidder-numbers:bm-id", () => new Promise<void>((r) => { release = r; }));
+
+    const sync = performSheetSync(sheets, "bm-id");
+    await vi.advanceTimersByTimeAsync(10);
+    expect(calls).toEqual([]);
+
+    release();
+    await held;
+    await expect(sync).resolves.toEqual({ success: true });
+    expect(calls.length).toBeGreaterThan(0);
+  });
+
+  it("builds Bidder-Numbers for labels under the same lock (two label prints can't both write it)", async () => {
+    const { withLock } = await import("../utils/asyncLock");
+    const { sheets, calls } = fakeSheets();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    let release!: () => void;
+    const held = withLock("bidder-numbers:bm-id", () => new Promise<void>((r) => { release = r; }));
+
+    const build = ensureBidderNumbersSheet(sheets, "bm-id", "tickets-id");
+    await vi.advanceTimersByTimeAsync(10);
+    expect(calls).toEqual([]);
+
+    release();
+    await held;
+    await expect(build).resolves.toMatchObject({ created: true });
   });
 
   it("refuses to rebuild once a walk-in is registered, before changing anything", async () => {

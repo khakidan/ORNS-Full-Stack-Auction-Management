@@ -141,6 +141,24 @@ describe("runPaypalSweep - resolving/escalating pending rows", () => {
     expect(lUpdate?.values).toEqual([[""]]);
   });
 
+  it("tells open screens and the sheet cache, and records the payment in Action History (ROADMAP B5)", async () => {
+    const { changesSince } = await import("../utils/changeFeed");
+    const { logSystemAction } = await import("../services/actionLog");
+    mockBidderNumbers([pendingRow()]);
+    mockExtractInvoiceIdFromUrl.mockReturnValue("INV2-X");
+    mockGetInvoiceStatus.mockResolvedValue("PAID");
+    const version = changesSince(0).version;
+
+    await runPaypalSweep();
+
+    expect(changesSince(version).changed.length).toBeGreaterThan(0);
+    expect(logSystemAction).toHaveBeenCalledWith(expect.anything(), "PayPal sweeper", expect.objectContaining({
+      action: "PayPal payment confirmed",
+      target: expect.stringMatching(/^Bidder /),
+      summary: expect.stringContaining("INV2-X"),
+    }));
+  });
+
   it("also resolves a MARKED_AS_PAID row", async () => {
     mockBidderNumbers([pendingRow()]);
     mockExtractInvoiceIdFromUrl.mockReturnValue("INV2-X");
@@ -175,6 +193,8 @@ describe("runPaypalSweep - resolving/escalating pending rows", () => {
     const result = await runPaypalSweep();
 
     expect(result).toEqual({ pending: 1, resolved: 0, escalated: 1 });
+    const { logSystemAction } = await import("../services/actionLog");
+    expect(logSystemAction).toHaveBeenCalledWith(expect.anything(), "PayPal sweeper", expect.objectContaining({ action: "PayPal payment not confirmed" }));
     // Real-bug regression guard: this must land on the sweeper's own
     // "PayPal-Follow-Up" sheet, never the client-facing "Follow-Up" sheet
     // (auctionService.ts's recordWinningBidLocked / Dashboard's
@@ -241,6 +261,18 @@ describe("runPaypalSweep - resolving/escalating pending rows", () => {
     // Evaluated bottom-up: row 2 (bidder 102) resolves; row 1 (bidder 101)
     // throws and is skipped, but doesn't abort row 2's own processing.
     expect(result).toEqual({ pending: 2, resolved: 1, escalated: 0 });
+  });
+
+  it("leaves the cache and change feed alone, and logs nothing, when nothing was pending", async () => {
+    const { changesSince } = await import("../utils/changeFeed");
+    const { logSystemAction } = await import("../services/actionLog");
+    mockBidderNumbers([pendingRow({ 8: "Cash" })]);
+    const version = changesSince(0).version;
+
+    await runPaypalSweep();
+
+    expect(changesSince(version).changed).toEqual([]);
+    expect(logSystemAction).not.toHaveBeenCalled();
   });
 
   it("ignores rows whose method label isn't the pending marker", async () => {

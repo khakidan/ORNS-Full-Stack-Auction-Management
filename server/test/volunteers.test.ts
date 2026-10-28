@@ -152,6 +152,40 @@ describe("what a signed-in volunteer can do", () => {
     expect(sheetReads).toContain("bm 'Bidder-Numbers'!A:L as Bearer mock-access-token");
   });
 
+  it.each([
+    ["the Tickets spreadsheet (attendee contact and payment details)", "tk", "'tickets'!A:Z"],
+    ["a Bid Management tab their screens don't use", "bm", "_Settings!A:C"],
+    ["a range with no tab name", "bm", "A1:Z9"],
+  ])("can't read %s (ROADMAP B4)", async (_label, id, range) => {
+    const res = await request(app).get(`/api/sheets/${id}/${encodeURIComponent(range)}`).set(volunteerSession());
+    expect(res.status).toBe(403);
+  });
+
+  it.each([["bm", "Bid-Management!A:ZZ"], ["bm", "'Auction-Status'!A2"], ["it", "Auction-Items!A:Z"]])("can read %s %s, which Bid Management shows", async (id, range) => {
+    const res = await request(app).get(`/api/sheets/${id}/${encodeURIComponent(range)}`).set(volunteerSession());
+    expect(res.status).toBe(200);
+  });
+
+  it("gets the ticket list with only the badge fields - no email, phone or payment details (ROADMAP B4)", async () => {
+    server.use(http.get(`${SHEETS}/:id/values/:range`, ({ params }) => {
+      const range = decodeURIComponent(String(params.range));
+      if (params.id === "tk" && range.startsWith("'tickets'")) {
+        const row = Array(22).fill("");
+        Object.assign(row, { 0: "Pat", 1: "Lee", 2: "pat@example.com", 3: "555-0100", 4: "2", 19: "PayPal", 20: "Paid", 21: "$70" });
+        return HttpResponse.json({ values: [["First"], row] });
+      }
+      if (String(params.range).includes("Auction-Status")) return HttpResponse.json({ values: [["Live"]] });
+      return HttpResponse.json({ values: [] });
+    }));
+
+    const res = await request(app).get("/api/attendees/badges").set(volunteerSession());
+
+    expect(res.status).toBe(200);
+    expect(res.body.attendees).toEqual([expect.objectContaining({ sheet: "tickets", rowIndex: 2, firstName: "Pat", lastName: "Lee", paymentStatus: "Paid" })]);
+    const text = JSON.stringify(res.body);
+    for (const secret of ["pat@example.com", "555-0100", "PayPal", "$70"]) expect(text).not.toContain(secret);
+  });
+
   it("can ask what changed, so their screen refreshes live like staff's", async () => {
     const res = await request(app).get("/api/changes?since=0").set(volunteerSession());
     expect(res.status).toBe(200);

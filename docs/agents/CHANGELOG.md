@@ -6,6 +6,14 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **Audit items B2-B6.**
+  - **B2 - Emailing one receipt can't send it twice.** The checkout email button sends an idempotency key; `POST /api/receipts/email-only` runs under `withIdempotency` and `runIfIdle` per bidder (a double-click gets 409), and refuses a missing `bidderId`.
+  - **B3 - Set Up and the bidder-label build hold the Bidder-Numbers lock.** `performSheetSync` and `ensureBidderNumbersSheet` (`syncService.ts`) run under `withLock('bidder-numbers:...')`; Set Up is refused unless the auction is in Prep, runs under `runIfIdle`, and is sent once (`postJsonOnce`).
+  - **B4 - Volunteers no longer see attendees' contact or payment details.** Their sheet reads are limited to the Bid Management and Items tabs those screens use (`volunteerAccess.ts`), nothing from the Tickets spreadsheet; their Bidders badges come from the new `GET /api/attendees/badges` (names, ticket and paid status only), which `useAttendeesData` uses for volunteers.
+  - **B5 - The PayPal sweeper refreshes open screens and records what it did.** A sweep with pending rows ends with `clearCacheForSpreadsheet` (so the change feed tells open browsers); each confirmed payment or timeout is written to Action History as "PayPal sweeper" through the new `logSystemAction` (`actionLog.ts`).
+  - **B6 - The Google tokens in the sign-in cookie are encrypted.** `orns_session` keeps them in `sealedTokens` (AES-256-GCM, key derived from `SESSION_SECRET`, `server/utils/sealedSessionTokens.ts`); `req.session.tokens` still reads and writes them. A cookie from before this change has plaintext `tokens`, which are ignored - **everyone signs in once more after this deploys**. Sign Out does not revoke the Google token, as the roadmap item suggested: revoking ends the app's whole grant for that person (every device), and the PayPal sweeper and admin notification emails reuse the most recent staff sign-in's token.
+  - Backend 850 -> 873, frontend 807 -> 808, total 1657 -> 1681.
+
 - **Receipts go to this year's folder after Setup New Auction Year (ROADMAP B1).** Node ran the receipt scripts with no folder, so the Bid Management Apps Script used `receiptFolderID` from the spreadsheet's `_Settings` tab, which Setup New Auction Year never updated - receipts kept going to last year's Bidder Receipts folder until someone clicked Save Configuration. Now:
   - Every receipt run passes the Config's `receiptFolderId` (`fromConfig`'s `RECEIPT_FIELDS`; `createIndividualReceipt` / `createAllReceipts` in `receiptService.ts`). The script already honored a folder argument (`_applyFolderOverride_`), so no Apps Script redeploy is needed.
   - Setup New Auction Year also writes the new receipt and print folders into `_Settings` (`upsertSetting`), and says to click Save Configuration if that fails.

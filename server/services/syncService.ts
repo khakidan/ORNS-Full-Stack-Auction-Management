@@ -1,4 +1,6 @@
 import { sheets_v4 } from "googleapis";
+import { withLock } from "../utils/asyncLock";
+import { parseAuctionState } from "../utils/auctionState";
 import { BIDDER_NUMBERS_HEADERS } from "../utils/bidderNumbersHeaders";
 import { BIDDER_COL, TICKETS_COL, WALK_IN_PAYMENT_METHOD } from "../utils/sheetColumns";
 import { SheetRows, bidderEmail, bidderName, collectTicketPeople } from "./ticketPeople";
@@ -123,6 +125,12 @@ async function writeBidderNumbersSheet(sheets: sheets_v4.Sheets, spreadsheetId: 
  * numbering algorithm, not a second copy that could drift from it.
  */
 export async function ensureBidderNumbersSheet(sheets: sheets_v4.Sheets, spreadsheetId: string, auctionTicketSheetsID: string): Promise<{ created: boolean; count: number }> {
+  // Under the Bidder-Numbers lock (patterns.md): two label prints at once
+  // would otherwise both see it empty and both write it (ROADMAP B3).
+  return withLock(`bidder-numbers:${spreadsheetId}`, () => ensureBidderNumbersSheetLocked(sheets, spreadsheetId, auctionTicketSheetsID));
+}
+
+async function ensureBidderNumbersSheetLocked(sheets: sheets_v4.Sheets, spreadsheetId: string, auctionTicketSheetsID: string): Promise<{ created: boolean; count: number }> {
 
   if (!auctionTicketSheetsID) {
     throw new Error("Missing the Auction Tickets spreadsheet ID - configure it in Settings before creating bidder labels.");
@@ -317,6 +325,25 @@ export async function isBidManagementSetUp(sheets: sheets_v4.Sheets, spreadsheet
  * spreadsheet. Refused once walk-ins exist (assertNoWalkInsRegistered).
  */
 export async function performSheetSync(sheets: sheets_v4.Sheets, spreadsheetId: string, customAuctionTicketSheetsID?: string) {
+  // Under the Bidder-Numbers lock, so a check-in or walk-in landing during
+  // the rebuild can't be overwritten by it (ROADMAP B3).
+  return withLock(`bidder-numbers:${spreadsheetId}`, () => performSheetSyncLocked(sheets, spreadsheetId, customAuctionTicketSheetsID));
+}
+
+/** The auction's state; a spreadsheet with no Auction-Status tab yet is in Prep. */
+async function readAuctionState(sheets: sheets_v4.Sheets, spreadsheetId: string) {
+  const res = await sheets.spreadsheets.values
+    .get({ spreadsheetId, range: "'Auction-Status'!A2", valueRenderOption: "UNFORMATTED_VALUE" })
+    .catch(() => null);
+  return parseAuctionState(res?.data.values?.[0]?.[0]);
+}
+
+async function performSheetSyncLocked(sheets: sheets_v4.Sheets, spreadsheetId: string, customAuctionTicketSheetsID?: string) {
+  // Rebuilding renumbers every bidder - only before the auction starts.
+  const state = await readAuctionState(sheets, spreadsheetId);
+  if (state !== "prep") {
+    throw new Error(`Cannot re-sync: the auction is ${state === "live" ? "Live" : "Closed"}. Set Up only runs while the auction is in Prep.`);
+  }
   const settings = await readSettings(sheets, spreadsheetId);
   const auctionTicketSheetsID = customAuctionTicketSheetsID || settings["auctionTicketSheetsID"];
   if (!auctionTicketSheetsID) {

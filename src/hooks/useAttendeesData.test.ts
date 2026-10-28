@@ -34,6 +34,9 @@ import { Attendee } from "@/types";
 vi.mock("@/services/google-api", () => ({
   getSheetData: vi.fn(),
   appendAttendeeRow: vi.fn(),
+  fetchWithRetry: vi.fn(),
+  getBaseUrl: () => "",
+  errorTextFrom: (data: any, fallback: string) => data?.error || fallback,
 }));
 
 vi.mock("@/services/apiClient", () => ({ postJson: vi.fn() }));
@@ -45,7 +48,7 @@ vi.mock("sonner", () => ({
   },
 }));
 
-import { getSheetData, appendAttendeeRow } from "@/services/google-api";
+import { getSheetData, appendAttendeeRow, fetchWithRetry } from "@/services/google-api";
 import { postJson } from "@/services/apiClient";
 import { toast } from "sonner";
 
@@ -402,5 +405,20 @@ describe("useAttendeesData.removeAttendee", () => {
 
     // B must be restored, but A must stay removed - not both restored.
     expect(result.current.attendees).toEqual([attendeeB]);
+  });
+});
+
+describe("useAttendeesData - volunteers (badgesOnly, ROADMAP B4)", () => {
+  it("loads the badge-only ticket list from the server and never reads the ticket spreadsheet", async () => {
+    vi.mocked(getSheetData).mockClear();
+    const badge = makeAttendee({ email: "", phone: "", paymentMethod: "", totalPaid: "", ticketsPurchased: "" });
+    vi.mocked(fetchWithRetry).mockResolvedValue({ ok: true, json: async () => ({ attendees: [badge] }) } as Response);
+    const { result } = renderHook(() => useAttendeesData("ss-id", true));
+
+    await act(() => result.current.fetchAttendees());
+
+    expect(fetchWithRetry).toHaveBeenCalledWith("/api/attendees/badges", expect.anything());
+    expect(getSheetData).not.toHaveBeenCalled();
+    expect(result.current.attendees).toEqual([badge]);
   });
 });

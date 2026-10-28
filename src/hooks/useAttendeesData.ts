@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { appendAttendeeRow, getSheetData } from "@/services/google-api";
+import { appendAttendeeRow, errorTextFrom, fetchWithRetry, getBaseUrl, getSheetData } from "@/services/google-api";
 import { postJson } from "@/services/apiClient";
 import { parseAttendeeRows } from "@/lib/attendeeParsing";
 import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
@@ -8,7 +8,13 @@ import { Attendee } from "@/types";
 
 const ATTENDEE_SHEETS = ["tickets", "staff tickets", "sponsor tickets"];
 
-export function useAttendeesData(ticketsSpreadsheetId: string) {
+/**
+ * The Attendee List. `badgesOnly` (volunteers): only what the Bidders tab's
+ * badges and checkout need - names, ticket and paid status, no contact or
+ * payment details - from /api/attendees/badges, since volunteers can't read
+ * the Tickets spreadsheet (ROADMAP B4).
+ */
+export function useAttendeesData(ticketsSpreadsheetId: string, badgesOnly = false) {
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -17,6 +23,14 @@ export function useAttendeesData(ticketsSpreadsheetId: string) {
     if (!ticketsSpreadsheetId) return;
     if (!options?.silent) setLoading(true);
     try {
+      if (badgesOnly) {
+        const res = await fetchWithRetry(`${getBaseUrl()}/api/attendees/badges`, { credentials: "include" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(errorTextFrom(data, "Couldn't load the ticket list"));
+        setAttendees(data.attendees || []);
+        return;
+      }
+
       let allAttendees: Attendee[] = [];
 
       for (const sheetName of ATTENDEE_SHEETS) {
@@ -36,7 +50,7 @@ export function useAttendeesData(ticketsSpreadsheetId: string) {
     } finally {
       setLoading(false);
     }
-  }, [ticketsSpreadsheetId]);
+  }, [ticketsSpreadsheetId, badgesOnly]);
 
   const addAttendee = async (sheetName: string, rowData: string[]) => {
     if (!ticketsSpreadsheetId) return;

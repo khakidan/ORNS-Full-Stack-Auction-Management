@@ -23,12 +23,15 @@ export function useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, f
   const handleEmailReceipt = async (winner: WinnerRecord) => {
     setProcessingId(`${winner.bidderId}-email`);
     try {
+      // One key per click, reused by postJson's retries, so a resend after
+      // a dropped connection can't email the bidder twice (ROADMAP B2).
       await postJson("/api/receipts/email-only", {
         bidderId: winner.bidderId,
         spreadsheetId,
         itemsSpreadsheetId,
         bidderNumbersSheet,
-        bidManagementSheet
+        bidManagementSheet,
+        idempotencyKey: window.crypto.randomUUID()
       }, "Failed to send email");
       toast.success(`Receipt emailed to ${winner.name}`);
     } catch (error: any) {

@@ -7,6 +7,9 @@ import { IDEMPOTENT_POST_RETRY } from '../utils/googleRetry';
 import { logAction } from '../services/actionLog';
 import { syncBiddersFromTickets } from '../services/bidderTicketSync';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
+import { getSharedConfig } from '../services/configService';
+import { parseAttendeeRows } from '../../src/lib/attendeeParsing';
+import { Attendee } from '../../src/types';
 
 /** The Auction Tickets spreadsheet's attendee tabs. */
 export const TICKET_SHEETS = ["tickets", "staff tickets", "sponsor tickets"];
@@ -37,8 +40,48 @@ function parseTicketRange(range: unknown): { sheet: string; cells: string; row: 
  * proxy (which refuses the ticket tabs), so each one is recorded in Action
  * History with what it replaced, and deleting checks its permission.
  */
+/**
+ * What a volunteer's Bid Management screens need from a ticket: which
+ * ticket it is, the names (to match bidders and guests) and whether it's
+ * paid - for the Bidders tab's Staff/Paid badges and checkout's ticket
+ * link. No email, phone, payment method or amount (ROADMAP B4).
+ */
+export function badgeFields(a: Attendee): Attendee {
+  return {
+    ...a,
+    email: "",
+    phone: "",
+    ticketsPurchased: "",
+    paymentMethod: "",
+    totalPaid: "",
+    guestsInfo: a.guestsInfo.map((g) => ({ ...g, email: "" })),
+  };
+}
+
 export default function createAttendeeRouter() {
   const router = Router();
+
+  /**
+   * The ticket list with only the badge fields, for volunteers (who can't
+   * read the ticket spreadsheet itself - volunteerAccess.ts). Always this
+   * year's Tickets spreadsheet, from the Config.
+   */
+  router.get("/attendees/badges", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const spreadsheetId = (await getSharedConfig()).auctionTicketsSpreadsheetId;
+      if (!spreadsheetId) return res.json({ attendees: [] });
+      const sheets = sheetsFor(req);
+      const attendees: Attendee[] = [];
+      for (const sheet of TICKET_SHEETS) {
+        const data = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${sheet}'!A:Z` }).catch(() => null);
+        const values = (data?.data.values || []) as string[][];
+        if (values.length > 1) attendees.push(...parseAttendeeRows(sheet, values).map(badgeFields));
+      }
+      res.json({ attendees });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   /**
    * Appends an attendee row. The browser resends after a 5xx or a dropped

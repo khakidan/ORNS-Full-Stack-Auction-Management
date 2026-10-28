@@ -48,10 +48,12 @@ vi.mock('../services/idempotencyStore', () => {
 // vi.importActual.
 vi.mock('../services/actionLog', () => ({
   logAction: vi.fn(async () => {}),
+  logSystemAction: vi.fn(async () => {}),
 }))
 afterEach(async () => {
-  const { logAction } = await import('../services/actionLog')
+  const { logAction, logSystemAction } = await import('../services/actionLog')
   vi.mocked(logAction).mockClear()
+  vi.mocked(logSystemAction).mockClear()
 })
 
 // Bidders follow their tickets (bidderTicketSync.ts): many routes run the

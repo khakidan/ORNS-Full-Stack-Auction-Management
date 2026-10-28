@@ -139,20 +139,34 @@ export default function createReceiptsRouter() {
     }
   });
 
+  /**
+   * Emails one bidder their receipt. The browser resends after a dropped
+   * connection, so the request's `idempotencyKey` makes a resend return the
+   * first result, and one email per bidder runs at a time (a double-click
+   * gets 409) - either would otherwise email the bidder twice (ROADMAP B2).
+   */
   router.post("/email-only", fromConfig(RECEIPT_FIELDS), async (req, res, next) => {
-    const { bidderId, spreadsheetId, itemsSpreadsheetId } = req.body;
+    const { bidderId, spreadsheetId, itemsSpreadsheetId, idempotencyKey } = req.body;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
+    if (typeof bidderId !== "string" && typeof bidderId !== "number") return res.status(400).json({ error: "bidderId required" });
+    if (String(bidderId).trim() === "") return res.status(400).json({ error: "bidderId required" });
 
     try {
-      const client = googleAuthFor(req);
-      const paypal = new PayPalService({ isSandbox: await getPaypalIsSandbox() });
-      const result = await processEmail(client, spreadsheetId, String(bidderId), itemsSpreadsheetId, paypal, sheetNamesFromBody(req.body));
+      const outcome = await withIdempotency("receipts/email-only", idempotencyKey, () =>
+        runIfIdle(`receipt-email:${spreadsheetId}:${bidderId}`, async () => {
+          const client = googleAuthFor(req);
+          const paypal = new PayPalService({ isSandbox: await getPaypalIsSandbox() });
+          const result = await processEmail(client, spreadsheetId, String(bidderId), itemsSpreadsheetId, paypal, sheetNamesFromBody(req.body));
+          if (result.success === false) return { error: result.error as string };
 
-      if (result.success === false) return res.status(400).json({ error: result.error });
-
-      await logAction(req, { area: "Bid Management", action: "Email receipt", target: `Bidder ${bidderId}`, summary: `Emailed bidder ${bidderId}'s receipt`, notUndoableReason: "receipts and emails have already gone out" });
-      res.json({ success: true, result });
+          await logAction(req, { area: "Bid Management", action: "Email receipt", target: `Bidder ${bidderId}`, summary: `Emailed bidder ${bidderId}'s receipt`, notUndoableReason: "receipts and emails have already gone out" });
+          return { success: true, result };
+        })
+      );
+      if ("error" in outcome.result) return res.status(400).json({ error: outcome.result.error });
+      res.json(idempotentBody(outcome));
     } catch (error) {
+      if (error instanceof AlreadyRunningError) return res.status(409).json({ error: "This bidder's receipt is already being emailed." });
       next(error);
     }
   });

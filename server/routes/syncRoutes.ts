@@ -3,6 +3,7 @@ import { logAction } from '../services/actionLog';
 import { requirePermission } from '../middleware/requirePermission';
 import { sheetsFor, respondIfNotFound } from '../utils/googleClients';
 import { performSheetSync, isBidManagementSetUp } from '../services/syncService';
+import { AlreadyRunningError, runIfIdle } from '../utils/asyncLock';
 
 /** Builds Bidder-Numbers / Bid-Management from the ticket sheets (syncService.ts). */
 export default function createSyncRouter() {
@@ -15,7 +16,8 @@ export default function createSyncRouter() {
     }
 
     try {
-      const result = await performSheetSync(sheetsFor(req), spreadsheetId, auctionTicketSheetsID);
+      // One Set Up at a time: a double-click would otherwise rebuild twice.
+      const result = await runIfIdle(`bidders-sync:${spreadsheetId}`, () => performSheetSync(sheetsFor(req), spreadsheetId, auctionTicketSheetsID));
       await logAction(req, {
         area: "Bid Management",
         action: "Set Up Bid Management App",
@@ -24,6 +26,7 @@ export default function createSyncRouter() {
       });
       res.json({ success: true, result });
     } catch (error: any) {
+      if (error instanceof AlreadyRunningError) return res.status(409).json({ error: "Set Up is already running. Wait for it to finish." });
       console.error(`[Sync Route Error] Native synchronization flow failed:`, error);
       // Surface expected, actionable failures (missing settings, the
       // already-registered-walk-in guard) with their real message intact -

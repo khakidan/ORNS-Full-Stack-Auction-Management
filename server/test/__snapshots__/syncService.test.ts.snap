@@ -3,6 +3,10 @@
 exports[`performSheetSync - full rebuild > archives the old tabs, then writes Bidder-Numbers and the Bid-Management grid 1`] = `
 [
   {
+    "args": "bm-id 'Auction-Status'!A2",
+    "op": "get",
+  },
+  {
     "args": "bm-id _Settings!A:C",
     "op": "get",
   },

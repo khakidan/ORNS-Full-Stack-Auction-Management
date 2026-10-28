@@ -68,7 +68,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   // top-level Auction Items workflow uses too), and returns the same
   // AuctionItem[] shape the old useItemsData did.
   const itemsData = useAuctionItems(config.auctionItemsSpreadsheetId);
-  const attendeesData = useAttendeesData(ticketsSpreadsheetId);
+  const attendeesData = useAttendeesData(ticketsSpreadsheetId, user?.role === "volunteer");
   const winnersData = useWinnersData(spreadsheetId, biddersData.bidders, itemsData.items, config.bidManagementSheet, config.bidderNumbersSheet, config.auctionItemsSpreadsheetId);
   const auctionStatusData = useAuctionStatusData(spreadsheetId, config.bidManagementSheet, config.bidderNumbersSheet);
 

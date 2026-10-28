@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useConfig } from "@/context/ConfigContext";
 import { useAuth } from "@/context/AuthContext";
 import { useAuction } from "@/context/AuctionContext";
-import { postJson } from "@/services/apiClient";
+import { postJsonOnce } from "@/services/apiClient";
 import Dashboard from "./Dashboard";
 import Bidders from "./Bidders";
 import Items from "./Items";
@@ -36,7 +36,8 @@ export default function BidManagementWorkflow({ activeBidTab, onBidTabChange, is
     setIsSyncing(true);
     const toastId = toast.loading("Checking credentials and backing up existing Bid-Management layers...");
     try {
-      await postJson("/api/bidders/sync", {
+      // Sent once: a resend would rebuild the bid sheet a second time (ROADMAP B3).
+      await postJsonOnce("/api/bidders/sync", {
         spreadsheetId: config.bidManagementSpreadsheetId,
         auctionTicketSheetsID: config.auctionTicketsSpreadsheetId,
       }, "Failed to setup bid management app");

@@ -560,6 +560,41 @@ describe('Receipt Email-Only workflow', () => {
     expect(response.status).toBe(401);
   });
 
+  it("a resend with the same key (a retry after a dropped connection) emails the bidder once (ROADMAP B2)", async () => {
+    let sends = 0;
+    server.use(http.post("https://gmail.googleapis.com/gmail/v1/users/:userId/messages/send", () => { sends++; return HttpResponse.json({ id: "m" }); }));
+    const body = { bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id', idempotencyKey: 'email-42-once' };
+
+    const first = await request(app).post('/api/receipts/email-only').set(authHeader).send(body);
+    const resent = await request(app).post('/api/receipts/email-only').set(authHeader).send(body);
+
+    expect([first.status, resent.status]).toEqual([200, 200]);
+    expect(resent.body.duplicated).toBe(true);
+    expect(sends).toBe(1);
+  });
+
+  it("turns away a second email for the same bidder while the first is still sending (a double-click)", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    server.use(http.post("https://gmail.googleapis.com/gmail/v1/users/:userId/messages/send", async () => { await gate; return HttpResponse.json({ id: "m" }); }));
+    const send = (key: string) => request(app).post('/api/receipts/email-only').set(authHeader)
+      .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id', idempotencyKey: key });
+
+    const first = send('click-1').then((r) => r);
+    await new Promise((r) => setTimeout(r, 200));
+    const second = await send('click-2');
+    release();
+    await first;
+
+    expect(second.status).toBe(409);
+  });
+
+  it('Missing bidderId — returns 400 (not a lookup of bidder "undefined")', async () => {
+    const response = await request(app).post('/api/receipts/email-only').set(authHeader).send({ spreadsheetId: 'test-spreadsheet-id' });
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('bidderId required');
+  });
+
   it('Missing spreadsheetId — returns 400', async () => {
     const response = await request(app)
       .post('/api/receipts/email-only')
