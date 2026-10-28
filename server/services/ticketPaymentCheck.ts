@@ -122,6 +122,10 @@ export async function checkTicketPayment(
 
     const atPayPal: PayPalPayment | null = await paypal.getPayment(paid.chargeId, new Date(paid.createdAt));
     if (!atPayPal) return review([`PayPal has no payment ${paid.chargeId} - check it in PayPal and set the status in the app.`]);
+    // A risk review can last days, so staff see it now; it's checked again each poll and clears once PayPal releases it.
+    if (atPayPal.status === "PENDING" && atPayPal.pendingReason === "PENDING_REVIEW") {
+      return review([`PayPal is holding payment ${paid.chargeId} for review. It's marked Paid once PayPal releases it; if it's still held after a few days, check it in PayPal.`]);
+    }
     if (atPayPal.status === "PENDING") return { outcome: "unchanged", entryId, status, reason: `PayPal payment ${paid.chargeId} is still pending` };
     const problems: string[] = [];
     if (atPayPal.status !== "COMPLETED") problems.push(`PayPal says payment ${paid.chargeId} is ${atPayPal.status}, not completed.`);

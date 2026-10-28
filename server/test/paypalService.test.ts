@@ -395,6 +395,12 @@ describe("PayPalService.getPayment (ROADMAP W4)", () => {
     });
   }
 
+  it("says why a pending capture is pending (PayPal holding it for review)", async () => {
+    const fetcher = fetcherFor({ "/v2/payments/captures/9AB12345CD678901E": [200, { status: "PENDING", status_details: { reason: "PENDING_REVIEW" }, amount: { value: "70.00", currency_code: "USD" } }] });
+
+    expect(await newService({ fetcher }).getPayment("9AB12345CD678901E", around)).toEqual({ status: "PENDING", amount: 70, currency: "USD", pendingReason: "PENDING_REVIEW" });
+  });
+
   it("reads a PayPal Checkout payment from the Captures API", async () => {
     const fetcher = fetcherFor({ "/v2/payments/captures/9AB12345CD678901E": [200, { status: "COMPLETED", amount: { value: "70.00", currency_code: "USD" } }] });
 

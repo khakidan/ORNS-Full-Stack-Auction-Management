@@ -63,6 +63,8 @@ export interface PayPalPayment {
   status: string;
   amount: number;
   currency: string;
+  /** Why a PENDING payment is pending (Captures API only), e.g. PENDING_REVIEW - PayPal holding it for a risk review - or ECHECK. */
+  pendingReason?: string;
 }
 
 /** Transaction Search's one-letter statuses, as the Captures API names them. */
@@ -402,7 +404,8 @@ export class PayPalService {
     const capture = await this.fetcher(`${this.baseUrl}/v2/payments/captures/${transactionId}`, { method: "GET", headers });
     if (capture.status === 200) {
       const data = JSON.parse(await capture.text());
-      return { status: String(data.status || ""), amount: Number(data.amount?.value), currency: String(data.amount?.currency_code || "") };
+      const pendingReason = data.status_details?.reason ? String(data.status_details.reason) : undefined;
+      return { status: String(data.status || ""), amount: Number(data.amount?.value), currency: String(data.amount?.currency_code || ""), ...(pendingReason ? { pendingReason } : {}) };
     }
     if (capture.status !== 404) throw new Error(`PayPal payment lookup failed (${capture.status}): ${await capture.text()}`);
 

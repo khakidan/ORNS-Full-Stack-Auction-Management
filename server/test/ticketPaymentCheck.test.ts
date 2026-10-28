@@ -127,9 +127,29 @@ describe("checkTicketPayment", () => {
 
   it("waits while PayPal still has the payment pending (an eCheck)", async () => {
     const { sheets, updates } = fakeSheets([ticketRow("1500")]);
-    const result = await checkTicketPayment(sheets, "1500", { mode: "write", ...deps({}, { status: "PENDING", amount: 70, currency: "USD" }) });
+    const result = await checkTicketPayment(sheets, "1500", { mode: "write", ...deps({}, { status: "PENDING", amount: 70, currency: "USD", pendingReason: "ECHECK" }) });
     expect(result).toMatchObject({ outcome: "unchanged", reason: expect.stringContaining("still pending") });
     expect(updates).toEqual([]);
+    expect((await review("1500").get()).exists).toBe(false);
+  });
+
+  it("puts a payment PayPal is holding for review on the review list - Fluent Forms calls it paid, but it isn't yet", async () => {
+    const { sheets, updates } = fakeSheets([ticketRow("1500")]);
+    const result = await checkTicketPayment(sheets, "1500", { mode: "write", ...deps({}, { status: "PENDING", amount: 70, currency: "USD", pendingReason: "PENDING_REVIEW" }) });
+    expect(result).toMatchObject({ outcome: "needs-review", problems: [expect.stringContaining("holding payment")] });
+    expect(updates).toEqual([]);
+    expect((await review("1500").get()).data()?.problems).toEqual([expect.stringContaining("holding payment")]);
+  });
+
+  it("marks it Paid and clears the review once PayPal releases it", async () => {
+    const { sheets, updates } = fakeSheets([ticketRow("1500")]);
+    await checkTicketPayment(sheets, "1500", { mode: "write", ...deps({}, { status: "PENDING", amount: 70, currency: "USD", pendingReason: "PENDING_REVIEW" }) });
+
+    const result = await checkTicketPayment(sheets, "1500", { mode: "write", ...deps({}, { status: "COMPLETED", amount: 70, currency: "USD" }) });
+
+    expect(result).toMatchObject({ outcome: "set", to: "Paid" });
+    expect(updates).toHaveLength(1);
+    expect((await review("1500").get()).exists).toBe(false);
   });
 
   it.each([
