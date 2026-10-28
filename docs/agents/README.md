@@ -46,6 +46,8 @@ are set on the service itself and there is no `.env`.
 *   `GEMINI_API_KEY`: Key for the server-side Gemini bundle-suggestion features
 *   `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET`: PayPal Invoicing API credentials (sandbox credentials locally)
 *   `SWEEPER_TRIGGER_SECRET`: Shared secret Cloud Scheduler sends to `POST /internal/paypal-sweep` to run the PayPal sweep (see "Deployment"). Production only; leave it empty locally, which turns that endpoint off
+*   `FLUENT_FORMS_WEBHOOK_SECRET`: Shared secret the Auction Tickets form's Webhook feed sends in an `X-ORNS-Webhook-Secret` header to `POST /api/webhooks/fluent-forms/tickets` (see "Fluent Forms ticket webhook"). Leave it empty locally, which turns that endpoint off
+*   `FLUENT_FORMS_TICKETS_MODE` (optional): `write` makes the ticket webhook add rows to the tickets tab. Unset (the default) is shadow mode: it reports what it would do (Cloud Logging, `jsonPayload.fluentFormsWebhook`) and writes nothing. Set it to `write` only at the switch-over, when the form's Google Sheets feed is turned off - never run both as writers
 *   `APPS_SCRIPT_DEV_MODE` (optional): `true` makes Apps Script calls run each script's latest *saved* editor code instead of its deployed API-executable version - only works for the script's owner; for trying `.gs` edits locally before deploying them. Default (unset/`false`) runs the deployed version - see "Deployment"
 *   `DRIVE_TEMPLATE_FILES_FOLDER_ID`: The Auction/General Auction Info/Template Files folder, where Settings > Action History creates the master Action History spreadsheet (next to the master Bid Management and Item Entry spreadsheets)
 *   `FULL_ADMIN_EMAILS`: Comma-separated @orns.org addresses that are always **Full Administrators** (`server/services/userService.ts`). They can't be demoted in the app, so nobody can lock every admin out; every other @orns.org address is a User unless given a role in Settings > Users. Leave it empty and nobody can open Settings - set at least one address
@@ -169,6 +171,35 @@ rate limit - so the `orns-auction-manager-gh` service must run with
 **Maximum instances = 1** (Scaling tab). With two instances, two requests
 could each take "the" lock on different machines. Everything else stays
 at the cheap defaults: minimum instances 0 and **Request-based** billing.
+
+**Fluent Forms ticket webhook.** The Auction Tickets form (Fluent Forms
+form 7 on orns.org) also sends each purchase to
+`POST /api/webhooks/fluent-forms/tickets`
+(`server/routes/webhookRoutes.ts`, ROADMAP W3), which hands it to
+`upsertTicketPurchase` (one row per Fluent Forms entry ID). Set-up:
+
+1.  Make a long random secret (`openssl rand -hex 32`) and set it as the
+    service's `FLUENT_FORMS_WEBHOOK_SECRET`. Leave
+    `FLUENT_FORMS_TICKETS_MODE` unset (shadow mode).
+2.  In WordPress, Fluent Forms > Auction Tickets > Settings &
+    Integrations, add a **Webhook** feed: request URL
+    `https://orns-auction-manager.cloud.run/api/webhooks/fluent-forms/tickets`,
+    method POST, format **JSON**, request header
+    `X-ORNS-Webhook-Secret: <the secret>`, request body **Selected
+    Fields** with exactly the keys in
+    `server/services/fluentFormsWebhookPayload.ts`, each set to the same
+    smart code the form's Google Sheets feed uses for that column (the
+    input value, never the label), and `entry_id` set to
+    `{submission.id}`. Turn on its payment events too, if offered.
+3.  Submit a test entry and check Cloud Logging for
+    `jsonPayload.fluentFormsWebhook` with `"outcome": "would-add"` (or
+    `"exists"` once the Sheets feed's row is there), and the entry's API
+    log in Fluent Forms for a 200.
+
+It writes as the server's stored background Google sign-in (the one the
+PayPal sweeper uses, refreshed by any staff sign-in); without one it
+answers 503. Only at the switch-over: set `FLUENT_FORMS_TICKETS_MODE=write`
+and turn the Google Sheets feed off.
 
 **PayPal sweeper schedule (Cloud Scheduler).** The sweeper that checks
 deferred credit-card checkouts against PayPal isn't a timer inside the
