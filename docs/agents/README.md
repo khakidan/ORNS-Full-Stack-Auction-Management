@@ -190,11 +190,14 @@ form 7 on orns.org) also sends each purchase to
     `server/services/fluentFormsWebhookPayload.ts`, each set to the same
     smart code the form's Google Sheets feed uses for that column (the
     input value, never the label), and `entry_id` set to
-    `{submission.id}`. Turn on its payment events too, if offered.
+    `{submission.id}` (Entry Attributes). Leave `transaction_id` out -
+    Fluent Forms offers no smart code for it. Turn on its payment events
+    too, if offered.
 3.  Submit a test entry and check Cloud Logging for
     `jsonPayload.fluentFormsWebhook` with `"outcome": "would-add"` (or
-    `"exists"` once the Sheets feed's row is there), and the entry's API
-    log in Fluent Forms for a 200.
+    `"exists"` once the Sheets feed's row is there) and a `read` that
+    matches the entry (`total` in dollars - 70, not 7000), and the
+    entry's API log in Fluent Forms for a 200.
 
 It writes as the server's stored background Google sign-in (the one the
 PayPal sweeper uses, refreshed by any staff sign-in); without one it

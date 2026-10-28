@@ -20,7 +20,10 @@ import { TicketPurchase, TicketPurchaseGuest } from "./ticketPurchaseRow";
  *   payment_method      payment method             ("paypal", or "test" for cash/check)
  *   payment_status      payment status             ("paid", "pending", ...)
  *   payment_total       payment total              ("$140.00", "140", ...)
- *   transaction_id      the payment's transaction ID (blank for cash/check) - for W4
+ *   transaction_id      optional - Fluent Forms' Payment Details smart codes have no
+ *                       transaction ID (only Receipt, Summary, Order Items, Status,
+ *                       Total, Method), so the feed leaves it out and W4 reads the
+ *                       transaction from the REST API by entry ID
  */
 export const WEBHOOK_FIELDS = [
   "entry_id", "first_name", "last_name", "email", "phone", "tickets",

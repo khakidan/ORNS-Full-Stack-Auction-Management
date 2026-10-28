@@ -3,6 +3,7 @@ import { google } from "googleapis";
 import { getSweeperAuthClient } from "../services/paypalSweeperJob";
 import { getAdminFirestore } from "../services/firebaseAdmin";
 import { purchaseFromWebhook } from "../services/fluentFormsWebhookPayload";
+import { TicketPurchase } from "../services/ticketPurchaseRow";
 import { upsertTicketPurchase } from "../services/ticketPurchaseService";
 import { secretMatches } from "../utils/sharedSecret";
 
@@ -39,6 +40,22 @@ export function _resetWebhookRateLimitForTesting(): void {
  */
 export function ticketWebhookMode(): "write" | "compare" {
   return process.env.FLUENT_FORMS_TICKETS_MODE?.trim().toLowerCase() === "write" ? "write" : "compare";
+}
+
+/**
+ * What the app read from a delivery - numbers and labels only, never a
+ * name, email or phone - so a test shows the parsed values in Cloud
+ * Logging whatever the outcome (an "exists" never builds the row): a
+ * Payment Total sent in cents would show here as 7000, not 70.
+ */
+function whatWasRead(purchase: TicketPurchase) {
+  return {
+    tickets: purchase.tickets,
+    total: purchase.total,
+    guests: purchase.guests.filter((g) => g.firstName || g.lastName || g.email).length,
+    paymentMethod: purchase.paymentMethod,
+    paymentStatus: purchase.paymentStatus,
+  };
 }
 
 /**
@@ -92,14 +109,14 @@ export default function createWebhookRouter() {
     try {
       const client = await getSweeperAuthClient();
       if (!client) {
-        await recordDelivery({ entryId: purchase.entryId, mode, outcome: "no-google-sign-in" });
+        await recordDelivery({ entryId: purchase.entryId, mode, outcome: "no-google-sign-in", read: whatWasRead(purchase) });
         return res.status(503).json({ error: "The server has no stored Google sign-in to write with. A staff member needs to sign in to the app once." });
       }
       const result = await upsertTicketPurchase(google.sheets({ version: "v4", auth: client }), purchase, { mode });
-      await recordDelivery({ entryId: result.entryId, mode, outcome: result.outcome, ...("problems" in result ? { problems: result.problems } : {}) });
+      await recordDelivery({ entryId: result.entryId, mode, outcome: result.outcome, read: whatWasRead(purchase), ...("problems" in result ? { problems: result.problems } : {}) });
       res.json({ mode, ...result });
     } catch (error: any) {
-      await recordDelivery({ entryId: purchase.entryId, mode, outcome: "error", error: String(error?.message || error).slice(0, 500) });
+      await recordDelivery({ entryId: purchase.entryId, mode, outcome: "error", read: whatWasRead(purchase), error: String(error?.message || error).slice(0, 500) });
       next(error);
     }
   });
