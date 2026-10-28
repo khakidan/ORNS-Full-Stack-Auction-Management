@@ -42,7 +42,7 @@ export default function TicketPurchaseStatusCard({ attendees, purchases }: Ticke
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-            Website Ticket Purchases
+            Website Ticket Check
           </CardTitle>
         </CardHeader>
       </Card>
@@ -55,7 +55,7 @@ export default function TicketPurchaseStatusCard({ attendees, purchases }: Ticke
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-amber-600" />
-            Website Ticket Purchases
+            Website Ticket Check
           </CardTitle>
           <CardDescription>Couldn't reach the server to check status - try reloading the page.</CardDescription>
         </CardHeader>
@@ -81,7 +81,7 @@ export default function TicketPurchaseStatusCard({ attendees, purchases }: Ticke
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2">
             {styles.icon}
-            Website Ticket Purchases
+            Website Ticket Check
           </CardTitle>
           <Badge variant="outline" className={styles.badge}>
             {styles.label}

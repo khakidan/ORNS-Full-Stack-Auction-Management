@@ -35,19 +35,19 @@ const status = (overrides: Partial<TicketPurchaseStatus> = {}): TicketPurchaseSt
   ...overrides,
 });
 
-describe("AuctionTicketsWorkflow - Website Purchases tab (ROADMAP W6)", () => {
+describe("AuctionTicketsWorkflow - Website Ticket Check tab (ROADMAP W6)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCan = true;
   });
 
-  it("gives staff a Website Purchases tab, off the attendee list, with no dot while all is well", async () => {
+  it("gives staff a Website Ticket Check tab, off the attendee list, with no dot while all is well", async () => {
     mockedGetStatus.mockResolvedValue(status());
     render(<AuctionTicketsWorkflow />);
 
     await waitFor(() => expect(mockedGetStatus).toHaveBeenCalled());
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Auction Tickets", "Website Purchases", "Document Creation"]);
-    expect(screen.queryByText("Website Ticket Purchases")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Auction Tickets", "Website Ticket Check", "Document Creation"]);
+    expect(screen.queryByText("Last purchase sent by the website")).not.toBeInTheDocument();
   });
 
   it("flags the tab when something needs attention, and the card is one click away", async () => {
@@ -55,10 +55,10 @@ describe("AuctionTicketsWorkflow - Website Purchases tab (ROADMAP W6)", () => {
     const user = userEvent.setup();
     render(<AuctionTicketsWorkflow />);
 
-    const tab = await screen.findByRole("tab", { name: "Website Purchases Needs attention" });
+    const tab = await screen.findByRole("tab", { name: "Website Ticket Check Needs attention" });
     await user.click(tab);
 
-    expect(await screen.findByText("Website Ticket Purchases")).toBeVisible();
+    expect(await screen.findByText("Last purchase sent by the website")).toBeVisible();
     expect(screen.getByText(/Pat Lee \(entry 1491\)/)).toBeInTheDocument();
   });
 
@@ -66,7 +66,7 @@ describe("AuctionTicketsWorkflow - Website Purchases tab (ROADMAP W6)", () => {
     mockCan = false;
     render(<AuctionTicketsWorkflow />);
 
-    expect(screen.queryByRole("tab", { name: /Website Purchases/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /Website Ticket Check/ })).not.toBeInTheDocument();
     expect(mockedGetStatus).not.toHaveBeenCalled();
   });
 });

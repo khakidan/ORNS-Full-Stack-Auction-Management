@@ -8,7 +8,7 @@ const POLL_INTERVAL_MS = 60000;
 export type TicketPurchaseStatusState = ReturnType<typeof useTicketPurchaseStatus>;
 
 /**
- * Drives the Tickets page's Website Purchases tab (ROADMAP W6): the last
+ * Drives the Tickets page's Website Ticket Check tab (ROADMAP W6): the last
  * webhook, the poll's last runs and what needs staff. Refreshes every
  * minute while `enabled` (staff who can see the tab); "Check now" runs the
  * poll on demand and calls `onAdded` when it added a row, so the attendee

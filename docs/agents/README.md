@@ -289,8 +289,9 @@ answers 500. Set Up Bid Management App and Create Bidder Labels run it
 first, so neither works from a list missing a purchase; a failed check
 never stops them (`pollTicketPurchasesFirst`).
 
-**Website Ticket Purchases card (ROADMAP W6).** On the Tickets page's
-**Website Purchases** tab, for staff with the auction-stage permission
+**Website Ticket Check (ROADMAP W6).** On the Tickets page's
+**Website Ticket Check** tab, which confirms every ticket bought on the
+ORNS website reached the app and its PayPal payment went through, for staff with the auction-stage permission
 (`TicketPurchaseStatusCard`, from `GET /api/tickets/fluent-forms/status`;
 volunteers don't get the tab). When it needs attention the tab itself
 carries a pulsing amber dot (`AttentionDot`), so it's seen without

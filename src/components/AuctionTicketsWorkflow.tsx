@@ -14,7 +14,7 @@ export default function AuctionTicketsWorkflow() {
   const { can } = useAuth();
   const spreadsheetId = config.auctionTicketsSpreadsheetId;
 
-  // Website Purchases (ROADMAP W6) is for staff who can run the auction's
+  // Website Ticket Check (ROADMAP W6) is for staff who can run the auction's
   // stages; the page holds its status so the tab can flag a problem
   // without being opened.
   const canSeePurchases = can("auction.stage");
@@ -25,7 +25,7 @@ export default function AuctionTicketsWorkflow() {
     { value: "auction_tickets", label: "Auction Tickets", content: <TicketAttendeeTab /> },
     ...(canSeePurchases ? [{
       value: "website_purchases",
-      label: "Website Purchases",
+      label: "Website Ticket Check",
       indicator: needsAttention ? <AttentionDot label="Needs attention" /> : undefined,
       content: <TicketPurchaseStatusCard attendees={attendees} purchases={purchases} />,
     }] : []),
