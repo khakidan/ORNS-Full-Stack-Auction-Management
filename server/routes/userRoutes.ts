@@ -4,7 +4,7 @@ import { requirePermission } from '../middleware/requirePermission';
 import { getRole, listUsers, normalizeEmail, roleChangeRefusal, setRole } from '../services/userService';
 import { isRole, ROLE_LABELS } from '../utils/permissions';
 
-/** The Settings page's Users tab: staff roles (Full Administrator only). */
+/** The Settings page's Users tab: staff roles (Administrators - users.manage). */
 export default function createUserRouter() {
   const router = Router();
 

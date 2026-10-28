@@ -48,6 +48,9 @@ vi.mock("@/context/AuctionContext", () => ({
   useAuction: () => ({ isAuctionClosed: mockIsAuctionClosed }),
 }));
 
+let mockCanEditTickets = true;
+vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ can: (c: string) => c !== "tickets.edit" || mockCanEditTickets }) }));
+
 const emptyFilesResponse = { ok: true, status: 200, json: async () => [] } as Response;
 
 describe("TicketDocumentCreationTab", () => {
@@ -157,5 +160,17 @@ describe("TicketDocumentCreationTab", () => {
 
     expect(screen.getByText("Auction Closed: Creation tools disabled.")).toBeInTheDocument();
     expect((screen.getByText("Create Bidder Labels Doc").closest("button") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("disables bidder labels for a User - the Tickets page is view-only for them", async () => {
+    mockCanEditTickets = false;
+    try {
+      await act(async () => {
+        render(<TicketDocumentCreationTab />);
+      });
+      expect((screen.getByText("Create Bidder Labels Doc").closest("button") as HTMLButtonElement).disabled).toBe(true);
+    } finally {
+      mockCanEditTickets = true;
+    }
   });
 });

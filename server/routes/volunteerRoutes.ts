@@ -40,7 +40,7 @@ async function emailLink(req: Request, volunteer: Volunteer, token: string): Pro
   await google.gmail({ version: "v1", auth: client }).users.messages.send({ userId: "me", requestBody: { raw } });
 }
 
-/** Settings > Users: volunteers (Full Administrator only). */
+/** Settings > Users: volunteers (Administrators - users.manage). */
 export default function createVolunteerRouter() {
   const router = Router();
 

@@ -10,7 +10,7 @@ import { getSweeperStatus, runPaypalSweep } from '../services/paypalSweeperJob';
 export default function createSweeperRouter() {
   const router = Router();
 
-  router.get("/paypal-sweeper/status", requirePermission("settings"), async (_req: Request, res: Response, next: NextFunction) => {
+  router.get("/paypal-sweeper/status", requirePermission("settings.system"), async (_req: Request, res: Response, next: NextFunction) => {
     try {
       res.json(await getSweeperStatus());
     } catch (error) {
@@ -18,7 +18,7 @@ export default function createSweeperRouter() {
     }
   });
 
-  router.post("/paypal-sweeper/run-now", requirePermission("settings"), async (_req: Request, res: Response, next: NextFunction) => {
+  router.post("/paypal-sweeper/run-now", requirePermission("settings.system"), async (_req: Request, res: Response, next: NextFunction) => {
     try {
       res.json(await runPaypalSweep());
     } catch (error) {

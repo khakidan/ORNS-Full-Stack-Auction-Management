@@ -52,7 +52,7 @@ export default function UsersAdmin() {
       <RefreshableListCard
         icon={<UserCog className="w-5 h-5 text-primary" />}
         title="Staff Roles"
-        description="Every other @orns.org address is a User when they sign in. Administrators can do everything except use this Settings page; Users also can't set up, start or close the auction, or delete attendees."
+        description="Every other @orns.org address is a User when they sign in. Administrators can do everything except the PayPal, Apps Script and Bug Reports settings. Users can't use Settings, can only view the Auction Tickets page, and can't set up, start or close the auction."
         loading={loading}
         onRefresh={fetchUsers}
       >

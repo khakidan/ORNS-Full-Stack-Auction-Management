@@ -2,9 +2,11 @@ import { Request, Response, NextFunction } from "express";
 import { Capability, can } from "../utils/permissions";
 
 const REFUSALS: Record<Capability, string> = {
-  settings: "Only a Full Administrator can do this.",
-  "users.manage": "Only a Full Administrator can manage users.",
+  settings: "Only an Administrator can do this.",
+  "settings.system": "Only a Full Administrator can do this.",
+  "users.manage": "Only an Administrator can manage users.",
   "auction.stage": "Only an Administrator can set up, start or close the auction.",
+  "tickets.edit": "The Auction Tickets page is view-only for your role - ask an Administrator.",
   "attendees.delete": "Only an Administrator can delete attendees.",
   "bidders.walkIn": "Volunteers can't register walk-ins - ask a staff member.",
 };

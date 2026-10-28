@@ -40,6 +40,9 @@ export default function TicketAttendeeTab() {
   const { can } = useAuth();
 
   const state = useTicketAttendeeState({ attendees, setAttendees, addAttendee, removeAttendee, spreadsheetId });
+  // Users only view this page (tickets.edit); a closed auction is read-only for everyone.
+  const viewOnly = !can("tickets.edit");
+  const readOnly = isAuctionClosed || viewOnly;
 
   return (
     <div className="space-y-4">
@@ -71,7 +74,7 @@ export default function TicketAttendeeTab() {
               Refresh
             </Button>
 
-            {!isAuctionClosed && (
+            {!readOnly && (
               <AddAttendeeDialog
                 open={state.isAddDialogOpen}
                 onOpenChange={state.setIsAddDialogOpen}
@@ -84,6 +87,11 @@ export default function TicketAttendeeTab() {
             {isAuctionClosed && (
               <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 h-10 px-4">
                 Auction Closed (Read Only)
+              </Badge>
+            )}
+            {!isAuctionClosed && viewOnly && (
+              <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 h-10 px-4">
+                View Only
               </Badge>
             )}
           </>
@@ -100,7 +108,7 @@ export default function TicketAttendeeTab() {
         <AttendeesList
           attendees={state.filteredAttendees}
           loading={attendeesLoading}
-          isAuctionClosed={isAuctionClosed}
+          isAuctionClosed={readOnly}
           canDelete={can("attendees.delete")}
           onEdit={state.setAttendeeToEdit}
           onUpdatePaymentStatus={state.updatePaymentStatus}

@@ -26,7 +26,7 @@ const STATUS: Record<VolunteerStatus, { label: string; className: string }> = {
 const when = (iso?: string) => (iso ? format(new Date(iso), "MMM d, h:mm a") : "—");
 
 /**
- * Settings > Users > Volunteers (Full Administrator): connect the shared
+ * Settings > Users > Volunteers (Administrators): connect the shared
  * volunteer Google account, invite people outside @orns.org with a
  * one-time sign-in link, and see who signed in. Links only work while the
  * auction is Live; access ends when it's Closed.

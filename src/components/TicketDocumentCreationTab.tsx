@@ -7,11 +7,14 @@ import { DocumentCreationPanel } from "@/components/DocumentCreationPanel";
 import { FolderFilesCard } from "@/components/FolderFilesCard";
 
 import { useAuction } from "@/context/AuctionContext";
+import { useAuth } from "@/context/AuthContext";
 import { useConfig } from "@/context/ConfigContext";
 import { isConfiguredId } from "@/lib/configuredId";
 
 export default function TicketDocumentCreationTab() {
   const { isAuctionClosed } = useAuction();
+  // Users only view the Tickets page; making bidder labels is a change (tickets.edit).
+  const { can } = useAuth();
   const { config } = useConfig();
   const spreadsheetId = config.auctionTicketsSpreadsheetId;
   const forPrintFolderId = config.forPrintFolderId;
@@ -55,7 +58,7 @@ export default function TicketDocumentCreationTab() {
             className="w-full justify-start gap-2"
             variant="secondary"
             onClick={() => runScript('apiCreateBidderLabels', 'Create Bidder Labels')}
-            disabled={isAuctionClosed}
+            disabled={isAuctionClosed || !can("tickets.edit")}
           >
             <PlaySquare className="w-4 h-4 text-emerald-600" />
             Create Bidder Labels Doc
