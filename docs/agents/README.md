@@ -26,7 +26,7 @@ The **ORNS (Orchard Ridge Nursery School) Charity Auction Manager** is a high-pe
 The codebase is split into highly modular structural patterns:
 
 *   `/src/components/`: Extracted React components, including lazy-loaded operational interfaces (`ConfigSettings.tsx`, `AuctionTicketsWorkflow.tsx`, `AuctionItemsWorkflow.tsx`) and highly interactive sub-modules.
-*   `/server/routes/`: Isolated REST endpoint pathways (`authRoutes.ts`, `bidRoutes.ts`, `bundleRoutes.ts`, `dataRoutes.ts` - which mounts `syncRoutes.ts`, `sweeperRoutes.ts`, `settingsRoutes.ts`, `itemRoutes.ts`, `sheetsProxyRoutes.ts`, `driveRoutes.ts` - `health.ts`, `productionRoutes.ts`, `receiptRoutes.ts`, `setupRoutes.ts`, and others; see `file-reference.md`).
+*   `/server/routes/`: Isolated REST endpoint pathways (`authRoutes.ts`, `bidRoutes.ts`, `bundleRoutes.ts`, `dataRoutes.ts` - which mounts `syncRoutes.ts`, `sweeperRoutes.ts`, `itemRoutes.ts`, `sheetsProxyRoutes.ts`, `driveRoutes.ts` - `health.ts`, `productionRoutes.ts`, `receiptRoutes.ts`, `setupRoutes.ts`, and others; see `file-reference.md`).
 *   `/server/services/`: Global services such as `google.ts` (the Google API retry policy - GET/PUT/PATCH/DELETE only; POSTs that are safe to repeat opt in with `server/utils/googleRetry.ts`) and `genai.ts` (modern SDK configuration for Gemini assistant tools).
 *   `/server/middleware/`: The centralized error handler, the `requireAuth` session guard, and no-store cache headers for `/api` and `/auth`.
 *   `/server/utils/`: Backend helpers - the in-process `withLock` mutex, idempotency cache, sheet read cache, range/column helpers, category and min-raise logic, the PayPal surcharge formula, and boot-time env validation.

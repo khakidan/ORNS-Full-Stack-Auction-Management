@@ -35,6 +35,6 @@ NODE_OPTIONS=--no-experimental-webstorage npx vitest run src/           # fronte
 
 | Layer | Path | Tests |
 |---|---|---|
-| **Backend** | `server/test/` | **873 passed** |
-| **Frontend** | `src/` | **808 passed** |
-| **Total** | `npm run test:quiet` | **1681 passed** |
+| **Backend** | `server/test/` | **888 passed** |
+| **Frontend** | `src/` | **806 passed** |
+| **Total** | `npm run test:quiet` | **1694 passed** |

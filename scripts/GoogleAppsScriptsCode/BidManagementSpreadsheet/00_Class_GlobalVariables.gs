@@ -1,19 +1,33 @@
 /**
- * Foundation class. Loads and caches the _Settings configuration via
- * PropertiesService so every subclass has access to `this.config`.
+ * The settings the web app passed to this run (Node's Config: receipt
+ * folder, logo). Set by the api* bridge functions (useRunSettings_) before
+ * anything is constructed; each Apps Script execution starts with a fresh
+ * global scope, so one run's settings never reach another.
+ */
+var RUN_SETTINGS_ = {};
+
+/** @param {Object|null|undefined} settings e.g. { receiptFolderID, ornsLogoID } */
+function useRunSettings_ ( settings ) {
+    RUN_SETTINGS_ = settings && typeof settings === 'object' ? settings : {};
+}
+
+/**
+ * Foundation class. Gives every subclass `this.config`: the settings the
+ * web app passed to this run. The spreadsheet's `_Settings` tab is no
+ * longer read - it was a second copy of the app's Config that only the
+ * browser's Save Configuration kept up to date (ROADMAP B11).
  * Also holds shared string constants and UI banding colors.
  */
 class GlobalVariables {
     /**
      * @param {Object} [overrides] Optional dependency/config injection, used
-     *   by unit tests to avoid touching the real active spreadsheet or its
-     *   _Settings tab. Production call sites (`new GlobalVariables()`, or a
-     *   subclass's `super()` with no args) never pass this.
+     *   by unit tests to avoid touching the real active spreadsheet.
+     *   Production call sites (`new GlobalVariables()`, or a subclass's
+     *   `super()` with no args) never pass this.
      * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [overrides.activeSpreadSheet]
      *   Replaces `SpreadsheetApp.getActiveSpreadsheet()`.
      * @param {Object} [overrides.config]
-     *   Replaces the real `_Settings` tab read entirely when given (skips
-     *   touching `overrides.activeSpreadSheet`/the real one for it).
+     *   Replaces the run's settings (RUN_SETTINGS_) when given.
      */
     constructor ( overrides = {} ) {
         this.activeSpreadSheet = overrides.activeSpreadSheet || SpreadsheetApp.getActiveSpreadsheet();
@@ -22,61 +36,8 @@ class GlobalVariables {
         this.bidManagementString = 'Bid-Management';
         this.bidNumbersString = 'Bidder-Numbers';
 
-        if ( overrides.config !== undefined ) {
-            this.config = overrides.config;
-        } else {
-            // ── Load _Settings dynamically on every execution ────────────────────
-            const requiredKeys = [
-                'auctionImportSheetID',
-                'auctionTicketSheetsID',
-                'ornsLogoID',
-                'receiptFolderID',
-                'ticketPrice'
-            ];
-
-            let settingsSheet = this.activeSpreadSheet.getSheetByName( '_Settings' );
-            if ( !settingsSheet ) {
-                this.createEmptySettingsTab_( requiredKeys );
-                settingsSheet = this.activeSpreadSheet.getSheetByName( '_Settings' );
-            }
-
-            this.config = {};
-            settingsSheet.getDataRange().getValues().forEach( row => {
-                if ( row[ 0 ] && row[ 0 ] !== 'Setting Key' ) {
-                    this.config[ row[ 0 ] ] = row[ 1 ];
-                }
-            } );
-        }
+        this.config = overrides.config !== undefined ? overrides.config : RUN_SETTINGS_;
 
         this.currentYear = new Date().getFullYear();
-    }
-
-    createEmptySettingsTab_ ( keys ) {
-        // Guard against calling UI in API context
-        let ui = null;
-        try { ui = SpreadsheetApp.getUi(); } catch ( e ) { }
-
-        if ( ui ) {
-            const strings = new UIStrings();
-            ui.alert(
-                strings.configRequiredTitle,
-                strings.configRequiredMsg,
-                ui.ButtonSet.OK
-            );
-        }
-
-        const sheet = this.activeSpreadSheet.insertSheet( '_Settings' );
-        sheet.getRange( 'A1:C1' )
-            .setValues( [ [ 'Setting Key', 'ID Value', 'Location Description' ] ] )
-            .setFontWeight( 'bold' );
-
-        sheet.getRange( 2, 1, keys.length, 1 ).setValues( keys.map( k => [ k ] ) );
-        sheet.setColumnWidth( 1, 200 )
-            .setColumnWidth( 2, 350 )
-            .setColumnWidth( 3, 350 );
-        sheet.setFrozenRows( 1 );
-
-        // Still throw the error to stop execution if config is missing
-        throw new Error( "Configuration Required: Settings tab initialized. Please configure it." );
     }
 }

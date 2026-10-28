@@ -24,6 +24,12 @@ const mockTokens = {
 };
 const authHeader = authCookieHeader(mockTokens);
 
+// Receipts need a receipt folder in the Config (ROADMAP B11).
+beforeEach(async () => {
+  const { getAdminFirestore } = await import("../services/firebaseAdmin");
+  await getAdminFirestore().collection("settings").doc("global").set({ receiptFolderId: "receipts-folder", ornsLogoId: "logo-file" });
+});
+
 // Shared GET handler override for email tests — provides realistic sheet data
 // that processEmail needs to build and send a receipt
 const emailSheetHandler = http.get(
@@ -203,15 +209,15 @@ describe('Receipt Generate workflow', () => {
     // Node resolves the receipt itself now (see receiptDataService.ts)
     // instead of Class_ReceiptManager.gs looking it up a second,
     // independent way - see CHANGELOG.md's Code Hardening
-    // item #2 / CHANGELOG.md. folderID (2nd position) is null here because
-    // the test Config has no receipt folder (see the B1 test below). No
+    // item #2 / CHANGELOG.md. folderID (2nd position) and the logo (4th)
+    // come from the Config (see the B1/B11 test below). No
     // `emailReceipt` parameter any more -
     // Step 5 deleted the GAS-side email path it gated, which nothing
     // ever actually triggered (the client always sent `false`).
     const expectedTotal = calculatePayPalSurcharge(50).total;
     expect(requestBody.parameters).toEqual([
       "42",
-      null,
+      "receipts-folder",
       {
         bidId: "42",
         firstName: "John",
@@ -228,14 +234,15 @@ describe('Receipt Generate workflow', () => {
         // against the default PayPal sandbox mocks in handlers.ts.
         paymentUrl: "https://www.sandbox.paypal.com/invoice/p/#INV2-MOCK-0000-0000-0001",
         adjustedTotal: expectedTotal
-      }
+      },
+      { ornsLogoID: "logo-file" },
     ]);
   });
 
-  it("files receipts in the Config's receipt folder, not the spreadsheet's own _Settings copy (ROADMAP B1)", async () => {
+  it("hands the script the Config's receipt folder and logo - it no longer reads its own _Settings copy (ROADMAP B1, B11)", async () => {
     const { getAdminFirestore } = await import("../services/firebaseAdmin");
     const { _resetConfigCacheForTesting } = await import("../services/configService");
-    await getAdminFirestore().collection("settings").doc("global").set({ receiptFolderId: "this-years-receipts" });
+    await getAdminFirestore().collection("settings").doc("global").set({ receiptFolderId: "this-years-receipts", ornsLogoId: "the-logo" });
     _resetConfigCacheForTesting();
     const runs: any[] = [];
     server.use(
@@ -251,13 +258,33 @@ describe('Receipt Generate workflow', () => {
     await request(app).post('/api/receipts/generate-all').set(authHeader)
       .send({ spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id', part: 1 });
 
-    expect(runs.map((r) => [r.function, r.parameters[0]])).toEqual([
-      ["apiCreateIndividualReceipt", "42"],
-      ...runs.slice(1).map(() => ["apiCreateAllReceipts", "this-years-receipts"]),
-    ]);
-    expect(runs[0].parameters[1]).toBe("this-years-receipts");
     expect(runs.length).toBeGreaterThan(1);
+    const [individual, ...all] = runs;
+    expect(individual.function).toBe("apiCreateIndividualReceipt");
+    expect(individual.parameters[1]).toBe("this-years-receipts");
+    expect(individual.parameters[3]).toEqual({ ornsLogoID: "the-logo" });
+    for (const run of all) {
+      expect(run.function).toBe("apiCreateAllReceipts");
+      expect(run.parameters[0]).toBe("this-years-receipts");
+      expect(run.parameters[3]).toEqual({ ornsLogoID: "the-logo" });
+    }
   });
+
+  it("refuses to print without a receipt folder in the Config, rather than letting the script guess one", async () => {
+    const { getAdminFirestore } = await import("../services/firebaseAdmin");
+    await getAdminFirestore().collection("settings").doc("global").set({});
+
+    const one = await request(app).post('/api/receipts/generate').set(authHeader)
+      .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
+    const all = await request(app).post('/api/receipts/generate-all').set(authHeader)
+      .send({ spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
+
+    expect(one.status).toBe(400);
+    expect(all.status).toBe(400);
+    expect(one.body.error).toContain("Receipts Folder ID");
+    expect(appsScriptCallCount).toBe(0);
+  });
+
 
   it('Auth failure', async () => {
     const response = await request(app)

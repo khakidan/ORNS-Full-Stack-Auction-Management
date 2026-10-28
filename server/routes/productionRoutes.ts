@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { fromConfig, ITEM_DOCUMENT_FIELDS, BIDDER_LABEL_FIELDS } from '../middleware/fromConfig';
 import { isAppsScriptFailure, runAppsScript } from '../utils/appsScriptRun';
 import { AlreadyRunningError, runIfIdle } from '../utils/asyncLock';
 import { google } from 'googleapis';
@@ -8,6 +9,13 @@ import { ensureBidderNumbersSheet, getBidderLabelList } from '../services/syncSe
 import { getValidSortedItems } from '../services/itemDataService';
 import { sheetsFor } from '../utils/googleClients';
 import { syncBiddersFromTickets } from '../services/bidderTicketSync';
+
+/**
+ * Documents always go to the Config's For Print folder: without one the
+ * scripts would fall back to a folder in their own _Settings tab, which
+ * nothing keeps up to date (ROADMAP B11).
+ */
+const MISSING_PRINT_FOLDER = "Set the For Print Folder ID in Settings before creating documents.";
 
 export default function createProductionRouter() {
   const router = Router();
@@ -46,6 +54,8 @@ export default function createProductionRouter() {
     }
   };
 
+  const itemDocumentConfig = fromConfig(ITEM_DOCUMENT_FIELDS);
+
   /**
    * ITEM ENTRY SPREADSHEET COMMANDS
    *
@@ -66,47 +76,50 @@ export default function createProductionRouter() {
     next: NextFunction,
     functionName: string
   ) => {
-    const { folderId, spreadsheetId } = req.body;
+    const { folderId, spreadsheetId, ornsLogoId } = req.body;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
+    if (!folderId) return res.status(400).json({ error: MISSING_PRINT_FOLDER });
 
     try {
       const sheets = sheetsFor(req);
       const items = await getValidSortedItems(sheets, spreadsheetId);
-      await handleAppsScriptCall(req, res, next, functionName, process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || "", items]);
+      // The Config's values win over the script's own _Settings copy (ROADMAP B11).
+      const settings = { ornsLogoID: ornsLogoId || "", auctionDevFolderID: folderId };
+      await handleAppsScriptCall(req, res, next, functionName, process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId, items, settings]);
     } catch (error) {
       next(error);
     }
   };
 
-  router.post("/item-entry/bundling-doc", (req, res, next) => {
+  router.post("/item-entry/bundling-doc", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateBundlingDoc");
   });
 
-  router.post("/item-entry/item-labels", (req, res, next) => {
+  router.post("/item-entry/item-labels", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateItemLabels");
   });
 
-  router.post("/item-entry/slideshow", (req, res, next) => {
+  router.post("/item-entry/slideshow", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateSlideshow");
   });
 
-  router.post("/item-entry/bidding-guide-cover", (req, res, next) => {
+  router.post("/item-entry/bidding-guide-cover", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateBiddingGuideCoverPage");
   });
 
-  router.post("/item-entry/bidding-guide-inner", (req, res, next) => {
+  router.post("/item-entry/bidding-guide-inner", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateBiddingGuideInnerPages");
   });
 
-  router.post("/item-entry/bid-sheets", (req, res, next) => {
+  router.post("/item-entry/bid-sheets", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateBidSheets");
   });
 
-  router.post("/item-entry/catalog", (req, res, next) => {
+  router.post("/item-entry/catalog", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateCatalog");
   });
 
-  router.post("/item-entry/table-tents", (req, res, next) => {
+  router.post("/item-entry/table-tents", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateTableTents");
   });
 
@@ -114,8 +127,9 @@ export default function createProductionRouter() {
    * TICKETS SPREADSHEET COMMANDS
    */
 
-  router.post("/tickets/bidder-labels", async (req, res, next) => {
+  router.post("/tickets/bidder-labels", fromConfig(BIDDER_LABEL_FIELDS), async (req, res, next) => {
     const { folderId, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId } = req.body;
+    if (!folderId) return res.status(400).json({ error: MISSING_PRINT_FOLDER });
 
     // Real auction workflow (see CHANGELOG.md): bidder labels get printed
     // 2-3 days before the auction, while "Set Up Bid Management App" - and
@@ -147,7 +161,7 @@ export default function createProductionRouter() {
       }
     }
 
-    handleAppsScriptCall(req, res, next, "apiCreateBidderLabels", process.env.SCRIPT_ID_TICKETS!, [folderId || "", bidders]);
+    handleAppsScriptCall(req, res, next, "apiCreateBidderLabels", process.env.SCRIPT_ID_TICKETS!, [folderId, bidders]);
   });
 
   return router;

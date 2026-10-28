@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { fromConfig, ITEM_FIELDS } from '../middleware/fromConfig';
 import { logAction } from '../services/actionLog';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
@@ -47,7 +48,7 @@ export default function createBundleRouter() {
     }
   });
 
-  router.post("/process", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/process", fromConfig(ITEM_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
     const {
       spreadsheetId, 
       targetIds, 
@@ -106,7 +107,7 @@ export default function createBundleRouter() {
     }
   });
 
-  router.post("/restore", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/restore", fromConfig(ITEM_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
     const { spreadsheetId, targetBundleToken, idempotencyKey } = req.body;
     
     if (!spreadsheetId || !targetBundleToken) {

@@ -108,7 +108,6 @@ describe("performSheetSync - full rebuild", () => {
     ];
     const ranges: Record<string, any[][]> = {
       "'Auction-Status'!A2": [[opts.state ?? "Prep"]],
-      "_Settings!A:C": [["Setting Key", "Value"], ["auctionTicketSheetsID", "tickets-id"], ["ticketPrice", "40"]],
       "'tickets'!A:T": [["First"], ["Pat", "Lee", "pat@x.org", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", opts.walkIn ? "Auction Checkout" : ""]],
       "'tickets'!A:S": [["First"], ["Pat", "Lee", "pat@x.org", "2", "yes", "", "", "Sam", "Lee", "sam@x.org", "yes"]],
       "'staff tickets'!A:C": [["First"], ["Ann", "Staff", "ann@orns.org"]],
@@ -156,14 +155,14 @@ describe("performSheetSync - full rebuild", () => {
     const { sheets, calls } = fakeSheets();
     vi.spyOn(console, "log").mockImplementation(() => {});
 
-    await expect(performSheetSync(sheets, "bm-id")).resolves.toEqual({ success: true });
+    await expect(performSheetSync(sheets, "bm-id", "tickets-id")).resolves.toEqual({ success: true });
 
     expect(calls).toMatchSnapshot();
   });
 
   it.each(["Live", "Closed"])("refuses to rebuild (renumbering every bidder) once the auction is %s, before changing anything (ROADMAP B3)", async (state) => {
     const { sheets, calls } = fakeSheets({ state });
-    await expect(performSheetSync(sheets, "bm-id")).rejects.toThrow(/Cannot re-sync: the auction is/);
+    await expect(performSheetSync(sheets, "bm-id", "tickets-id")).rejects.toThrow(/Cannot re-sync: the auction is/);
     expect(calls.filter((c) => c.op !== "get")).toEqual([]);
   });
 
@@ -174,7 +173,7 @@ describe("performSheetSync - full rebuild", () => {
     let release!: () => void;
     const held = withLock("bidder-numbers:bm-id", () => new Promise<void>((r) => { release = r; }));
 
-    const sync = performSheetSync(sheets, "bm-id");
+    const sync = performSheetSync(sheets, "bm-id", "tickets-id");
     await vi.advanceTimersByTimeAsync(10);
     expect(calls).toEqual([]);
 
@@ -204,7 +203,7 @@ describe("performSheetSync - full rebuild", () => {
     const { sheets, calls } = fakeSheets({ walkIn: true });
     vi.spyOn(console, "log").mockImplementation(() => {});
 
-    await expect(performSheetSync(sheets, "bm-id")).rejects.toThrow(/Cannot re-sync: 1 walk-in bidder\(s\).*Pat Lee/);
+    await expect(performSheetSync(sheets, "bm-id", "tickets-id")).rejects.toThrow(/Cannot re-sync: 1 walk-in bidder\(s\).*Pat Lee/);
     expect(calls.filter((c) => c.op !== "get")).toEqual([]);
   });
 });

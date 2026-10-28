@@ -134,8 +134,10 @@ describe("Document and Presentation Creation workflow", () => {
         // handling bug (wrong key, wrong array position) wouldn't have
         // failed this test before this assertion existed. Every item-entry
         // case now also expects Node's resolved item list as the 2nd
-        // parameter (see EXPECTED_DEFAULT_ITEMS above).
-        const expected = expectedParams ?? ((payload as any).folderId !== undefined ? [(payload as any).folderId, EXPECTED_DEFAULT_ITEMS] : []);
+        // parameter (see EXPECTED_DEFAULT_ITEMS above), and the Config's
+        // values the script used to read from its own _Settings tab (ROADMAP B11).
+        const folderId = (payload as any).folderId;
+        const expected = expectedParams ?? [folderId, EXPECTED_DEFAULT_ITEMS, { ornsLogoID: "", auctionDevFolderID: folderId }];
         expect(lastAppsScriptParams).toEqual(expected);
       });
 

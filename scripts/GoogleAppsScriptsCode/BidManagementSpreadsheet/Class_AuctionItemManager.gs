@@ -27,8 +27,9 @@ class AuctionItemManager extends GlobalVariables {
 
     /**
      * Opens the master Auction Items spreadsheet
-     * (`this.config['auctionImportSheetID']`, already loaded from this
-     * spreadsheet's own _Settings tab by GlobalVariables) and builds an
+     * (`this.config['auctionImportSheetID']` - the run's settings since
+     * ROADMAP B11; no receipt run passes it, as Node names the items
+     * itself, so nothing live calls this) and builds an
      * `{ id: name }` map from its "Auction-Items" sheet - falling back to
      * the workbook's first tab if that name doesn't exist, mirroring
      * server/services/syncService.ts's own fallback. Read positionally per
