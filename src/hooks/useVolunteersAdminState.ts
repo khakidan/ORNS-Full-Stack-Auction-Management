@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { errorTextFrom, fetchWithRetry, getBaseUrl } from "@/services/google-api";
-import { postJson } from "@/services/apiClient";
+import { postJsonOnce } from "@/services/apiClient";
 
 export type VolunteerStatus = "invited" | "active" | "deactivated" | "revoked";
 
@@ -54,7 +54,7 @@ export function useVolunteersAdminState() {
   const run = async (busy: string, path: string, body: unknown, success: string): Promise<boolean> => {
     setBusyId(busy);
     try {
-      await postJson(path, body, "That didn't work");
+      await postJsonOnce(path, body, "That didn't work");
       toast.success(success);
       await fetchVolunteers();
       return true;

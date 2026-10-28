@@ -157,17 +157,66 @@ describe("what a signed-in volunteer can do", () => {
     expect(res.status).toBe(200);
   });
 
+  it("recording that a volunteer was seen never brings back a removed record (ROADMAP A10)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    volunteerService.touchVolunteer("v1", 1_000_000);
+    await new Promise((r) => setImmediate(r));
+    expect(fake.docs("volunteers").get("v1")!.lastSeenAt).toEqual(expect.any(String));
+
+    fake.docs("volunteers").delete("v1");
+    volunteerService.touchVolunteer("v1", 2_000_000);
+    await new Promise((r) => setImmediate(r));
+    expect(fake.docs("volunteers").has("v1")).toBe(false);
+    warn.mockRestore();
+  });
+
+  it("is told only about Bid Management undos, not Users/Tickets/Settings ones that name staff and attendees (ROADMAP A9)", async () => {
+    const { announce, _resetChangeFeedForTesting } = await import("../utils/changeFeed");
+    _resetChangeFeedForTesting();
+    announce("dan@orns.org undid an action: Checked in bidder 104.", "dan@orns.org", "Bid Management");
+    announce("dan@orns.org undid an action: sam@orns.org: Administrator -> User.", "dan@orns.org", "Users");
+    announce("dan@orns.org undid an action: Added Pat Lee to tickets.", "dan@orns.org", "Tickets");
+
+    const volunteer = await request(app).get("/api/changes?since=0").set(volunteerSession());
+    const staff = await request(app).get("/api/changes?since=0").set(admin);
+
+    expect(volunteer.body.notices.map((n: any) => n.area)).toEqual(["Bid Management"]);
+    expect(staff.body.notices).toHaveLength(3);
+  });
+
   it.each([
     ["another spreadsheet", "GET", `/api/sheets/other-sheet/${encodeURIComponent("A1:B2")}`, {}],
     ["Settings", "GET", "/api/paypal-sweeper/status", {}],
     ["a walk-in (not in the volunteers' list)", "POST", "/api/bidders/walk-in", { spreadsheetId: "bm" }],
     ["item editing", "POST", "/api/auction/update-item", { spreadsheetId: "it" }],
-    ["a winning bid in another spreadsheet", "POST", "/api/auction/record-winning-bid", { spreadsheetId: "elsewhere" }],
     ["the Action History", "GET", "/api/action-history", {}],
   ])("is refused %s", async (_label, method, path, body) => {
     const req = method === "GET" ? request(app).get(path) : request(app).post(path).send(body);
     const res = await req.set(volunteerSession());
     expect(res.status).toBe(403);
+  });
+
+  it("can't point a winning bid at another spreadsheet: the auction's own is used, whatever the request says (ROADMAP A13)", async () => {
+    const touched = new Set<string>();
+    server.use(http.all(`${SHEETS}/:id/*`, ({ params }) => { touched.add(String(params.id)); return HttpResponse.json({ values: [["ID"]] }); }));
+
+    await request(app).post("/api/auction/record-winning-bid").set(volunteerSession())
+      .send({ spreadsheetId: "elsewhere", bidderId: "101", itemId: "301", price: 50, bidManagementSheet: "Bid-Management", bidderNumbersSheet: "Bidder-Numbers", idempotencyKey: "k" });
+
+    expect(touched.has("elsewhere")).toBe(false);
+    expect(touched.has("bm")).toBe(true);
+  });
+
+  it("gets no spreadsheet at all from the request while the Config has none set", async () => {
+    fake.docs("settings").set("global", { ...fake.docs("settings").get("global"), bidManagementSpreadsheetId: "" });
+    const touched = new Set<string>();
+    server.use(http.all(`${SHEETS}/:id/*`, ({ params }) => { touched.add(String(params.id)); return HttpResponse.json({ values: [["Live"]] }); }));
+
+    const res = await request(app).post("/api/bidders/set-flag").set(volunteerSession())
+      .send({ spreadsheetId: "elsewhere", bidderNumbersSheet: "Bidder-Numbers", bidderId: "101", flag: "checkedIn" });
+
+    expect(touched.has("elsewhere")).toBe(false);
+    expect(res.status).not.toBe(200);
   });
 
   it.each([

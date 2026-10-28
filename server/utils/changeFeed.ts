@@ -23,6 +23,8 @@ export interface Notice {
   message: string;
   /** Who caused it - their own screen already said so. */
   by: string;
+  /** The Action History area it concerns (volunteers get only Bid Management's). */
+  area: string;
 }
 const MAX_NOTICES = 50;
 let notices: Notice[] = [];
@@ -40,9 +42,9 @@ export function noteChange(key: string): void {
 }
 
 /** Records a message for every open screen (shown as a toast), e.g. "Dan undid ...". */
-export function announce(message: string, by: string): void {
+export function announce(message: string, by: string, area: string): void {
   version += 1;
-  notices = [...notices, { version, message, by }].slice(-MAX_NOTICES);
+  notices = [...notices, { version, message, by, area }].slice(-MAX_NOTICES);
 }
 
 /** The current count, and the keys changed and notices made after `since`. */

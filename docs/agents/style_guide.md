@@ -72,7 +72,7 @@ shared Config comes from `GET /api/config`); before that it was a lazy
 initial bundle:
 `AttendanceChart.tsx` renders its card at once and lazy-loads the pie
 itself (`AttendancePie.tsx`). Everything else loads on initial page load
-(`App.tsx` eagerly imports `Dashboard`, `Bidders`, `Items`, `BidEntry`,
+(`App.tsx` eagerly imports `BidManagementWorkflow.tsx`, which imports `Dashboard`, `Bidders`, `Items`, `BidEntry`,
 `Checkout`, `Receipts`, which pull in `motion` and `lucide-react`
 immediately). Summed, that is **~283 kB gzipped of JS** on the critical
 path, plus 15 kB of CSS - down from ~333 kB before the pie was

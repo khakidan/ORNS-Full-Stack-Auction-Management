@@ -17,7 +17,11 @@ export default function createChangesRouter() {
     // it makes shows up in this same answer, so screens reload it at once.
     if (req.user?.role !== "volunteer") await syncBiddersFromTickets(req, { background: true });
     const since = Number(req.query.since);
-    res.json(changesSince(Number.isFinite(since) && since >= 0 ? since : 0));
+    const changes = changesSince(Number.isFinite(since) && since >= 0 ? since : 0);
+    // Volunteers only work in Bid Management; other undo notices name staff
+    // and attendees they have no business seeing (ROADMAP A9).
+    if (req.user?.role === "volunteer") changes.notices = changes.notices.filter((n) => n.area === "Bid Management");
+    res.json(changes);
   });
   return router;
 }

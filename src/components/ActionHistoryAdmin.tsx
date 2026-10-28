@@ -148,6 +148,15 @@ export default function ActionHistoryAdmin() {
             >
               {state.trackingOn ? "Turn off edit tracking" : "Turn on edit tracking"}
             </LoadingButton>
+            {state.trackingOn && state.trackingTurnedOn && (
+              <span
+                className="text-xs text-muted-foreground"
+                title="Edits are recorded by this person's Google account. If that account is removed, recording stops - turn tracking off and on again to record as yourself."
+              >
+                Recording as {state.trackingTurnedOn.by}
+                {state.trackingTurnedOn.at ? ` since ${format(new Date(state.trackingTurnedOn.at), "MMM d")}` : ""}
+              </span>
+            )}
             {state.spreadsheetUrl && (
               <Button variant="outline" size="sm" className="gap-2" onClick={() => window.open(state.spreadsheetUrl, "_blank", "noopener,noreferrer")}>
                 <ExternalLink className="w-4 h-4" /> Open Spreadsheet
@@ -160,7 +169,7 @@ export default function ActionHistoryAdmin() {
       <RefreshableListCard
         icon={<History className="w-5 h-5 text-primary" />}
         title="Action History"
-        description={`${state.actions.length} of ${state.totalCount} actions this season, newest first. Undo puts back what an action changed, unless it has changed again since.`}
+        description={`${state.actions.length} of ${state.totalCount} actions this season, newest first${state.hasMore ? ` (the newest ${state.loadedCount} loaded - search and filters cover those)` : ""}. Undo puts back what an action changed, unless it has changed again since.`}
         loading={state.loading}
         onRefresh={state.fetchActions}
       >
@@ -171,6 +180,13 @@ export default function ActionHistoryAdmin() {
           emptyMessage={state.totalCount === 0 ? "No actions recorded yet this season." : "No actions match your search or filters."}
           renderRow={(a) => <ActionRow key={a.id} action={a} undoing={state.undoingId === a.id} onUndo={setConfirming} />}
         />
+        {state.hasMore && (
+          <div className="flex justify-center p-4 border-t">
+            <LoadingButton variant="outline" size="sm" loading={state.loadingMore} onClick={state.loadMore}>
+              Load older actions
+            </LoadingButton>
+          </div>
+        )}
       </RefreshableListCard>
 
       <ConfirmationDialog

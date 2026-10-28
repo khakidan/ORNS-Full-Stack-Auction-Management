@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
+import { errorTextFrom, getBaseUrl, postOnce } from "@/services/google-api";
 import { useConfig } from "@/context/ConfigContext";
 import { Config } from "@/types";
 import { postJson } from "@/services/apiClient";
@@ -75,15 +75,18 @@ export function useConfigSettingsState() {
       const auctionItemsId = extractId(config.auctionItemsSpreadsheetId);
       const auctionTicketsId = extractId(config.auctionTicketsSpreadsheetId);
 
-      const response = await fetchWithRetry(`${getBaseUrl()}/api/auction/setup-new`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ticketsSpreadsheetId: auctionTicketsId,
-          itemEntrySpreadsheetId: auctionItemsId,
-          bidManagementSpreadsheetId: bidMgtId
-        }),
+      // Sent once, never retried: setup makes the year's folders and clears
+      // the masters, so a resend would report "already exists" though the
+      // first run went through (ROADMAP A17).
+      const response = await postOnce(`${getBaseUrl()}/api/auction/setup-new`, {
+        ticketsSpreadsheetId: auctionTicketsId,
+        itemEntrySpreadsheetId: auctionItemsId,
+        bidManagementSpreadsheetId: bidMgtId
       });
+      if (!response.ok) {
+        const refusal = await response.json().catch(() => ({}));
+        throw new Error(errorTextFrom(refusal, `Couldn't start setting up the new auction year (status ${response.status})`));
+      }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();

@@ -1,5 +1,20 @@
 import { parseDollar } from "@/lib/auctionItemPricing";
 import { AuctionItem } from "@/types";
+import { getCategoryBase } from "@/lib/categoryHelpers";
+
+/** Live (1301), Raffle Tickets (1501) and Open Appeal (1601) - see `steppedBidding`. */
+const UNSTEPPED_CATEGORY_BASES = new Set([1301, 1501, 1601]);
+
+/**
+ * Whether the item's bids go up in Minimum Raise steps from the Opening
+ * Bid. Silent-auction sheets do; Live items are called by the auctioneer,
+ * raffle tickets and Open Appeal tiers are bought (often several at once),
+ * so a figure in those columns says nothing about a valid amount
+ * (ROADMAP A12).
+ */
+function steppedBidding(item: AuctionItem): boolean {
+  return !item.allowMultipleWinners && !UNSTEPPED_CATEGORY_BASES.has(getCategoryBase(item.category));
+}
 
 /** Above this many times the item's value, an amount is probably an extra digit. */
 export const VALUE_MULTIPLE_LIMIT = 3;
@@ -18,7 +33,8 @@ const money = (n: number) => `$${n.toFixed(2)}`;
  *   $20...), so $22 can't be a winning bid.
  * - More than VALUE_MULTIPLE_LIMIT x the value: usually an extra digit.
  *
- * A field the item doesn't have (blank or $0) skips its check.
+ * A field the item doesn't have (blank or $0) skips its check. The step
+ * check is skipped for items not bid in steps (`steppedBidding`).
  */
 export function bidWarnings(item: AuctionItem, price: number): string[] {
   const warnings: string[] = [];
@@ -32,7 +48,7 @@ export function bidWarnings(item: AuctionItem, price: number): string[] {
 
   if (opening > 0 && price < opening - EPS) {
     warnings.push(`${money(price)} is below the opening bid of ${money(opening)}. Missing a digit?`);
-  } else if (opening > 0 && minRaise > 0) {
+  } else if (opening > 0 && minRaise > 0 && steppedBidding(item)) {
     const steps = (price - opening) / minRaise;
     const below = opening + Math.floor(steps + EPS / minRaise) * minRaise;
     if (price - below > EPS) {

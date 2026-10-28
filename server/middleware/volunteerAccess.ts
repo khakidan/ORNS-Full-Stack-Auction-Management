@@ -8,8 +8,9 @@ import { RuntimeConfig } from "../services/volunteerService";
  * refused - a new route is closed to volunteers until it's added here.
  *
  * Matched on the full path (requireAuth runs before the router knows
- * which route matched). `ids` names the request fields that must point at
- * one of the auction's own spreadsheets or folders.
+ * which route matched). A route here that names a spreadsheet in its body
+ * must take it through `fromConfig` (middleware/fromConfig.ts), which
+ * replaces it with the auction's own and never lets a volunteer supply one.
  */
 interface VolunteerRoute {
   method: "GET" | "POST";
@@ -34,9 +35,6 @@ const ROUTES: VolunteerRoute[] = [
   { method: "GET", path: /^\/api\/drive\/files\/[^/]+$/ },
 ];
 
-/** Body fields that name a spreadsheet; each must be one of the auction's. */
-const SPREADSHEET_FIELDS = ["spreadsheetId", "itemsSpreadsheetId", "ticketsSpreadsheetId"];
-
 /** Why a volunteer's request is refused, or null if it's allowed. */
 export function volunteerRefusal(req: Request, config: RuntimeConfig): string | null {
   const path = (req.originalUrl || req.url).split("?")[0];
@@ -51,10 +49,5 @@ export function volunteerRefusal(req: Request, config: RuntimeConfig): string | 
 
   const folderMatch = /^\/api\/drive\/files\/([^/]+)$/.exec(path);
   if (folderMatch && !folders.has(decodeURIComponent(folderMatch[1]))) return "That folder isn't part of this auction.";
-
-  for (const field of SPREADSHEET_FIELDS) {
-    const value = req.body?.[field];
-    if (value && !spreadsheets.has(String(value))) return "That spreadsheet isn't part of this auction.";
-  }
   return null;
 }

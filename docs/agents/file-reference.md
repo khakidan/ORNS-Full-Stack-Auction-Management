@@ -44,6 +44,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   ├── middleware/
 │   │   ├── cacheControl.ts    # no-store on /api/* and /auth/*
 │   │   ├── errorHandler.ts    # Centralized JSON error responses (message only for signed-in staff)
+│   │   ├── fromConfig.ts      # Fills spreadsheet IDs, tab names and ticket price from the server's Config
 │   │   ├── requireAuth.ts     # 401 unless the orns_session cookie carries tokens
 │   │   └── securityHeaders.ts # No framing (CSP frame-ancestors, X-Frame-Options), nosniff, Referrer-Policy, HSTS when deployed
 │   │
@@ -102,18 +103,20 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │
 └── src/                       # Frontend React Layer
     ├── main.tsx               # Mount point
-    ├── App.tsx                # Layout shell, workflow/tab routing, lazy-loaded views
+    ├── App.tsx                # Layout shell: sign-in screens, sidebar, the current workflow (lazy-loaded views); routing in hooks/useWorkflowNavigation.ts
     ├── index.css              # Tailwind + design tokens
     ├── types.ts               # Shared types (Config, GoogleTokens, bug report shapes, ...)
     ├── context/               # AuctionContext, AuthContext, ConfigContext
     ├── services/
     │   ├── google-api.ts      # fetchWithRetry (reports retries; throws ServerUnreachableError), postOnce (no retries, for Apps Script runs), sheet read/write helpers
-    │   └── apiClient.ts       # postJson (JSON POST + the server's error text, throws HttpError with the status)
+    │   └── apiClient.ts       # postJson (JSON POST + the server's error text, throws HttpError with the status); postJsonOnce (the same, sent once)
     ├── hooks/                 # One hook per view/state concern (useCheckoutState, useGoogleAuth, ...); useOutboxReplay sends saved bids
     ├── lib/                   # Pure parsing/validation/formatting helpers (configuredId.ts: isConfiguredId), error buffer, screenshot capture;
     │                          #   bidOutbox.ts (winning bids saved on the device while offline), syncStatus.ts (retry state)
     └── components/            # Views (Dashboard, Bidders, Items, Checkout, Receipts, ConfigSettings, BidEntry, ...) and their sub-components;
                                #   SyncStatusBanner.tsx (connection banner above every page + sidebar waiting count);
-                               #   FormField.tsx (labelled dialog field), RowIdTile.tsx (list-row number box)
+                               #   FormField.tsx (labelled dialog field), RowIdTile.tsx (list-row number box);
+                               #   AppSidebar.tsx, SignInScreens.tsx, BackToTop.tsx, BidManagementWorkflow.tsx (App.tsx's pieces);
+                               #   ArchivedOverviewSection.tsx, ArchivedListSections.tsx (ArchivedYearPanel.tsx's sections)
         └── ui/                # Primitives: button, card, select, dialog, table, ... plus IconButton, LoadingButton, ConfirmationDialog, ListPageCard
 ```

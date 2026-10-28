@@ -21,12 +21,12 @@ describe("changeFeed", () => {
   });
 
   it("hands each browser only the notices made since it last looked", () => {
-    announce("dan@orns.org undid an action: Checked in bidder 104.", "dan@orns.org");
+    announce("dan@orns.org undid an action: Checked in bidder 104.", "dan@orns.org", "Bid Management");
     const seen = changesSince(0).version;
-    announce("dan@orns.org undid an action: Recorded a bid.", "dan@orns.org");
+    announce("dan@orns.org undid an action: Recorded a bid.", "dan@orns.org", "Bid Management");
 
     expect(changesSince(0).notices).toHaveLength(2);
-    expect(changesSince(seen).notices).toEqual([{ version: 2, message: "dan@orns.org undid an action: Recorded a bid.", by: "dan@orns.org" }]);
+    expect(changesSince(seen).notices).toEqual([{ version: 2, message: "dan@orns.org undid an action: Recorded a bid.", by: "dan@orns.org", area: "Bid Management" }]);
   });
 
   it("every server write is recorded, through the cache clear that follows it", () => {

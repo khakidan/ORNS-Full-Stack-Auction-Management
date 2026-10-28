@@ -109,6 +109,26 @@ describe("/api/action-history", () => {
     vi.mocked(getActionHistorySpreadsheetId).mockResolvedValue(LOG_ID);
   });
 
+  it("sends the newest actions a page at a time, without the Undo Data (ROADMAP A15)", async () => {
+    const rows = Array.from({ length: 5 }, (_, i) =>
+      [`act-${i + 1}`, "t", "a@orns.org", "", "App", "Settings", "Do", "", `s${i + 1}`, "", "", "", "Can't be undone: x", "", ""]);
+    server.use(http.get(`${SHEETS}/:id/values/:range`, () => HttpResponse.json({ values: [[...ACTION_HISTORY_HEADER], ...rows] })));
+
+    const first = await request(app).get("/api/action-history?limit=2").set(admin);
+    expect(first.body.actions.map((a: any) => a.id)).toEqual(["act-5", "act-4"]);
+    expect(first.body).toMatchObject({ total: 5, more: true });
+    expect(first.body.actions[0]).not.toHaveProperty("undoData");
+
+    const next = await request(app).get("/api/action-history?limit=2&before=act-4").set(admin);
+    expect(next.body.actions.map((a: any) => a.id)).toEqual(["act-3", "act-2"]);
+    const last = await request(app).get("/api/action-history?limit=2&before=act-2").set(admin);
+    expect(last.body).toMatchObject({ more: false });
+    expect(last.body.actions.map((a: any) => a.id)).toEqual(["act-1"]);
+
+    const gone = await request(app).get("/api/action-history?limit=2&before=deleted-row").set(admin);
+    expect(gone.body).toMatchObject({ actions: [], restart: true });
+  });
+
   it("is Full Administrator only", async () => {
     const user = authCookieHeader(tokens, "sam@orns.org");
     vi.spyOn(await import("../services/userService"), "getRole").mockResolvedValue("admin");
@@ -279,6 +299,25 @@ describe("/api/action-history", () => {
       expect(writes).toEqual([]);
     });
 
+    it("marks the action's row as it is after the undo, not where it was found before (a row inserted meanwhile - ROADMAP A8)", async () => {
+      const rows = logRows("", undoCells);
+      const shifted = [rows[0], ["act-0", "t", "x", "", "App", "Tickets", "Other", "", "s", "", "", "", "Can't be undone: x", "", ""], rows[1]];
+      let logReads = 0;
+      const writes: string[] = [];
+      server.use(
+        http.get(`${SHEETS}/:id/values/:range`, ({ params }) =>
+          HttpResponse.json({ values: params.id === LOG_ID ? (logReads++ === 0 ? rows : shifted) : [[true]] })),
+        http.put(`${SHEETS}/:id/values/:range`, ({ params }) => {
+          writes.push(`${params.id} ${decodeURIComponent(String(params.range))}`);
+          return HttpResponse.json({});
+        })
+      );
+
+      expect((await request(app).post("/api/action-history/act-1/undo").set(admin)).status).toBe(200);
+      expect(writes).toContain(`${LOG_ID} 'Actions'!M3`);
+      expect(writes).not.toContain(`${LOG_ID} 'Actions'!M2`);
+    });
+
     it("answers 404 for an unknown action", async () => {
       sheetsWith(logRows("", undoCells), true);
       expect((await request(app).post("/api/action-history/nope/undo").set(admin)).status).toBe(404);
@@ -333,6 +372,28 @@ describe("POST /api/action-history/edit-tracking", () => {
     expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: "Turn off edit tracking" }));
   });
 
+  it("remembers who turned it on and when, reports it with the status, and forgets it when turned off (ROADMAP A11)", async () => {
+    vi.mocked(getActionHistorySpreadsheetId).mockResolvedValue(LOG_ID);
+    server.use(http.post("https://script.googleapis.com/v1/scripts/:scriptId\\:run", () => HttpResponse.json({ response: { result: { success: true, on: true } } })));
+
+    await request(app).post("/api/action-history/edit-tracking").set(admin).send({ itemsSpreadsheetId: "it", ticketsSpreadsheetId: "tk" });
+    expect((await request(app).get("/api/action-history/edit-tracking").set(admin)).body.turnedOn).toEqual({ by: TEST_ADMIN_EMAIL, at: expect.any(String) });
+
+    await request(app).post("/api/action-history/edit-tracking").set(admin).send({ enabled: false });
+    expect((await request(app).get("/api/action-history/edit-tracking").set(admin)).body.turnedOn).toBeNull();
+  });
+
+  it("doesn't record a turn-on that failed in either script", async () => {
+    vi.mocked(getActionHistorySpreadsheetId).mockResolvedValue(LOG_ID);
+    server.use(http.post("https://script.googleapis.com/v1/scripts/:scriptId\\:run", ({ params }) =>
+      HttpResponse.json({ response: { result: params.scriptId === "test-tickets-script-id" ? { success: false, error: "boom" } : { success: true } } })));
+
+    await request(app).post("/api/action-history/edit-tracking").set(admin).send({ itemsSpreadsheetId: "it", ticketsSpreadsheetId: "tk" });
+
+    const { getEditTrackingRecord } = await import("../services/actionHistoryStore");
+    expect(await getEditTrackingRecord()).toBeNull();
+  });
+
   it("refuses until the Action History spreadsheet exists", async () => {
     vi.mocked(getActionHistorySpreadsheetId).mockResolvedValue("");
     const res = await request(app).post("/api/action-history/edit-tracking").set(admin).send({ itemsSpreadsheetId: "it", ticketsSpreadsheetId: "tk" });
@@ -376,7 +437,7 @@ describe("routes record what they did", () => {
     }));
   });
 
-  it("an attendee edit records the cells' old and new values", async () => {
+  it("an attendee edit records the cells' old and new values, in the Config's Tickets spreadsheet (not the one the browser named)", async () => {
     server.use(http.get(`${SHEETS}/:id/values/:range`, () => HttpResponse.json({ values: [["old@x.org"]] })));
 
     const res = await request(app).post("/api/attendees/update").set(admin).send({ spreadsheetId: "tk", range: "tickets!C4", values: [["new@x.org"]] });
@@ -385,7 +446,7 @@ describe("routes record what they did", () => {
     expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       area: "Tickets",
       action: "Edit attendee",
-      undo: { kind: "cells", spreadsheetId: "tk", range: "'tickets'!C4", before: [["old@x.org"]], after: [["new@x.org"]] },
+      undo: { kind: "cells", spreadsheetId: "tk-sheet", range: "'tickets'!C4", before: [["old@x.org"]], after: [["new@x.org"]] },
     }));
   });
 

@@ -2,6 +2,24 @@ import { setupServer } from 'msw/node'
 import { handlers } from './handlers'
 import { beforeAll, afterAll, afterEach, vi } from 'vitest'
 
+// No test reaches real Firestore: without this, an unmocked read (the
+// Config, a role) went out over the network with whatever Google
+// credentials the machine had. Every test gets an empty in-memory
+// Firestore, cleared after each test; a test file that needs data mocks
+// firebaseAdmin with its own (helpers/fakeFirestore.ts), which wins.
+vi.mock('../services/firebaseAdmin', async () => {
+  const { createFakeFirestore } = await import('./helpers/fakeFirestore')
+  const fake = createFakeFirestore()
+  return { getAdminFirestore: () => fake.db, _clearDefaultFakeFirestore: () => fake.clear() }
+})
+afterEach(async () => {
+  const admin: any = await import('../services/firebaseAdmin')
+  // A file's own firebaseAdmin mock has no such export (vitest throws on the lookup).
+  try { admin._clearDefaultFakeFirestore() } catch { /* not the default fake */ }
+  const { _resetConfigCacheForTesting } = await import('../services/configService')
+  _resetConfigCacheForTesting()
+})
+
 // PayPal sandbox/live is read from Firestore server-side (sharedConfig.ts,
 // ROADMAP.md M3). Tests never reach real Firestore, so every test sees
 // sandbox unless it overrides this mock; sharedConfig.test.ts covers the
@@ -49,12 +67,15 @@ vi.mock('../services/bidderTicketSync', () => ({
 // covers the real module via vi.importActual.
 vi.mock('../services/actionHistoryStore', () => {
   const undone = new Set<string>()
+  let editTracking: unknown = null
   return {
     getActionHistorySpreadsheetId: vi.fn(async () => ''),
     setActionHistorySpreadsheetId: vi.fn(async () => {}),
     wasUndone: vi.fn(async (id: string) => undone.has(id)),
     recordUndone: vi.fn(async (id: string) => { undone.add(id) }),
-    _resetActionHistoryStoreForTesting: () => undone.clear(),
+    getEditTrackingRecord: vi.fn(async () => editTracking),
+    setEditTrackingRecord: vi.fn(async (record: unknown) => { editTracking = record }),
+    _resetActionHistoryStoreForTesting: () => { undone.clear(); editTracking = null },
   }
 })
 afterEach(async () => {
