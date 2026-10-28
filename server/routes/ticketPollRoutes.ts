@@ -1,7 +1,10 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { requirePermission } from "../middleware/requirePermission";
 import { logAction } from "../services/actionLog";
-import { pollTicketPurchasesNow } from "../services/ticketPoll";
+import { fluentFormsApiFromEnv } from "../services/fluentFormsApi";
+import { getAdminFirestore } from "../services/firebaseAdmin";
+import { pollTicketPurchasesNow, readTicketPollStatus } from "../services/ticketPoll";
+import { listReview, ticketWriteMode } from "../services/ticketPurchaseService";
 import { AlreadyRunningError } from "../utils/asyncLock";
 
 /**
@@ -12,6 +15,38 @@ import { AlreadyRunningError } from "../utils/asyncLock";
  */
 export default function createTicketPollRouter() {
   const router = Router();
+
+  /**
+   * The Tickets page's status card (ROADMAP W6): the last webhook, the
+   * poll's last runs, the entries the poll had to add, and the review
+   * list - so a failure shows up days before the auction, not at check-in.
+   */
+  router.get("/tickets/fluent-forms/status", requirePermission("auction.stage"), async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const [webhookDoc, poll, review] = await Promise.all([
+        getAdminFirestore().collection("system").doc("fluentFormsTickets").get(),
+        readTicketPollStatus(),
+        listReview(),
+      ]);
+      const webhook = webhookDoc.data()?.lastWebhook;
+      res.json({
+        configured: fluentFormsApiFromEnv() !== null,
+        mode: ticketWriteMode(),
+        lastWebhook: webhook ? { at: webhook.at, entryId: webhook.entryId, outcome: webhook.outcome, ...(webhook.error ? { error: webhook.error } : {}) } : null,
+        poll: poll ? {
+          lastSuccessAt: poll.lastSuccessAt || null,
+          lastRunAt: poll.lastRun?.at || null,
+          lastRunErrors: poll.lastRun?.errors || [],
+          seasonStartEntryId: poll.seasonStartEntryId,
+        } : null,
+        missed: Object.entries(poll?.missed || {}).map(([entryId, at]) => ({ entryId, at })).sort((a, b) => Number(a.entryId) - Number(b.entryId)),
+        submittedAt: poll?.submittedAt || {},
+        review,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.post("/tickets/fluent-forms/check-now", requirePermission("auction.stage"), async (req: Request, res: Response, next: NextFunction) => {
     try {

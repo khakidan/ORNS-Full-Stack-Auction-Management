@@ -1,4 +1,4 @@
-import { SweeperStatus, PaypalSweepOutcome, ArchivedAuction } from "@/types";
+import { SweeperStatus, PaypalSweepOutcome, ArchivedAuction, TicketPurchaseStatus, TicketPollRun } from "@/types";
 import { newRequestId, reportDone, reportRetry } from "@/lib/syncStatus";
 import { isConfiguredId } from "@/lib/configuredId";
 
@@ -169,6 +169,29 @@ export async function runPaypalSweepNow(): Promise<PaypalSweepOutcome> {
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
     throw new Error(errorData.error || "Failed to run PayPal sweep");
+  }
+  return res.json();
+}
+
+export async function getTicketPurchaseStatus(): Promise<TicketPurchaseStatus> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/tickets/fluent-forms/status`, {
+    credentials: "include"
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to fetch the website ticket status");
+  }
+  return res.json();
+}
+
+export async function checkWebsiteTicketsNow(): Promise<TicketPollRun> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/tickets/fluent-forms/check-now`, {
+    method: "POST",
+    credentials: "include"
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to check the website's ticket purchases");
   }
   return res.json();
 }

@@ -14,7 +14,7 @@ vi.mock("../services/ticketPaymentCheck", async (importOriginal) => ({
   checkTicketPayment: vi.fn(),
 }));
 
-import { pollTicketPurchases, startNewTicketSeason, TicketPollDeps } from "../services/ticketPoll";
+import { pollTicketPurchases, pollTicketPurchasesFirst, readTicketPollStatus, startNewTicketSeason, TicketPollDeps } from "../services/ticketPoll";
 import { FluentFormsEntry } from "../services/fluentFormsApi";
 import { upsertTicketPurchase } from "../services/ticketPurchaseService";
 import { checkTicketPayment } from "../services/ticketPaymentCheck";
@@ -207,6 +207,41 @@ describe("pollTicketPurchases", () => {
     await first;
   });
 
+  it("remembers each entry it had to add - a missed webhook - for the status card, until the next season", async () => {
+    await startAt(1482);
+    vi.mocked(upsertTicketPurchase).mockImplementation(async (_s, p) =>
+      p.entryId === "1483" ? { outcome: "added", entryId: p.entryId, rowIndex: 9 } : { outcome: "exists", entryId: p.entryId, rowIndex: 10 });
+
+    const run = await pollTicketPurchases(deps([entry(1483), entry(1484)]));
+    await pollTicketPurchases(deps([entry(1483), entry(1484)]));
+
+    expect((await readTicketPollStatus())?.missed).toEqual({ "1483": run.at });
+  });
+
+  it("in compare mode remembers the entries missing from the sheet too", async () => {
+    delete process.env.FLUENT_FORMS_TICKETS_MODE;
+    await startAt(1482);
+    vi.mocked(upsertTicketPurchase).mockImplementation(async (_s, p) => ({ outcome: "would-add", entryId: p.entryId, row: [] }));
+
+    const run = await pollTicketPurchases(deps([entry(1483)]));
+
+    expect((await readTicketPollStatus())?.missed).toEqual({ "1483": run.at });
+  });
+
+  it("records when each of this season's entries was submitted (not spam), for 'still Pending after N days'", async () => {
+    await startAt(1482);
+
+    await pollTicketPurchases(deps([entry(1482), entry(1483, { createdAt: "2027-02-03 09:00:00" }), entry(1484, { status: "spam" })]));
+
+    expect((await readTicketPollStatus())?.submittedAt).toEqual({ "1483": "2027-02-03 09:00:00" });
+  });
+
+  it("hands the status card its last run", async () => {
+    await startAt(1482);
+    const run = await pollTicketPurchases(deps([entry(1482)]));
+    expect(await readTicketPollStatus()).toMatchObject({ lastSuccessAt: run.at, lastRun: { at: run.at } });
+  });
+
   it("logs each run to Cloud Logging", async () => {
     await startAt(1482);
     await pollTicketPurchases(deps([entry(1483)]), "staff: jane@orns.org");
@@ -231,5 +266,32 @@ describe("startNewTicketSeason (Setup New Auction Year)", () => {
 
     expect(await startNewTicketSeason()).toBeNull();
     expect((await state().get()).exists).toBe(false);
+  });
+});
+
+describe("pollTicketPurchasesFirst (Set Up Bid Management App, bidder labels)", () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    for (const key of ["FLUENT_FORMS_SITE_URL", "FLUENT_FORMS_API_USER", "FLUENT_FORMS_API_PASSWORD"]) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+  });
+
+  it("never stops what comes next - a check that can't run is only logged", async () => {
+    Object.assign(process.env, { FLUENT_FORMS_SITE_URL: "https://www.example.org", FLUENT_FORMS_API_USER: "u", FLUENT_FORMS_API_PASSWORD: "p" });
+    await startAt(1482);
+    let release!: () => void;
+    vi.mocked(upsertTicketPurchase).mockImplementation(() => new Promise((resolve) => { release = () => resolve({ outcome: "added", entryId: "1483", rowIndex: 9 }); }));
+    const first = pollTicketPurchases(deps([entry(1483)]));
+    await vi.waitFor(() => expect(upsertTicketPurchase).toHaveBeenCalled());
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await expect(pollTicketPurchasesFirst("bidder labels: jane@orns.org")).resolves.toBeUndefined();
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("bidder labels: jane@orns.org"), expect.anything());
+    warn.mockRestore();
+    release();
+    await first;
   });
 });

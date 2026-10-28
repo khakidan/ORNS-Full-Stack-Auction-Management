@@ -19,6 +19,7 @@ import { useAuction } from "@/context/AuctionContext";
 import { useAuth } from "@/context/AuthContext";
 import { useConfig } from "@/context/ConfigContext";
 import { useTicketAttendeeState } from "@/hooks/useTicketAttendeeState";
+import TicketPurchaseStatusCard from "@/components/TicketPurchaseStatusCard";
 
 // SelectValue with no children renders the raw stored value, not the
 // matching SelectItem's label - see component-standards.md's documented
@@ -42,6 +43,7 @@ export default function TicketAttendeeTab() {
 
   return (
     <div className="space-y-4">
+      {can("auction.stage") && <TicketPurchaseStatusCard attendees={attendees} onAdded={fetchAttendees} />}
       <FilterToolbar
         searchValue={state.searchTerm}
         onSearchChange={state.setSearchTerm}

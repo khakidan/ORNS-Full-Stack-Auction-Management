@@ -172,6 +172,35 @@ export interface SweeperStatus {
   lastResult: PaypalSweepOutcome | null;
 }
 
+/** The Tickets page's website-purchases status card (server/routes/ticketPollRoutes.ts, ROADMAP W6). */
+export interface TicketPurchaseStatus {
+  /** The Fluent Forms API is set up on the server, so the poll can run. */
+  configured: boolean;
+  /** "compare" until the switch-over: the Sheets feed adds rows and the webhook and poll only report. */
+  mode: "write" | "compare";
+  lastWebhook: { at: string; entryId: string; outcome: string; error?: string } | null;
+  poll: { lastSuccessAt: string | null; lastRunAt: string | null; lastRunErrors: string[]; seasonStartEntryId: number } | null;
+  /** Entries the poll had to add (or found missing from the sheet) - each one a webhook that was missed. */
+  missed: { entryId: string; at: string }[];
+  /** Entry ID -> when it was submitted (WordPress's local time, "2027-02-01 10:00:00"). */
+  submittedAt: Record<string, string>;
+  review: { entryId: string; name: string; problems: string[]; firstSeenAt: string; lastSeenAt: string }[];
+}
+
+/** What one poll run did (server/services/ticketPoll.ts). */
+export interface TicketPollRun {
+  at: string;
+  mode: "write" | "compare";
+  newEntries: number;
+  added: string[];
+  wouldAdd: string[];
+  needsReview: string[];
+  paymentsSet: string[];
+  paymentsWouldSet: string[];
+  paymentsNeedReview: string[];
+  errors: string[];
+}
+
 /** One past auction's archived spreadsheets on Drive (server/services/archiveService.ts). Null = not found. */
 export interface ArchivedAuction {
   year: number;

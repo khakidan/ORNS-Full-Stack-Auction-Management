@@ -11,6 +11,7 @@ import { ensureBidderNumbersSheet, getBidderLabelList } from '../services/syncSe
 import { getValidSortedItems } from '../services/itemDataService';
 import { sheetsFor } from '../utils/googleClients';
 import { syncBiddersFromTickets } from '../services/bidderTicketSync';
+import { pollTicketPurchasesFirst } from '../services/ticketPoll';
 
 /**
  * Documents always go to the Config's For Print folder: without one the
@@ -180,6 +181,8 @@ export default function createProductionRouter() {
     let bidders: { name: string; number: string }[] = [];
     if (bidManagementSpreadsheetId) {
       try {
+        // Website purchases first, so no one's label is missing (ROADMAP W6).
+        await pollTicketPurchasesFirst(`bidder labels: ${req.user?.email || "unknown"}`);
         const sheets = sheetsFor(req);
         const built = await ensureBidderNumbersSheet(sheets, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId || "");
         if (built.created) {
