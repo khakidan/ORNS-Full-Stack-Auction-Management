@@ -281,10 +281,23 @@ whose webhook was missed (`pollTicketPurchases`,
 State is Firestore `system/fluentFormsPoll`: the season's first entry
 (Setup New Auction Year moves it, so last year's purchases are never
 re-added), the high-water mark, and the last run (also in Cloud Logging
-as `jsonPayload.fluentFormsPoll`). Staff can run it on demand with
-`POST /api/tickets/fluent-forms/check-now` (the auction-stage
-permission). It needs the Fluent Forms API (see "Ticket payments (W4)")
-and answers 503 without it; a run with errors answers 500.
+as `jsonPayload.fluentFormsPoll`). Staff can run it on demand with the
+Tickets page's **Check Now** button (`POST /api/tickets/fluent-forms/check-now`,
+the auction-stage permission). It needs the Fluent Forms API (see
+"Ticket payments (W4)") and answers 503 without it; a run with errors
+answers 500. Set Up Bid Management App and Create Bidder Labels run it
+first, so neither works from a list missing a purchase; a failed check
+never stops them (`pollTicketPurchasesFirst`).
+
+**Website Ticket Purchases card (ROADMAP W6).** At the top of the
+Tickets page, for staff with the auction-stage permission
+(`TicketPurchaseStatusCard`, from `GET /api/tickets/fluent-forms/status`).
+It shows "Needs Attention" when the poll hasn't succeeded in over 12
+hours (two missed runs), the last run stopped with an error, the last
+webhook failed, or a purchase is on the review list. It also lists the
+entries the poll had to add (each one a missed webhook; in shadow mode,
+entries missing from the sheet when checked) and website purchases
+still Pending a week after they were bought.
 
 Cloud Scheduler's free tier covers 3 jobs per billing account (these are
 2), and each run is a few seconds of Cloud Run CPU.

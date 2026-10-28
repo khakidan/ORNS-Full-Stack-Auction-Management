@@ -5,6 +5,7 @@ import { requirePermission } from '../middleware/requirePermission';
 import { sheetsFor, respondIfNotFound } from '../utils/googleClients';
 import { performSheetSync, isBidManagementSetUp } from '../services/syncService';
 import { AlreadyRunningError, runIfIdle } from '../utils/asyncLock';
+import { pollTicketPurchasesFirst } from '../services/ticketPoll';
 
 /** Builds Bidder-Numbers / Bid-Management from the ticket sheets (syncService.ts). */
 export default function createSyncRouter() {
@@ -18,7 +19,11 @@ export default function createSyncRouter() {
 
     try {
       // One Set Up at a time: a double-click would otherwise rebuild twice.
-      const result = await runIfIdle(`bidders-sync:${spreadsheetId}`, () => performSheetSync(sheetsFor(req), spreadsheetId, auctionTicketSheetsID));
+      // Website purchases first, so no bidder is missing (ROADMAP W6).
+      const result = await runIfIdle(`bidders-sync:${spreadsheetId}`, async () => {
+        await pollTicketPurchasesFirst(`Set Up Bid Management App: ${req.user?.email || "unknown"}`);
+        return performSheetSync(sheetsFor(req), spreadsheetId, auctionTicketSheetsID);
+      });
       await logAction(req, {
         area: "Bid Management",
         action: "Set Up Bid Management App",

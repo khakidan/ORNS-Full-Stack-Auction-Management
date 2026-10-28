@@ -11,6 +11,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app";
 import { logAction } from "../services/actionLog";
+import { pollTicketPurchasesFirst } from "../services/ticketPoll";
+
+// Website purchases are checked first (ROADMAP W6); the check itself is tested in ticketPoll.test.ts.
+vi.mock("../services/ticketPoll", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../services/ticketPoll")>()),
+  pollTicketPurchasesFirst: vi.fn(),
+}));
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
 import { resetHandlersState, productionScriptCallLog,
@@ -143,6 +150,7 @@ describe("Document and Presentation Creation workflow", () => {
         // Each run makes a new Drive file, so it's in Action History (ROADMAP B8).
         const created = vi.mocked(logAction).mock.calls.map(([, e]) => e).filter((e) => e.action.startsWith("Create "));
         expect(created).toEqual([expect.objectContaining({ area: funcName === "apiCreateBidderLabels" ? "Tickets" : "Auction Items", notUndoableReason: expect.any(String) })]);
+        if (funcName === "apiCreateBidderLabels") expect(pollTicketPurchasesFirst).toHaveBeenCalledWith("bidder labels: test-admin@orns.org");
       });
 
       it("auth failure - returns 401 when unauthenticated", async () => {

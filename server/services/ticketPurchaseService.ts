@@ -143,6 +143,22 @@ export async function flagForReview(entryId: string, name: string, problems: str
   });
 }
 
+export interface TicketReviewItem {
+  entryId: string;
+  name: string;
+  problems: string[];
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+/** The review list, oldest first - for the Tickets page's status card (W6). */
+export async function listReview(): Promise<TicketReviewItem[]> {
+  const snapshot = await REVIEW().get();
+  return snapshot.docs
+    .map((doc) => doc.data() as TicketReviewItem)
+    .sort((a, b) => String(a.firstSeenAt).localeCompare(String(b.firstSeenAt)));
+}
+
 /** Takes an entry off the review list once it's sorted. */
 export async function clearReview(entryId: string): Promise<void> {
   await REVIEW().doc(entryId).delete().catch(() => {});

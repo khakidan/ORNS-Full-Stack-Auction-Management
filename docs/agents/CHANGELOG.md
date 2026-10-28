@@ -6,6 +6,14 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **W6 - Website Ticket Purchases card on the Tickets page** (`TicketPurchaseStatusCard`, staff with the auction-stage permission).
+  - `GET /api/tickets/fluent-forms/status` gathers the last webhook (time, entry, outcome - not what was read), the poll's last success and last run's errors, the entries the poll had to add, the review list (`listReview`), and when each of this season's entries was submitted.
+  - The card shows "Needs Attention" when the poll hasn't succeeded in over 12 hours (two missed runs), the last run stopped, the last webhook failed, or a purchase needs review (`ticketStatusProblems`, `src/lib/ticketPurchaseStatus.ts`). It lists the missed entries and website purchases still Pending 7 days after they were bought (`pendingTooLong`; cash/check buyers paying at the door show here too, without raising the badge).
+  - **Check Now** runs the poll (`POST /api/tickets/fluent-forms/check-now`) and reloads the attendee list when it added a row or confirmed a payment.
+  - The poll now remembers, per season, each entry it added (or in compare mode found missing from the sheet) and each entry's submission time (`missed`, `submittedAt` in `system/fluentFormsPoll`).
+  - Set Up Bid Management App and Create Bidder Labels run the poll first (`pollTicketPurchasesFirst`), so neither works from a ticket list missing a website purchase; a failed check is logged and shows on the card, and never stops them.
+  - New `TicketPurchaseStatusCard.test.tsx` and `ticketPurchaseStatus.test.ts`; status-route tests in `ticketPollRoutes.test.ts`; poll-state and run-first tests in `ticketPoll.test.ts`; run-first assertions in `tickets.test.ts` and `production.test.ts`. Backend 1031 -> 1039, frontend 814 -> 826, total 1845 -> 1865.
+- **W5 set up** (2026-10-28): Cloud Scheduler job `fluent-forms-poll` created (us-east1, `0 6,11,16,21 * * *` America/Chicago, enabled all year). Its first run (revision 00051, compare mode) started the season after entry 1482 and added nothing.
 - **W5 - The poll: no website ticket purchase is missed** (`pollTicketPurchases`, `server/services/ticketPoll.ts`).
   - Cloud Scheduler calls `POST /internal/fluent-forms-poll` four times a day, all year, with the sweeper's `X-Sweeper-Secret` (`README.md` "Website ticket poll"); staff can run it with `POST /api/tickets/fluent-forms/check-now` (auction-stage permission; the button comes with W6's status card). One run at a time (`runIfIdle`).
   - Reads the form's entries from WordPress (`FluentFormsApi.listEntriesAfter`: `GET /wp-json/fluentform/v1/submissions`, which has no "after ID" filter, so it pages back from the newest) and turns each into a `TicketPurchase` through the webhook's own parser (`purchaseFromEntry`; the form's input names, including `guestN_input_radio` for each guest's own-number answer, from `fluentform-get-form`).

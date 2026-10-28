@@ -11,6 +11,13 @@ import { http, HttpResponse } from "msw";
 import { resetHandlersState, lastBulkWritePayload } from "./handlers";
 import { AUCTION_TICKETS_ITEM_ID } from "../utils/categoryHelpers";
 import { authCookieHeader } from "./helpers/session";
+import { pollTicketPurchasesFirst } from "../services/ticketPoll";
+
+// Website purchases are checked first (ROADMAP W6); the check itself is tested in ticketPoll.test.ts.
+vi.mock("../services/ticketPoll", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../services/ticketPoll")>()),
+  pollTicketPurchasesFirst: vi.fn(),
+}));
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -305,6 +312,7 @@ describe('Guest Bidder Number Assignment workflow', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
+    expect(pollTicketPurchasesFirst).toHaveBeenCalledWith("Set Up Bid Management App: test-admin@orns.org");
 
     expect(lastBulkWritePayload).toBeDefined();
     

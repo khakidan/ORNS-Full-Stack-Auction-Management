@@ -18,6 +18,10 @@ export interface TicketPollState {
   highWaterEntryId: number;
   /** entry ID -> the Fluent Forms payment status last settled (checkTicketPayment had nothing left to do). */
   settled: Record<string, string>;
+  /** entry ID -> when the poll added it (or, in compare mode, found it missing from the sheet): each one a webhook that was missed (W6). */
+  missed: Record<string, string>;
+  /** entry ID -> when it was submitted (Fluent Forms' site-local time), for the status card's "still Pending after N days" (W6). */
+  submittedAt: Record<string, string>;
   lastSuccessAt?: string;
 }
 
@@ -49,12 +53,17 @@ export interface TicketPollDeps {
 }
 
 async function readState(): Promise<TicketPollState | null> {
-  const data = (await STATE().get()).data();
+  return stateFrom((await STATE().get()).data());
+}
+
+function stateFrom(data: Record<string, any> | undefined): TicketPollState | null {
   if (!data || !Number.isFinite(data.highWaterEntryId)) return null;
   return {
     seasonStartEntryId: Number(data.seasonStartEntryId) || 0,
     highWaterEntryId: Number(data.highWaterEntryId),
     settled: data.settled && typeof data.settled === "object" ? data.settled : {},
+    missed: data.missed && typeof data.missed === "object" ? data.missed : {},
+    submittedAt: data.submittedAt && typeof data.submittedAt === "object" ? data.submittedAt : {},
     lastSuccessAt: data.lastSuccessAt,
   };
 }
@@ -92,7 +101,7 @@ export async function pollTicketPurchases(deps: TicketPollDeps, trigger = "sched
     let state = await readState();
     if (!state) {
       const latest = await deps.fluentForms.latestEntryId();
-      state = { seasonStartEntryId: latest, highWaterEntryId: latest, settled: {} };
+      state = newSeason(latest);
       run.started = latest;
     }
 
@@ -129,6 +138,7 @@ export async function pollTicketPurchases(deps: TicketPollDeps, trigger = "sched
           const result = await upsertTicketPurchase(await needSheets(), purchase, { mode });
           if (result.outcome === "added") run.added.push(entryId);
           if (result.outcome === "would-add") run.wouldAdd.push(entryId);
+          if (result.outcome === "added" || result.outcome === "would-add") state.missed[entryId] = run.at;
           if (result.outcome === "needs-review") run.needsReview.push(entryId);
           if ((result.outcome === "added" || result.outcome === "exists") && entry.paymentMethod === "paypal") {
             await checkPayment(entryId, entry.paymentStatus);
@@ -139,6 +149,7 @@ export async function pollTicketPurchases(deps: TicketPollDeps, trigger = "sched
 
       for (const entry of entries) {
         const entryId = String(entry.id);
+        if (entry.status !== "spam" && entry.createdAt) state.submittedAt[entryId] = entry.createdAt;
         if (entry.id > state.highWaterEntryId || entry.status === "spam" || entry.paymentMethod !== "paypal") continue;
         if (!SETTLING_STATUSES.has(entry.paymentStatus) || checkedThisRun.has(entryId)) continue;
         if (state.settled[entryId] === entry.paymentStatus) continue;
@@ -153,6 +164,19 @@ export async function pollTicketPurchases(deps: TicketPollDeps, trigger = "sched
     console.log(JSON.stringify({ fluentFormsPoll: run }));
     return run;
   });
+}
+
+function newSeason(latest: number): TicketPollState {
+  return { seasonStartEntryId: latest, highWaterEntryId: latest, settled: {}, missed: {}, submittedAt: {} };
+}
+
+/** The poll's saved state and last run, for the Tickets page's status card (W6); null before its first run. */
+export async function readTicketPollStatus(): Promise<(TicketPollState & { lastRun?: TicketPollRun }) | null> {
+  const data = (await STATE().get()).data();
+  const state = stateFrom(data);
+  if (!state) return null;
+  const lastRun = data?.lastRun as TicketPollRun | undefined;
+  return { ...state, ...(lastRun ? { lastRun } : {}) };
 }
 
 /** The poll with the server's real WordPress, PayPal and Google access; null while the Fluent Forms API isn't set up. */
@@ -182,6 +206,20 @@ export async function startNewTicketSeason(): Promise<number | null> {
     return null;
   }
   const latest = await fluentForms.latestEntryId();
-  await STATE().set({ seasonStartEntryId: latest, highWaterEntryId: latest, settled: {} });
+  await STATE().set(newSeason(latest));
   return latest;
+}
+
+/**
+ * Set Up Bid Management App and bidder labels run the poll first (ROADMAP
+ * W6), so neither works from a ticket list missing a website purchase. It
+ * never stops them: a failure is logged here and shows on the Tickets
+ * page's status card.
+ */
+export async function pollTicketPurchasesFirst(trigger: string): Promise<void> {
+  try {
+    await pollTicketPurchasesNow(trigger);
+  } catch (error: any) {
+    console.warn(`[TicketPoll] Couldn't check the website's ticket purchases first (${trigger}):`, error?.message || error);
+  }
 }
