@@ -30,6 +30,11 @@ export interface TicketPaymentDeps {
   paypal: Pick<PayPalService, "getPayment">;
 }
 
+/** PayPal as the Settings sandbox/live switch says - live purchases are only found with the live app's credentials. */
+export async function paypalForTickets(): Promise<PayPalService> {
+  return new PayPalService({ isSandbox: (await getSharedConfig()).paypalIsSandbox !== false });
+}
+
 const money = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
 const isRefund = (t: FluentFormsTransaction) => t.status === "refunded" || t.status === "partially-refunded";
 

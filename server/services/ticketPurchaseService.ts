@@ -14,6 +14,15 @@ export const FLUENT_FORMS = "Fluent Forms (website)";
 export const TICKETS_TAB = "'tickets'";
 const REVIEW = () => getAdminFirestore().collection("ticketPurchaseReview");
 
+/**
+ * "write" once the switch-over is made (ROADMAP rollout step 3); until
+ * then "compare" - the shadow mode, which reports and writes nothing. The
+ * webhook (W3) and the poll (W5) both follow it.
+ */
+export function ticketWriteMode(): "write" | "compare" {
+  return process.env.FLUENT_FORMS_TICKETS_MODE?.trim().toLowerCase() === "write" ? "write" : "compare";
+}
+
 export type TicketPurchaseOutcome =
   /** Appended to the tickets tab. */
   | { outcome: "added"; entryId: string; rowIndex: number | null }

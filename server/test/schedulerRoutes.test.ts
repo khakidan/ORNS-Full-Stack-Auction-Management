@@ -8,6 +8,12 @@ vi.mock("../services/paypalSweeperJob", () => ({
   persistSweeperCredential: vi.fn(),
 }));
 
+const mockPoll = vi.fn();
+vi.mock("../services/ticketPoll", () => ({
+  pollTicketPurchasesNow: (...args: unknown[]) => mockPoll(...args),
+  startNewTicketSeason: vi.fn(),
+}));
+
 import { app } from "../app";
 
 describe("POST /internal/paypal-sweep (Cloud Scheduler)", () => {
@@ -39,5 +45,40 @@ describe("POST /internal/paypal-sweep (Cloud Scheduler)", () => {
     const res = await request(app).post("/internal/paypal-sweep").set("X-Sweeper-Secret", "");
     expect(res.status).toBe(404);
     expect(mockRunPaypalSweep).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /internal/fluent-forms-poll (Cloud Scheduler, ROADMAP W5)", () => {
+  const original = process.env.SWEEPER_TRIGGER_SECRET;
+  const run = { added: ["1483"], errors: [] as string[] };
+  beforeEach(() => {
+    mockPoll.mockReset().mockResolvedValue(run);
+    process.env.SWEEPER_TRIGGER_SECRET = "test-secret";
+  });
+  afterEach(() => {
+    if (original === undefined) delete process.env.SWEEPER_TRIGGER_SECRET;
+    else process.env.SWEEPER_TRIGGER_SECRET = original;
+  });
+
+  it("runs the poll with the scheduler's secret", async () => {
+    const res = await request(app).post("/internal/fluent-forms-poll").set("X-Sweeper-Secret", "test-secret");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(run);
+    expect(mockPoll).toHaveBeenCalledWith("scheduler");
+  });
+
+  it("401s on a wrong secret without polling", async () => {
+    expect((await request(app).post("/internal/fluent-forms-poll").set("X-Sweeper-Secret", "nope")).status).toBe(401);
+    expect(mockPoll).not.toHaveBeenCalled();
+  });
+
+  it("answers 500 for a run with errors, so the job's log shows the failure", async () => {
+    mockPoll.mockResolvedValue({ added: [], errors: ["Fluent Forms API 401"] });
+    expect((await request(app).post("/internal/fluent-forms-poll").set("X-Sweeper-Secret", "test-secret")).status).toBe(500);
+  });
+
+  it("answers 503 while the Fluent Forms API isn't set up", async () => {
+    mockPoll.mockResolvedValue(null);
+    expect((await request(app).post("/internal/fluent-forms-poll").set("X-Sweeper-Secret", "test-secret")).status).toBe(503);
   });
 });

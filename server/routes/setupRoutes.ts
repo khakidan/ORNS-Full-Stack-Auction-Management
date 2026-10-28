@@ -12,6 +12,7 @@ import { getActionHistorySpreadsheetId } from '../services/actionHistoryStore';
 import { updateSharedConfigFields } from '../services/configService';
 import { CONFIG_KEY, noteChange } from '../utils/changeFeed';
 import { AlreadyRunningError, runIfIdle } from '../utils/asyncLock';
+import { startNewTicketSeason } from '../services/ticketPoll';
 
 export default function createSetupRouter() {
   const router = Router();
@@ -71,6 +72,15 @@ export default function createSetupRouter() {
           } catch (err: any) {
             configSaveError = `The new folders were created but couldn't be saved in the configuration (${err?.message || err}). Set Receipts Folder ID to ${result.bidderReceiptsFolderId} and For Print Folder ID to ${result.forPrintFolderId} in Settings.`;
             onLog(configSaveError);
+          }
+
+          // The website ticket poll (W5) must not add last year's purchases
+          // to the cleared sheet: the new season starts after the newest entry.
+          try {
+            const latest = await startNewTicketSeason();
+            onLog(latest === null ? "Reset the website ticket check; it starts the new season on its next run." : `Website ticket purchases after Fluent Forms entry ${latest} are this year's.`);
+          } catch (err: any) {
+            onLog(`Couldn't reset the website ticket check (${err?.message || err}) - ask for it to be reset before ticket sales open, or last year's purchases may be re-added.`);
           }
 
           await logAction(req, {

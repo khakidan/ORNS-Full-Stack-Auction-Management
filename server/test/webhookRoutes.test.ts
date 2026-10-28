@@ -15,7 +15,7 @@ vi.mock("../services/ticketPurchaseService", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../services/ticketPurchaseService")>()),
   upsertTicketPurchase: vi.fn(),
 }));
-vi.mock("../services/ticketPaymentCheck", () => ({ checkTicketPayment: vi.fn() }));
+vi.mock("../services/ticketPaymentCheck", () => ({ checkTicketPayment: vi.fn(), paypalForTickets: vi.fn(async () => ({})) }));
 
 import { app } from "../app";
 import { getSweeperAuthClient } from "../services/paypalSweeperJob";

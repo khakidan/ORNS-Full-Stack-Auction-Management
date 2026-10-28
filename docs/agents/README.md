@@ -266,8 +266,28 @@ The job (`paypal-sweeper`, region us-east1):
     Settings page's PayPal Sweeper card shows "Running" while it's
     firing and "Paused" otherwise.
 
-Cloud Scheduler's free tier covers 3 jobs per billing account, and each
-run is a few seconds of Cloud Run CPU.
+**Website ticket poll (Cloud Scheduler, ROADMAP W5).** A second job,
+`fluent-forms-poll` (region us-east1), calls
+`POST /internal/fluent-forms-poll` four times a day with the same
+`X-Sweeper-Secret` header: frequency `0 6,11,16,21 * * *`, time zone
+America/Chicago, URL
+`https://orns-auction-manager.cloud.run/internal/fluent-forms-poll`,
+method POST, attempt deadline 180s. It runs **all year** - unlike the
+sweeper, leave it on. With nothing new on the website a run reads one
+page of WordPress's entries list and nothing else (no Google, no PayPal),
+so it costs nothing; while ticket sales are open it adds any purchase
+whose webhook was missed (`pollTicketPurchases`,
+`server/services/ticketPoll.ts`) and confirms PayPal payments (W4).
+State is Firestore `system/fluentFormsPoll`: the season's first entry
+(Setup New Auction Year moves it, so last year's purchases are never
+re-added), the high-water mark, and the last run (also in Cloud Logging
+as `jsonPayload.fluentFormsPoll`). Staff can run it on demand with
+`POST /api/tickets/fluent-forms/check-now` (the auction-stage
+permission). It needs the Fluent Forms API (see "Ticket payments (W4)")
+and answers 503 without it; a run with errors answers 500.
+
+Cloud Scheduler's free tier covers 3 jobs per billing account (these are
+2), and each run is a few seconds of Cloud Run CPU.
 
 The service account also needs Firestore access (it already has it if
 the PayPal sweeper status card works): the server reads the PayPal
