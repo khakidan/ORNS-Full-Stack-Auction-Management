@@ -10,6 +10,13 @@ import { getValidSortedItems } from '../services/itemDataService';
 import { sheetsFor } from '../utils/googleClients';
 import { syncBiddersFromTickets } from '../services/bidderTicketSync';
 
+/**
+ * Documents always go to the Config's For Print folder: without one the
+ * scripts would fall back to a folder in their own _Settings tab, which
+ * nothing keeps up to date (ROADMAP B11).
+ */
+const MISSING_PRINT_FOLDER = "Set the For Print Folder ID in Settings before creating documents.";
+
 export default function createProductionRouter() {
   const router = Router();
   router.use(requireAuth);
@@ -69,13 +76,16 @@ export default function createProductionRouter() {
     next: NextFunction,
     functionName: string
   ) => {
-    const { folderId, spreadsheetId } = req.body;
+    const { folderId, spreadsheetId, ornsLogoId } = req.body;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
+    if (!folderId) return res.status(400).json({ error: MISSING_PRINT_FOLDER });
 
     try {
       const sheets = sheetsFor(req);
       const items = await getValidSortedItems(sheets, spreadsheetId);
-      await handleAppsScriptCall(req, res, next, functionName, process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId || "", items]);
+      // The Config's values win over the script's own _Settings copy (ROADMAP B11).
+      const settings = { ornsLogoID: ornsLogoId || "", auctionDevFolderID: folderId };
+      await handleAppsScriptCall(req, res, next, functionName, process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId, items, settings]);
     } catch (error) {
       next(error);
     }
@@ -119,6 +129,7 @@ export default function createProductionRouter() {
 
   router.post("/tickets/bidder-labels", fromConfig(BIDDER_LABEL_FIELDS), async (req, res, next) => {
     const { folderId, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId } = req.body;
+    if (!folderId) return res.status(400).json({ error: MISSING_PRINT_FOLDER });
 
     // Real auction workflow (see CHANGELOG.md): bidder labels get printed
     // 2-3 days before the auction, while "Set Up Bid Management App" - and
@@ -150,7 +161,7 @@ export default function createProductionRouter() {
       }
     }
 
-    handleAppsScriptCall(req, res, next, "apiCreateBidderLabels", process.env.SCRIPT_ID_TICKETS!, [folderId || "", bidders]);
+    handleAppsScriptCall(req, res, next, "apiCreateBidderLabels", process.env.SCRIPT_ID_TICKETS!, [folderId, bidders]);
   });
 
   return router;

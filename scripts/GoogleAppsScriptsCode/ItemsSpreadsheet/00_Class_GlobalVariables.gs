@@ -1,6 +1,22 @@
 /**
+ * The settings the web app passed to this run (Node's Config: logo, For
+ * Print folder). Set by the api* bridge functions (useRunSettings_) before
+ * anything is constructed; each Apps Script execution starts with a fresh
+ * global scope, so one run's settings never reach another.
+ */
+var RUN_SETTINGS_ = {};
+
+/** @param {Object|null|undefined} settings e.g. { ornsLogoID, auctionDevFolderID } */
+function useRunSettings_ ( settings ) {
+    RUN_SETTINGS_ = settings && typeof settings === 'object' ? settings : {};
+}
+
+/**
  * Foundation class. Holds core business constants and loads the _Settings
- * configuration so every subclass has access to `this.config`.
+ * configuration so every subclass has access to `this.config`. _Settings
+ * keeps only what the app's Config doesn't have (label template, auction
+ * logo, slideshow background); the run's settings from the web app are
+ * laid over it and win, so a stale copy there is never used (ROADMAP B11).
  */
 class GlobalVariables {
     /**
@@ -59,6 +75,9 @@ class GlobalVariables {
             this.config = {};
             settingsSheet.getDataRange().getValues()
                 .forEach( row => { this.config[ row[ 0 ] ] = row[ 1 ]; } );
+            Object.keys( RUN_SETTINGS_ ).forEach( key => {
+                if ( RUN_SETTINGS_[ key ] ) this.config[ key ] = RUN_SETTINGS_[ key ];
+            } );
         }
     }
 

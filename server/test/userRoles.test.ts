@@ -117,7 +117,6 @@ describe("permissions on routes", () => {
   it.each([
     ["POST", "/api/auction/setup-new"],
     ["POST", "/api/auction/archive"],
-    ["POST", "/api/settings/update"],
     ["GET", "/api/paypal-sweeper/status"],
     ["POST", "/api/paypal-sweeper/run-now"],
     ["GET", "/api/apps-script/versions"],

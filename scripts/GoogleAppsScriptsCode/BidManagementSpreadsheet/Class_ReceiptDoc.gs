@@ -22,12 +22,16 @@ class ReceiptDoc extends DocService {
 
     // ── Header / footer ──────────────────────────────────────────────────────
     writeHeader_ () {
-        this.getDoc_().addHeader()
+        const header = this.getDoc_().addHeader()
             .insertParagraph( 0, '' )
-            .setAlignment( this.horizontalCenter )
-            .appendInlineImage( this.getOrnsLogoBlob() )
-            .setHeight( 97.08737864078 )
-            .setWidth( 97.08737864078 );
+            .setAlignment( this.horizontalCenter );
+        // No logo set in Settings: the receipt is still made, just without it.
+        const logo = this.getOrnsLogoBlob();
+        if ( logo ) {
+            header.appendInlineImage( logo )
+                .setHeight( 97.08737864078 )
+                .setWidth( 97.08737864078 );
+        }
     }
 
     writeFooter_ () {

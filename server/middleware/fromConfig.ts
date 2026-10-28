@@ -48,11 +48,12 @@ export const BID_MANAGEMENT_FIELDS: ConfigFields = {
   ticketPrice: "ticketPrice",
 };
 
-/** Receipts and emails also read the items, and file receipts in this year's folder. */
+/** Receipts and emails also read the items, file receipts in this year's folder, and print the logo. */
 export const RECEIPT_FIELDS: ConfigFields = {
   ...BID_MANAGEMENT_FIELDS,
   itemsSpreadsheetId: "auctionItemsSpreadsheetId",
   receiptFolderId: "receiptFolderId",
+  ornsLogoId: "ornsLogoId",
 };
 
 /** Attendee List routes: the Auction Tickets spreadsheet. */
@@ -61,8 +62,8 @@ export const TICKET_FIELDS: ConfigFields = { spreadsheetId: "auctionTicketsSprea
 /** Auction Items routes: its spreadsheet. */
 export const ITEM_FIELDS: ConfigFields = { spreadsheetId: "auctionItemsSpreadsheetId" };
 
-/** Item documents: the items, filed in this year's For Print folder. */
-export const ITEM_DOCUMENT_FIELDS: ConfigFields = { ...ITEM_FIELDS, folderId: "forPrintFolderId" };
+/** Item documents: the items, filed in this year's For Print folder, with the logo (the slideshow). */
+export const ITEM_DOCUMENT_FIELDS: ConfigFields = { ...ITEM_FIELDS, folderId: "forPrintFolderId", ornsLogoId: "ornsLogoId" };
 
 /** Bidder labels: Bidder-Numbers, built from the ticket sheets, filed in this year's For Print folder. */
 export const BIDDER_LABEL_FIELDS: ConfigFields = {
@@ -76,9 +77,6 @@ export const SYNC_FIELDS: ConfigFields = {
   spreadsheetId: "bidManagementSpreadsheetId",
   auctionTicketSheetsID: "auctionTicketsSpreadsheetId",
 };
-
-/** `_Settings` saves: the Bid Management spreadsheet, which its Apps Script reads. */
-export const SETTINGS_FIELDS: ConfigFields = { spreadsheetId: "bidManagementSpreadsheetId" };
 
 /** Setup New Auction Year and Archive: the three master spreadsheets. */
 export const MASTER_SPREADSHEET_FIELDS: ConfigFields = {

@@ -47,7 +47,6 @@ describe("routes take their spreadsheets from the Config, not the request (ROADM
     ["make an item document", "/api/production/item-entry/catalog", { spreadsheetId: STALE, folderId: STALE }, "it"],
     ["make bidder labels", "/api/production/tickets/bidder-labels", { bidManagementSpreadsheetId: STALE, auctionTicketsSpreadsheetId: STALE, folderId: STALE }, "bm"],
     ["Set Up Bid Management App", "/api/bidders/sync", { spreadsheetId: STALE, auctionTicketSheetsID: STALE }, "bm"],
-    ["save a _Settings value", "/api/settings/update", { spreadsheetId: STALE, key: "ticketPrice", value: "35", idempotencyKey: "k6" }, "bm"],
     ["set up a new auction year", "/api/auction/setup-new", { ticketsSpreadsheetId: STALE, itemEntrySpreadsheetId: STALE, bidManagementSpreadsheetId: STALE }, "bm"],
     ["archive the auction", "/api/auction/archive", { year: 2026, ticketsSpreadsheetId: STALE, itemEntrySpreadsheetId: STALE, bidManagementSpreadsheetId: STALE }, "bm"],
     ["resolve a bug report", "/api/bug-reports/resolve", { spreadsheetId: STALE, reportId: "r1" }, "bugs"],
@@ -80,10 +79,22 @@ describe("routes take their spreadsheets from the Config, not the request (ROADM
     expect(touched).toEqual([]);
   });
 
+  it.each([
+    ["an item document", "/api/production/item-entry/catalog", { spreadsheetId: "it" }],
+    ["bidder labels", "/api/production/tickets/bidder-labels", { bidManagementSpreadsheetId: "bm" }],
+  ])("refuses %s without a For Print folder in the Config, rather than letting the script use its own _Settings copy (ROADMAP B11)", async (_label, path, body) => {
+    await getAdminFirestore().collection("settings").doc("global").set({ auctionItemsSpreadsheetId: "it", bidManagementSpreadsheetId: "bm" });
+
+    const res = await request(app).post(path).set(admin).send(body);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("For Print Folder ID");
+  });
+
   it("still uses a staff member's own value while the Config field is blank", async () => {
     await getAdminFirestore().collection("settings").doc("global").set({});
 
-    await request(app).post("/api/settings/update").set(admin).send({ spreadsheetId: "typed-in", key: "k", value: "v", idempotencyKey: "k7" });
+    await request(app).post("/api/bundle/restore").set(admin).send({ spreadsheetId: "typed-in", targetBundleToken: "b", idempotencyKey: "k7" });
 
     expect(touched).toContain("typed-in");
   });

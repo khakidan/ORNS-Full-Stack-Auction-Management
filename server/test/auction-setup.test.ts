@@ -37,7 +37,7 @@ describe("setupRoutes - /api/auction/setup-new", () => {
   it("saves the new year's Bidder Receipts and For Print folders in the Config itself, keeping the other settings (ROADMAP A5)", async () => {
     fake.docs("settings").set("global", { bidManagementSpreadsheetId: "s3", receiptFolderId: "last-year-receipts", forPrintFolderId: "last-year-print", ticketPrice: "40" });
 
-    // The Bid Management scripts' own copy (_Settings) must get the new folders too (ROADMAP B1).
+    // The scripts get the folders from the Config on every run; nothing writes their old _Settings copy (ROADMAP B11).
     const settingsWrites: { range: string; values: unknown }[] = [];
     const captureSettings = async ({ params, request }: any) => {
       const range = decodeURIComponent(String(params.range));
@@ -59,10 +59,7 @@ describe("setupRoutes - /api/auction/setup-new", () => {
     const result = finalLine(response.text);
     expect(result.success).toBe(true);
     expect(result.configSaveError).toBeUndefined();
-    expect(settingsWrites).toEqual([
-      { range: "_Settings!B2:C2", values: [[result.bidderReceiptsFolderId, "Receipts Folder ID"]] },
-      { range: "_Settings!A:C", values: [["forPrintFolderID", result.forPrintFolderId, "For Print Folder ID"]] },
-    ]);
+    expect(settingsWrites).toEqual([]);
     expect(result.bidderReceiptsFolderId).toBeTruthy();
     expect(fake.docs("settings").get("global")).toMatchObject({
       receiptFolderId: result.bidderReceiptsFolderId,

@@ -28,7 +28,6 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── dataRoutes.ts      # Mounts the signed-in routers below under /api (requireAuth once)
 │   │   ├── syncRoutes.ts      #   POST /bidders/sync ("Set Up Bid Management App")
 │   │   ├── sweeperRoutes.ts   #   PayPal sweeper status / run-now
-│   │   ├── settingsRoutes.ts  #   POST /settings/update (_Settings key)
 │   │   ├── configRoutes.ts    #   GET /config (everyone signed in), POST /config (Full Administrators)
 │   │   ├── itemRoutes.ts      #   Auction item add / update / bulk-update / delete
 │   │   ├── sheetsProxyRoutes.ts # Generic Sheets read (cached per user); no generic writes
@@ -67,7 +66,6 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── paypalSweeperJob.ts      # PayPal verification sweep (run by Cloud Scheduler / Run Now) + status
 │   │   ├── receiptDataService.ts    # Won-item resolution and invoice get-or-create for receipts
 │   │   ├── receiptService.ts        # Apps Script receipt calls; batch email loop
-│   │   ├── settingsService.ts       # _Settings key upsert (settings: lock)
 │   │   ├── configService.ts         # The shared Config (settings/global): cached read, validated save
 │   │   ├── sharedConfig.ts          # PayPal sandbox/live, read from the shared Config
 │   │   ├── sheetsService.ts         # Staged multi-op Sheets "transaction" with rollback; ensureSheetTab
