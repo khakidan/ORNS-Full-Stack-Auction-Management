@@ -18,13 +18,28 @@ const POLL_MS = 5000;
  *
  * Plain fetch, not fetchWithRetry: a missed check is simply retried on the
  * next tick, and must not show the "saving..." sync banner.
+ *
+ * A 401 means this browser's sign-in ended while the tab was open (a
+ * deploy that changed the session, an expired session, a volunteer's
+ * access ending): `onSignedOut` is called - once, until a check succeeds
+ * again - so the app re-checks its sign-in and shows the sign-in screen,
+ * which also stops this polling. Without it the tab kept asking every 5
+ * seconds and looked signed in until the next action failed.
  */
-export function useChangeFeed(enabled: boolean, onChange: (changed: Set<string>, reset: boolean) => void, myEmail?: string): () => Promise<void> {
+export function useChangeFeed(
+  enabled: boolean,
+  onChange: (changed: Set<string>, reset: boolean) => void,
+  myEmail?: string,
+  onSignedOut?: () => void
+): () => Promise<void> {
   const since = useRef<number | null>(null);
   const callback = useRef(onChange);
   callback.current = onChange;
   const me = useRef(myEmail);
   me.current = myEmail;
+  const signedOut = useRef(onSignedOut);
+  signedOut.current = onSignedOut;
+  const reportedSignedOut = useRef(false);
   const inFlight = useRef(false);
 
   const checkNow = useCallback(async () => {
@@ -32,7 +47,15 @@ export function useChangeFeed(enabled: boolean, onChange: (changed: Set<string>,
     inFlight.current = true;
     try {
       const res = await fetch(`${getBaseUrl()}/api/changes?since=${since.current ?? 0}`, { credentials: "include" });
+      if (res.status === 401) {
+        if (!reportedSignedOut.current) {
+          reportedSignedOut.current = true;
+          signedOut.current?.();
+        }
+        return;
+      }
       if (!res.ok) return;
+      reportedSignedOut.current = false;
       const data: { version: number; changed: string[]; notices?: { message: string; by: string }[]; reset: boolean } = await res.json();
       const first = since.current === null;
       since.current = data.version;

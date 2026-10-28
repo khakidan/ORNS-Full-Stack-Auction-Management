@@ -18,6 +18,8 @@ const fetchAuctionStatus = vi.fn(async () => {});
 const fetchSetupStatus = vi.fn(async () => {});
 const reloadConfig = vi.fn(async () => {});
 let onRemoteChange: (changed: Set<string>, reset: boolean) => Promise<void>;
+let onSignedOut: (() => void) | undefined;
+const checkAuth = vi.fn(async () => {});
 
 vi.mock("./ConfigContext", () => ({
   useConfig: () => ({
@@ -26,7 +28,7 @@ vi.mock("./ConfigContext", () => ({
   }),
 }));
 // Signed out, so the initial full load doesn't run and only live-refresh reloads are counted.
-vi.mock("./AuthContext", () => ({ useAuth: () => ({ authenticated: false, user: null }) }));
+vi.mock("./AuthContext", () => ({ useAuth: () => ({ authenticated: false, user: null, checkAuth }) }));
 vi.mock("@/hooks/useBiddersData", () => ({ useBiddersData: () => ({ bidders: [], fetchBidders, setLoading: vi.fn() }) }));
 vi.mock("@/hooks/useAuctionItems", () => ({ useAuctionItems: () => ({ items: [], refresh: refreshItems }) }));
 vi.mock("@/hooks/useAttendeesData", () => ({ useAttendeesData: () => ({ attendees: [], fetchAttendees }) }));
@@ -35,8 +37,9 @@ vi.mock("@/hooks/useAuctionStatusData", () => ({
   useAuctionStatusData: () => ({ fetchAuctionStatus, fetchSetupStatus, requestCloseAuction: vi.fn(), requestGoLive: vi.fn() }),
 }));
 vi.mock("@/hooks/useChangeFeed", () => ({
-  useChangeFeed: (_enabled: boolean, handler: typeof onRemoteChange) => {
+  useChangeFeed: (_enabled: boolean, handler: typeof onRemoteChange, _me?: string, signedOut?: () => void) => {
     onRemoteChange = handler;
+    onSignedOut = signedOut;
     return vi.fn();
   },
 }));
@@ -93,5 +96,12 @@ describe("AuctionContext live refresh", () => {
     await act(() => onRemoteChange(new Set(), true));
     expect(reloaded()).toEqual({ bidders: 1, winners: 1, items: 1, attendees: 1, status: 1, setup: 1, config: 1 });
     expect(seen?.lastChangedKeys).toEqual(["*"]);
+  });
+});
+
+describe("AuctionContext sign-in ending", () => {
+  it("re-checks the sign-in when the change feed hears it has ended (a 401), so the sign-in screen shows", () => {
+    onSignedOut?.();
+    expect(checkAuth).toHaveBeenCalledTimes(1);
   });
 });

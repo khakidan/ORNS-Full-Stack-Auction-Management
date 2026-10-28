@@ -58,7 +58,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   const spreadsheetId = config.bidManagementSpreadsheetId;
   const ticketsSpreadsheetId = config.auctionTicketsSpreadsheetId;
 
-  const { authenticated: isApiAuthenticated, user } = useAuth();
+  const { authenticated: isApiAuthenticated, user, checkAuth } = useAuth();
 
   const biddersData = useBiddersData(spreadsheetId, config.bidderNumbersSheet);
   // Items live in the separate Auction Items spreadsheet, not a copy synced
@@ -108,7 +108,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     setLastChangedKeys(reset ? ["*"] : [...changed]);
     setDataVersion((v) => v + 1);
   }, [spreadsheetId, config.auctionItemsSpreadsheetId, ticketsSpreadsheetId, fetchBidders, fetchAuctionStatus, fetchSetupStatus, refreshItems, fetchAttendees, reloadConfig]);
-  const checkForChanges = useChangeFeed(isApiAuthenticated === true, onRemoteChange, user?.email);
+  const checkForChanges = useChangeFeed(isApiAuthenticated === true, onRemoteChange, user?.email, checkAuth);
 
   const goLive = useCallback(async () => {
     await auctionStatusData.requestGoLive();
