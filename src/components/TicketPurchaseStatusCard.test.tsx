@@ -5,7 +5,13 @@ import "@testing-library/jest-dom";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import TicketPurchaseStatusCard from "./TicketPurchaseStatusCard";
+import { useTicketPurchaseStatus } from "@/hooks/useTicketPurchaseStatus";
 import { TicketPurchaseStatus } from "@/types";
+
+/** The card as the Tickets page uses it: the page holds the status. */
+function StatusCard({ onAdded }: { onAdded: () => void }) {
+  return <TicketPurchaseStatusCard attendees={[]} purchases={useTicketPurchaseStatus(onAdded)} />;
+}
 
 vi.mock("@/services/google-api", () => ({
   getTicketPurchaseStatus: vi.fn(),
@@ -42,7 +48,7 @@ describe("TicketPurchaseStatusCard", () => {
 
   it("shows Working when the webhook and the check are healthy", async () => {
     mockedGetStatus.mockResolvedValue(status());
-    render(<TicketPurchaseStatusCard attendees={[]} onAdded={vi.fn()} />);
+    render(<StatusCard onAdded={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("Working")).toBeInTheDocument());
     expect(screen.getByText(/Entry 1490: added to the sheet/)).toBeInTheDocument();
   });
@@ -52,7 +58,7 @@ describe("TicketPurchaseStatusCard", () => {
       missed: [{ entryId: "1485", at: recent }, { entryId: "1488", at: recent }],
       review: [{ entryId: "1491", name: "Pat Lee", problems: ["4 guests for 2 tickets"], firstSeenAt: recent, lastSeenAt: recent }],
     }));
-    render(<TicketPurchaseStatusCard attendees={[]} onAdded={vi.fn()} />);
+    render(<StatusCard onAdded={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("Needs Attention")).toBeInTheDocument());
     expect(screen.getByText(/Pat Lee \(entry 1491\)/)).toBeInTheDocument();
     expect(screen.getByText("Entries 1485, 1488")).toBeInTheDocument();
@@ -60,7 +66,7 @@ describe("TicketPurchaseStatusCard", () => {
 
   it("says when the Fluent Forms API isn't set up, without a Check Now button", async () => {
     mockedGetStatus.mockResolvedValue(status({ configured: false, poll: null }));
-    render(<TicketPurchaseStatusCard attendees={[]} onAdded={vi.fn()} />);
+    render(<StatusCard onAdded={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("Not Set Up")).toBeInTheDocument());
     expect(screen.queryByText("Check Now")).not.toBeInTheDocument();
   });
@@ -69,7 +75,7 @@ describe("TicketPurchaseStatusCard", () => {
     mockedGetStatus.mockResolvedValue(status());
     mockedCheckNow.mockResolvedValue(run({ newEntries: 1, added: ["1492"] }));
     const onAdded = vi.fn();
-    render(<TicketPurchaseStatusCard attendees={[]} onAdded={onAdded} />);
+    render(<StatusCard onAdded={onAdded} />);
     fireEvent.click(await screen.findByText("Check Now"));
     await waitFor(() => expect(onAdded).toHaveBeenCalled());
     expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("1 new, 1 missing from the sheet"));
@@ -80,7 +86,7 @@ describe("TicketPurchaseStatusCard", () => {
     mockedGetStatus.mockResolvedValue(status());
     mockedCheckNow.mockResolvedValue(run({ errors: ["WordPress said no"] }));
     const onAdded = vi.fn();
-    render(<TicketPurchaseStatusCard attendees={[]} onAdded={onAdded} />);
+    render(<StatusCard onAdded={onAdded} />);
     fireEvent.click(await screen.findByText("Check Now"));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("The check stopped: WordPress said no"));
     expect(onAdded).not.toHaveBeenCalled();

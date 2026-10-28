@@ -289,10 +289,13 @@ answers 500. Set Up Bid Management App and Create Bidder Labels run it
 first, so neither works from a list missing a purchase; a failed check
 never stops them (`pollTicketPurchasesFirst`).
 
-**Website Ticket Purchases card (ROADMAP W6).** At the top of the
-Tickets page, for staff with the auction-stage permission
-(`TicketPurchaseStatusCard`, from `GET /api/tickets/fluent-forms/status`).
-It shows "Needs Attention" when the poll hasn't succeeded in over 12
+**Website Ticket Check (ROADMAP W6).** On the Tickets page's
+**Website Ticket Check** tab, which confirms every ticket bought on the
+ORNS website reached the app and its PayPal payment went through, for staff with the auction-stage permission
+(`TicketPurchaseStatusCard`, from `GET /api/tickets/fluent-forms/status`;
+volunteers don't get the tab). When it needs attention the tab itself
+carries a pulsing amber dot (`AttentionDot`), so it's seen without
+opening the tab. It shows "Needs Attention" when the poll hasn't succeeded in over 12
 hours (two missed runs), the last run stopped with an error, the last
 webhook failed, or a purchase is on the review list. It also lists the
 entries the poll had to add (each one a missed webhook; in shadow mode,
