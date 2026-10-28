@@ -107,7 +107,7 @@ All core operations are managed via npm scripts declared in `package.json`:
 *   `npm run lint`: Static type checks (`tsc --noEmit`).
 *   `npm run test`: Runs the complete test suite with Vitest.
 *   `npm run gas:stamp` / `gas:deploy` / `gas:check`: Apps Script tooling (`scripts/apps-script/cli.mjs`) - see "Deploying the Apps Scripts" under Deployment.
-*   `npm run test:quiet`: Same as `npm run test`, with `NODE_OPTIONS=--no-experimental-webstorage` - required on Node 22+, where Node's own built-in Web Storage global can leave jsdom's `window.localStorage` undefined (`ConfigContext.tsx` reads it at module load). Uses inline `VAR=value` shell syntax, which needs a POSIX shell (bash/zsh/Git Bash).
+*   `npm run test:quiet`: Same as `npm run test` (kept as the name the docs use). `vitest.config.ts` passes `--no-experimental-webstorage` to every test worker - required on Node 22+, where Node's own Web Storage global hides jsdom's `window.localStorage` - so no `NODE_OPTIONS` is needed, in any shell.
 
 ---
 

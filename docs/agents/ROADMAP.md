@@ -34,15 +34,7 @@ A read of the whole codebase after A1-A17 shipped (`8f3a1ea`), measured against 
 
 Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 
-### Low
-
-
-### Structure - refactor
-
-
-### Tests
-
-- **B14 - The frontend suite only passes with `--no-experimental-webstorage`.** `npm run test:quiet` sets it, but `npx vitest run src` (what an editor's test runner or a developer reaching for one file uses) fails 27 tests on Node's experimental `localStorage`. Set the flag in `vitest.config.ts` (a `poolOptions` `execArgv`) so every way of running the tests behaves the same, and note it in `testing-batches.md`.
+All items, B1-B14, are done - see `CHANGELOG.md` (search for the item ID).
 
 ### Confirmed fine (don't "fix")
 
