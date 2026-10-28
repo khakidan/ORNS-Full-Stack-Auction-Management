@@ -46,7 +46,7 @@ describe("AuctionTicketsWorkflow - Website Purchases tab (ROADMAP W6)", () => {
     render(<AuctionTicketsWorkflow />);
 
     await waitFor(() => expect(mockedGetStatus).toHaveBeenCalled());
-    expect(screen.getByRole("tab", { name: "Website Purchases" })).toBeInTheDocument();
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Auction Tickets", "Website Purchases", "Document Creation"]);
     expect(screen.queryByText("Website Ticket Purchases")).not.toBeInTheDocument();
   });
 

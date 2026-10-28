@@ -23,16 +23,14 @@ export default function AuctionTicketsWorkflow() {
 
   const tabs: WorkflowTab[] = [
     { value: "auction_tickets", label: "Auction Tickets", content: <TicketAttendeeTab /> },
-    { value: "documents", label: "Document Creation", content: <TicketDocumentCreationTab /> },
-  ];
-  if (canSeePurchases) {
-    tabs.push({
+    ...(canSeePurchases ? [{
       value: "website_purchases",
       label: "Website Purchases",
       indicator: needsAttention ? <AttentionDot label="Needs attention" /> : undefined,
       content: <TicketPurchaseStatusCard attendees={attendees} purchases={purchases} />,
-    });
-  }
+    }] : []),
+    { value: "documents", label: "Document Creation", content: <TicketDocumentCreationTab /> },
+  ];
 
   return (
     <WorkflowTabsShell
