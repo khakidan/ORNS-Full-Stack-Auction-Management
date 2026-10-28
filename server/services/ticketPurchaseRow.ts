@@ -49,7 +49,8 @@ const MAX_GUESTS = 3;
  * (cash or check) method has the key "test" and shows as "Offline".
  */
 const PAYMENT_METHODS: Record<string, string> = { paypal: "PayPal", test: "Offline", offline: "Offline", stripe: "Stripe" };
-const PAYMENT_STATUSES: Record<string, string> = { paid: "Paid", pending: "Pending", refunded: "Refunded", failed: "Failed", cancelled: "Cancelled" };
+// "processing" is a PayPal payment PayPal hasn't released yet (a review hold) - Pending until it does.
+const PAYMENT_STATUSES: Record<string, string> = { paid: "Paid", pending: "Pending", processing: "Pending", refunded: "Refunded", failed: "Failed", cancelled: "Cancelled" };
 
 /** Public text for a cell: trimmed, capped, never run as a formula. */
 function text(value: unknown): string {

@@ -72,6 +72,7 @@ describe("ticketRowFromPurchase", () => {
     ["test", "pending", "Offline", "Pending"],
     ["offline", "pending", "Offline", "Pending"],
     ["PayPal", "PAID", "PayPal", "Pending"],
+    ["paypal", "processing", "PayPal", "Pending"],
     ["venmo", "refunded", "Venmo", "Refunded"],
     ["paypal", "", "PayPal", "Pending"],
   ])("labels method %s / status %s as %s / %s - never Paid until PayPal confirms it (W4)", (method, status, methodLabel, statusLabel) => {
