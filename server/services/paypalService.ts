@@ -57,6 +57,18 @@ export interface RemoveSurchargeResult {
   removed: boolean;
 }
 
+/** One PayPal payment as PayPal itself reports it (getPayment). */
+export interface PayPalPayment {
+  /** COMPLETED, PENDING, REFUNDED, PARTIALLY_REFUNDED, DECLINED, ... */
+  status: string;
+  amount: number;
+  currency: string;
+}
+
+/** Transaction Search's one-letter statuses, as the Captures API names them. */
+const SEARCH_STATUSES: Record<string, string> = { S: "COMPLETED", P: "PENDING", V: "REFUNDED", D: "DECLINED" };
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 export class PayPalService {
   private fetcher: typeof fetch;
   private clientId: string;
@@ -367,5 +379,52 @@ export class PayPalService {
 
     const data = JSON.parse(responseText);
     return data.status;
+  }
+
+  /**
+   * Looks up a payment by its PayPal transaction ID, as PayPal reports it -
+   * how a website ticket purchase is confirmed paid (ROADMAP W4), never
+   * from what the form says. null when this PayPal account has no such
+   * payment.
+   *
+   * Tries the Captures API first (PayPal Checkout payments); a PayPal
+   * Standard payment isn't a capture there, so a 404 falls back to
+   * Transaction Search, which needs a date window of at most 31 days -
+   * `around` is when the payment was made (a margin either side allows for
+   * time zones). Transaction Search can lag a new payment by a few hours;
+   * the poll (W5) checks again.
+   */
+  async getPayment(transactionId: string, around: Date): Promise<PayPalPayment | null> {
+    if (!/^[A-Za-z0-9-]{6,64}$/.test(transactionId)) return null;
+    const accessToken = await this.getAccessToken_();
+    const headers = { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" };
+
+    const capture = await this.fetcher(`${this.baseUrl}/v2/payments/captures/${transactionId}`, { method: "GET", headers });
+    if (capture.status === 200) {
+      const data = JSON.parse(await capture.text());
+      return { status: String(data.status || ""), amount: Number(data.amount?.value), currency: String(data.amount?.currency_code || "") };
+    }
+    if (capture.status !== 404) throw new Error(`PayPal payment lookup failed (${capture.status}): ${await capture.text()}`);
+
+    const when = Number.isNaN(around.getTime()) ? Date.now() : around.getTime();
+    const start = new Date(when - 2 * DAY_MS);
+    const end = new Date(Math.min(when + 29 * DAY_MS, Date.now()));
+    const query = new URLSearchParams({
+      transaction_id: transactionId,
+      start_date: start.toISOString().replace(/\.\d{3}Z$/, "Z"),
+      end_date: end.toISOString().replace(/\.\d{3}Z$/, "Z"),
+      fields: "transaction_info",
+    });
+    const search = await this.fetcher(`${this.baseUrl}/v1/reporting/transactions?${query}`, { method: "GET", headers });
+    const text = await search.text();
+    if (search.status !== 200) throw new Error(`PayPal transaction search failed (${search.status}): ${text}`);
+    const info = JSON.parse(text).transaction_details?.[0]?.transaction_info;
+    if (!info) return null;
+    const code = String(info.transaction_status || "");
+    return {
+      status: SEARCH_STATUSES[code] || code,
+      amount: Number(info.transaction_amount?.value),
+      currency: String(info.transaction_amount?.currency_code || ""),
+    };
   }
 }

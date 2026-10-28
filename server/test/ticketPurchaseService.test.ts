@@ -71,7 +71,7 @@ describe("upsertTicketPurchase", () => {
 
     expect(result).toEqual({ outcome: "added", entryId: "1500", rowIndex: 3 });
     expect(appended).toHaveLength(1);
-    expect(appended[0]).toEqual(expect.arrayContaining(["Pat", "Lee", "PayPal", "Paid", "$70", "1500"]));
+    expect(appended[0]).toEqual(expect.arrayContaining(["Pat", "Lee", "PayPal", "Pending", "$70", "1500"]));
     expect(sheets.spreadsheets.values.append).toHaveBeenCalledWith(expect.objectContaining({ spreadsheetId: "tk", valueInputOption: "USER_ENTERED" }));
     expect(vi.mocked(logSystemAction)).toHaveBeenCalledWith(sheets, FLUENT_FORMS, expect.objectContaining({ area: "Tickets", action: "Add ticket purchase", target: "Pat Lee" }));
     expect(syncBiddersWith).toHaveBeenCalledTimes(1);

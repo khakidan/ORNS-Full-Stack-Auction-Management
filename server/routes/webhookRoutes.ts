@@ -2,6 +2,10 @@ import { Router } from "express";
 import { google } from "googleapis";
 import { getSweeperAuthClient } from "../services/paypalSweeperJob";
 import { getAdminFirestore } from "../services/firebaseAdmin";
+import { getSharedConfig } from "../services/configService";
+import { fluentFormsApiFromEnv } from "../services/fluentFormsApi";
+import { PayPalService } from "../services/paypalService";
+import { checkTicketPayment } from "../services/ticketPaymentCheck";
 import { purchaseFromWebhook } from "../services/fluentFormsWebhookPayload";
 import { TicketPurchase } from "../services/ticketPurchaseRow";
 import { upsertTicketPurchase } from "../services/ticketPurchaseService";
@@ -59,6 +63,24 @@ function whatWasRead(purchase: TicketPurchase) {
 }
 
 /**
+ * After the row is handled: confirm its payment from Fluent Forms' REST API
+ * and PayPal (W4). The delivery only says *when* to look - what it says
+ * about the payment isn't trusted. Never fails the request: the row was
+ * handled, and the poll (W5) checks a row still Pending again.
+ */
+async function checkPayment(sheets: ReturnType<typeof google.sheets>, entryId: string, mode: "write" | "compare") {
+  const fluentForms = fluentFormsApiFromEnv();
+  if (!fluentForms) return { outcome: "not-configured" };
+  try {
+    const paypal = new PayPalService({ isSandbox: (await getSharedConfig()).paypalIsSandbox !== false });
+    return await checkTicketPayment(sheets, entryId, { mode, fluentForms, paypal });
+  } catch (error: any) {
+    console.error("[FluentFormsWebhook] Payment check failed:", error?.message || error);
+    return { outcome: "error", error: String(error?.message || error).slice(0, 500) };
+  }
+}
+
+/**
  * Remembers the latest delivery for the Tickets page's status card (W6),
  * and logs it to Cloud Logging (`jsonPayload.fluentFormsWebhook`), which
  * is how shadow mode is checked until that card exists. Never fails the
@@ -86,7 +108,8 @@ async function recordDelivery(entry: Record<string, unknown>): Promise<void> {
  *
  * The purchase goes to upsertTicketPurchase (W2) in the mode from
  * FLUENT_FORMS_TICKETS_MODE: "compare" (the default) writes nothing,
- * "write" adds the row. It runs as the server's stored background Google
+ * "write" adds the row; then checkTicketPayment (W4) confirms a PayPal
+ * payment from the payment itself. It runs as the server's stored background Google
  * sign-in, since no person is asking. A failure answers 5xx, so Fluent
  * Forms logs it against the entry - and the poll (W5) adds it later.
  */
@@ -112,9 +135,15 @@ export default function createWebhookRouter() {
         await recordDelivery({ entryId: purchase.entryId, mode, outcome: "no-google-sign-in", read: whatWasRead(purchase) });
         return res.status(503).json({ error: "The server has no stored Google sign-in to write with. A staff member needs to sign in to the app once." });
       }
-      const result = await upsertTicketPurchase(google.sheets({ version: "v4", auth: client }), purchase, { mode });
-      await recordDelivery({ entryId: result.entryId, mode, outcome: result.outcome, read: whatWasRead(purchase), ...("problems" in result ? { problems: result.problems } : {}) });
-      res.json({ mode, ...result });
+      const sheets = google.sheets({ version: "v4", auth: client });
+      const result = await upsertTicketPurchase(sheets, purchase, { mode });
+      const payment = result.outcome === "added" || result.outcome === "exists" ? await checkPayment(sheets, result.entryId, mode) : undefined;
+      await recordDelivery({
+        entryId: result.entryId, mode, outcome: result.outcome, read: whatWasRead(purchase),
+        ...("problems" in result ? { problems: result.problems } : {}),
+        ...(payment ? { payment } : {}),
+      });
+      res.json({ mode, ...result, ...(payment ? { payment } : {}) });
     } catch (error: any) {
       await recordDelivery({ entryId: purchase.entryId, mode, outcome: "error", read: whatWasRead(purchase), error: String(error?.message || error).slice(0, 500) });
       next(error);

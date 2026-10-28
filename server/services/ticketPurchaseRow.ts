@@ -116,7 +116,10 @@ export function ticketRowFromPurchase(purchase: TicketPurchase): TicketRowResult
     if (slot.ownBidderNumber !== null) row[slot.ownBidderNumber] = guest.ownBidderNumber ? "yes" : "no";
   });
   row[TICKETS_COL.paymentMethod] = label(PAYMENT_METHODS, String(purchase.paymentMethod ?? ""));
-  row[TICKETS_COL.paymentStatus] = String(purchase.paymentStatus ?? "").trim() ? label(PAYMENT_STATUSES, String(purchase.paymentStatus)) : "Pending";
+  // Never Paid on the form's say-so: a new row starts Pending and
+  // checkTicketPayment (W4) sets Paid once PayPal confirms the payment.
+  const status = String(purchase.paymentStatus ?? "").trim() ? label(PAYMENT_STATUSES, String(purchase.paymentStatus)) : "Pending";
+  row[TICKETS_COL.paymentStatus] = status === "Paid" ? "Pending" : status;
   row[TICKETS_COL.totalPaid] = dollars(purchase.total);
   row[FORM_ENTRY_ID_COLUMN.index] = entryId;
   return { row };
