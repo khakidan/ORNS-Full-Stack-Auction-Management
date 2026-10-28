@@ -1,4 +1,5 @@
 import { Request } from "express";
+import { sheets_v4 } from "googleapis";
 import { sheetsFor } from "../utils/googleClients";
 import { ROLE_LABELS } from "../utils/permissions";
 import { UndoSpec } from "../utils/undoSpec";
@@ -39,12 +40,24 @@ export interface ActionEntry {
  * is never blocked or lost from the record.
  */
 export async function logAction(req: Request, entry: ActionEntry): Promise<void> {
-  const input: ActionRowInput = {
+  await appendActionRow(sheetsFor(req), {
     who: req.user?.email || "unknown",
     role: req.user ? ROLE_LABELS[req.user.role] : "",
     source: "App",
     ...entry,
-  };
+  });
+}
+
+/**
+ * logAction for work the server does on its own, with no request - the
+ * PayPal sweeper (ROADMAP B5). Written with `sheets` (the job's own Google
+ * access); `who` names the job.
+ */
+export async function logSystemAction(sheets: sheets_v4.Sheets, who: string, entry: ActionEntry): Promise<void> {
+  await appendActionRow(sheets, { who, role: "System", source: "App", ...entry });
+}
+
+async function appendActionRow(sheets: sheets_v4.Sheets, input: ActionRowInput): Promise<void> {
   const row = buildActionRow(input);
   try {
     const spreadsheetId = await getActionHistorySpreadsheetId();
@@ -53,7 +66,7 @@ export async function logAction(req: Request, entry: ActionEntry): Promise<void>
       return;
     }
     await Promise.race([
-      sheetsFor(req).spreadsheets.values.append({
+      sheets.spreadsheets.values.append({
         spreadsheetId,
         range: ACTIONS_RANGE,
         // RAW: names and descriptions are typed by people and must never

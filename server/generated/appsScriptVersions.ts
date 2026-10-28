@@ -2,7 +2,7 @@
 // The fingerprint each Apps Script project's Version.gs should report
 // (scripts/apps-script/fingerprint.mjs); see server/routes/appsScriptRoutes.ts.
 export const EXPECTED_APPS_SCRIPT_VERSIONS = {
-  BidManagementSpreadsheet: "b9bf3f07d255",
-  ItemsSpreadsheet: "1f3b7b806deb",
+  BidManagementSpreadsheet: "fb47cce253ff",
+  ItemsSpreadsheet: "bec74e53fd7a",
   TicketsSpreadsheet: "b4d1e7c5ec77",
 } as const;

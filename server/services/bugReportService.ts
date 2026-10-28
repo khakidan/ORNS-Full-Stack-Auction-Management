@@ -179,8 +179,7 @@ export async function listOpenBugReports(sheets: sheets_v4.Sheets, spreadsheetId
 
 /**
  * Finds a report's 1-indexed sheet row by Report ID (column A), the same
- * find-by-key-in-column-A pattern dataRoutes.ts's /settings/update
- * already uses against a different sheet - reading the full row (not
+ * find-by-key-in-column-A pattern - reading the full row (not
  * just column A) so the caller also gets the screenshot link back
  * without a second API call, since resolving a report needs both the
  * row index (to update Status) and the screenshot link (to delete the

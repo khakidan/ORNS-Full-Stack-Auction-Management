@@ -1,10 +1,10 @@
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import { fromConfig, RECEIPT_FIELDS } from '../middleware/fromConfig';
 import { googleAuthFor } from '../utils/googleClients';
 import { logAction } from '../services/actionLog';
 import { google } from 'googleapis';
 import { processEmail } from '../services/emailService';
-import { createIndividualReceipt, createAllReceipts, processAllEmails, RECEIPTS_PER_PART, receiptPartFileName } from '../services/receiptService';
+import { createIndividualReceipt, createAllReceipts, processAllEmails, ReceiptRunSettings, RECEIPTS_PER_PART, receiptPartFileName } from '../services/receiptService';
 import { isAppsScriptFailure } from '../utils/appsScriptRun';
 import { buildBidderReceiptWithInvoice, buildAllBidderReceiptsWithInvoices, sheetNamesFromBody } from '../services/receiptDataService';
 import { PayPalService } from '../services/paypalService';
@@ -13,6 +13,13 @@ import { requireAuth } from '../middleware/requireAuth';
 import { AlreadyRunningError, runIfIdle, withLock } from '../utils/asyncLock';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { syncBiddersFromTickets } from '../services/bidderTicketSync';
+
+const MISSING_RECEIPT_FOLDER = "Set the Receipts Folder ID in Settings before printing receipts.";
+
+/** The Config's receipt folder and logo (fromConfig's RECEIPT_FIELDS), for the receipt script. */
+function receiptRunSettings(req: Request): ReceiptRunSettings {
+  return { folderId: req.body.receiptFolderId, ornsLogoId: req.body.ornsLogoId };
+}
 
 export default function createReceiptsRouter() {
   const router = Router();
@@ -30,6 +37,7 @@ export default function createReceiptsRouter() {
 
     if (!scriptId) return res.status(500).json({ error: "SCRIPT_ID_BID_MANAGEMENT not configured." });
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
+    if (!req.body.receiptFolderId) return res.status(400).json({ error: MISSING_RECEIPT_FOLDER });
 
     try {
       // One run at a time per bidder: a double-click or a resent request
@@ -54,7 +62,7 @@ export default function createReceiptsRouter() {
         if (receiptResult.success === false) return res.status(400).json({ error: receiptResult.error });
 
         const script = google.script({ version: "v1", auth: client });
-        const result = await createIndividualReceipt(script, scriptId, bidderId, receiptResult.receipt, req.body.receiptFolderId);
+        const result = await createIndividualReceipt(script, scriptId, bidderId, receiptResult.receipt, receiptRunSettings(req));
         // The script reports its own failures as { success: false } -
         // passing that on as a 200 showed "Receipt Doc created!" for a
         // receipt that was never made.
@@ -87,6 +95,7 @@ export default function createReceiptsRouter() {
 
     if (!scriptId) return res.status(500).json({ error: "SCRIPT_ID_BID_MANAGEMENT not configured." });
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
+    if (!req.body.receiptFolderId) return res.status(400).json({ error: MISSING_RECEIPT_FOLDER });
     if (!Number.isInteger(part) || part < 1) return res.status(400).json({ error: "part must be a whole number, starting at 1" });
 
     try {
@@ -106,7 +115,7 @@ export default function createReceiptsRouter() {
         const slice = receipts.slice((part - 1) * RECEIPTS_PER_PART, part * RECEIPTS_PER_PART);
         const fileName = receiptPartFileName(part, totalParts, slice);
         const script = google.script({ version: "v1", auth: client });
-        const result = await createAllReceipts(script, scriptId, slice, fileName, req.body.receiptFolderId);
+        const result = await createAllReceipts(script, scriptId, slice, fileName, receiptRunSettings(req));
         if (isAppsScriptFailure(result)) return res.status(400).json({ error: result.error || `${fileName} couldn't be created.` });
         await logAction(req, { area: "Bid Management", action: "Print all receipts", target: `Part ${part} of ${totalParts}`, summary: `Printed ${fileName} (${slice.length} bidder(s))`, notUndoableReason: "receipts and emails have already gone out" });
 
@@ -139,20 +148,34 @@ export default function createReceiptsRouter() {
     }
   });
 
+  /**
+   * Emails one bidder their receipt. The browser resends after a dropped
+   * connection, so the request's `idempotencyKey` makes a resend return the
+   * first result, and one email per bidder runs at a time (a double-click
+   * gets 409) - either would otherwise email the bidder twice (ROADMAP B2).
+   */
   router.post("/email-only", fromConfig(RECEIPT_FIELDS), async (req, res, next) => {
-    const { bidderId, spreadsheetId, itemsSpreadsheetId } = req.body;
+    const { bidderId, spreadsheetId, itemsSpreadsheetId, idempotencyKey } = req.body;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
+    if (typeof bidderId !== "string" && typeof bidderId !== "number") return res.status(400).json({ error: "bidderId required" });
+    if (String(bidderId).trim() === "") return res.status(400).json({ error: "bidderId required" });
 
     try {
-      const client = googleAuthFor(req);
-      const paypal = new PayPalService({ isSandbox: await getPaypalIsSandbox() });
-      const result = await processEmail(client, spreadsheetId, String(bidderId), itemsSpreadsheetId, paypal, sheetNamesFromBody(req.body));
+      const outcome = await withIdempotency("receipts/email-only", idempotencyKey, () =>
+        runIfIdle(`receipt-email:${spreadsheetId}:${bidderId}`, async () => {
+          const client = googleAuthFor(req);
+          const paypal = new PayPalService({ isSandbox: await getPaypalIsSandbox() });
+          const result = await processEmail(client, spreadsheetId, String(bidderId), itemsSpreadsheetId, paypal, sheetNamesFromBody(req.body));
+          if (result.success === false) return { error: result.error as string };
 
-      if (result.success === false) return res.status(400).json({ error: result.error });
-
-      await logAction(req, { area: "Bid Management", action: "Email receipt", target: `Bidder ${bidderId}`, summary: `Emailed bidder ${bidderId}'s receipt`, notUndoableReason: "receipts and emails have already gone out" });
-      res.json({ success: true, result });
+          await logAction(req, { area: "Bid Management", action: "Email receipt", target: `Bidder ${bidderId}`, summary: `Emailed bidder ${bidderId}'s receipt`, notUndoableReason: "receipts and emails have already gone out" });
+          return { success: true, result };
+        })
+      );
+      if ("error" in outcome.result) return res.status(400).json({ error: outcome.result.error });
+      res.json(idempotentBody(outcome));
     } catch (error) {
+      if (error instanceof AlreadyRunningError) return res.status(409).json({ error: "This bidder's receipt is already being emailed." });
       next(error);
     }
   });

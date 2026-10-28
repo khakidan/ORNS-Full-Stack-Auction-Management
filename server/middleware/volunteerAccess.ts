@@ -18,8 +18,10 @@ interface VolunteerRoute {
 }
 
 const ROUTES: VolunteerRoute[] = [
-  // Reads of the auction's own spreadsheets (checked below).
+  // Reads of the tabs Bid Management shows (checked below).
   { method: "GET", path: /^\/api\/sheets\/[^/]+\/[^/]+$/ },
+  // The ticket list with only the Bidders tab's badge fields - never the ticket spreadsheet itself.
+  { method: "GET", path: /^\/api\/attendees\/badges$/ },
   { method: "GET", path: /^\/api\/bidders\/setup-status$/ },
   // The auction's Config - for a volunteer, only the Bid Management fields.
   { method: "GET", path: /^\/api\/config$/ },
@@ -35,6 +37,28 @@ const ROUTES: VolunteerRoute[] = [
   { method: "GET", path: /^\/api\/drive\/files\/[^/]+$/ },
 ];
 
+/** The tab a range names ("'Bid-Management'!A:ZZ" -> "bid-management"); a range without one is refused. */
+function tabOf(range: string): string {
+  const bang = range.lastIndexOf("!");
+  return bang === -1 ? "" : range.slice(0, bang).trim().replace(/^'(.*)'$/, "$1").trim().toLowerCase();
+}
+
+/**
+ * The tabs a volunteer's screens read, per spreadsheet - nothing from the
+ * Tickets spreadsheet (attendee contact and payment details; volunteers
+ * get /api/attendees/badges instead - ROADMAP B4), and only Bid
+ * Management's own tabs.
+ */
+function volunteerTabs(config: RuntimeConfig, spreadsheetId: string): Set<string> {
+  if (spreadsheetId === config.bidManagementSpreadsheetId) {
+    return new Set([config.bidderNumbersSheet || "Bidder-Numbers", config.bidManagementSheet || "Bid-Management", "Auction-Status", "Special-Winners", "Follow-Up"].map((t) => t.toLowerCase()));
+  }
+  if (spreadsheetId === config.auctionItemsSpreadsheetId) {
+    return new Set(["auction-items", "value calculations", "categories"]);
+  }
+  return new Set();
+}
+
 /** Why a volunteer's request is refused, or null if it's allowed. */
 export function volunteerRefusal(req: Request, config: RuntimeConfig): string | null {
   const path = (req.originalUrl || req.url).split("?")[0];
@@ -44,8 +68,12 @@ export function volunteerRefusal(req: Request, config: RuntimeConfig): string | 
   const spreadsheets = new Set([config.bidManagementSpreadsheetId, config.auctionItemsSpreadsheetId, config.auctionTicketsSpreadsheetId].filter(Boolean));
   const folders = new Set([config.receiptFolderId, config.forPrintFolderId].filter(Boolean));
 
-  const sheetMatch = /^\/api\/sheets\/([^/]+)\//.exec(path);
-  if (sheetMatch && !spreadsheets.has(decodeURIComponent(sheetMatch[1]))) return "That spreadsheet isn't part of this auction.";
+  const sheetMatch = /^\/api\/sheets\/([^/]+)\/([^/]+)$/.exec(path);
+  if (sheetMatch) {
+    const id = decodeURIComponent(sheetMatch[1]);
+    if (!spreadsheets.has(id)) return "That spreadsheet isn't part of this auction.";
+    if (!volunteerTabs(config, id).has(tabOf(decodeURIComponent(sheetMatch[2])))) return "Volunteers can't open that part of the spreadsheet.";
+  }
 
   const folderMatch = /^\/api\/drive\/files\/([^/]+)$/.exec(path);
   if (folderMatch && !folders.has(decodeURIComponent(folderMatch[1]))) return "That folder isn't part of this auction.";

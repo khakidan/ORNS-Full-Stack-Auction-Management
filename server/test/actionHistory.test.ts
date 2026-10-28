@@ -86,6 +86,24 @@ describe("logAction", () => {
     expect(appended.body.values[0].slice(2, 9)).toEqual(["jane@orns.org", "Administrator", "App", "Auction Items", "Edit item", "", "=HYPERLINK(\"x\")"]);
   });
 
+  it("records work the server does on its own (the PayPal sweeper) as that job, with the job's own Google access (ROADMAP B5)", async () => {
+    const real = await vi.importActual<typeof import("../services/actionLog")>("../services/actionLog");
+    vi.mocked(getActionHistorySpreadsheetId).mockResolvedValueOnce(LOG_ID);
+    let appended: any = null;
+    server.use(http.post(`${SHEETS}/:id/values/:range\\:append`, async ({ request }) => {
+      appended = { auth: request.headers.get("authorization"), body: await request.json() };
+      return HttpResponse.json({});
+    }));
+    const { google } = await import("googleapis");
+    const { getAuthenticatedClient } = await import("../services/oauth");
+    const sheets = google.sheets({ version: "v4", auth: getAuthenticatedClient({ access_token: "sweeper-token" }) });
+
+    await real.logSystemAction(sheets, "PayPal sweeper", { area: "Bid Management", action: "PayPal payment confirmed", summary: "s", notUndoableReason: "x" });
+
+    expect(appended.auth).toBe("Bearer sweeper-token");
+    expect(appended.body.values[0].slice(2, 7)).toEqual(["PayPal sweeper", "System", "App", "Bid Management", "PayPal payment confirmed"]);
+  });
+
   it("writes to Cloud Logging instead - never failing the action - when there's no spreadsheet yet or the write fails", async () => {
     const real = await vi.importActual<typeof import("../services/actionLog")>("../services/actionLog");
     const log = vi.spyOn(console, "log").mockImplementation(() => {});

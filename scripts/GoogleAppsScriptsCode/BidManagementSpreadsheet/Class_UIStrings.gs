@@ -15,11 +15,6 @@ class UIStrings {
         this.systemErrorTitle = 'System Error';
         this.continueTitle = 'Continue?';
 
-        // ── GlobalVariables / Bootstrap ───────────────────────────────────────
-        this.configRequiredTitle = 'Configuration Required';
-        this.configRequiredMsg = 'The "_Settings" tab has been created. Please use the "Set File & Folder" menu to configure your IDs.';
-        this.settingsError = 'Settings tab initialized. Please configure it before running again.';
-
         // ── SettingsManager ───────────────────────────────────────────────────
         this.settingsWorkflowTitle = 'Which setting are you updating?';
         this.settingsWorkflowPrompt = '\n\nEnter the number (e.g., 1):';

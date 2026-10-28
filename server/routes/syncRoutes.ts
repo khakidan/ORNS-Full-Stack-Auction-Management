@@ -1,21 +1,24 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { fromConfig, SYNC_FIELDS } from '../middleware/fromConfig';
 import { logAction } from '../services/actionLog';
 import { requirePermission } from '../middleware/requirePermission';
 import { sheetsFor, respondIfNotFound } from '../utils/googleClients';
 import { performSheetSync, isBidManagementSetUp } from '../services/syncService';
+import { AlreadyRunningError, runIfIdle } from '../utils/asyncLock';
 
 /** Builds Bidder-Numbers / Bid-Management from the ticket sheets (syncService.ts). */
 export default function createSyncRouter() {
   const router = Router();
 
-  router.post("/bidders/sync", requirePermission("auction.stage"), async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/bidders/sync", requirePermission("auction.stage"), fromConfig(SYNC_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
     const { spreadsheetId, auctionTicketSheetsID } = req.body;
     if (!spreadsheetId) {
       return res.status(400).json({ error: "spreadsheetId is required to sync and setup bid management." });
     }
 
     try {
-      const result = await performSheetSync(sheetsFor(req), spreadsheetId, auctionTicketSheetsID);
+      // One Set Up at a time: a double-click would otherwise rebuild twice.
+      const result = await runIfIdle(`bidders-sync:${spreadsheetId}`, () => performSheetSync(sheetsFor(req), spreadsheetId, auctionTicketSheetsID));
       await logAction(req, {
         area: "Bid Management",
         action: "Set Up Bid Management App",
@@ -24,6 +27,7 @@ export default function createSyncRouter() {
       });
       res.json({ success: true, result });
     } catch (error: any) {
+      if (error instanceof AlreadyRunningError) return res.status(409).json({ error: "Set Up is already running. Wait for it to finish." });
       console.error(`[Sync Route Error] Native synchronization flow failed:`, error);
       // Surface expected, actionable failures (missing settings, the
       // already-registered-walk-in guard) with their real message intact -
