@@ -54,7 +54,7 @@ export default function createReceiptsRouter() {
         if (receiptResult.success === false) return res.status(400).json({ error: receiptResult.error });
 
         const script = google.script({ version: "v1", auth: client });
-        const result = await createIndividualReceipt(script, scriptId, bidderId, receiptResult.receipt);
+        const result = await createIndividualReceipt(script, scriptId, bidderId, receiptResult.receipt, req.body.receiptFolderId);
         // The script reports its own failures as { success: false } -
         // passing that on as a 200 showed "Receipt Doc created!" for a
         // receipt that was never made.
@@ -106,7 +106,7 @@ export default function createReceiptsRouter() {
         const slice = receipts.slice((part - 1) * RECEIPTS_PER_PART, part * RECEIPTS_PER_PART);
         const fileName = receiptPartFileName(part, totalParts, slice);
         const script = google.script({ version: "v1", auth: client });
-        const result = await createAllReceipts(script, scriptId, slice, fileName);
+        const result = await createAllReceipts(script, scriptId, slice, fileName, req.body.receiptFolderId);
         if (isAppsScriptFailure(result)) return res.status(400).json({ error: result.error || `${fileName} couldn't be created.` });
         await logAction(req, { area: "Bid Management", action: "Print all receipts", target: `Part ${part} of ${totalParts}`, summary: `Printed ${fileName} (${slice.length} bidder(s))`, notUndoableReason: "receipts and emails have already gone out" });
 

@@ -37,11 +37,32 @@ describe("setupRoutes - /api/auction/setup-new", () => {
   it("saves the new year's Bidder Receipts and For Print folders in the Config itself, keeping the other settings (ROADMAP A5)", async () => {
     fake.docs("settings").set("global", { bidManagementSpreadsheetId: "s3", receiptFolderId: "last-year-receipts", forPrintFolderId: "last-year-print", ticketPrice: "40" });
 
+    // The Bid Management scripts' own copy (_Settings) must get the new folders too (ROADMAP B1).
+    const settingsWrites: { range: string; values: unknown }[] = [];
+    const captureSettings = async ({ params, request }: any) => {
+      const range = decodeURIComponent(String(params.range));
+      if (params.id !== "s3" || !range.startsWith("_Settings")) return undefined;
+      settingsWrites.push({ range, values: ((await request.json()) as any).values });
+      return HttpResponse.json({});
+    };
+    server.use(
+      http.get("https://sheets.googleapis.com/v4/spreadsheets/:id/values/:range", ({ params }) =>
+        params.id === "s3" && decodeURIComponent(String(params.range)).startsWith("_Settings")
+          ? HttpResponse.json({ values: [["Key", "Value", "Description"], ["receiptFolderID", "last-year-receipts", "Receipts Folder ID"]] })
+          : undefined),
+      http.put("https://sheets.googleapis.com/v4/spreadsheets/:id/values/:range", captureSettings),
+      http.post("https://sheets.googleapis.com/v4/spreadsheets/:id/values/:range\\:append", captureSettings),
+    );
+
     const response = await request(app).post("/api/auction/setup-new").set(authHeader).send(setupBody);
 
     const result = finalLine(response.text);
     expect(result.success).toBe(true);
     expect(result.configSaveError).toBeUndefined();
+    expect(settingsWrites).toEqual([
+      { range: "_Settings!B2:C2", values: [[result.bidderReceiptsFolderId, "Receipts Folder ID"]] },
+      { range: "_Settings!A:C", values: [["forPrintFolderID", result.forPrintFolderId, "For Print Folder ID"]] },
+    ]);
     expect(result.bidderReceiptsFolderId).toBeTruthy();
     expect(fake.docs("settings").get("global")).toMatchObject({
       receiptFolderId: result.bidderReceiptsFolderId,

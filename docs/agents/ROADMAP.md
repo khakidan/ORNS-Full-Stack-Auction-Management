@@ -34,10 +34,6 @@ A read of the whole codebase after A1-A17 shipped (`8f3a1ea`), measured against 
 
 Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 
-### High - fix before the next Setup New Auction Year
-
-- **B1 - After Setup New Auction Year, receipts still go to last year's folder.** Node runs the receipt scripts with no folder (`receiptService.ts`: `apiCreateIndividualReceipt(bidderId, null, ...)`, `apiCreateAllReceipts(null, ...)`), so the Bid Management Apps Script uses `receiptFolderID` from the spreadsheet's `_Settings` tab (`02_Class_DriveService.gs` `getReceiptFolder`). Only Save Configuration in the browser writes `_Settings` (`useConfigSettingsState.ts` `syncSettingToCloud`). Setup New Auction Year now saves the new folder IDs to the Config on the server (A5), but never updates `_Settings`, so every receipt keeps going to the old year's Bidder Receipts folder until someone clicks Save Configuration. Fix: pass `config.receiptFolderId` from the server's Config as the folder argument on every receipt run (the script already honors it - `_applyFolderOverride_`), and have the setup route update `_Settings` too (see B11).
-
 ### Medium - before the auction
 
 - **B2 - Emailing one receipt can send it twice.** `useCheckoutReceiptActions.ts` posts `/api/receipts/email-only` with `postJson`, which resends after a 5xx, a 429 or a dropped connection. The route has no idempotency key and no `runIfIdle` (unlike `/email-all`), so a resend - or a double-click - emails the bidder again and logs it twice. It also doesn't check `bidderId` (a missing one becomes the string `"undefined"`). Fix: an idempotency key (`withIdempotency`) or `postJsonOnce`, plus `runIfIdle` per bidder and a `bidderId` check.

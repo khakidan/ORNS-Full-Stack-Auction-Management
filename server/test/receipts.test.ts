@@ -203,8 +203,9 @@ describe('Receipt Generate workflow', () => {
     // Node resolves the receipt itself now (see receiptDataService.ts)
     // instead of Class_ReceiptManager.gs looking it up a second,
     // independent way - see CHANGELOG.md's Code Hardening
-    // item #2 / CHANGELOG.md. folderID (2nd position) is still never
-    // wired through from Node. No `emailReceipt` parameter any more -
+    // item #2 / CHANGELOG.md. folderID (2nd position) is null here because
+    // the test Config has no receipt folder (see the B1 test below). No
+    // `emailReceipt` parameter any more -
     // Step 5 deleted the GAS-side email path it gated, which nothing
     // ever actually triggered (the client always sent `false`).
     const expectedTotal = calculatePayPalSurcharge(50).total;
@@ -229,6 +230,33 @@ describe('Receipt Generate workflow', () => {
         adjustedTotal: expectedTotal
       }
     ]);
+  });
+
+  it("files receipts in the Config's receipt folder, not the spreadsheet's own _Settings copy (ROADMAP B1)", async () => {
+    const { getAdminFirestore } = await import("../services/firebaseAdmin");
+    const { _resetConfigCacheForTesting } = await import("../services/configService");
+    await getAdminFirestore().collection("settings").doc("global").set({ receiptFolderId: "this-years-receipts" });
+    _resetConfigCacheForTesting();
+    const runs: any[] = [];
+    server.use(
+      emailSheetHandler,
+      http.post('https://script.googleapis.com/v1/scripts/:scriptId\\:run', async ({ request }) => {
+        runs.push(await request.clone().json());
+        return HttpResponse.json({ response: { result: { success: true } } });
+      })
+    );
+
+    await request(app).post('/api/receipts/generate').set(authHeader)
+      .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
+    await request(app).post('/api/receipts/generate-all').set(authHeader)
+      .send({ spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id', part: 1 });
+
+    expect(runs.map((r) => [r.function, r.parameters[0]])).toEqual([
+      ["apiCreateIndividualReceipt", "42"],
+      ...runs.slice(1).map(() => ["apiCreateAllReceipts", "this-years-receipts"]),
+    ]);
+    expect(runs[0].parameters[1]).toBe("this-years-receipts");
+    expect(runs.length).toBeGreaterThan(1);
   });
 
   it('Auth failure', async () => {

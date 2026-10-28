@@ -6,6 +6,11 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **Receipts go to this year's folder after Setup New Auction Year (ROADMAP B1).** Node ran the receipt scripts with no folder, so the Bid Management Apps Script used `receiptFolderID` from the spreadsheet's `_Settings` tab, which Setup New Auction Year never updated - receipts kept going to last year's Bidder Receipts folder until someone clicked Save Configuration. Now:
+  - Every receipt run passes the Config's `receiptFolderId` (`fromConfig`'s `RECEIPT_FIELDS`; `createIndividualReceipt` / `createAllReceipts` in `receiptService.ts`). The script already honored a folder argument (`_applyFolderOverride_`), so no Apps Script redeploy is needed.
+  - Setup New Auction Year also writes the new receipt and print folders into `_Settings` (`upsertSetting`), and says to click Save Configuration if that fails.
+  - Backend 849 -> 850, total 1656 -> 1657.
+
 - **Audit items A6-A17 (the rest of the 2026-10-27 backlog).**
   - **A6:** a staff sign-in removes any volunteer session left in the same browser (`/auth/callback`), so it can't stay a volunteer.
   - **A7:** volunteer invite/resend/revoke, Undo and Create Action History are sent once (`postJsonOnce` in `apiClient.ts`, built on `postOnce`) - a retry used to email a second link or report "already undone"/"already exists" though the first request worked.
