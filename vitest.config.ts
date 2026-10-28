@@ -7,6 +7,11 @@ export default defineConfig({
     globals: true,
     environment: "node",
     setupFiles: ["./server/test/setup.ts"],
+    // Node 22+'s own experimental localStorage global hides jsdom's, which
+    // the frontend tests need. Set here (not only in `npm run test:quiet`)
+    // so `npx vitest run src`, an editor's test runner, or one test file run
+    // by hand behave the same (ROADMAP B14).
+    execArgv: ["--no-experimental-webstorage"],
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },

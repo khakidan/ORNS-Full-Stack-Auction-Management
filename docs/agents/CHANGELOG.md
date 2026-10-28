@@ -6,6 +6,8 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **B14 - The tests pass however they're run.** `vitest.config.ts` starts every test worker with `--no-experimental-webstorage` (`execArgv`), so `npx vitest run src`, one file run by hand, or an editor's test runner no longer fail 32 frontend tests on Node's own `localStorage`. `npm run test:quiet` no longer needs `NODE_OPTIONS` (so it also works outside a POSIX shell); `testing-batches.md` and `README.md` updated.
+
 - **Audit items B7-B10.**
   - **B7 - A bug report is saved and emailed once.** The dialog sends an `idempotencyKey` made once per submit, and `POST /api/bug-reports` saves and emails under `withIdempotency`, so a retry after a slow save gets the first result. A rate-limit refusal or a failed save isn't remembered, so the same report can be sent again later.
   - **B8 - The remaining writes are in Action History** (with a `notUndoableReason`): every document from `productionRoutes.ts` ("Create auction catalog" and so on - each run makes a new Drive file), the bidder-label route's Bidder-Numbers build when it assigns numbers (also `clearCacheForSpreadsheet`), and resolving a bug report (also `clearCacheForSpreadsheet`).
