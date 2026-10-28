@@ -5,7 +5,7 @@ import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
-import { WorkflowTabsShell } from "./WorkflowTabsShell";
+import { AttentionDot, WorkflowTabsShell } from "./WorkflowTabsShell";
 
 window.HTMLElement.prototype.hasPointerCapture = vi.fn();
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -86,6 +86,16 @@ describe("WorkflowTabsShell - tabs", () => {
     expect(screen.getByRole("tab", { name: "Tab One" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Tab Two" })).toBeInTheDocument();
     expect(screen.getByText("Content Two")).toBeVisible();
+  });
+
+  it("shows a tab's indicator after its label, named for screen readers", () => {
+    render(
+      <WorkflowTabsShell title="T" description="D" spreadsheetId="" auctionState="prep" defaultTab="one"
+        tabs={[tabs[0], { ...tabs[1], indicator: <AttentionDot label="Needs attention" /> }]} />
+    );
+
+    expect(screen.getByRole("tab", { name: "Tab Two Needs attention" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Tab One" })).toBeInTheDocument();
   });
 
   it("switches content when a different tab is clicked", async () => {
