@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseAttendeeRows } from "./attendeeParsing";
+import { FORM_ENTRY_ID_COLUMN } from "./attendeeSheetColumns";
 
 // General "tickets" sheet column layout (0-indexed), cross-checked against
 // every other consumer of this exact layout so these tests pin verified,
@@ -203,5 +204,29 @@ describe("parseAttendeeRows - payment fields", () => {
     expect(attendee.paymentMethod).toBe("Comp");
     expect(attendee.paymentStatus).toBe("Paid");
     expect(attendee.totalPaid).toBe("$0");
+  });
+});
+
+describe("parseAttendeeRows - Fluent Forms entry ID (ROADMAP W1)", () => {
+  it("reads the entry ID from column W on the general tickets sheet, trimmed", () => {
+    const row = [...generalRow({ 0: "Alice", 1: "One" }), " 4817 "];
+    const [attendee] = parseAttendeeRows("tickets", [GENERAL_HEADER, row]);
+    expect(FORM_ENTRY_ID_COLUMN).toEqual({ letter: "W", index: 22 });
+    expect(attendee.formEntryId).toBe("4817");
+  });
+
+  it("is blank for a row without one (a walk-in, or added in the app) and on staff/sponsor sheets", () => {
+    const [walkIn] = parseAttendeeRows("tickets", [GENERAL_HEADER, generalRow({ 0: "Walk", 1: "In" })]);
+    const staffRow = new Array(23).fill("");
+    Object.assign(staffRow, { 0: "Sam", 1: "Staff", 22: "4817" });
+    const [staff] = parseAttendeeRows("staff tickets", [OTHER_HEADER, staffRow]);
+    expect(walkIn.formEntryId).toBe("");
+    expect(staff.formEntryId).toBe("");
+  });
+
+  it("doesn't shift any other column - the payment columns still read T-V", () => {
+    const row = [...generalRow({ 0: "Alice", 1: "One", 19: "PayPal", 20: "Paid", 21: "$70" }), "4817"];
+    const [attendee] = parseAttendeeRows("tickets", [GENERAL_HEADER, row]);
+    expect(attendee).toMatchObject({ paymentMethod: "PayPal", paymentStatus: "Paid", totalPaid: "$70", formEntryId: "4817" });
   });
 });

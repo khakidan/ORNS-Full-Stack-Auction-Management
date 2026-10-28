@@ -170,8 +170,8 @@ describe("what a signed-in volunteer can do", () => {
     server.use(http.get(`${SHEETS}/:id/values/:range`, ({ params }) => {
       const range = decodeURIComponent(String(params.range));
       if (params.id === "tk" && range.startsWith("'tickets'")) {
-        const row = Array(22).fill("");
-        Object.assign(row, { 0: "Pat", 1: "Lee", 2: "pat@example.com", 3: "555-0100", 4: "2", 19: "PayPal", 20: "Paid", 21: "$70" });
+        const row = Array(23).fill("");
+        Object.assign(row, { 0: "Pat", 1: "Lee", 2: "pat@example.com", 3: "555-0100", 4: "2", 19: "PayPal", 20: "Paid", 21: "$70", 22: "entry-4817" });
         return HttpResponse.json({ values: [["First"], row] });
       }
       if (String(params.range).includes("Auction-Status")) return HttpResponse.json({ values: [["Live"]] });
@@ -183,7 +183,7 @@ describe("what a signed-in volunteer can do", () => {
     expect(res.status).toBe(200);
     expect(res.body.attendees).toEqual([expect.objectContaining({ sheet: "tickets", rowIndex: 2, firstName: "Pat", lastName: "Lee", paymentStatus: "Paid" })]);
     const text = JSON.stringify(res.body);
-    for (const secret of ["pat@example.com", "555-0100", "PayPal", "$70"]) expect(text).not.toContain(secret);
+    for (const secret of ["pat@example.com", "555-0100", "PayPal", "$70", "entry-4817"]) expect(text).not.toContain(secret);
   });
 
   it("can ask what changed, so their screen refreshes live like staff's", async () => {

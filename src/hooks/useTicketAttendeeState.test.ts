@@ -12,6 +12,7 @@
  * filter are a separate, larger test-coverage gap, not part of this fix.
  */
 import { renderHook, act, waitFor } from "@testing-library/react";
+import { FORM_ENTRY_ID_COLUMN } from "@/lib/attendeeSheetColumns";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useTicketAttendeeState } from "./useTicketAttendeeState";
 import { Attendee, Guest } from "@/types";
@@ -747,6 +748,8 @@ describe("useTicketAttendeeState", () => {
       expect(row[8]).toBe("One");
       expect(row[9]).toBe("g1@example.com");
       expect(row[10]).toBe("yes"); // own bidder number
+      // Column W is the Fluent Forms entry ID; a ticket added in the app has none (ROADMAP W1).
+      expect(row[FORM_ENTRY_ID_COLUMN.index]).toBe("");
     });
 
     it("places a Staff/Sponsor guest into the unshifted H-J columns, with no own-bidder-number column", async () => {
