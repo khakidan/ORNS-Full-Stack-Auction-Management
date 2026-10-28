@@ -133,4 +133,22 @@ describe("POST /api/webhooks/fluent-forms/tickets", () => {
     const stored = (await getAdminFirestore().collection("system").doc("fluentFormsTickets").get()).data();
     expect(stored?.lastWebhook).toMatchObject({ entryId: "1500", mode: "compare", outcome: "would-add", at: expect.any(String) });
   });
+
+  it("logs what it read - numbers and labels, never a name, email or phone - even when the row already exists", async () => {
+    vi.mocked(upsertTicketPurchase).mockResolvedValue({ outcome: "exists", entryId: "1500", rowIndex: 4 });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    let line = "";
+    try {
+      await send({ ...body, payment_total: "$7,000.00", guest_1_first_name: "Sam", guest_1_email: "sam@example.com" });
+      line = log.mock.calls.map(([text]) => String(text)).find((text) => text.includes("fluentFormsWebhook")) || "";
+    } finally {
+      log.mockRestore();
+    }
+
+    expect(JSON.parse(line).fluentFormsWebhook).toEqual({
+      entryId: "1500", mode: "compare", outcome: "exists",
+      read: { tickets: 1, total: 7000, guests: 1, paymentMethod: "paypal", paymentStatus: "paid" },
+    });
+    for (const personal of ["Pat", "Lee", "pat@example.com", "555-0100", "Sam", "sam@example.com"]) expect(line).not.toContain(personal);
+  });
 });
