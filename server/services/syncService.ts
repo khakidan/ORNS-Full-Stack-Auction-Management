@@ -193,17 +193,6 @@ export async function getBidderLabelList(sheets: sheets_v4.Sheets, spreadsheetId
     .sort((a, b) => parseInt(a.number, 10) - parseInt(b.number, 10));
 }
 
-/** _Settings key -> trimmed value (column A -> column B). A missing tab reads as no settings. */
-async function readSettings(sheets: sheets_v4.Sheets, spreadsheetId: string): Promise<Record<string, string>> {
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: "_Settings!A:C" }).catch(() => ({ data: { values: [] as SheetRows } }));
-  const settings: Record<string, string> = {};
-  for (const row of res.data.values || []) {
-    const key = String(row[0] ?? "");
-    if (key && key !== "Setting Key") settings[key] = cell(row, 1);
-  }
-  return settings;
-}
-
 /**
  * Refuses a rebuild once a walk-in has been registered straight into
  * Bid-Management (registerWalkInBidder marks them "Auction Checkout" in
@@ -324,10 +313,10 @@ export async function isBidManagementSetUp(sheets: sheets_v4.Sheets, spreadsheet
  * Bidder-Numbers tabs, then rebuilds both from the Auction Tickets
  * spreadsheet. Refused once walk-ins exist (assertNoWalkInsRegistered).
  */
-export async function performSheetSync(sheets: sheets_v4.Sheets, spreadsheetId: string, customAuctionTicketSheetsID?: string) {
+export async function performSheetSync(sheets: sheets_v4.Sheets, spreadsheetId: string, auctionTicketSheetsID: string) {
   // Under the Bidder-Numbers lock, so a check-in or walk-in landing during
   // the rebuild can't be overwritten by it (ROADMAP B3).
-  return withLock(`bidder-numbers:${spreadsheetId}`, () => performSheetSyncLocked(sheets, spreadsheetId, customAuctionTicketSheetsID));
+  return withLock(`bidder-numbers:${spreadsheetId}`, () => performSheetSyncLocked(sheets, spreadsheetId, auctionTicketSheetsID));
 }
 
 /** The auction's state; a spreadsheet with no Auction-Status tab yet is in Prep. */
@@ -338,16 +327,16 @@ async function readAuctionState(sheets: sheets_v4.Sheets, spreadsheetId: string)
   return parseAuctionState(res?.data.values?.[0]?.[0]);
 }
 
-async function performSheetSyncLocked(sheets: sheets_v4.Sheets, spreadsheetId: string, customAuctionTicketSheetsID?: string) {
+async function performSheetSyncLocked(sheets: sheets_v4.Sheets, spreadsheetId: string, auctionTicketSheetsID: string) {
   // Rebuilding renumbers every bidder - only before the auction starts.
   const state = await readAuctionState(sheets, spreadsheetId);
   if (state !== "prep") {
     throw new Error(`Cannot re-sync: the auction is ${state === "live" ? "Live" : "Closed"}. Set Up only runs while the auction is in Prep.`);
   }
-  const settings = await readSettings(sheets, spreadsheetId);
-  const auctionTicketSheetsID = customAuctionTicketSheetsID || settings["auctionTicketSheetsID"];
+  // From the Config (syncRoutes' fromConfig), not the spreadsheet's old
+  // _Settings copy (ROADMAP B11).
   if (!auctionTicketSheetsID) {
-    throw new Error("Missing 'auctionTicketSheetsID' in settings. Please configure settings first.");
+    throw new Error("Missing 'Auction Tickets Spreadsheet ID'. Set it in Settings first.");
   }
 
   await assertNoWalkInsRegistered(sheets, auctionTicketSheetsID);

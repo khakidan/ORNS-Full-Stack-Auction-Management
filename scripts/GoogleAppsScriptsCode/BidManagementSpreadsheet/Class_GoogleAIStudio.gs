@@ -102,8 +102,18 @@ class GoogleAIStudio extends GlobalVariables { // ◄ Added 'extends GlobalVaria
     }
 }
 
-function apiCreateAllReceipts ( folderID, receipts, fileName ) {
+/**
+ * The bridge functions' `settings` is the web app's Config for this run -
+ * `{ ornsLogoID }` - and the receipt folder is `folderID`; neither is read
+ * from the spreadsheet's _Settings tab any more (ROADMAP B11).
+ */
+function useReceiptRunSettings_ ( folderID, settings ) {
+    useRunSettings_( Object.assign( {}, settings, { receiptFolderID: folderID } ) );
+}
+
+function apiCreateAllReceipts ( folderID, receipts, fileName, settings ) {
     try {
+        useReceiptRunSettings_( folderID, settings );
         // BUG FIX: this bridge function used to drop `receipts` entirely -
         // it never forwarded it to createAllReceipts, so every real batch
         // call from Node (which always sends a receipts array as the 2nd
@@ -115,8 +125,9 @@ function apiCreateAllReceipts ( folderID, receipts, fileName ) {
     }
 }
 
-function apiCreateIndividualReceipt ( bidderId, folderID, receiptData ) {
+function apiCreateIndividualReceipt ( bidderId, folderID, receiptData, settings ) {
     try {
+        useReceiptRunSettings_( folderID, settings );
         return new GoogleAIStudio().createIndividualReceipt( bidderId, folderID, receiptData );
     } catch ( e ) {
         return { success: false, error: e.toString() };

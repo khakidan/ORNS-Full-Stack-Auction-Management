@@ -94,7 +94,7 @@ class DocService extends DriveService {
 
         const destinationFolder = this.getReceiptFolder();
         if ( !destinationFolder ) {
-            console.error( 'DocService: receipt folder ID is missing or invalid in _Settings.' );
+            console.error( 'DocService: receipt folder ID is missing or invalid.' );
             return;
         }
 

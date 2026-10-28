@@ -141,18 +141,19 @@ class GoogleAIStudio {
 
 // ==============================================================================
 // GLOBAL API WRAPPERS
-// Pass folderID and the resolved items array as arguments when calling via
-// the Apps Script API. Example from Node: run("apiCreateBundlingDoc",
-// [folderID, items])
+// Pass folderID, the resolved items array and the app's settings for this
+// run ({ ornsLogoID, auctionDevFolderID } - see useRunSettings_) when
+// calling via the Apps Script API. Example from Node:
+// run("apiCreateBundlingDoc", [folderID, items, settings])
 // ==============================================================================
 
 const API_BRIDGE = new GoogleAIStudio();
 
-function apiCreateBundlingDoc ( folderID, items ) { return API_BRIDGE.createBundlingDoc( folderID, items ); }
-function apiCreateItemLabels ( folderID, items ) { return API_BRIDGE.createItemLabels( folderID, items ); }
-function apiCreateSlideshow ( folderID, items ) { return API_BRIDGE.createSlideshow( folderID, items ); }
-function apiCreateBiddingGuideCoverPage ( folderID, items ) { return API_BRIDGE.createBiddingGuideCoverPage( folderID, items ); }
-function apiCreateBiddingGuideInnerPages ( folderID, items ) { return API_BRIDGE.createBiddingGuideInnerPages( folderID, items ); }
-function apiCreateBidSheets ( folderID, items ) { return API_BRIDGE.createBidSheets( folderID, items ); }
-function apiCreateCatalog ( folderID, items ) { return API_BRIDGE.createCatalog( folderID, items ); }
-function apiCreateTableTents ( folderID, items ) { return API_BRIDGE.createTableTents( folderID, items ); }
+function apiCreateBundlingDoc ( folderID, items, settings ) { useRunSettings_( settings ); return API_BRIDGE.createBundlingDoc( folderID, items ); }
+function apiCreateItemLabels ( folderID, items, settings ) { useRunSettings_( settings ); return API_BRIDGE.createItemLabels( folderID, items ); }
+function apiCreateSlideshow ( folderID, items, settings ) { useRunSettings_( settings ); return API_BRIDGE.createSlideshow( folderID, items ); }
+function apiCreateBiddingGuideCoverPage ( folderID, items, settings ) { useRunSettings_( settings ); return API_BRIDGE.createBiddingGuideCoverPage( folderID, items ); }
+function apiCreateBiddingGuideInnerPages ( folderID, items, settings ) { useRunSettings_( settings ); return API_BRIDGE.createBiddingGuideInnerPages( folderID, items ); }
+function apiCreateBidSheets ( folderID, items, settings ) { useRunSettings_( settings ); return API_BRIDGE.createBidSheets( folderID, items ); }
+function apiCreateCatalog ( folderID, items, settings ) { useRunSettings_( settings ); return API_BRIDGE.createCatalog( folderID, items ); }
+function apiCreateTableTents ( folderID, items, settings ) { useRunSettings_( settings ); return API_BRIDGE.createTableTents( folderID, items ); }
