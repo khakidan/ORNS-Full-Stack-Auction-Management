@@ -382,3 +382,64 @@ describe("PayPalService.removeSurchargeLine (ROADMAP.md L3 - cash/check payers d
     await expect(paypal.removeSurchargeLine("INV2-AAAA")).rejects.toThrow(/update failed \(422\)/);
   });
 });
+
+describe("PayPalService.getPayment (ROADMAP W4)", () => {
+  const around = new Date("2026-04-25T12:05:02Z");
+  /** Answers the token call, then each lookup by URL. */
+  function fetcherFor(routes: Record<string, [number, unknown]>) {
+    return vi.fn(async (url: string) => {
+      if (url.endsWith("/v1/oauth2/token")) return mockFetchResponse(200, { access_token: "tok" });
+      const match = Object.keys(routes).find((path) => url.includes(path));
+      if (!match) throw new Error(`unexpected ${url}`);
+      return mockFetchResponse(...routes[match]);
+    });
+  }
+
+  it("reads a PayPal Checkout payment from the Captures API", async () => {
+    const fetcher = fetcherFor({ "/v2/payments/captures/9AB12345CD678901E": [200, { status: "COMPLETED", amount: { value: "70.00", currency_code: "USD" } }] });
+
+    const payment = await newService({ fetcher }).getPayment("9AB12345CD678901E", around);
+
+    expect(payment).toEqual({ status: "COMPLETED", amount: 70, currency: "USD" });
+  });
+
+  it("falls back to Transaction Search for a PayPal Standard payment, within a 31-day window around it", async () => {
+    const fetcher = fetcherFor({
+      "/v2/payments/captures/": [404, { name: "RESOURCE_NOT_FOUND" }],
+      "/v1/reporting/transactions": [200, { transaction_details: [{ transaction_info: { transaction_status: "S", transaction_amount: { value: "70.00", currency_code: "USD" } } }] }],
+    });
+
+    const payment = await newService({ fetcher }).getPayment("9AB12345CD678901E", around);
+
+    expect(payment).toEqual({ status: "COMPLETED", amount: 70, currency: "USD" });
+    const searchUrl = new URL(fetcher.mock.calls.map(([u]) => String(u)).find((u) => u.includes("/reporting/"))!);
+    expect(searchUrl.searchParams.get("transaction_id")).toBe("9AB12345CD678901E");
+    const days = (Date.parse(searchUrl.searchParams.get("end_date")!) - Date.parse(searchUrl.searchParams.get("start_date")!)) / 86400000;
+    expect(days).toBeLessThanOrEqual(31);
+    expect(Date.parse(searchUrl.searchParams.get("start_date")!)).toBeLessThan(around.getTime());
+  });
+
+  it.each([["V", "REFUNDED"], ["P", "PENDING"], ["D", "DECLINED"]])("names Transaction Search's %s as %s", async (code, status) => {
+    const fetcher = fetcherFor({
+      "/v2/payments/captures/": [404, {}],
+      "/v1/reporting/transactions": [200, { transaction_details: [{ transaction_info: { transaction_status: code, transaction_amount: { value: "70.00", currency_code: "USD" } } }] }],
+    });
+    expect((await newService({ fetcher }).getPayment("9AB12345CD678901E", around))?.status).toBe(status);
+  });
+
+  it("answers null when this PayPal account has no such payment", async () => {
+    const fetcher = fetcherFor({ "/v2/payments/captures/": [404, {}], "/v1/reporting/transactions": [200, { transaction_details: [] }] });
+    expect(await newService({ fetcher }).getPayment("9AB12345CD678901E", around)).toBeNull();
+  });
+
+  it("throws on a PayPal error, so it isn't read as 'no such payment'", async () => {
+    const fetcher = fetcherFor({ "/v2/payments/captures/": [404, {}], "/v1/reporting/transactions": [403, { name: "NOT_AUTHORIZED" }] });
+    await expect(newService({ fetcher }).getPayment("9AB12345CD678901E", around)).rejects.toThrow(/search failed \(403\)/);
+  });
+
+  it("never puts a malformed ID into a PayPal URL", async () => {
+    const fetcher = fetcherFor({});
+    expect(await newService({ fetcher }).getPayment("../v1/oauth2", around)).toBeNull();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});

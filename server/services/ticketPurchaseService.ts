@@ -11,7 +11,7 @@ import { FORM_ENTRY_ID_COLUMN } from "../../src/lib/attendeeSheetColumns";
 
 /** Who Action History says made these rows. */
 export const FLUENT_FORMS = "Fluent Forms (website)";
-const TICKETS_TAB = "'tickets'";
+export const TICKETS_TAB = "'tickets'";
 const REVIEW = () => getAdminFirestore().collection("ticketPurchaseReview");
 
 export type TicketPurchaseOutcome =
@@ -86,14 +86,14 @@ export async function upsertTicketPurchase(
       location: `Auction Tickets ${written || "'tickets'"}`,
       notUndoableReason: "the purchase is still in Fluent Forms, so it would be added again; edit or delete the ticket in the app instead",
     });
-    await REVIEW().doc(entryId).delete().catch(() => {});
+    await clearReview(entryId);
     await syncBiddersWith(sheets, (entry) => logSystemAction(sheets, FLUENT_FORMS, entry));
     return { outcome: "added", entryId, rowIndex: rowNumberOf(written) };
   });
 }
 
 /** The 1-based row whose column W holds `entryId`, or null. */
-async function findEntryRow(sheets: sheets_v4.Sheets, spreadsheetId: string, entryId: string): Promise<number | null> {
+export async function findEntryRow(sheets: sheets_v4.Sheets, spreadsheetId: string, entryId: string): Promise<number | null> {
   const column = FORM_ENTRY_ID_COLUMN.letter;
   const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: `${TICKETS_TAB}!${column}:${column}` });
   const values = res.data.values || [];
@@ -114,15 +114,27 @@ function rowNumberOf(range: string | null): number | null {
  * the buyer's name and what's wrong. The full purchase stays in WordPress.
  */
 async function putOnReviewList(purchase: TicketPurchase, problems: string[]): Promise<void> {
-  const entryId = String(purchase.entryId ?? "").trim();
+  await flagForReview(String(purchase.entryId ?? "").trim(), `${purchase.firstName ?? ""} ${purchase.lastName ?? ""}`, problems);
+}
+
+/**
+ * Puts an entry on the `ticketPurchaseReview` list for staff (W2's rows
+ * that can't be written, W4's payments that can't be confirmed).
+ */
+export async function flagForReview(entryId: string, name: string, problems: string[]): Promise<void> {
   const now = new Date().toISOString();
   const doc = REVIEW().doc(/^\d+$/.test(entryId) ? entryId : `no-entry-id-${now}`);
   const existing = (await doc.get()).data();
   await doc.set({
     entryId,
-    name: `${purchase.firstName ?? ""} ${purchase.lastName ?? ""}`.trim().slice(0, 200),
+    name: name.trim().slice(0, 200),
     problems,
     firstSeenAt: existing?.firstSeenAt || now,
     lastSeenAt: now,
   });
+}
+
+/** Takes an entry off the review list once it's sorted. */
+export async function clearReview(entryId: string): Promise<void> {
+  await REVIEW().doc(entryId).delete().catch(() => {});
 }

@@ -15,10 +15,12 @@ vi.mock("../services/ticketPurchaseService", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../services/ticketPurchaseService")>()),
   upsertTicketPurchase: vi.fn(),
 }));
+vi.mock("../services/ticketPaymentCheck", () => ({ checkTicketPayment: vi.fn() }));
 
 import { app } from "../app";
 import { getSweeperAuthClient } from "../services/paypalSweeperJob";
 import { upsertTicketPurchase } from "../services/ticketPurchaseService";
+import { checkTicketPayment } from "../services/ticketPaymentCheck";
 import { getAuthenticatedClient } from "../services/oauth";
 import { getAdminFirestore } from "../services/firebaseAdmin";
 import { _resetWebhookRateLimitForTesting } from "../routes/webhookRoutes";
@@ -32,22 +34,26 @@ const body = {
 const send = (payload: unknown = body, secret = SECRET) =>
   request(app).post(URL).set("X-ORNS-Webhook-Secret", secret).send(payload as object);
 
-const env = { secret: process.env.FLUENT_FORMS_WEBHOOK_SECRET, mode: process.env.FLUENT_FORMS_TICKETS_MODE };
+const ENV_KEYS = ["FLUENT_FORMS_WEBHOOK_SECRET", "FLUENT_FORMS_TICKETS_MODE", "FLUENT_FORMS_SITE_URL", "FLUENT_FORMS_API_USER", "FLUENT_FORMS_API_PASSWORD"] as const;
+const env = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
+/** Turns on the Fluent Forms REST API, which the payment check (W4) needs. */
+const withFluentFormsApi = () => Object.assign(process.env, { FLUENT_FORMS_SITE_URL: "https://www.orns.org", FLUENT_FORMS_API_USER: "orns-app", FLUENT_FORMS_API_PASSWORD: "app-password" });
 
 beforeEach(() => {
   process.env.FLUENT_FORMS_WEBHOOK_SECRET = SECRET;
-  delete process.env.FLUENT_FORMS_TICKETS_MODE;
+  for (const key of ENV_KEYS.slice(1)) delete process.env[key];
   _resetWebhookRateLimitForTesting();
   vi.mocked(getSweeperAuthClient).mockResolvedValue(getAuthenticatedClient({ access_token: "background", expiry_date: Date.now() + 3600000 }));
   vi.mocked(upsertTicketPurchase).mockReset().mockImplementation(async (_sheets, purchase, { mode }) =>
     mode === "write" ? { outcome: "added", entryId: purchase.entryId, rowIndex: 5 } : { outcome: "would-add", entryId: purchase.entryId, row: [] }
   );
+  vi.mocked(checkTicketPayment).mockReset().mockResolvedValue({ outcome: "unchanged", entryId: "1500", status: "Pending", reason: "Fluent Forms says pending" });
 });
 
 afterEach(() => {
-  for (const [key, value] of [["FLUENT_FORMS_WEBHOOK_SECRET", env.secret], ["FLUENT_FORMS_TICKETS_MODE", env.mode]] as const) {
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
+  for (const key of ENV_KEYS) {
+    if (env[key] === undefined) delete process.env[key];
+    else process.env[key] = env[key];
   }
 });
 
@@ -148,7 +154,61 @@ describe("POST /api/webhooks/fluent-forms/tickets", () => {
     expect(JSON.parse(line).fluentFormsWebhook).toEqual({
       entryId: "1500", mode: "compare", outcome: "exists",
       read: { tickets: 1, total: 7000, guests: 1, paymentMethod: "paypal", paymentStatus: "paid" },
+      payment: { outcome: "not-configured" },
     });
     for (const personal of ["Pat", "Lee", "pat@example.com", "555-0100", "Sam", "sam@example.com"]) expect(line).not.toContain(personal);
+  });
+
+  describe("then the payment check (W4)", () => {
+    it("runs for the purchase's row, in the same mode, and answers with what it found", async () => {
+      withFluentFormsApi();
+      vi.mocked(upsertTicketPurchase).mockResolvedValue({ outcome: "exists", entryId: "1500", rowIndex: 4 });
+
+      const res = await send({ ...body, payment_status: "paid" });
+
+      expect(checkTicketPayment).toHaveBeenCalledWith(expect.anything(), "1500", expect.objectContaining({ mode: "compare" }));
+      expect(res.body.payment).toEqual({ outcome: "unchanged", entryId: "1500", status: "Pending", reason: "Fluent Forms says pending" });
+    });
+
+    it("runs on a row it just added (write mode)", async () => {
+      withFluentFormsApi();
+      process.env.FLUENT_FORMS_TICKETS_MODE = "write";
+
+      await send();
+
+      expect(checkTicketPayment).toHaveBeenCalledWith(expect.anything(), "1500", expect.objectContaining({ mode: "write" }));
+    });
+
+    it("doesn't run when there's no row to check", async () => {
+      withFluentFormsApi();
+      await send();
+      vi.mocked(upsertTicketPurchase).mockResolvedValue({ outcome: "needs-review", entryId: "1500", problems: ["x"] });
+      await send();
+      expect(checkTicketPayment).not.toHaveBeenCalled();
+    });
+
+    it("says it's not configured while the Fluent Forms API env vars aren't set", async () => {
+      vi.mocked(upsertTicketPurchase).mockResolvedValue({ outcome: "exists", entryId: "1500", rowIndex: 4 });
+
+      const res = await send();
+
+      expect(res.body.payment).toEqual({ outcome: "not-configured" });
+      expect(checkTicketPayment).not.toHaveBeenCalled();
+    });
+
+    it("still answers 200 when the check fails - the row was handled, and the poll checks again", async () => {
+      withFluentFormsApi();
+      const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.mocked(upsertTicketPurchase).mockResolvedValue({ outcome: "exists", entryId: "1500", rowIndex: 4 });
+      vi.mocked(checkTicketPayment).mockRejectedValue(new Error("Fluent Forms API 401"));
+
+      const res = await send();
+      quiet.mockRestore();
+
+      expect(res.status).toBe(200);
+      expect(res.body.payment).toEqual({ outcome: "error", error: "Fluent Forms API 401" });
+      const stored = (await getAdminFirestore().collection("system").doc("fluentFormsTickets").get()).data();
+      expect(stored?.lastWebhook.payment).toEqual({ outcome: "error", error: "Fluent Forms API 401" });
+    });
   });
 });

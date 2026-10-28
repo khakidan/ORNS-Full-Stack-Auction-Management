@@ -48,6 +48,7 @@ are set on the service itself and there is no `.env`.
 *   `SWEEPER_TRIGGER_SECRET`: Shared secret Cloud Scheduler sends to `POST /internal/paypal-sweep` to run the PayPal sweep (see "Deployment"). Production only; leave it empty locally, which turns that endpoint off
 *   `FLUENT_FORMS_WEBHOOK_SECRET`: Shared secret the Auction Tickets form's Webhook feed sends in an `X-ORNS-Webhook-Secret` header to `POST /api/webhooks/fluent-forms/tickets` (see "Fluent Forms ticket webhook"). Leave it empty locally, which turns that endpoint off
 *   `FLUENT_FORMS_TICKETS_MODE` (optional): `write` makes the ticket webhook add rows to the tickets tab. Unset (the default) is shadow mode: it reports what it would do (Cloud Logging, `jsonPayload.fluentFormsWebhook`) and writes nothing. Set it to `write` only at the switch-over, when the form's Google Sheets feed is turned off - never run both as writers
+*   `FLUENT_FORMS_SITE_URL`, `FLUENT_FORMS_API_USER`, `FLUENT_FORMS_API_PASSWORD` (optional): WordPress's REST API (`https://www.orns.org`, a dedicated WordPress user, its Application Password - keep the password in Secret Manager). The ticket webhook uses it to confirm a PayPal payment (see "Fluent Forms ticket webhook"); with any one unset the payment check is off. `FLUENT_FORMS_TICKETS_FORM_ID` (optional) defaults to `7`
 *   `APPS_SCRIPT_DEV_MODE` (optional): `true` makes Apps Script calls run each script's latest *saved* editor code instead of its deployed API-executable version - only works for the script's owner; for trying `.gs` edits locally before deploying them. Default (unset/`false`) runs the deployed version - see "Deployment"
 *   `DRIVE_TEMPLATE_FILES_FOLDER_ID`: The Auction/General Auction Info/Template Files folder, where Settings > Action History creates the master Action History spreadsheet (next to the master Bid Management and Item Entry spreadsheets)
 *   `FULL_ADMIN_EMAILS`: Comma-separated @orns.org addresses that are always **Full Administrators** (`server/services/userService.ts`). They can't be demoted in the app, so nobody can lock every admin out; every other @orns.org address is a User unless given a role in Settings > Users. Leave it empty and nobody can open Settings - set at least one address
@@ -159,7 +160,18 @@ The Settings page's **Apps Script Versions** card shows whether each live script
 
 Production configuration (all the environment variables above, with
 production values) is set on the `orns-auction-manager-gh` service in
-the Cloud Run console, not in any file in this repo. The server binds
+the Cloud Run console, not in any file in this repo. Since 2026-10-28
+the secret ones - `GOOGLE_CLIENT_SECRET`, `PAYPAL_CLIENT_SECRET`,
+`SESSION_SECRET`, `GEMINI_API_KEY`, `SWEEPER_TRIGGER_SECRET`,
+`FLUENT_FORMS_WEBHOOK_SECRET` - are Secret Manager secrets of the same
+name, referenced by the service as `<NAME>:latest`, and
+`FLUENT_FORMS_API_PASSWORD` comes from the secret
+`fluent-forms-api-password` (Variables & Secrets > "Secrets exposed as environment
+variables"); the service account
+`firebase-adminsdk-fbsvc@orns-auction-bid-management.iam.gserviceaccount.com`
+has Secret Accessor on each. To change one, add a new version of the
+secret and deploy a new revision (a running instance keeps the value it
+started with). Never add one back as a plain variable. The server binds
 `0.0.0.0:$PORT`; Cloud Run terminates HTTPS in front of it, and
 `app.set("trust proxy", 1)` is what lets Express treat those requests as
 secure for the `orns_session` cookie.
@@ -203,6 +215,39 @@ It writes as the server's stored background Google sign-in (the one the
 PayPal sweeper uses, refreshed by any staff sign-in); without one it
 answers 503. Only at the switch-over: set `FLUENT_FORMS_TICKETS_MODE=write`
 and turn the Google Sheets feed off.
+
+**Ticket payments (W4).** After each delivery the webhook confirms the
+row's payment (`checkTicketPayment`, `server/services/ticketPaymentCheck.ts`)
+from the payment itself, never from what the delivery says: it reads the
+entry's transactions from WordPress's REST API
+(`GET /wp-json/fluentform/v1/submissions/resources?form_id=7&entry_id=N&orderData=1`,
+`server/services/fluentFormsApi.ts`) and looks the PayPal transaction ID
+up at PayPal (`PayPalService.getPayment`: the Captures API, then
+Transaction Search for a PayPal Standard payment). Only a PayPal payment
+that is completed, in USD, for the amount Fluent Forms recorded, and not
+already used for another entry sets the row Paid; anything else goes on
+the review list. Cash/check is left to staff, a Paid row never goes back
+to Pending, and a refund PayPal confirms sets it Refunded and flags it. A
+new website row always starts Pending. Set-up:
+
+1.  In WordPress, add a user (e.g. `orns-auction-app`) with no other
+    role, and in Fluent Forms > Global Settings > Managers give it only
+    **View Entries** (`fluentform_entries_viewer`) and **View Payments**
+    (`fluentform_view_payments`) for the Auction Tickets form. On its
+    profile, create an **Application Password**.
+2.  Put the password in Secret Manager (it's `fluent-forms-api-password`)
+    and expose it to the service as `FLUENT_FORMS_API_PASSWORD` - the
+    variable's name, not the secret's, is what the app reads; set `FLUENT_FORMS_SITE_URL=https://www.orns.org`
+    and `FLUENT_FORMS_API_USER` to the user's login.
+3.  In the PayPal developer dashboard, the app whose credentials the
+    service uses (`PAYPAL_CLIENT_ID`) needs **Transaction Search** turned
+    on - PayPal Standard payments are only found there. The Settings
+    sandbox/live switch picks which PayPal it asks, so a live purchase
+    checked against the sandbox is never confirmed (it goes on the review
+    list instead).
+4.  Submit a test entry and check `jsonPayload.fluentFormsWebhook.payment`
+    in Cloud Logging: `not-configured` means step 2 is missing, `error`
+    carries the reason (a 401 from WordPress means the user or password).
 
 **PayPal sweeper schedule (Cloud Scheduler).** The sweeper that checks
 deferred credit-card checkouts against PayPal isn't a timer inside the

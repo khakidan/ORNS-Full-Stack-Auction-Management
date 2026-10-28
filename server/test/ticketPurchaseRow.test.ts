@@ -68,13 +68,13 @@ describe("ticketRowFromPurchase", () => {
   });
 
   it.each([
-    ["paypal", "paid", "PayPal", "Paid"],
+    ["paypal", "paid", "PayPal", "Pending"],
     ["test", "pending", "Offline", "Pending"],
     ["offline", "pending", "Offline", "Pending"],
-    ["PayPal", "PAID", "PayPal", "Paid"],
+    ["PayPal", "PAID", "PayPal", "Pending"],
     ["venmo", "refunded", "Venmo", "Refunded"],
     ["paypal", "", "PayPal", "Pending"],
-  ])("labels method %s / status %s as %s / %s", (method, status, methodLabel, statusLabel) => {
+  ])("labels method %s / status %s as %s / %s - never Paid until PayPal confirms it (W4)", (method, status, methodLabel, statusLabel) => {
     const row = rowOf(purchase({ paymentMethod: method, paymentStatus: status }));
     expect([row[19], row[20]]).toEqual([methodLabel, statusLabel]);
   });
