@@ -64,7 +64,7 @@ describe("GET /auth/status", () => {
 
     expect(res.body).toEqual({
       authenticated: true,
-      user: { email: "jane@orns.org", role: "admin", roleLabel: "Administrator", capabilities: ["auction.stage", "attendees.delete", "bidders.walkIn"] },
+      user: { email: "jane@orns.org", role: "admin", roleLabel: "Administrator", capabilities: ["settings", "users.manage", "auction.stage", "tickets.edit", "attendees.delete", "bidders.walkIn"] },
     });
   });
 
@@ -109,21 +109,43 @@ describe("permissions on routes", () => {
     ["POST", "/api/auction/close-and-cleanup", { spreadsheetId: "s", bidderNumbersSheet: "B", bidManagementSheet: "M" }],
     ["POST", "/api/bidders/sync", { spreadsheetId: "s" }],
     ["POST", "/api/attendees/delete", { spreadsheetId: "s", sheet: "tickets", rowIndex: 5 }],
+    ["POST", "/api/auction/setup-new", {}],
   ])("a User is refused %s %s (Admin-only)", async (_m, path, body) => {
     const res = await request(app).post(path).set(as("sam@orns.org")).send(body);
     expect(res.status).toBe(403);
   });
 
+  it("a User can't change roles", async () => {
+    const res = await request(app).put("/api/users/pat%40orns.org/role").set(as("sam@orns.org")).send({ role: "admin" });
+    expect(res.status).toBe(403);
+  });
+
   it.each([
-    ["POST", "/api/auction/setup-new"],
-    ["POST", "/api/auction/archive"],
+    ["/api/attendees/add", { spreadsheetId: "s", sheet: "tickets", row: ["Pat"] }],
+    ["/api/attendees/update", { spreadsheetId: "s", range: "'tickets'!A5", values: [["Pat"]] }],
+    ["/api/production/tickets/bidder-labels", { folderId: "f" }],
+  ])("the Auction Tickets page is view-only for a User: %s is refused", async (path, body) => {
+    const res = await request(app).post(path).set(as("sam@orns.org")).send(body);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toContain("view-only");
+  });
+
+  it.each([
+    ["GET", "/api/users"],
+    ["GET", "/api/action-history/status"],
+  ])("an Administrator can use the Settings tabs they see: %s %s", async (method, path) => {
+    usersDocs.set("jane@orns.org", { role: "admin" });
+    const res = await (method === "GET" ? request(app).get(path) : request(app).post(path).send({})).set(as("jane@orns.org"));
+    expect(res.status).not.toBe(403);
+  });
+
+  it.each([
     ["GET", "/api/paypal-sweeper/status"],
     ["POST", "/api/paypal-sweeper/run-now"],
     ["GET", "/api/apps-script/versions"],
     ["GET", "/api/bug-reports/list?spreadsheetId=s"],
     ["POST", "/api/bug-reports/resolve"],
-    ["GET", "/api/users"],
-  ])("an Administrator is refused the Settings-only route %s %s", async (method, path) => {
+  ])("an Administrator is refused the Full-Administrator-only route %s %s (PayPal, Apps Script, Bug Reports)", async (method, path) => {
     usersDocs.set("jane@orns.org", { role: "admin" });
     const req = method === "GET" ? request(app).get(path) : request(app).post(path).send({});
     const res = await req.set(as("jane@orns.org"));
@@ -173,6 +195,20 @@ describe("Users API", () => {
       ["jane@orns.org", "admin", false],
       ["sam@orns.org", "user", false],
     ]);
+  });
+
+  it("lets an Administrator give their own level or lower, but never Full Administrator, and not change a Full Administrator", async () => {
+    usersDocs.set("jane@orns.org", { role: "admin" });
+    usersDocs.set("alex@orns.org", { role: "full_admin" });
+    const put = (email: string, role: string) => request(app).put(`/api/users/${encodeURIComponent(email)}/role`).set(as("jane@orns.org")).send({ role });
+
+    expect((await put("sam@orns.org", "admin")).status).toBe(200);
+    const promote = await put("pat@orns.org", "full_admin");
+    expect(promote.status).toBe(400);
+    expect(promote.body.error).toContain("Only a Full Administrator");
+    expect((await put("alex@orns.org", "user")).status).toBe(400);
+    expect(usersDocs.get("alex@orns.org")?.role).toBe("full_admin");
+    expect(usersDocs.get("pat@orns.org")).toBeUndefined();
   });
 
   it("assigns and removes a role, and the change applies to that person's next request", async () => {

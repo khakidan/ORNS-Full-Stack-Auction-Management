@@ -98,7 +98,8 @@ Firestore is utilized to synchronize system configuration, active operational pa
     (`server/services/configService.ts`, cached 30 seconds and replaced
     on save). Browsers get it from `GET /api/config` - every signed-in
     staff member gets all of it, a volunteer only the Bid Management
-    fields - and Full Administrators save it with `POST /api/config`
+    fields - and Administrators save it with `POST /api/config` (only a Full
+    Administrator changes `paypalIsSandbox`)
     (validated, recorded in Action History, and announced on the change
     feed as `config` so open screens reload it). `firestore.rules` denies
     browsers everything.

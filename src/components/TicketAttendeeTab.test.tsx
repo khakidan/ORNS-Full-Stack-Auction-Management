@@ -14,7 +14,7 @@ import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import TicketAttendeeTab from "./TicketAttendeeTab";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { toast } from "sonner";
 
 // Framer Motion Mock
@@ -143,8 +143,9 @@ vi.mock("@/context/ConfigContext", () => ({
 
 const mockAddAttendee = vi.fn();
 
+let mockCanEditTickets = true;
 vi.mock("@/context/AuthContext", () => ({
-  useAuth: () => ({ can: () => true }),
+  useAuth: () => ({ can: (c: string) => c !== "tickets.edit" || mockCanEditTickets }),
 }));
 
 vi.mock("@/context/AuctionContext", () => ({
@@ -167,6 +168,29 @@ describe('TicketAttendeeTab - Layout', () => {
     const heading = screen.getByText("Attendee List");
     const cardHeader = heading.parentElement;
     expect(cardHeader?.className.split(/\s+/)).not.toContain("pb-3");
+  });
+});
+
+describe('TicketAttendeeTab - view-only for a User (tickets.edit)', () => {
+  afterEach(() => { mockCanEditTickets = true; });
+
+  it('shows the list but no way to add, edit or change payment status', () => {
+    mockCanEditTickets = false;
+    render(<TicketAttendeeTab />);
+
+    expect(screen.getByText('View Only')).toBeInTheDocument();
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByText('Add New Entry')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('First')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Edit / })).not.toBeInTheDocument();
+    expect((screen.getAllByRole('button', { name: /^(Paid|Pending)$/ })[0] as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('lets staff who can edit do so', () => {
+    render(<TicketAttendeeTab />);
+    expect(screen.queryByText('View Only')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Edit / }).length).toBeGreaterThan(0);
+    expect((screen.getAllByRole('button', { name: /^(Paid|Pending)$/ })[0] as HTMLButtonElement).disabled).toBe(false);
   });
 });
 

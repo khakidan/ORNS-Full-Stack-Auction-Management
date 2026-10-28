@@ -37,7 +37,7 @@ export default function createAppsScriptRouter() {
   router.use(requireAuth);
   // Mounted at its own "/api/apps-script" prefix, so router.use() here only
   // covers this router's routes.
-  router.use(requirePermission("settings"));
+  router.use(requirePermission("settings.system"));
 
   router.get("/versions", async (req, res) => {
     const client = getAuthenticatedClient(req.session.tokens);

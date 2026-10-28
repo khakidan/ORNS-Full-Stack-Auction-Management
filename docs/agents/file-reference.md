@@ -28,7 +28,7 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
 │   │   ├── dataRoutes.ts      # Mounts the signed-in routers below under /api (requireAuth once)
 │   │   ├── syncRoutes.ts      #   POST /bidders/sync ("Set Up Bid Management App")
 │   │   ├── sweeperRoutes.ts   #   PayPal sweeper status / run-now
-│   │   ├── configRoutes.ts    #   GET /config (everyone signed in), POST /config (Full Administrators)
+│   │   ├── configRoutes.ts    #   GET /config (everyone signed in), POST /config (Administrators; PayPal sandbox/live only by Full Administrators)
 │   │   ├── itemRoutes.ts      #   Auction item add / update / bulk-update / delete
 │   │   ├── sheetsProxyRoutes.ts # Generic Sheets read (cached per user); no generic writes
 │   │   ├── driveRoutes.ts     #   GET /drive/files/:folderId

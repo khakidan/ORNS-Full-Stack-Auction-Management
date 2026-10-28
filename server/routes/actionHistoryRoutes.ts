@@ -39,7 +39,7 @@ function explainScriptError(message: string): string {
   return /script\.scriptapp|permission to call ScriptApp|caller does not have permission/i.test(message) ? SIGN_IN_AGAIN : message;
 }
 
-/** Settings > Action History: create the log spreadsheet, read it, and Undo (Full Administrator only). */
+/** Settings > Action History: create the log spreadsheet, read it, and Undo (Administrators - the settings capability). */
 export default function createActionHistoryRouter() {
   const router = Router();
 

@@ -91,7 +91,7 @@ function ActionRow({ action, onUndo, undoing }: { action: ActionRecord; onUndo: 
 }
 
 /**
- * Settings > Action History (Full Administrator only): who did what, from
+ * Settings > Action History (Administrators): who did what, from
  * the Action History spreadsheet, newest first, with Undo for the actions
  * that can be reversed. Undo refuses (with the reason) when the value has
  * changed since, so it never overwrites a later change.

@@ -90,7 +90,7 @@ export default function createAttendeeRouter() {
    * twice, so the request's `idempotencyKey` makes a resend return the
    * first result instead (ROADMAP A4).
    */
-  router.post("/attendees/add", fromConfig(TICKET_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/attendees/add", requirePermission("tickets.edit"), fromConfig(TICKET_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
     const { spreadsheetId, sheet, row, idempotencyKey } = req.body || {};
     if (!spreadsheetId || !TICKET_SHEETS.includes(sheet) || !Array.isArray(row)) {
       return res.status(400).json({ error: "spreadsheetId, a ticket sheet name and the new row are required." });
@@ -126,7 +126,7 @@ export default function createAttendeeRouter() {
     }
   });
 
-  router.post("/attendees/update", fromConfig(TICKET_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/attendees/update", requirePermission("tickets.edit"), fromConfig(TICKET_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
     const { spreadsheetId, range, values } = req.body || {};
     const target = parseTicketRange(range);
     if (!spreadsheetId || !target || !Array.isArray(values) || values.length !== 1 || !Array.isArray(values[0])) {

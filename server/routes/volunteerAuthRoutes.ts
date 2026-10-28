@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction, urlencoded } from 'express';
 import crypto from 'crypto';
 import { getOAuthClient, SCOPES } from '../services/oauth';
 import { getRole } from '../services/userService';
+import { can } from '../utils/permissions';
 import {
   findVolunteerByToken,
   getAuctionStateForVolunteers,
@@ -116,7 +117,7 @@ export default function createVolunteerAuthRouter() {
   });
 
   /**
-   * Full Administrator: starts Google sign-in as the shared volunteer
+   * Whoever manages users (users.manage): starts Google sign-in as the shared volunteer
    * account. The callback (authRoutes.ts) sees `oauthPurpose`, stores that
    * account's sign-in for volunteers, and leaves the admin's own session
    * as it was.
@@ -124,8 +125,8 @@ export default function createVolunteerAuthRouter() {
   router.get("/auth/volunteer-account/connect", async (req: Request, res: Response, next: NextFunction) => {
     try {
       const email = req.session?.email;
-      if (!req.session?.tokens || !email || (await getRole(email)) !== "full_admin") {
-        return res.status(403).send(page("Not allowed", "<p>Only a Full Administrator can connect the volunteer account.</p>"));
+      if (!req.session?.tokens || !email || !can(await getRole(email), "users.manage")) {
+        return res.status(403).send(page("Not allowed", "<p>Only an Administrator can connect the volunteer account.</p>"));
       }
       const account = volunteerAccountEmail();
       if (!account) {

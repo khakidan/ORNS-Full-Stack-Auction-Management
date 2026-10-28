@@ -60,10 +60,26 @@ describe("GET /api/config", () => {
 });
 
 describe("POST /api/config", () => {
-  it("is refused for anyone but a Full Administrator", async () => {
+  it("is refused for a User - Settings is for Administrators", async () => {
     const res = await request(app).post("/api/config").set(plainUser).send({ ...STORED, ticketPrice: "1" });
     expect(res.status).toBe(403);
     expect(fake.docs("settings").get("global")?.ticketPrice).toBe("35");
+  });
+
+  it("lets an Administrator save Configuration, but not switch PayPal sandbox/live - that's the PayPal Integration tab, Full Administrators only", async () => {
+    fake.docs("users").set("jane@orns.org", { role: "admin" });
+    const admin = authCookieHeader(tokens, "jane@orns.org");
+
+    const res = await request(app).post("/api/config").set(admin).send({ ...STORED, ticketPrice: "40", paypalIsSandbox: false });
+
+    expect(res.status).toBe(200);
+    expect(fake.docs("settings").get("global")).toMatchObject({ ticketPrice: "40", paypalIsSandbox: true });
+  });
+
+  it("lets a Full Administrator switch PayPal to live", async () => {
+    const res = await request(app).post("/api/config").set(fullAdmin).send({ ...STORED, paypalIsSandbox: false });
+    expect(res.status).toBe(200);
+    expect(fake.docs("settings").get("global")?.paypalIsSandbox).toBe(false);
   });
 
   it("saves the Config, records what changed, and tells open screens to reload it", async () => {

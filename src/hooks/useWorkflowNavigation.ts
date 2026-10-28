@@ -52,7 +52,7 @@ function writeStored(key: string, value: string): void {
  * non-admin never shows a page they can't use, even for a frame
  * (ROADMAP A14 - this used to be corrected afterwards in effects):
  * - a volunteer sees only Bid Management, and not its Items tab;
- * - Settings is Full Administrator only - anyone else gets Bid Management.
+ * - Settings is for Administrators (the settings capability) - anyone else gets Bid Management.
  */
 export function useWorkflowNavigation() {
   const { user, can } = useAuth();

@@ -58,6 +58,9 @@ vi.mock("@/context/AuctionContext", () => ({
 }));
 
 // BugReportsAdmin has its own tests; it only needs to render here.
+let mockCaps = ["settings", "settings.system", "users.manage"];
+vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ can: (c: string) => mockCaps.includes(c) }) }));
+
 vi.mock("./BugReportsAdmin", () => ({ default: () => <div>BugReportsAdmin</div> }));
 vi.mock("./UsersAdmin", () => ({ default: () => <div>UsersAdmin</div> }));
 vi.mock("./ActionHistoryAdmin", () => ({ default: () => <div>ActionHistoryAdmin</div> }));
@@ -248,5 +251,15 @@ describe("ConfigSettings", () => {
 
     await user.click(screen.getByRole("tab", { name: "PayPal Integration" }));
     expect(screen.getByText("Save Configuration")).toBeInTheDocument();
+  });
+
+  it("gives an Administrator only Configuration, Users and Action History", () => {
+    mockCaps = ["settings", "users.manage"];
+    try {
+      render(<ConfigSettings />);
+      expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Configuration", "Users", "Action History"]);
+    } finally {
+      mockCaps = ["settings", "settings.system", "users.manage"];
+    }
   });
 });

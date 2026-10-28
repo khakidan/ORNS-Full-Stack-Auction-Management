@@ -12,6 +12,7 @@ import { getValidSortedItems } from '../services/itemDataService';
 import { sheetsFor } from '../utils/googleClients';
 import { syncBiddersFromTickets } from '../services/bidderTicketSync';
 import { pollTicketPurchasesFirst } from '../services/ticketPoll';
+import { requirePermission } from '../middleware/requirePermission';
 
 /**
  * Documents always go to the Config's For Print folder: without one the
@@ -157,7 +158,7 @@ export default function createProductionRouter() {
    * TICKETS SPREADSHEET COMMANDS
    */
 
-  router.post("/tickets/bidder-labels", fromConfig(BIDDER_LABEL_FIELDS), async (req, res, next) => {
+  router.post("/tickets/bidder-labels", requirePermission("tickets.edit"), fromConfig(BIDDER_LABEL_FIELDS), async (req, res, next) => {
     const { folderId, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId } = req.body;
     if (!folderId) return res.status(400).json({ error: MISSING_PRINT_FOLDER });
 

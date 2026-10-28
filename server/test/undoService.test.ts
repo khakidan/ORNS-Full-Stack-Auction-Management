@@ -66,14 +66,28 @@ describe("applyUndo - items", () => {
 });
 
 describe("applyUndo - roles", () => {
+  /** Roles by address; dan clicks Undo. */
+  const roles = (byEmail: Record<string, string>) => vi.mocked(getRole).mockImplementation(async (email: string) => (byEmail[email] ?? "user") as any);
+
   it("puts the old role back if it hasn't changed since, and refuses otherwise", async () => {
-    vi.mocked(getRole).mockResolvedValueOnce("admin");
+    roles({ "dan@orns.org": "full_admin", "jane@orns.org": "admin" });
     await applyUndo(sheetsReturning([]), { kind: "role", email: "jane@orns.org", before: "user", after: "admin" }, "dan@orns.org");
     expect(setRole).toHaveBeenCalledWith("jane@orns.org", "user", "dan@orns.org");
 
-    vi.mocked(getRole).mockResolvedValueOnce("full_admin");
-    await expect(applyUndo(sheetsReturning([]), { kind: "role", email: "jane@orns.org", before: "user", after: "admin" }, "dan@orns.org"))
+    roles({ "dan@orns.org": "full_admin", "jane@orns.org": "user" });
+    await expect(applyUndo(sheetsReturning([]), { kind: "role", email: "jane@orns.org", before: "admin", after: "full_admin" }, "dan@orns.org"))
       .rejects.toBeInstanceOf(UndoRefusedError);
+  });
+
+  it("won't let an Administrator's Undo give or take away Full Administrator", async () => {
+    roles({ "dan@orns.org": "admin", "jane@orns.org": "user" });
+    await expect(applyUndo(sheetsReturning([]), { kind: "role", email: "jane@orns.org", before: "full_admin", after: "user" }, "dan@orns.org"))
+      .rejects.toThrow("Only a Full Administrator");
+
+    roles({ "dan@orns.org": "admin", "jane@orns.org": "full_admin" });
+    await expect(applyUndo(sheetsReturning([]), { kind: "role", email: "jane@orns.org", before: "admin", after: "full_admin" }, "dan@orns.org"))
+      .rejects.toThrow("Only a Full Administrator");
+    expect(setRole).not.toHaveBeenCalled();
   });
 
   it.each([

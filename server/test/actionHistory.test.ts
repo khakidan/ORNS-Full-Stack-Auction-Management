@@ -147,9 +147,9 @@ describe("/api/action-history", () => {
     expect(gone.body).toMatchObject({ actions: [], restart: true });
   });
 
-  it("is Full Administrator only", async () => {
+  it("is for Administrators, not Users", async () => {
     const user = authCookieHeader(tokens, "sam@orns.org");
-    vi.spyOn(await import("../services/userService"), "getRole").mockResolvedValue("admin");
+    vi.spyOn(await import("../services/userService"), "getRole").mockResolvedValue("user");
     expect((await request(app).get("/api/action-history").set(user)).status).toBe(403);
     expect((await request(app).post("/api/action-history/x/undo").set(user)).status).toBe(403);
     vi.restoreAllMocks();

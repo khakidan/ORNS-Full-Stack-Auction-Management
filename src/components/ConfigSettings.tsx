@@ -12,8 +12,9 @@ import ManualCopyDialog from "./ManualCopyDialog";
 import BugReportsAdmin from "./BugReportsAdmin";
 import UsersAdmin from "./UsersAdmin";
 import ActionHistoryAdmin from "./ActionHistoryAdmin";
-import { WorkflowTabsShell } from "@/components/WorkflowTabsShell";
+import { WorkflowTab, WorkflowTabsShell } from "@/components/WorkflowTabsShell";
 import { useAuction } from "@/context/AuctionContext";
+import { useAuth } from "@/context/AuthContext";
 
 export default function ConfigSettings() {
   const {
@@ -30,6 +31,7 @@ export default function ConfigSettings() {
     handleSave,
   } = useConfigSettingsState();
   const { auctionState } = useAuction();
+  const { can } = useAuth();
 
   // PayPal and Settings both edit the same `config` draft, so each carries
   // the same Save button.
@@ -91,6 +93,21 @@ export default function ConfigSettings() {
     </div>
   );
 
+  // Administrators get Configuration, Users and Action History; the
+  // PayPal, Apps Script and Bug Reports tabs are Full Administrators'
+  // (settings.system - the server refuses their routes to anyone else).
+  const system = can("settings.system");
+  const tabs: WorkflowTab[] = [
+    { value: "configuration", label: "Configuration", content: configurationTab },
+    ...(system ? [
+      { value: "paypal", label: "PayPal Integration", content: paypalTab },
+      { value: "apps_script", label: "Google Apps Scripts", content: <AppsScriptVersionsCard /> },
+      { value: "bug_reports", label: "Bug Reports", content: <BugReportsAdmin /> },
+    ] : []),
+    ...(can("users.manage") ? [{ value: "users", label: "Users", content: <UsersAdmin /> }] : []),
+    { value: "action_history", label: "Action History", content: <ActionHistoryAdmin /> },
+  ];
+
   return (
     <WorkflowTabsShell
       title="Settings"
@@ -98,20 +115,7 @@ export default function ConfigSettings() {
       spreadsheetId=""
       auctionState={auctionState}
       defaultTab="configuration"
-      tabs={[
-        { value: "configuration", label: "Configuration", content: configurationTab },
-        { value: "paypal", label: "PayPal Integration", content: paypalTab },
-        {
-          value: "apps_script",
-          label: "Google Apps Scripts",
-          content: (
-            <AppsScriptVersionsCard />
-          ),
-        },
-        { value: "bug_reports", label: "Bug Reports", content: <BugReportsAdmin /> },
-        { value: "users", label: "Users", content: <UsersAdmin /> },
-        { value: "action_history", label: "Action History", content: <ActionHistoryAdmin /> },
-      ]}
+      tabs={tabs}
     />
   );
 }

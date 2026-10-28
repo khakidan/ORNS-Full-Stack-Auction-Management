@@ -318,7 +318,7 @@ describe("connecting the shared volunteer account", () => {
     expect(fake.docs("system").get("volunteerAuth")!.refreshToken).toBe("volunteer-refresh");
   });
 
-  it("is Full Administrator only", async () => {
+  it("is for Administrators, not Users", async () => {
     const res = await request(app).get("/auth/volunteer-account/connect").set(authCookieHeader(tokens, "sam@orns.org"));
     expect(res.status).toBe(403);
   });
