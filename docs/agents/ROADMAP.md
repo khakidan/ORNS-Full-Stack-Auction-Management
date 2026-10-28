@@ -45,7 +45,6 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 
 - **B11 - The Config lives in two places.** Firestore `settings/global` is the Config, but the Apps Scripts read their own copy from the Bid Management spreadsheet's `_Settings` tab (receipt folder, logo, Items and Tickets IDs), which only the browser's Save Configuration writes, one `/api/settings/update` call per key after the Firestore save. If one of those six calls fails, or the Config changes any other way (Setup New Auction Year - B1), the scripts work from stale values. Fix: write `_Settings` from the server whenever the Config is saved (`POST /api/config`, the setup route), or pass every value from Node so the scripts stop reading `_Settings`.
 - **B12 - A13's follow-up: more routes still take spreadsheet IDs from the browser.** Item add/edit/delete/bulk edit (`itemRoutes.ts`), bundle and restore (`bundleRoutes.ts`), the document routes (`productionRoutes.ts`), Set Up (`syncRoutes.ts`), `/settings/update`, Setup New Auction Year and Archive (`setupRoutes.ts`) and bug reports. Apply `fromConfig` to them too (with `auctionItemsSpreadsheetId`, `forPrintFolderId` and so on), so a stale tab can't edit last year's items.
-- **B13 - Hooks over the 250-line guide** (`component-standards.md`): `useTicketAttendeeState.ts` (366 lines) and `useBiddersState.ts` (281). Split each by concern (editing, filtering, dialogs).
 
 ### Tests
 

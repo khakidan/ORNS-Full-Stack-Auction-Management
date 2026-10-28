@@ -6,6 +6,8 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **B13 - The two hooks over the 250-line guide are split by concern** (`component-standards.md`). `useTicketAttendeeState.ts` (366 -> 146 lines) composes `useAttendeeCellEdits.ts` (field, payment-status and guest-slot edits with their per-attendee rollback) and `useAddAttendeeForm.ts` (the Add Attendee form and its sheet row). `useBiddersState.ts` (281 -> 133) composes `useBidderFilters.ts` (search, filters, sort; `BidderSortKey`/`BidderSortConfig` still re-exported from `useBiddersState`) and `useWalkInForm.ts`. Both hooks return exactly what they did, so their callers and tests are unchanged. Every hook is now within the guide (largest: `useConfigSettingsState.ts`, 240).
+
 - **Audit items B2-B6.**
   - **B2 - Emailing one receipt can't send it twice.** The checkout email button sends an idempotency key; `POST /api/receipts/email-only` runs under `withIdempotency` and `runIfIdle` per bidder (a double-click gets 409), and refuses a missing `bidderId`.
   - **B3 - Set Up and the bidder-label build hold the Bidder-Numbers lock.** `performSheetSync` and `ensureBidderNumbersSheet` (`syncService.ts`) run under `withLock('bidder-numbers:...')`; Set Up is refused unless the auction is in Prep, runs under `runIfIdle`, and is sent once (`postJsonOnce`).
