@@ -197,6 +197,20 @@ describe("Users API", () => {
     ]);
   });
 
+  it("lets an Administrator give their own level or lower, but never Full Administrator, and not change a Full Administrator", async () => {
+    usersDocs.set("jane@orns.org", { role: "admin" });
+    usersDocs.set("alex@orns.org", { role: "full_admin" });
+    const put = (email: string, role: string) => request(app).put(`/api/users/${encodeURIComponent(email)}/role`).set(as("jane@orns.org")).send({ role });
+
+    expect((await put("sam@orns.org", "admin")).status).toBe(200);
+    const promote = await put("pat@orns.org", "full_admin");
+    expect(promote.status).toBe(400);
+    expect(promote.body.error).toContain("Only a Full Administrator");
+    expect((await put("alex@orns.org", "user")).status).toBe(400);
+    expect(usersDocs.get("alex@orns.org")?.role).toBe("full_admin");
+    expect(usersDocs.get("pat@orns.org")).toBeUndefined();
+  });
+
   it("assigns and removes a role, and the change applies to that person's next request", async () => {
     await request(app).get("/api/bidders/setup-status").set(as("sam@orns.org")); // caches sam as User
 

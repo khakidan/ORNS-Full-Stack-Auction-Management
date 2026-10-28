@@ -6,7 +6,8 @@
  * - Full Administrator: everything.
  * - Administrator: everything except the Settings page's PayPal
  *   Integration, Google Apps Scripts and Bug Reports tabs. A tab an
- *   Administrator can see, they can use in full (Users included).
+ *   Administrator can see, they can use in full - except that on Users
+ *   they grant only their own level or lower (roleChangeRefusal).
  * - User: no Settings page; the Auction Tickets page is view-only; can't
  *   Go Live, Close the auction, or Set Up the Bid Management App.
  * - Volunteer (not an @orns.org address; only while the auction is Live):

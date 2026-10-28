@@ -103,9 +103,10 @@ export async function applyUndo(sheets: sheets_v4.Sheets, spec: UndoSpec, actorE
     }
 
     case "role": {
-      const refusal = roleChangeRefusal(spec.email, spec.before, actorEmail);
+      const [actorRole, current] = await Promise.all([getRole(actorEmail), getRole(spec.email)]);
+      const refusal = roleChangeRefusal(spec.email, spec.before, { email: actorEmail, role: actorRole }, current);
       if (refusal) throw new UndoRefusedError(refusal);
-      if ((await getRole(spec.email)) !== spec.after) throw new UndoRefusedError(`${spec.email}'s role: ${CHANGED_SINCE}`);
+      if (current !== spec.after) throw new UndoRefusedError(`${spec.email}'s role: ${CHANGED_SINCE}`);
       await setRole(spec.email, spec.before, actorEmail);
       return;
     }

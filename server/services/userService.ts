@@ -1,5 +1,5 @@
 import { getAdminFirestore } from "./firebaseAdmin";
-import { Role, isRole } from "../utils/permissions";
+import { Role, UserRole, isRole } from "../utils/permissions";
 
 /**
  * Staff roles. An @orns.org address is a User unless it is listed in the
@@ -51,17 +51,22 @@ export function isBootstrapAdmin(email: string): boolean {
 const ORNS_EMAIL = /^[^\s@]+@orns\.org$/i;
 
 /**
- * Why `actorEmail` can't set `email`'s role to `role`, or null if they can.
- * Only @orns.org addresses; a FULL_ADMIN_EMAILS address and your own role
- * can't be changed in the app, so nobody can lock every Full Administrator
- * out by accident. Used by the Users tab and by Undo of a role change.
+ * Why `actor` can't set `email`'s role (now `currentRole`) to `role`, or
+ * null if they can. Only @orns.org addresses; a FULL_ADMIN_EMAILS address
+ * and your own role can't be changed in the app, so nobody can lock every
+ * Full Administrator out by accident; and an Administrator grants only
+ * their own level or lower - never Full Administrator, and never changes a
+ * Full Administrator. Used by the Users tab and by Undo of a role change.
  */
-export function roleChangeRefusal(email: string, role: unknown, actorEmail: string): string | null {
+export function roleChangeRefusal(email: string, role: unknown, actor: { email: string; role: UserRole }, currentRole: Role): string | null {
   const key = normalizeEmail(email);
   if (!ORNS_EMAIL.test(key)) return "Roles can only be given to @orns.org addresses.";
   if (!isRole(role)) return "Role must be full_admin, admin or user.";
   if (isBootstrapAdmin(key)) return `${key} is a Full Administrator set on the server (FULL_ADMIN_EMAILS) and can't be changed here.`;
-  if (key === normalizeEmail(actorEmail)) return "You can't change your own role.";
+  if (key === normalizeEmail(actor.email)) return "You can't change your own role.";
+  if (actor.role !== "full_admin" && (role === "full_admin" || currentRole === "full_admin")) {
+    return "Only a Full Administrator can give the Full Administrator role or change a Full Administrator's role.";
+  }
   return null;
 }
 

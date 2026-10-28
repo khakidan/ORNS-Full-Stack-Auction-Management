@@ -15,14 +15,14 @@ import VolunteersAdmin from "@/components/VolunteersAdmin";
 
 const ROLES: Role[] = ["full_admin", "admin", "user"];
 
-function RoleSelect({ value, disabled, onChange, id }: { value: Role; disabled?: boolean; onChange: (role: Role) => void; id?: string }) {
+function RoleSelect({ value, roles, disabled, onChange, id }: { value: Role; roles: Role[]; disabled?: boolean; onChange: (role: Role) => void; id?: string }) {
   return (
     <Select value={value} onValueChange={(v) => v && onChange(v as Role)} disabled={disabled}>
       <SelectTrigger id={id} className="h-10 w-48" aria-label="Role">
         <SelectValue>{(v: string) => ROLE_LABELS[v as Role] ?? v}</SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {ROLES.map((r) => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}
+        {roles.map((r) => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}
       </SelectContent>
     </Select>
   );
@@ -32,7 +32,8 @@ function RoleSelect({ value, disabled, onChange, id }: { value: Role; disabled?:
  * Settings > Users: who can do what. Every @orns.org address is a User when
  * they sign in; this is where specific addresses become Administrators or
  * Full Administrators. FULL_ADMIN_EMAILS addresses (set on the server) and
- * your own role can't be changed here.
+ * your own role can't be changed here, and an Administrator grants only
+ * their own level or lower (the server enforces it: roleChangeRefusal).
  */
 export default function UsersAdmin() {
   const { user: me } = useAuth();
@@ -45,14 +46,20 @@ export default function UsersAdmin() {
     if (await setRole(newEmail.trim().toLowerCase(), newRole)) setNewEmail("");
   };
 
-  const isLocked = (u: StaffUser) => u.bootstrap || u.email === me?.email;
+  const isFullAdmin = me?.role === "full_admin";
+  const assignable = isFullAdmin ? ROLES : ROLES.filter((r) => r !== "full_admin");
+  const lockReason = (u: StaffUser): string | null =>
+    u.bootstrap ? "Set on the server (FULL_ADMIN_EMAILS)"
+      : u.email === me?.email ? "You can't change your own role"
+      : u.role === "full_admin" && !isFullAdmin ? "Only a Full Administrator can change a Full Administrator's role"
+      : null;
 
   return (
     <div className="space-y-6">
       <RefreshableListCard
         icon={<UserCog className="w-5 h-5 text-primary" />}
         title="Staff Roles"
-        description="Every other @orns.org address is a User when they sign in. Administrators can do everything except the PayPal, Apps Script and Bug Reports settings. Users can't use Settings, can only view the Auction Tickets page, and can't set up, start or close the auction."
+        description="Every other @orns.org address is a User when they sign in. Administrators can do everything except the PayPal, Apps Script and Bug Reports settings, and give only the Administrator or User role. Users can't use Settings, can only view the Auction Tickets page, and can't set up, start or close the auction."
         loading={loading}
         onRefresh={fetchUsers}
       >
@@ -65,7 +72,7 @@ export default function UsersAdmin() {
           <Label htmlFor="newStaffRole" className="hidden sm:block">Role</Label>
           <span className="hidden sm:block" />
           <Input id="newStaffEmail" className="h-10" placeholder="name@orns.org" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
-          <RoleSelect id="newStaffRole" value={newRole} onChange={setNewRole} />
+          <RoleSelect id="newStaffRole" value={newRole} roles={assignable} onChange={setNewRole} />
           <LoadingButton className="h-10" loading={savingEmail === newEmail.trim().toLowerCase()} disabled={!addValid} onClick={handleAdd}>
             Save Role
           </LoadingButton>
@@ -87,13 +94,13 @@ export default function UsersAdmin() {
             <TableRow key={u.email} data-testid={`staff-row-${u.email}`}>
               <TableCell className="font-medium">{u.email}</TableCell>
               <TableCell>
-                {isLocked(u) ? (
-                  <span className="flex items-center gap-1.5 text-sm" title={u.bootstrap ? "Set on the server (FULL_ADMIN_EMAILS)" : "You can't change your own role"}>
+                {lockReason(u) ? (
+                  <span className="flex items-center gap-1.5 text-sm" title={lockReason(u)!}>
                     {ROLE_LABELS[u.role]}
                     <Lock className="w-3.5 h-3.5 text-muted-foreground" />
                   </span>
                 ) : (
-                  <RoleSelect value={u.role} disabled={savingEmail === u.email} onChange={(role) => setRole(u.email, role)} />
+                  <RoleSelect value={u.role} roles={assignable} disabled={savingEmail === u.email} onChange={(role) => setRole(u.email, role)} />
                 )}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">

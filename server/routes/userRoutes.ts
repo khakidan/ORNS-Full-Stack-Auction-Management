@@ -20,10 +20,10 @@ export default function createUserRouter() {
   router.put("/users/:email/role", requirePermission("users.manage"), async (req: Request, res: Response, next: NextFunction) => {
     const email = normalizeEmail(decodeURIComponent(req.params.email));
     const { role } = req.body || {};
-    const refusal = roleChangeRefusal(email, role, req.user!.email);
-    if (refusal || !isRole(role)) return res.status(400).json({ error: refusal });
     try {
       const before = await getRole(email);
+      const refusal = roleChangeRefusal(email, role, req.user!, before);
+      if (refusal || !isRole(role)) return res.status(400).json({ error: refusal });
       await setRole(email, role, req.user!.email);
       await logAction(req, {
         area: "Users",

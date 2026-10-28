@@ -13,8 +13,9 @@ vi.mock("@/services/google-api", () => ({
 }));
 vi.mock("./VolunteersAdmin", () => ({ default: () => null }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+let mockMyRole = "full_admin";
 vi.mock("@/context/AuthContext", () => ({
-  useAuth: () => ({ user: { email: "me@orns.org", role: "full_admin" } }),
+  useAuth: () => ({ user: { email: "me@orns.org", role: mockMyRole } }),
 }));
 // base-ui Select needs real layout; a native <select> is enough here.
 vi.mock("@/components/ui/select", () => ({
@@ -53,6 +54,25 @@ describe("UsersAdmin", () => {
     expect(within(screen.getByTestId("staff-row-boss@orns.org")).getByText("Full Administrator")).toBeInTheDocument();
     expect(within(screen.getByTestId("staff-row-me@orns.org")).queryByRole("combobox")).not.toBeInTheDocument();
     expect(within(screen.getByTestId("staff-row-sam@orns.org")).getByText("Never")).toBeInTheDocument();
+  });
+
+  it("lets an Administrator give only Administrator or User, and locks a Full Administrator's row", async () => {
+    mockMyRole = "admin";
+    vi.mocked(fetchWithRetry).mockImplementation(async () =>
+      json({ users: [...USERS, { email: "alex@orns.org", role: "full_admin", bootstrap: false }] }));
+    try {
+      render(<UsersAdmin />);
+      const sam = await screen.findByTestId("staff-row-sam@orns.org");
+      const values = (select: HTMLElement) => [...(select as HTMLSelectElement).options].map((o) => o.value);
+
+      expect(values(within(sam).getByRole("combobox", { name: "Role" }))).toEqual(["admin", "user"]);
+      expect(values(screen.getAllByRole("combobox", { name: "Role" })[0])).toEqual(["admin", "user"]);
+      const alex = screen.getByTestId("staff-row-alex@orns.org");
+      expect(within(alex).queryByRole("combobox")).not.toBeInTheDocument();
+      expect(within(alex).getByTitle("Only a Full Administrator can change a Full Administrator's role")).toBeInTheDocument();
+    } finally {
+      mockMyRole = "full_admin";
+    }
   });
 
   it("changes a role from the row's dropdown", async () => {
