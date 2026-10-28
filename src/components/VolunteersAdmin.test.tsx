@@ -5,14 +5,14 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import VolunteersAdmin from "./VolunteersAdmin";
 import { fetchWithRetry } from "@/services/google-api";
-import { postJson } from "@/services/apiClient";
+import { postJsonOnce } from "@/services/apiClient";
 
 vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn(),
   getBaseUrl: () => "",
   errorTextFrom: (d: any, f: string) => d?.error || f,
 }));
-vi.mock("@/services/apiClient", () => ({ postJson: vi.fn() }));
+vi.mock("@/services/apiClient", () => ({ postJsonOnce: vi.fn() }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/context/AuctionContext", () => ({ useAuction: () => ({ auctionState: "prep" }) }));
 vi.mock("@/components/ui/dialog", () => ({
@@ -34,7 +34,7 @@ const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body
 describe("VolunteersAdmin", () => {
   beforeEach(() => {
     vi.mocked(fetchWithRetry).mockReset().mockResolvedValue(json({ volunteers: VOLUNTEERS, account: { connected: true, email: "auction-volunteers@orns.org", connectedBy: "dan@orns.org", connectedAt: "2026-03-02T00:00:00Z" } }));
-    vi.mocked(postJson).mockReset().mockResolvedValue({});
+    vi.mocked(postJsonOnce).mockReset().mockResolvedValue({});
   });
 
   it("shows whether the shared volunteer account is connected", async () => {
@@ -72,7 +72,7 @@ describe("VolunteersAdmin", () => {
     await userEvent.type(within(dialog).getByLabelText("Email"), "sam@example.com");
     await userEvent.click(send);
 
-    await waitFor(() => expect(postJson).toHaveBeenCalledWith("/api/volunteers", { name: "Sam Staff", email: "sam@example.com" }, expect.any(String)));
+    await waitFor(() => expect(postJsonOnce).toHaveBeenCalledWith("/api/volunteers", { name: "Sam Staff", email: "sam@example.com" }, expect.any(String)));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
@@ -80,6 +80,6 @@ describe("VolunteersAdmin", () => {
     render(<VolunteersAdmin />);
     await userEvent.click(within(await screen.findByTestId("volunteer-row-kim@yahoo.com")).getByRole("button", { name: "Revoke" }));
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Revoke" }));
-    await waitFor(() => expect(postJson).toHaveBeenCalledWith("/api/volunteers/v2/revoke", {}, expect.any(String)));
+    await waitFor(() => expect(postJsonOnce).toHaveBeenCalledWith("/api/volunteers/v2/revoke", {}, expect.any(String)));
   });
 });

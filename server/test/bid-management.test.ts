@@ -324,12 +324,11 @@ describe("bidRoutes - /api/bidders/walk-in", () => {
     expect(lastAppendedRow[4]).toBe(true);
   });
 
-  it("returns 400 for missing required sheet names", async () => {
+  it("returns 400 when the name is missing", async () => {
     const response = await request(app)
       .post("/api/bidders/walk-in")
       .set(authHeader)
       .send({
-        firstName: "John",
         lastName: "Doe",
         spreadsheetId: "ss-id",
         idempotencyKey: "walkin-key-bad"
@@ -337,6 +336,20 @@ describe("bidRoutes - /api/bidders/walk-in", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error).toContain("Missing required fields for walk-in");
+  });
+
+  it("uses the Config's tab names, not the request's - a stale browser can't name the wrong tab (ROADMAP A13)", async () => {
+    const ranges: string[] = [];
+    server.use(http.get("https://sheets.googleapis.com/v4/spreadsheets/:id/values/:range", ({ params }) => {
+      ranges.push(decodeURIComponent(String(params.range)));
+      return HttpResponse.json({ values: [] });
+    }));
+
+    await request(app).post("/api/bidders/walk-in").set(authHeader)
+      .send({ firstName: "John", lastName: "Doe", spreadsheetId: "ss-id", bidderNumbersSheet: "Old-Bidders", bidManagementSheet: "Old-Grid", idempotencyKey: "walkin-stale" });
+
+    expect(ranges.some((r) => r.includes("Old-Bidders") || r.includes("Old-Grid"))).toBe(false);
+    expect(ranges.some((r) => r.includes("Bidder-Numbers"))).toBe(true);
   });
 });
 
@@ -427,11 +440,11 @@ describe("bidRoutes - /api/auction/close-and-cleanup", () => {
     expect(valuesBatchUpdateRequests.filter(r => r.spreadsheetId === "ss-id-empty")).toHaveLength(0);
   });
 
-  it("returns 400 for missing parameters", async () => {
+  it("returns 400 when no spreadsheet is given and the Config has none", async () => {
     const response = await request(app)
       .post("/api/auction/close-and-cleanup")
       .set(authHeader)
-      .send({ spreadsheetId: "ss-id" });
+      .send({});
 
     expect(response.status).toBe(400);
     expect(response.body.error).toContain("Missing required spreadsheet parameters");

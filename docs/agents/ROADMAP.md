@@ -34,26 +34,7 @@ Read of everything changed on 2026-10-27 (`cf4ea05`..`bf7994a`: auction states, 
 
 Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 
-### Low
-
-- **A6 - A staff sign-in can stay a volunteer.** `/auth/callback` adds `tokens` and `email` to the existing session but leaves a `volunteer` field from an earlier volunteer link in the same browser, and `requireAuth` checks `volunteer` first. Fix: delete `req.session.volunteer` on a staff sign-in.
-- **A7 - Other POSTs that shouldn't repeat go through `postJson` (which retries):** volunteer invite and resend (a second email; the first link then fails), Undo (a retry reports "already undone" though it worked), Create Action History (a retry reports "already exists"). Use `postOnce`, or have the server answer a repeat as success.
-- **A8 - Undo marks the row it found before undoing.** `markUndone` writes `M{rowIndex}` from the earlier `findAction`; a row inserted or a sort done by hand in between marks the wrong action. Re-find the row by Action ID just before marking.
-- **A9 - Volunteers receive every Undo notice.** `GET /api/changes` is open to volunteers and returns all `notices`, including Settings, Users and Tickets undos with staff emails and attendee names. Send volunteers only Bid Management notices.
-- **A10 - `touchVolunteer` can bring back a deleted record (plausible - not reproduced).** It writes `lastSeenAt` with `set(..., { merge: true })`; if Clear deactivated removes the record as a last request arrives, a blank record appears in the Volunteers table as "invited". Use `update()`.
-- **A11 - "Edit tracking on" only means the script property is set.** `apiEditTrackingStatus` doesn't check that an on-edit trigger exists - triggers belong to the admin who installed them, and if that trigger is removed (account removed, trigger deleted by hand) the button still says Turn off while nothing is recorded. Record who turned it on and when, and show it next to the button.
-- **A12 - Bid Entry's step check on repeatable and Live items (plausible - not reproduced).** `bidWarnings` applies the opening-bid-plus-raises rule to every item. Raffle tickets, Open Appeal tiers (`allowMultipleWinners`) and Live-auction items may not follow it if their sheet carries an Opening Bid and Minimum Raise. Check those items' figures; if needed, skip the step check for them.
-- **A17 - Setup New Auction Year is sent with `fetchWithRetry` (which retries).** `handleSetupNewAuction` (`src/hooks/useConfigSettingsState.ts`) posts `/api/auction/setup-new` through `fetchWithRetry`, which resends after a 5xx, a 429 or a dropped connection. The route creates the year's folders and copies and clears the masters, so a retry after the first run got under way hits "the auction folder already exists" and reports a failure though the first run may have finished. It's harmless (the check stops a second run) but confusing at the one moment it matters. Fix: send it once (`postOnce`-style, reading the NDJSON stream), and have the route run it under `runIfIdle` so a second click gets a 409.
-
-### Structure - refactor
-
-- **A13 - Routes still take spreadsheet IDs, tab names and the ticket price from the browser.** `bidRoutes.ts`, `receiptRoutes.ts`, `attendeeRoutes.ts`, Go Live and Close read `spreadsheetId`, `bidderNumbersSheet`, `bidManagementSheet`, `ticketPrice` etc. from the request body, though the server now has them (`getSharedConfig`). Read them on the server (body as a fallback during the change). This removes stale-browser bugs and lets `volunteerAccess.ts` drop its per-field ID checks.
-- **A14 - Components over the 50-250 line guide, and state set in effects** (`component-standards.md`, `react-patterns.md`): `App.tsx` is 529 lines and redirects volunteers and non-admins with `setActiveWorkflow` inside effects - work out the allowed workflow during render in a `useWorkflowNavigation` hook. `ArchivedYearPanel.tsx` is 293 lines - split it by section.
-- **A15 - The Action History list sends the whole log every time.** `listActions` returns every row, Undo Data included, on each load and on every live refresh (each logged action reloads every open Action History tab). Return the newest few hundred, page the rest, and leave Undo Data out of the list.
-
-### Tests
-
-- **A16 - Client gaps:** no test that `App.tsx` shows a volunteer only Bid Management (five tabs, no stage buttons) and the thank-you screen, and none that `AuctionContext`'s live refresh reloads the right data (`onRemoteChange` -> bidders, items, attendees, `reloadConfig`).
+All items, A1-A17, are done - see `CHANGELOG.md` (search for the item ID).
 
 ### Confirmed fine (don't "fix")
 

@@ -173,11 +173,16 @@ export async function getVolunteerStatus(id: string, now = Date.now()): Promise<
   return status;
 }
 
-/** Records that a volunteer is using the app, at most once a minute. Best-effort. */
+/**
+ * Records that a volunteer is using the app, at most once a minute.
+ * Best-effort. `update`, not a merging `set`: if the record was just
+ * removed (Clear deactivated), this must fail rather than bring back a
+ * blank record that the Volunteers table would show as invited (ROADMAP A10).
+ */
 export function touchVolunteer(id: string, now = Date.now()): void {
   if (now - (lastSeenWritten.get(id) || 0) < LAST_SEEN_INTERVAL_MS) return;
   lastSeenWritten.set(id, now);
-  volunteers().doc(id).set({ lastSeenAt: new Date(now).toISOString() }, { merge: true }).catch((e) => {
+  volunteers().doc(id).update({ lastSeenAt: new Date(now).toISOString() }).catch((e) => {
     console.warn("[Volunteers] Couldn't record last seen:", e?.message || e);
   });
 }

@@ -32,6 +32,27 @@ export async function setActionHistorySpreadsheetId(spreadsheetId: string, creat
 }
 
 /**
+ * Who last turned edit tracking on, and when (`editTracking` on the same
+ * doc; null once turned off). The on-edit triggers run as the admin who
+ * installed them, so if that account goes, recording silently stops while
+ * the script still says "on" - showing whose trigger it is lets an admin
+ * spot that and turn it on again as themselves (ROADMAP A11).
+ */
+export interface EditTrackingRecord {
+  by: string;
+  at: string;
+}
+
+export async function getEditTrackingRecord(): Promise<EditTrackingRecord | null> {
+  const record = (await DOC().get()).data()?.editTracking;
+  return record && typeof record.by === "string" ? { by: record.by, at: String(record.at || "") } : null;
+}
+
+export async function setEditTrackingRecord(record: EditTrackingRecord | null): Promise<void> {
+  await DOC().set({ editTracking: record }, { merge: true });
+}
+
+/**
  * Actions already undone: Firestore `undoneActions/{actionId}`
  * `{ undoneBy, undoneAt }`. The "Undone by" text in the spreadsheet can be
  * cleared by anyone on staff, so this is what stops one action being

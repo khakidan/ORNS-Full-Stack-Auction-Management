@@ -111,6 +111,9 @@ router.get("/auth/callback", async (req, res, next) => {
     delete slimTokens.scope;
     req.session.tokens = slimTokens;
     req.session.email = normalizeEmail(email);
+    // A volunteer link used earlier in this browser must not outrank the
+    // staff sign-in (requireAuth checks `volunteer` first) - ROADMAP A6.
+    delete req.session.volunteer;
 
     // Best-effort, like the sweeper credential below: lets the Users tab
     // list everyone who has signed in. Never blocks or fails the login.

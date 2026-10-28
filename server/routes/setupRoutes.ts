@@ -10,6 +10,7 @@ import { isDriveId } from '../services/driveService';
 import { getActionHistorySpreadsheetId } from '../services/actionHistoryStore';
 import { updateSharedConfigFields } from '../services/configService';
 import { CONFIG_KEY, noteChange } from '../utils/changeFeed';
+import { AlreadyRunningError, runIfIdle } from '../utils/asyncLock';
 
 export default function createSetupRouter() {
   const router = Router();
@@ -26,74 +27,86 @@ export default function createSetupRouter() {
       return res.status(400).json({ error: "Missing required spreadsheet IDs for auction setup." });
     }
 
-    res.setHeader('Content-Type', 'application/x-ndjson');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-
-    const client = getAuthenticatedClient(req.session.tokens);
-    const drive = google.drive({ version: "v3", auth: client });
-    const sheets = google.sheets({ version: "v4", auth: client });
-
-    const logs: string[] = [];
-    const onLog = (msg: string) => {
-      console.log(`[Auction Setup] ${msg}`);
-      logs.push(msg);
-      res.write(JSON.stringify({ log: msg }) + "\n");
-    };
-
+    // One setup at a time (ROADMAP A17): it makes the year's folders and
+    // clears the masters, so a second click or a resent request while it
+    // runs is turned away rather than run again.
     try {
-      const result = await setupNewAuction(
-        drive,
-        sheets,
-        {
-          ticketsSpreadsheetId,
-          itemEntrySpreadsheetId,
-          bidManagementSpreadsheetId
-        },
-        onLog
-      );
+      await runIfIdle("auction-setup-new", async () => {
+        res.setHeader('Content-Type', 'application/x-ndjson');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
 
-      // Point the Config at the new year's folders here, not from the
-      // browser afterwards - a closed tab or lost connection would leave
-      // receipts and print documents going to last year's (ROADMAP A5).
-      let configSaveError: string | undefined;
-      try {
-        await updateSharedConfigFields({ receiptFolderId: result.bidderReceiptsFolderId, forPrintFolderId: result.forPrintFolderId }, req.user!.email);
-        noteChange(CONFIG_KEY);
-        onLog("Saved the new Bidder Receipts and For Print folders in the configuration.");
-      } catch (err: any) {
-        configSaveError = `The new folders were created but couldn't be saved in the configuration (${err?.message || err}). Set Receipts Folder ID to ${result.bidderReceiptsFolderId} and For Print Folder ID to ${result.forPrintFolderId} in Settings.`;
-        onLog(configSaveError);
-      }
+        const client = getAuthenticatedClient(req.session.tokens);
+        const drive = google.drive({ version: "v3", auth: client });
+        const sheets = google.sheets({ version: "v4", auth: client });
 
-      await logAction(req, {
-        area: "Settings",
-        action: "Set up new auction year",
-        target: `${result.auctionYear} Auction`,
-        summary: `Started the ${result.auctionYear} auction year: backed up last year's spreadsheets and cleared the masters${configSaveError ? "" : "; receipts and print documents now go to the new year's folders"}`,
-        notUndoableReason: "the backups are in last year's folder",
-      });
-      res.write(JSON.stringify({
-        ...result,
-        configSaveError,
-        logs
-      }) + "\n");
-      res.end();
+        const logs: string[] = [];
+        const onLog = (msg: string) => {
+          console.log(`[Auction Setup] ${msg}`);
+          logs.push(msg);
+          res.write(JSON.stringify({ log: msg }) + "\n");
+        };
 
-    } catch (error: any) {
-      console.error("[Route Error] setup-new:", error);
-      // For streaming errors, we often write a final error message to the NDJSON stream
-      // before ending it, rather than just calling next(error) which might send an HTML error page.
-      if (!res.headersSent) {
-        return next(error);
-      }
+        try {
+          const result = await setupNewAuction(
+            drive,
+            sheets,
+            {
+              ticketsSpreadsheetId,
+              itemEntrySpreadsheetId,
+              bidManagementSpreadsheetId
+            },
+            onLog
+          );
+
+          // Point the Config at the new year's folders here, not from the
+          // browser afterwards - a closed tab or lost connection would leave
+          // receipts and print documents going to last year's (ROADMAP A5).
+          let configSaveError: string | undefined;
+          try {
+            await updateSharedConfigFields({ receiptFolderId: result.bidderReceiptsFolderId, forPrintFolderId: result.forPrintFolderId }, req.user!.email);
+            noteChange(CONFIG_KEY);
+            onLog("Saved the new Bidder Receipts and For Print folders in the configuration.");
+          } catch (err: any) {
+            configSaveError = `The new folders were created but couldn't be saved in the configuration (${err?.message || err}). Set Receipts Folder ID to ${result.bidderReceiptsFolderId} and For Print Folder ID to ${result.forPrintFolderId} in Settings.`;
+            onLog(configSaveError);
+          }
+
+          await logAction(req, {
+            area: "Settings",
+            action: "Set up new auction year",
+            target: `${result.auctionYear} Auction`,
+            summary: `Started the ${result.auctionYear} auction year: backed up last year's spreadsheets and cleared the masters${configSaveError ? "" : "; receipts and print documents now go to the new year's folders"}`,
+            notUndoableReason: "the backups are in last year's folder",
+          });
+          res.write(JSON.stringify({
+            ...result,
+            configSaveError,
+            logs
+          }) + "\n");
+          res.end();
+
+        } catch (error: any) {
+          console.error("[Route Error] setup-new:", error);
+          // For streaming errors, we often write a final error message to the NDJSON stream
+          // before ending it, rather than just calling next(error) which might send an HTML error page.
+          if (!res.headersSent) {
+            return next(error);
+          }
       
-      res.write(JSON.stringify({ 
-        success: false,
-        error: error.message,
-        logs
-      }) + "\n");
-      res.end();
+          res.write(JSON.stringify({ 
+            success: false,
+            error: error.message,
+            logs
+          }) + "\n");
+          res.end();
+        }
+      });
+    } catch (error) {
+      if (error instanceof AlreadyRunningError && !res.headersSent) {
+        return res.status(409).json({ error: "Setting up the new auction year is already running. Wait for it to finish." });
+      }
+      next(error);
     }
   });
 

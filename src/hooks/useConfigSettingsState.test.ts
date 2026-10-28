@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { extractId, useConfigSettingsState } from "./useConfigSettingsState";
 import { useConfig } from "@/context/ConfigContext";
-import { fetchWithRetry } from "@/services/google-api";
+import { postOnce } from "@/services/google-api";
 import { toast } from "sonner";
 import { Config } from "@/types";
 
@@ -66,6 +66,8 @@ vi.mock("@/context/ConfigContext", () => ({
 
 vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn(),
+  postOnce: vi.fn(),
+  errorTextFrom: (data: any, fallback: string) => data?.message || data?.error || fallback,
   getBaseUrl: vi.fn(() => "http://localhost:3000"),
 }));
 
@@ -174,7 +176,7 @@ describe("useConfigSettingsState - Setup New Auction Year (ROADMAP A5)", () => {
     const saveConfig = vi.fn();
     const reloadConfig = vi.fn().mockResolvedValue(undefined);
     mockUseConfig(BASE_CONFIG, { saveConfig, reloadConfig });
-    vi.mocked(fetchWithRetry).mockResolvedValue(streamOf(RESULT));
+    vi.mocked(postOnce).mockResolvedValue(streamOf(RESULT));
     const { result } = renderHook(() => useConfigSettingsState());
 
     await act(() => result.current.handleSetupNewAuction());
@@ -186,7 +188,7 @@ describe("useConfigSettingsState - Setup New Auction Year (ROADMAP A5)", () => {
 
   it("gives a draft with unsaved edits the new folders, so saving it later can't put last year's back", async () => {
     mockUseConfig(BASE_CONFIG);
-    vi.mocked(fetchWithRetry).mockResolvedValue(streamOf(RESULT));
+    vi.mocked(postOnce).mockResolvedValue(streamOf(RESULT));
     const { result } = renderHook(() => useConfigSettingsState());
     act(() => result.current.setConfig({ ...result.current.config, ticketPrice: "99" }));
 
@@ -195,9 +197,21 @@ describe("useConfigSettingsState - Setup New Auction Year (ROADMAP A5)", () => {
     expect(result.current.config).toMatchObject({ ticketPrice: "99", receiptFolderId: "new-receipts", forPrintFolderId: "new-print" });
   });
 
+  it("sends the setup once, and shows the server's reason when it's refused (already running - ROADMAP A17)", async () => {
+    mockUseConfig(BASE_CONFIG);
+    vi.mocked(postOnce).mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: "Setting up the new auction year is already running. Wait for it to finish." }) } as Response);
+    const { result } = renderHook(() => useConfigSettingsState());
+
+    await act(() => result.current.handleSetupNewAuction());
+
+    expect(postOnce).toHaveBeenCalledTimes(1);
+    expect(postOnce).toHaveBeenCalledWith("http://localhost:3000/api/auction/setup-new", expect.objectContaining({ bidManagementSpreadsheetId: "mock-bid-mgt-id" }));
+    expect(toast.error).toHaveBeenCalledWith("Setting up the new auction year is already running. Wait for it to finish.", expect.anything());
+  });
+
   it("shows the server's message, and doesn't touch the draft, when the server couldn't save the folders", async () => {
     mockUseConfig(BASE_CONFIG);
-    vi.mocked(fetchWithRetry).mockResolvedValue(streamOf({ ...RESULT, configSaveError: "Set Receipts Folder ID to new-receipts" }));
+    vi.mocked(postOnce).mockResolvedValue(streamOf({ ...RESULT, configSaveError: "Set Receipts Folder ID to new-receipts" }));
     const { result } = renderHook(() => useConfigSettingsState());
     act(() => result.current.setConfig({ ...result.current.config, ticketPrice: "99" }));
 

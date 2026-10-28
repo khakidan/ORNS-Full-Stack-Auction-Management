@@ -139,7 +139,7 @@ Prefer composition, as `Card` already models:
 ## Buttons
 
 Buttons represent actions, never navigation - this app has no client-side
-router; `App.tsx` manages workflow switching via `WorkflowType` state and
+router; `useWorkflowNavigation` (`src/hooks/useWorkflowNavigation.ts`) manages workflow switching via `WorkflowType` state and
 `history.pushState`, not `<Link>`-style navigation, so there's little
 risk of buttons standing in for links here, but keep the distinction
 clear when adding any new anchor-like controls.

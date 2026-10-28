@@ -51,6 +51,24 @@ describe("setupRoutes - /api/auction/setup-new", () => {
     });
   });
 
+  it("turns away a second setup while one is running, instead of running it again (ROADMAP A17)", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    server.use(http.get("https://www.googleapis.com/drive/v3/files", async () => {
+      await gate;
+      return HttpResponse.json({ files: [] });
+    }));
+
+    const first = request(app).post("/api/auction/setup-new").set(authHeader).send(setupBody).then((r) => r);
+    await new Promise((r) => setTimeout(r, 50));
+    const second = await request(app).post("/api/auction/setup-new").set(authHeader).send(setupBody);
+    release();
+    await first;
+
+    expect(second.status).toBe(409);
+    expect(second.body.error).toContain("already running");
+  });
+
   it("says which folder IDs to set by hand if the Config can't be saved", async () => {
     vi.spyOn(fake.db, "collection").mockImplementation(() => { throw new Error("Firestore is down"); });
 

@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { fromConfig, TICKET_FIELDS } from '../middleware/fromConfig';
 import { requirePermission } from '../middleware/requirePermission';
 import { sheetsFor } from '../utils/googleClients';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
@@ -45,7 +46,7 @@ export default function createAttendeeRouter() {
    * twice, so the request's `idempotencyKey` makes a resend return the
    * first result instead (ROADMAP A4).
    */
-  router.post("/attendees/add", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/attendees/add", fromConfig(TICKET_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
     const { spreadsheetId, sheet, row, idempotencyKey } = req.body || {};
     if (!spreadsheetId || !TICKET_SHEETS.includes(sheet) || !Array.isArray(row)) {
       return res.status(400).json({ error: "spreadsheetId, a ticket sheet name and the new row are required." });
@@ -81,7 +82,7 @@ export default function createAttendeeRouter() {
     }
   });
 
-  router.post("/attendees/update", async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/attendees/update", fromConfig(TICKET_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
     const { spreadsheetId, range, values } = req.body || {};
     const target = parseTicketRange(range);
     if (!spreadsheetId || !target || !Array.isArray(values) || values.length !== 1 || !Array.isArray(values[0])) {
@@ -122,7 +123,7 @@ export default function createAttendeeRouter() {
    * generic sheets proxy refuses the ticket tabs, so this permission can't
    * be bypassed).
    */
-  router.post("/attendees/delete", requirePermission("attendees.delete"), async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/attendees/delete", requirePermission("attendees.delete"), fromConfig(TICKET_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
     const { spreadsheetId, sheet, rowIndex } = req.body || {};
     if (!spreadsheetId || !TICKET_SHEETS.includes(sheet) || !Number.isInteger(rowIndex) || rowIndex < 2) {
       return res.status(400).json({ error: "spreadsheetId, a ticket sheet name and a data row number are required." });

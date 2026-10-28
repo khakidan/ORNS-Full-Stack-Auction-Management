@@ -6,6 +6,21 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **Audit items A6-A17 (the rest of the 2026-10-27 backlog).**
+  - **A6:** a staff sign-in removes any volunteer session left in the same browser (`/auth/callback`), so it can't stay a volunteer.
+  - **A7:** volunteer invite/resend/revoke, Undo and Create Action History are sent once (`postJsonOnce` in `apiClient.ts`, built on `postOnce`) - a retry used to email a second link or report "already undone"/"already exists" though the first request worked.
+  - **A8:** Undo finds the action's row again just before marking it "Undone by", so a row inserted or sorted by hand meanwhile can't get the mark.
+  - **A9:** change-feed notices carry their Action History area, and `GET /api/changes` gives volunteers only Bid Management ones.
+  - **A10:** `touchVolunteer` uses `update()`, so it can't bring back a record that Clear deactivated just removed.
+  - **A11:** turning edit tracking on records who did it and when (`editTracking` on Firestore `system/actionHistory`; cleared when turned off); Settings > Action History shows "Recording as <email> since <date>" next to the button, since the on-edit triggers run as that person.
+  - **A12:** Bid Entry's opening-bid-plus-raises step check is skipped for Live, Raffle Tickets and Open Appeal items and any item several people can win (`bidSanityChecks.ts`); the other checks still apply.
+  - **A13:** bid, checkout, walk-in, check-in, special-winner, Go Live, Close, receipt/email and attendee routes take spreadsheet IDs, tab names and the ticket price from the server's Config (`fromConfig`, `server/middleware/fromConfig.ts`), with the browser's value only filling a blank Config field for staff, never for volunteers. `volunteerAccess.ts` no longer checks body IDs.
+  - **A14:** `App.tsx` (529 -> 82 lines) is split into `useWorkflowNavigation` (works out the allowed workflow and tab during render instead of correcting them in effects), `AppSidebar.tsx`, `SignInScreens.tsx`, `BidManagementWorkflow.tsx` and `BackToTop.tsx`. `ArchivedYearPanel.tsx` (293 -> 121) is split into `ArchivedOverviewSection.tsx` and `ArchivedListSections.tsx`. A volunteer's Items tab content is no longer rendered at all.
+  - **A15:** `GET /api/action-history` sends 300 actions at a time (`limit`, `before`, `total`, `more`); the page has "Load older actions", and a live refresh reloads as many as are showing. Undo Data was already left out of the list.
+  - **A16:** new `App.test.tsx` (a volunteer sees only Bid Management - five tabs, no stage buttons - and the thank-you screen; a non-admin is sent from Settings to Bid Management) and `AuctionContext.test.tsx` (live refresh reloads the right data for each changed key, and everything on a reset).
+  - **A17:** Setup New Auction Year is sent once (`postOnce`) and runs under `runIfIdle`, so a second click or resend gets a 409 instead of a confusing "folder already exists".
+  - Tests: every server test now gets an in-memory Firestore by default (`server/test/setup.ts`) - before, an unmocked Firestore read (the Config, a role) went out to Google with the machine's own credentials. Backend 839 -> 849, frontend 787 -> 807, total 1626 -> 1656.
+
 - **A volunteer link is used up atomically (ROADMAP A2).** `redeemVolunteer` (`server/services/volunteerService.ts`) now runs in a Firestore transaction and only redeems a record that is still "invited" with the same token hash. Before, a Revoke or Resend landing between the link check and the sign-in was overwritten back to `active`, and two quick submissions both signed in. A link that fails the check gets the usual "link no longer works" page. The test Firestore stand-in (`fakeFirestore.ts`) gained `runTransaction` and `update`.
 
 - **The generic sheets proxy is read-only (ROADMAP A3).** Its write, append and clear routes are removed (`server/routes/sheetsProxyRoutes.ts`), with the unused `updateSheetData`, `appendSheetData` and `clearSheetData` in `src/services/google-api.ts`. A range without a tab name (`A5:Z5`) wrote the first tab, getting round the ticket-tab and locked-tab refusals - so a User could clear an attendee row without the delete permission or an Action History row. Every write now has its own locked, logged route. The cached read stays.

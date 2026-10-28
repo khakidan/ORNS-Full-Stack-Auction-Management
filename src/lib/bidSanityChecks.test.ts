@@ -25,6 +25,21 @@ describe("bidWarnings", () => {
     expect(bidWarnings(tenAndFive, 25)).toEqual([]);
   });
 
+  it.each([
+    ["a Live-auction item (called by the auctioneer)", { category: "Live" }],
+    ["raffle tickets", { category: "Raffle Tickets" }],
+    ["an Open Appeal tier", { category: "Open Appeal" }],
+    ["an item several people can win", { allowMultipleWinners: true }],
+  ])("doesn't apply the step rule to %s (ROADMAP A12), but still checks the opening bid", (_label, overrides) => {
+    const unstepped = item({ openingBid: "$10.00", minRaise: "$5.00", value: "$40.00", ...overrides });
+    expect(bidWarnings(unstepped, 22)).toEqual([]);
+    expect(bidWarnings(unstepped, 5)).toEqual([expect.stringContaining("below the opening bid")]);
+  });
+
+  it("still applies the step rule to an ordinary silent-auction category", () => {
+    expect(bidWarnings(item({ category: "Food", openingBid: "$10.00", minRaise: "$5.00", value: "$40.00" }), 22)).toHaveLength(1);
+  });
+
   it("flags an amount more than 3 times the value (an extra digit)", () => {
     expect(bidWarnings(item(), 1500)).toEqual([expect.stringContaining("more than 3 times the item's value of $100.00")]);
   });

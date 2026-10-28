@@ -5,7 +5,7 @@ import { render, screen, waitFor, within, fireEvent } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import ActionHistoryAdmin from "./ActionHistoryAdmin";
 import { fetchWithRetry } from "@/services/google-api";
-import { postJson } from "@/services/apiClient";
+import { postJson, postJsonOnce } from "@/services/apiClient";
 import { toast } from "sonner";
 
 vi.mock("@/services/google-api", () => ({
@@ -13,7 +13,7 @@ vi.mock("@/services/google-api", () => ({
   getBaseUrl: () => "",
   errorTextFrom: (d: any, f: string) => d?.error || f,
 }));
-vi.mock("@/services/apiClient", () => ({ postJson: vi.fn() }));
+vi.mock("@/services/apiClient", () => ({ postJson: vi.fn(), postJsonOnce: vi.fn() }));
 const CONFIG = { auctionItemsSpreadsheetId: "it-sheet", auctionTicketsSpreadsheetId: "tk-sheet" };
 const mockCheckForChanges = vi.fn(async () => {});
 let mockAuction = { dataVersion: 0, lastChangedKeys: [] as string[], checkForChanges: mockCheckForChanges };
@@ -50,18 +50,19 @@ describe("ActionHistoryAdmin", () => {
   beforeEach(() => {
     vi.mocked(fetchWithRetry).mockReset().mockResolvedValue(json({ spreadsheetId: "log", url: "https://docs/log", actions: ACTIONS }));
     vi.mocked(postJson).mockReset();
+    vi.mocked(postJsonOnce).mockReset();
     mockCheckForChanges.mockClear();
     mockAuction = { dataVersion: 0, lastChangedKeys: [], checkForChanges: mockCheckForChanges };
   });
 
   it("offers to create the spreadsheet when there isn't one yet", async () => {
     vi.mocked(fetchWithRetry).mockResolvedValue(json({ spreadsheetId: "", actions: [] }));
-    vi.mocked(postJson).mockResolvedValue({ spreadsheetId: "log" });
+    vi.mocked(postJsonOnce).mockResolvedValue({ spreadsheetId: "log" });
     render(<ActionHistoryAdmin />);
 
     await userEvent.click(await screen.findByRole("button", { name: /Create Action History spreadsheet/ }));
 
-    expect(postJson).toHaveBeenCalledWith("/api/action-history/create", {}, expect.any(String));
+    expect(postJsonOnce).toHaveBeenCalledWith("/api/action-history/create", {}, expect.any(String));
   });
 
   it("lists actions newest first with who did them, and the reason when one can't be undone", async () => {
@@ -100,7 +101,7 @@ describe("ActionHistoryAdmin", () => {
   });
 
   it("asks before undoing, then undoes; a refusal is shown with the server's reason", async () => {
-    vi.mocked(postJson).mockResolvedValueOnce({ success: true });
+    vi.mocked(postJsonOnce).mockResolvedValueOnce({ success: true });
     render(<ActionHistoryAdmin />);
     await userEvent.click(within(await screen.findByTestId("action-row-a3")).getByRole("button", { name: /Undo/ }));
 
@@ -109,11 +110,11 @@ describe("ActionHistoryAdmin", () => {
     expect(within(screen.getByRole("dialog")).queryByText(/nothing to see/)).toBeNull();
 
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Undo" }));
-    await waitFor(() => expect(postJson).toHaveBeenCalledWith("/api/action-history/a3/undo", {}, expect.any(String)));
+    await waitFor(() => expect(postJsonOnce).toHaveBeenCalledWith("/api/action-history/a3/undo", {}, expect.any(String)));
     // The undone change shows on this screen straight away, not on the next live-refresh tick.
     await waitFor(() => expect(mockCheckForChanges).toHaveBeenCalled());
 
-    vi.mocked(postJson).mockRejectedValueOnce(new Error("This has changed since, so undoing it would overwrite a later change."));
+    vi.mocked(postJsonOnce).mockRejectedValueOnce(new Error("This has changed since, so undoing it would overwrite a later change."));
     await userEvent.click(within(screen.getByTestId("action-row-a2")).getByRole("button", { name: /Undo/ }));
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("changed since"), expect.anything()));
@@ -142,6 +143,34 @@ describe("ActionHistoryAdmin", () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("no longer recorded")));
   });
 
+  it("says whose Google account is recording sheet edits, and since when (ROADMAP A11)", async () => {
+    vi.mocked(fetchWithRetry).mockImplementation(async (url: any) =>
+      String(url).endsWith("/edit-tracking")
+        ? json({ on: true, turnedOn: { by: "jane@orns.org", at: "2026-10-20T15:00:00Z" } })
+        : json({ spreadsheetId: "log", url: "https://docs/log", actions: ACTIONS }));
+    render(<ActionHistoryAdmin />);
+
+    expect(await screen.findByText(/Recording as jane@orns.org since Oct 20/)).toBeInTheDocument();
+  });
+
+  it("loads older actions a page at a time, below those showing (ROADMAP A15)", async () => {
+    const older = { ...base, id: "a0", who: "sam@orns.org", source: "App", area: "Tickets", action: "Add attendee", target: "", summary: "Added Pat Lee", undoable: false };
+    vi.mocked(fetchWithRetry).mockImplementation(async (url: any) => {
+      const u = String(url);
+      if (u.endsWith("/edit-tracking")) return json({ on: false });
+      if (u.includes("before=a1")) return json({ spreadsheetId: "log", actions: [older], total: 4, more: false });
+      return json({ spreadsheetId: "log", url: "https://docs/log", actions: ACTIONS, total: 4, more: true });
+    });
+    render(<ActionHistoryAdmin />);
+
+    await userEvent.click(await screen.findByRole("button", { name: /Load older actions/ }));
+
+    expect(await screen.findByTestId("action-row-a0")).toBeInTheDocument();
+    expect(screen.getByTestId("action-row-a3")).toBeInTheDocument();
+    expect(fetchWithRetry).toHaveBeenCalledWith("/api/action-history?limit=300&before=a1", expect.anything());
+    expect(screen.queryByRole("button", { name: /Load older actions/ })).toBeNull();
+  });
+
   it("reloads the list quietly when someone else's action arrives (live refresh)", async () => {
     const { rerender } = render(<ActionHistoryAdmin />);
     await screen.findByTestId("action-row-a3");
@@ -153,7 +182,7 @@ describe("ActionHistoryAdmin", () => {
 
     mockAuction = { ...mockAuction, dataVersion: 2, lastChangedKeys: ["action-history"] };
     rerender(<ActionHistoryAdmin />);
-    await waitFor(() => expect(fetchWithRetry).toHaveBeenCalledWith("/api/action-history", expect.anything()));
+    await waitFor(() => expect(fetchWithRetry).toHaveBeenCalledWith("/api/action-history?limit=300", expect.anything()));
     expect(screen.getByTestId("action-row-a3")).toBeInTheDocument();
   });
 });

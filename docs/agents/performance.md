@@ -39,8 +39,8 @@ const AuctionItemsWorkflow = lazy(() => import("./components/AuctionItemsWorkflo
 ```
 
 wrapped in `<Suspense>` per `style_guide.md`. `Dashboard`, `Bidders`,
-`Items`, `BidEntry`, `Checkout`, `Receipts` are imported eagerly at the
-top of `App.tsx` - these are the always-visible core workflow tabs, so
+`Items`, `BidEntry`, `Checkout`, `Receipts` are imported eagerly by
+`BidManagementWorkflow.tsx` (itself imported eagerly by `App.tsx`) - these are the always-visible core workflow tabs, so
 eager-loading them is a reasonable choice, not an oversight.
 
 `vite.config.ts` already defines manual vendor chunks by dependency:

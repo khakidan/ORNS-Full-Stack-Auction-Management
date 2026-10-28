@@ -2,11 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/services/google-api", () => ({
   fetchWithRetry: vi.fn(),
+  postOnce: vi.fn(),
   getBaseUrl: vi.fn(() => ""),
 }));
 
-import { fetchWithRetry } from "@/services/google-api";
-import { postJson, HttpError } from "./apiClient";
+import { fetchWithRetry, postOnce } from "@/services/google-api";
+import { postJson, postJsonOnce, HttpError } from "./apiClient";
 import { isConfiguredId } from "@/lib/configuredId";
 
 const mockedFetch = vi.mocked(fetchWithRetry);
@@ -66,5 +67,21 @@ describe("isConfiguredId", () => {
 
   it("is true for a real ID", () => {
     expect(isConfiguredId("1AbC-dEf_123")).toBe(true);
+  });
+});
+
+describe("postJsonOnce (ROADMAP A7)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("sends once, without fetchWithRetry's retries, and reads the reply like postJson", async () => {
+    vi.mocked(postOnce).mockResolvedValue(reply(409, { error: "Already undone" }));
+
+    const error = await postJsonOnce("/api/action-history/x/undo", {}, "Failed").catch((e) => e);
+
+    expect(postOnce).toHaveBeenCalledWith("/api/action-history/x/undo", {});
+    expect(postOnce).toHaveBeenCalledTimes(1);
+    expect(mockedFetch).not.toHaveBeenCalled();
+    expect(error).toBeInstanceOf(HttpError);
+    expect(error.message).toBe("Already undone");
   });
 });

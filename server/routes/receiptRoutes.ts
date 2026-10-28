@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { fromConfig, RECEIPT_FIELDS } from '../middleware/fromConfig';
 import { googleAuthFor } from '../utils/googleClients';
 import { logAction } from '../services/actionLog';
 import { google } from 'googleapis';
@@ -23,7 +24,7 @@ export default function createReceiptsRouter() {
     next();
   });
 
-  router.post("/generate", async (req, res, next) => {
+  router.post("/generate", fromConfig(RECEIPT_FIELDS), async (req, res, next) => {
     const { bidderId, spreadsheetId, itemsSpreadsheetId } = req.body;
     const scriptId = process.env.SCRIPT_ID_BID_MANAGEMENT;
 
@@ -79,7 +80,7 @@ export default function createReceiptsRouter() {
    * bid recorded while printing can shift a bidder across a part
    * boundary - print after bidding closes.
    */
-  router.post("/generate-all", async (req, res, next) => {
+  router.post("/generate-all", fromConfig(RECEIPT_FIELDS), async (req, res, next) => {
     const { spreadsheetId, itemsSpreadsheetId } = req.body;
     const scriptId = process.env.SCRIPT_ID_BID_MANAGEMENT;
     const part = req.body.part === undefined ? 1 : Number(req.body.part);
@@ -120,7 +121,7 @@ export default function createReceiptsRouter() {
 
   // Emailing resolves each bidder's PayPal invoice (ROADMAP.md H2), so,
   // like /generate, these routes need a PayPalService.
-  router.post("/email-all", async (req, res, next) => {
+  router.post("/email-all", fromConfig(RECEIPT_FIELDS), async (req, res, next) => {
     const { spreadsheetId, itemsSpreadsheetId, idempotencyKey } = req.body;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
 
@@ -138,7 +139,7 @@ export default function createReceiptsRouter() {
     }
   });
 
-  router.post("/email-only", async (req, res, next) => {
+  router.post("/email-only", fromConfig(RECEIPT_FIELDS), async (req, res, next) => {
     const { bidderId, spreadsheetId, itemsSpreadsheetId } = req.body;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
 

@@ -22,7 +22,7 @@ vi.mock("../services/userService", async (importActual) => ({
 }));
 
 import { app } from "../app";
-import { authCookieHeader } from "./helpers/session";
+import { authCookieHeader, sessionCookie } from "./helpers/session";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -70,6 +70,22 @@ describe('Auth Routes workflow', () => {
   });
 
   describe('GET /auth/callback', () => {
+    it('a staff sign-in replaces a volunteer session left in the same browser (ROADMAP A6)', async () => {
+      server.use(
+        http.post('https://oauth2.googleapis.com/token', () => HttpResponse.json({ access_token: "t", refresh_token: "r", expiry_date: Date.now() + 3600000, token_type: "Bearer" })),
+        http.get('https://www.googleapis.com/oauth2/v2/userinfo', () => HttpResponse.json({ email: "test@orns.org", hd: "orns.org", verified_email: true })),
+      );
+      const agent = request.agent(app);
+      const res = await agent.get('/auth/url').set('Cookie', sessionCookie({ volunteer: { id: "v1", email: "pat@gmail.com" } }));
+      const state = new URL(res.body.url).searchParams.get('state') as string;
+
+      await agent.get(`/auth/callback?code=c&state=${encodeURIComponent(state)}`);
+
+      const status = await agent.get('/auth/status');
+      expect(status.body.user).toMatchObject({ email: "test@orns.org" });
+      expect(status.body.user.role).not.toBe("volunteer");
+    });
+
     it('Happy path — valid code, authorized domain', async () => {
       server.use(
         http.post('https://oauth2.googleapis.com/token', () => {
