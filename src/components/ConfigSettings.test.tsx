@@ -217,42 +217,14 @@ describe("ConfigSettings", () => {
     });
   });
 
-  it("after saving, copies the settings to the Bid-Management _Settings tab without complaint when every copy succeeds", async () => {
-    render(<ConfigSettings />);
-    fireEvent.click(screen.getByText("Save Configuration"));
-
-    await waitFor(() => {
-      expect(fetchWithRetry).toHaveBeenCalledWith(expect.stringContaining("/api/settings/update"), expect.anything());
-    });
-    expect(toast.error).not.toHaveBeenCalled();
-  });
-
-  it("doesn't copy anything to the _Settings tab when the save itself is refused", async () => {
-    mockSaveConfig.mockRejectedValueOnce(new Error("You don't have permission to do that."));
+  it("saves only the Config - the Apps Scripts get these values from the server, so nothing is copied to a _Settings tab (ROADMAP B11)", async () => {
     render(<ConfigSettings />);
     fireEvent.click(screen.getByText("Save Configuration"));
 
     await waitFor(() => expect(mockSaveConfig).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));
-    expect(fetchWithRetry).not.toHaveBeenCalledWith(expect.stringContaining("/api/settings/update"), expect.anything());
-  });
-
-  it("shows a cloud-sync-failure toast, not the plain success toast, when a settings/update call returns a non-ok response - useConfigSettingsState.ts's syncSettingToCloud never checked res.ok, so a 4xx here used to be silently reported as full success", async () => {
-    vi.mocked(fetchWithRetry).mockImplementation(async (url) => {
-      if (url.toString().includes("/api/settings/update")) {
-        return { ok: false, status: 400, json: async () => ({ error: "Missing required fields" }) } as Response;
-      }
-      return { ok: true, json: async () => ({}) } as Response;
-    });
-
-    render(<ConfigSettings />);
-    fireEvent.click(screen.getByText("Save Configuration"));
-
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith(
-        expect.stringContaining("couldn't be copied")
-      );
-    });
+    expect(fetchWithRetry).not.toHaveBeenCalledWith(expect.stringContaining("/api/settings"), expect.anything());
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it("splits the Settings page into Configuration / PayPal Integration / Google Apps Scripts / Bug Reports tabs, each showing only its own content", async () => {

@@ -7,10 +7,6 @@ exports[`performSheetSync - full rebuild > archives the old tabs, then writes Bi
     "op": "get",
   },
   {
-    "args": "bm-id _Settings!A:C",
-    "op": "get",
-  },
-  {
     "args": "tickets-id 'tickets'!A:T",
     "op": "get",
   },

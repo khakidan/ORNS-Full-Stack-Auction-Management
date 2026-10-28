@@ -1,7 +1,7 @@
 /**
  * Service wrapper. Extends GlobalStyles so it inherits all style constants.
  * Provides lazy-loaded, cached access to every Drive resource referenced
- * in the _Settings tab.
+ * in the run's settings (GlobalVariables' RUN_SETTINGS_).
  */
 class DriveService extends GlobalStyles {
     constructor () {
@@ -51,7 +51,7 @@ class DriveService extends GlobalStyles {
 
     /**
      * If a valid folderID is provided, overrides getReceiptFolder() on this
-     * instance so all file-placement calls use it instead of _Settings.
+     * instance so all file-placement calls use it.
      * @param {string|null|undefined} folderID
      */
     _applyFolderOverride_ ( folderID ) {

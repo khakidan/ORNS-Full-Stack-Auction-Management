@@ -3,7 +3,6 @@ import { toast } from "sonner";
 import { errorTextFrom, getBaseUrl, postOnce } from "@/services/google-api";
 import { useConfig } from "@/context/ConfigContext";
 import { Config } from "@/types";
-import { postJson } from "@/services/apiClient";
 
 export function extractId(input: string): string {
   if (!input) return "";
@@ -24,14 +23,6 @@ export function extractId(input: string): string {
     if (match) return match[1];
   }
   return input.trim();
-}
-
-async function syncSettingToCloud(spreadsheetId: string, key: string, value: string, description: string) {
-  // idempotencyKey made once here, so the request's retries reuse it and
-  // the server applies the change once.
-  await postJson("/api/settings/update",
-    { spreadsheetId, key, value, description, idempotencyKey: window.crypto.randomUUID() },
-    "Failed to sync setting to cloud");
 }
 
 export function useConfigSettingsState() {
@@ -174,8 +165,9 @@ export function useConfigSettingsState() {
     const bugReportsSpreadsheetId = extractId(config.bugReportsSpreadsheetId);
     const bugReportsFolderId = extractId(config.bugReportsFolderId);
 
-    // Save for everyone (the server's shared Config).
-    let saved = true;
+    // Save for everyone (the server's shared Config). The Apps Scripts get
+    // these values from the server on every run, so there's no second copy
+    // to update (ROADMAP B11).
     try {
       await saveConfig({
         ...config,
@@ -193,33 +185,9 @@ export function useConfigSettingsState() {
       });
     } catch {
       // saveConfig already showed why.
-      saved = false;
-    }
-
-    if (!saved) {
-      setSavingSettings(false);
       return;
-    }
-
-    // Also copy to the Bid Management spreadsheet's _Settings tab, which its Apps Script reads.
-    let cloudSyncFailed = false;
-    if (bidMgtId) {
-      try {
-        await syncSettingToCloud(bidMgtId, "ticketPrice", config.ticketPrice, "Standard Walk-In Ticket Price");
-        await syncSettingToCloud(bidMgtId, "receiptFolderID", receiptFolderId, "Receipts Folder ID");
-        await syncSettingToCloud(bidMgtId, "forPrintFolderID", forPrintFolderId, "For Print Folder ID");
-        await syncSettingToCloud(bidMgtId, "ornsLogoID", ornsLogoId, "ORNS Logo File ID");
-        await syncSettingToCloud(bidMgtId, "auctionImportSheetID", auctionItemsId, "Auction Item Data Entry Spreadsheet ID");
-        await syncSettingToCloud(bidMgtId, "auctionTicketSheetsID", auctionTicketsId, "Auction Tickets Spreadsheet ID");
-      } catch (err: any) {
-        console.error("Failed to sync settings to cloud:", err);
-        cloudSyncFailed = true;
-      }
-    }
-
-    setSavingSettings(false);
-    if (cloudSyncFailed) {
-      toast.error("Settings saved, but couldn't be copied to the Bid-Management spreadsheet's _Settings tab. Check your Bid Management Spreadsheet ID.");
+    } finally {
+      setSavingSettings(false);
     }
     setTimeout(() => window.location.reload(), 1000);
   };

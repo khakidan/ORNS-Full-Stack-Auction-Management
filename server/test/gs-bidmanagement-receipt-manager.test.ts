@@ -183,7 +183,7 @@ describe("apiCreateIndividualReceipt / apiCreateAllReceipts declare every parame
   // so the only way to pin the fix without also faking global Apps
   // Script services is to assert on the function's own declared arity
   // directly. See CHANGELOG.md.
-  it("apiCreateIndividualReceipt declares all 3 parameters (bidderId, folderID, receiptData)", () => {
+  it("apiCreateIndividualReceipt declares all 4 parameters (bidderId, folderID, receiptData, settings)", () => {
     const { apiCreateIndividualReceipt } = loadGasClasses(
       [
         "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/00_Class_GlobalVariables.gs",
@@ -191,10 +191,10 @@ describe("apiCreateIndividualReceipt / apiCreateAllReceipts declare every parame
       ],
       ["apiCreateIndividualReceipt"]
     );
-    expect(apiCreateIndividualReceipt.length).toBe(3);
+    expect(apiCreateIndividualReceipt.length).toBe(4);
   });
 
-  it("apiCreateAllReceipts declares all 3 parameters (folderID, receipts, fileName)", () => {
+  it("apiCreateAllReceipts declares all 4 parameters (folderID, receipts, fileName, settings)", () => {
     const { apiCreateAllReceipts } = loadGasClasses(
       [
         "scripts/GoogleAppsScriptsCode/BidManagementSpreadsheet/00_Class_GlobalVariables.gs",
@@ -203,6 +203,7 @@ describe("apiCreateIndividualReceipt / apiCreateAllReceipts declare every parame
       ["apiCreateAllReceipts"]
     );
     // fileName: Node prints receipts in parts, one named PDF per part.
-    expect(apiCreateAllReceipts.length).toBe(3);
+    // settings: the Config's logo (ROADMAP B11).
+    expect(apiCreateAllReceipts.length).toBe(4);
   });
 });

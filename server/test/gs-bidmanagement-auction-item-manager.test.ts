@@ -7,7 +7,7 @@
  * an item added, renamed, or deactivated afterward silently never showed
  * up on printed receipts or PayPal invoice line items. It now opens the
  * real Auction Items spreadsheet live by ID (`this.config['auctionImportSheetID']`,
- * already loaded from this spreadsheet's own _Settings tab) instead - see
+ * from the run's settings since ROADMAP B11) instead - see
  * docs/agents/CHANGELOG.md's Code Hardening item #1 and
  * CHANGELOG.md for the full history. Mirrors
  * scripts/GoogleAppsScriptsCode/TicketsSpreadsheet/Class_BidderManager.gs's

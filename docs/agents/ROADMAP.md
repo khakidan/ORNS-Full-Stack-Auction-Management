@@ -43,7 +43,6 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 
 ### Structure - refactor
 
-- **B11 - The Config lives in two places.** Firestore `settings/global` is the Config, but the Apps Scripts read their own copy from the Bid Management spreadsheet's `_Settings` tab (receipt folder, logo, Items and Tickets IDs), which only the browser's Save Configuration writes, one `/api/settings/update` call per key after the Firestore save. If one of those six calls fails, or the Config changes any other way (Setup New Auction Year - B1), the scripts work from stale values. Fix: write `_Settings` from the server whenever the Config is saved (`POST /api/config`, the setup route), or pass every value from Node so the scripts stop reading `_Settings`.
 
 ### Tests
 
