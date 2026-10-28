@@ -68,7 +68,7 @@ describe("PayPalIntegrationCard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /open paypal sandbox dashboard/i }));
 
-    expect(openSpy).toHaveBeenCalledWith("https://developer.paypal.com/dashboard/accounts", "_blank");
+    expect(openSpy).toHaveBeenCalledWith("https://developer.paypal.com/dashboard/accounts", "_blank", "noopener,noreferrer");
     openSpy.mockRestore();
   });
 
@@ -78,7 +78,7 @@ describe("PayPalIntegrationCard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /open paypal business dashboard/i }));
 
-    expect(openSpy).toHaveBeenCalledWith("https://www.paypal.com/businessexp/summary", "_blank");
+    expect(openSpy).toHaveBeenCalledWith("https://www.paypal.com/businessexp/summary", "_blank", "noopener,noreferrer");
     openSpy.mockRestore();
   });
 });

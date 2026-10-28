@@ -113,7 +113,7 @@ export default function BidManagementWorkflow({ activeBidTab, onBidTabChange, is
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.open(`https://docs.google.com/spreadsheets/d/${config.bidManagementSpreadsheetId}`, "_blank")}
+              onClick={() => window.open(`https://docs.google.com/spreadsheets/d/${config.bidManagementSpreadsheetId}`, "_blank", "noopener,noreferrer")}
               className="gap-2 w-full sm:w-auto"
             >
               <ExternalLink className="w-4 h-4" />

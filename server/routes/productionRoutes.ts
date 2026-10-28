@@ -1,4 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { logAction, ActionArea, ActionEntry } from '../services/actionLog';
+import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { fromConfig, ITEM_DOCUMENT_FIELDS, BIDDER_LABEL_FIELDS } from '../middleware/fromConfig';
 import { isAppsScriptFailure, runAppsScript } from '../utils/appsScriptRun';
 import { AlreadyRunningError, runIfIdle } from '../utils/asyncLock';
@@ -17,6 +19,31 @@ import { syncBiddersFromTickets } from '../services/bidderTicketSync';
  */
 const MISSING_PRINT_FOLDER = "Set the For Print Folder ID in Settings before creating documents.";
 
+/** Each document's name in Action History (ROADMAP B8). */
+const DOCUMENT_NAMES: Record<string, string> = {
+  apiCreateBundlingDoc: "bundling document",
+  apiCreateItemLabels: "item labels",
+  apiCreateSlideshow: "live auction slideshow",
+  apiCreateBiddingGuideCoverPage: "bidding guide cover page",
+  apiCreateBiddingGuideInnerPages: "bidding guide inner pages",
+  apiCreateBidSheets: "bid sheets",
+  apiCreateCatalog: "auction catalog",
+  apiCreateTableTents: "table tents",
+  apiCreateBidderLabels: "bidder labels",
+};
+
+/** The Action History row for a document that was made: each run creates a new Drive file. */
+function documentCreated(functionName: string, area: ActionArea): ActionEntry {
+  const name = DOCUMENT_NAMES[functionName] || functionName;
+  return {
+    area,
+    action: `Create ${name}`,
+    target: name,
+    summary: `Created the ${name} in the For Print folder`,
+    notUndoableReason: "a new file was made in the For Print folder; delete it in Drive if it isn't wanted",
+  };
+}
+
 export default function createProductionRouter() {
   const router = Router();
   router.use(requireAuth);
@@ -27,7 +54,8 @@ export default function createProductionRouter() {
     next: NextFunction,
     functionName: string,
     scriptId: string,
-    parameters: any[] = []
+    parameters: any[],
+    area: ActionArea
   ) => {
     if (!scriptId) return res.status(400).json({ error: "Missing Target Environment Script ID" });
 
@@ -45,6 +73,7 @@ export default function createProductionRouter() {
           return res.status(400).json(result);
         }
 
+        await logAction(req, documentCreated(functionName, area));
         res.json(result || { success: true });
       });
     } catch (error: any) {
@@ -85,7 +114,7 @@ export default function createProductionRouter() {
       const items = await getValidSortedItems(sheets, spreadsheetId);
       // The Config's values win over the script's own _Settings copy (ROADMAP B11).
       const settings = { ornsLogoID: ornsLogoId || "", auctionDevFolderID: folderId };
-      await handleAppsScriptCall(req, res, next, functionName, process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId, items, settings]);
+      await handleAppsScriptCall(req, res, next, functionName, process.env.SCRIPT_ID_ITEM_ENTRY!, [folderId, items, settings], "Auction Items");
     } catch (error) {
       next(error);
     }
@@ -152,7 +181,17 @@ export default function createProductionRouter() {
     if (bidManagementSpreadsheetId) {
       try {
         const sheets = sheetsFor(req);
-        await ensureBidderNumbersSheet(sheets, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId || "");
+        const built = await ensureBidderNumbersSheet(sheets, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId || "");
+        if (built.created) {
+          clearCacheForSpreadsheet(bidManagementSpreadsheetId);
+          await logAction(req, {
+            area: "Bid Management",
+            action: "Build Bidder-Numbers",
+            summary: `Built Bidder-Numbers from the ticket sheets for the bidder labels: assigned ${built.count} bidder number(s)`,
+            location: "Bid Management 'Bidder-Numbers'",
+            notUndoableReason: "the labels print these numbers; Set Up Bid Management App rebuilds the tab before the auction",
+          });
+        }
         // Labels print each bidder's name - make sure it matches their ticket.
         await syncBiddersFromTickets(req);
         bidders = await getBidderLabelList(sheets, bidManagementSpreadsheetId);
@@ -161,7 +200,7 @@ export default function createProductionRouter() {
       }
     }
 
-    handleAppsScriptCall(req, res, next, "apiCreateBidderLabels", process.env.SCRIPT_ID_TICKETS!, [folderId, bidders]);
+    handleAppsScriptCall(req, res, next, "apiCreateBidderLabels", process.env.SCRIPT_ID_TICKETS!, [folderId, bidders], "Tickets");
   });
 
   return router;

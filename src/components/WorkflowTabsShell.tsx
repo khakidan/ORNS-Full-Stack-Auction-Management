@@ -66,7 +66,7 @@ export function WorkflowTabsShell({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.open(`https://docs.google.com/spreadsheets/d/${spreadsheetId}`, "_blank")}
+              onClick={() => window.open(`https://docs.google.com/spreadsheets/d/${spreadsheetId}`, "_blank", "noopener,noreferrer")}
               className="w-full sm:w-auto"
             >
               <ExternalLink className="w-4 h-4 mr-2" />

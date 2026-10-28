@@ -36,10 +36,6 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 
 ### Low
 
-- **B7 - A bug report can be saved and emailed twice.** The bug-report dialog posts with `postJson` (retried), and `POST /api/bug-reports` has no idempotency key, so a slow save that times out on the browser's side is appended to the sheet and emailed to web-admin@orns.org again. Fix: an idempotency key (the report's own ID). (Its spreadsheet and folder come from the Config since B12.)
-- **B8 - Some writes aren't in Action History** (AGENTS.md rule 7): the document routes in `productionRoutes.ts` (catalog, bid sheets, labels, slides - each creates a Drive file); the bidder-label route's `ensureBidderNumbersSheet`, which can create Bidder-Numbers and assign every bidder number; and resolving a bug report (`/api/bug-reports/resolve`, which edits the Bug-Reports sheet and deletes a screenshot). Fix: log each with a `notUndoableReason`.
-- **B9 - `window.open` without `noopener` in six places** (`PayPalIntegrationCard.tsx`, `FolderFilesCard.tsx`, `BidManagementWorkflow.tsx`, `WorkflowTabsShell.tsx`, `Receipts.tsx`, `useCheckoutReceiptActions.ts`). They open Google and PayPal pages, so the risk is small, but the opened page gets `window.opener`. Use `"noopener,noreferrer"` as the rest of the app does.
-- **B10 - `GET /api/bidders/setup-status` takes its spreadsheet from the query string, unchecked for volunteers.** A13 removed `volunteerAccess.ts`'s body-ID checks, which never covered query strings; this route is on the volunteers' list. It only answers true/false using the volunteer account's access, but should read the Config like the other volunteer routes.
 
 ### Structure - refactor
 

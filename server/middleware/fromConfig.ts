@@ -48,6 +48,9 @@ export const BID_MANAGEMENT_FIELDS: ConfigFields = {
   ticketPrice: "ticketPrice",
 };
 
+/** Just the Bid Management spreadsheet (setup-status, a GET - ROADMAP B10). */
+export const BID_MANAGEMENT_ID_FIELDS: ConfigFields = { spreadsheetId: "bidManagementSpreadsheetId" };
+
 /** Receipts and emails also read the items, file receipts in this year's folder, and print the logo. */
 export const RECEIPT_FIELDS: ConfigFields = {
   ...BID_MANAGEMENT_FIELDS,

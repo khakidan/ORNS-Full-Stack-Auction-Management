@@ -85,7 +85,7 @@ export function FolderFilesCard({ files, loadingFiles, isInvalidFolder, onRefres
                         variant="ghost"
                         size="sm"
                         className="h-8 gap-1"
-                        onClick={() => window.open(file.webViewLink, "_blank")}
+                        onClick={() => window.open(file.webViewLink, "_blank", "noopener,noreferrer")}
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
                         Open

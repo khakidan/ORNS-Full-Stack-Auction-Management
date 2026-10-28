@@ -8,6 +8,9 @@ import { requireAuth } from "../middleware/requireAuth";
 import { notifyAdminOfBugReport } from "../services/adminNotifications";
 import { BugReportPayload, BugReportType } from "../../src/types";
 import { sheetsFor, driveFor } from '../utils/googleClients';
+import { withIdempotency, idempotentBody } from '../utils/idempotency';
+import { logAction } from '../services/actionLog';
+import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 
 const BUG_REPORT_TYPES: BugReportType[] = ["Bug", "UI Issue", "Workflow Issue"];
 const MAX_TEXT_LENGTH = 50_000;
@@ -47,22 +50,61 @@ export function _resetBugReportRateLimitForTesting(): void {
   anonymousReports.clear();
 }
 
+class RateLimitedError extends Error {}
+
+/**
+ * Saves the report to the Bug Reports spreadsheet, or - when that isn't
+ * possible (none configured, no or stale session) - to the logs
+ * (production) or a local file (development). Throws only if the
+ * fallback fails too.
+ */
+async function saveReport(report: BugReportPayload, tokens: any, spreadsheetId: string | undefined, folderId: string | undefined): Promise<Record<string, unknown>> {
+  try {
+    if (!spreadsheetId) {
+      throw new Error("No Bug Reports spreadsheet configured");
+    }
+
+    const client = getAuthenticatedClient(tokens);
+    const sheets = google.sheets({ version: "v4", auth: client });
+    const reportId = buildReportFilename(report);
+
+    let screenshotLink = "";
+    if (report.screenshotBase64 && folderId) {
+      const drive = google.drive({ version: "v3", auth: client });
+      screenshotLink = await uploadScreenshotToDrive(drive, folderId, report.screenshotBase64, `${reportId}.png`);
+    }
+
+    await appendBugReportToSheet(sheets, spreadsheetId, report, reportId, screenshotLink);
+    return { success: true, storage: "sheet" };
+  } catch (error: any) {
+    console.error("[BugReport] Sheet save failed, falling back:", error?.message || error);
+    // Cloud Run's disk is in-memory and wiped on every instance
+    // recycle, so production falls back to Cloud Logging instead.
+    if (process.env.NODE_ENV === "production") {
+      logReportFallback(report);
+      return { success: true, storage: "log" };
+    }
+    const { filePath } = await writeLocalReportFallback(report);
+    return { success: true, storage: "local", filePath };
+  }
+}
+
 export default function createBugReportRouter() {
   const router = Router();
 
   // Deliberately NOT gated by requireAuth, unlike every other router in
   // this app - a bug report about a broken or expired Google session
   // must still be savable even when req.session.tokens is missing or
-  // stale. The catch block below falls back to the logs (production) or a
-  // local file (development) in exactly that case, so an unauthenticated
-  // request still succeeds.
+  // stale. saveReport falls back to the logs (production) or a local file
+  // (development) in exactly that case, so an unauthenticated request
+  // still succeeds.
   //
   // Because anyone can reach it (ROADMAP.md M1): requests without a
   // session are rate-limited per IP and can't attach a screenshot, every
   // text field is length-capped, and `type`/`timestamp` are validated
   // rather than written as sent.
   router.post("/", fromConfig(BUG_REPORT_FIELDS), async (req: Request, res: Response) => {
-    const { title, description, type, timestamp, route, appState, browserInfo, consoleActivity, screenshotBase64, bugReportsSpreadsheetId, bugReportsFolderId } = req.body;
+    const { title, description, type, timestamp, route, appState, browserInfo, consoleActivity, screenshotBase64, bugReportsSpreadsheetId, bugReportsFolderId, idempotencyKey } = req.body;
 
     if (!title || !description || !type) {
       return res.status(400).json({ error: "Missing required fields: title, description, and type are required." });
@@ -72,10 +114,6 @@ export default function createBugReportRouter() {
     }
 
     const signedIn = !!req.session?.tokens;
-    if (!signedIn && !allowAnonymousReport(req.ip || "unknown")) {
-      return res.status(429).json({ error: "Too many bug reports from this address - please sign in, or try again in a few minutes." });
-    }
-
     const report: BugReportPayload = {
       title: capText(title),
       description: capText(description),
@@ -90,50 +128,32 @@ export default function createBugReportRouter() {
       screenshotBase64: signedIn && typeof screenshotBase64 === "string" && screenshotBase64 ? screenshotBase64 : null,
     };
 
-    // Emails web-admin@orns.org once the report is saved (anywhere), so a
-    // report can't arrive unnoticed. Never lets a notification problem
-    // fail or re-run the save.
-    const respondSaved = async (body: Record<string, unknown>) => {
-      try {
-        await notifyAdminOfBugReport(report, req.session?.tokens);
-      } catch (e: any) {
-        console.error("[BugReport] Notification step failed:", e?.message || e);
-      }
-      return res.json(body);
-    };
-
+    // Saved and emailed once per idempotencyKey (ROADMAP B7): the dialog's
+    // retries resend the same key, so a slow save that timed out on the
+    // browser's side isn't appended and emailed again. A refusal (rate
+    // limit) or a failed save throws, so nothing is remembered and a
+    // later retry runs again.
     try {
-      if (!bugReportsSpreadsheetId) {
-        throw new Error("No Bug Reports spreadsheet configured");
-      }
-
-      const client = getAuthenticatedClient(req.session?.tokens);
-      const sheets = google.sheets({ version: "v4", auth: client });
-      const reportId = buildReportFilename(report);
-
-      let screenshotLink = "";
-      if (report.screenshotBase64 && bugReportsFolderId) {
-        const drive = google.drive({ version: "v3", auth: client });
-        screenshotLink = await uploadScreenshotToDrive(drive, bugReportsFolderId, report.screenshotBase64, `${reportId}.png`);
-      }
-
-      await appendBugReportToSheet(sheets, bugReportsSpreadsheetId, report, reportId, screenshotLink);
-      return await respondSaved({ success: true, storage: "sheet" });
-    } catch (error: any) {
-      console.error("[BugReport] Sheet save failed, falling back:", error?.message || error);
-      try {
-        // Cloud Run's disk is in-memory and wiped on every instance
-        // recycle, so production falls back to Cloud Logging instead.
-        if (process.env.NODE_ENV === "production") {
-          logReportFallback(report);
-          return await respondSaved({ success: true, storage: "log" });
+      const outcome = await withIdempotency("bug-reports", idempotencyKey, async () => {
+        if (!signedIn && !allowAnonymousReport(req.ip || "unknown")) throw new RateLimitedError();
+        const body = await saveReport(report, req.session?.tokens, bugReportsSpreadsheetId, bugReportsFolderId);
+        // Emails web-admin@orns.org once the report is saved (anywhere), so
+        // a report can't arrive unnoticed. Never lets a notification
+        // problem fail or re-run the save.
+        try {
+          await notifyAdminOfBugReport(report, req.session?.tokens);
+        } catch (e: any) {
+          console.error("[BugReport] Notification step failed:", e?.message || e);
         }
-        const { filePath } = await writeLocalReportFallback(report);
-        return await respondSaved({ success: true, storage: "local", filePath });
-      } catch (fallbackError: any) {
-        console.error("[BugReport] Fallback also failed:", fallbackError);
-        return res.status(500).json({ error: "Failed to save bug report" });
+        return body;
+      });
+      return res.json(idempotentBody(outcome));
+    } catch (error: any) {
+      if (error instanceof RateLimitedError) {
+        return res.status(429).json({ error: "Too many bug reports from this address - please sign in, or try again in a few minutes." });
       }
+      console.error("[BugReport] Fallback also failed:", error);
+      return res.status(500).json({ error: "Failed to save bug report" });
     }
   });
 
@@ -174,6 +194,15 @@ export default function createBugReportRouter() {
       if (screenshotLink) {
         await deleteScreenshotFromDrive(driveFor(req), screenshotLink);
       }
+      clearCacheForSpreadsheet(spreadsheetId);
+      await logAction(req, {
+        area: "Settings",
+        action: "Resolve bug report",
+        target: reportId,
+        summary: `Marked bug report ${reportId} resolved${screenshotLink ? " and deleted its screenshot" : ""}`,
+        location: "Bug Reports 'Bug-Reports'",
+        notUndoableReason: screenshotLink ? "the screenshot was deleted" : "set the report's Status back to Open in the Bug-Reports sheet",
+      });
       res.json({ success: true });
     } catch (error: any) {
       next(error);
