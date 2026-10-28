@@ -12,6 +12,8 @@ interface AuthContextType {
   can: (capability: Capability) => boolean;
   handleLogin: () => Promise<void>;
   handleLogout: () => Promise<void>;
+  /** Asks the server again whether this browser is signed in (e.g. after a request came back 401). */
+  checkAuth: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

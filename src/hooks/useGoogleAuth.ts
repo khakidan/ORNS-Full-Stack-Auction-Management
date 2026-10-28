@@ -77,5 +77,5 @@ export function useGoogleAuth() {
     await checkProviderAuth();
   };
 
-  return { authenticated, user, signedOutReason, handleLogin, handleLogout };
+  return { authenticated, user, signedOutReason, handleLogin, handleLogout, checkAuth: checkProviderAuth };
 }

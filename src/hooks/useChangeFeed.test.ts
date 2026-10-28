@@ -69,6 +69,57 @@ describe("useChangeFeed", () => {
     expect(toast.info).toHaveBeenCalledWith("dan@orns.org undid an action: Checked in bidder 104.", expect.anything());
   });
 
+  it("asks the app to re-check its sign-in when the server says it's signed out (401) - once, not on every tick", async () => {
+    const onSignedOut = vi.fn();
+    fetchMock.mockResolvedValue({ ok: false, status: 401 } as Response);
+
+    renderHook(() => useChangeFeed(true, vi.fn(), undefined, onSignedOut));
+    await act(async () => {});
+    await act(async () => { await vi.advanceTimersByTimeAsync(15000); });
+
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
+    expect(onSignedOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops polling once the app knows it's signed out", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 401 } as Response);
+    let enabled = true;
+    const { rerender } = renderHook(() => useChangeFeed(enabled, vi.fn(), undefined, () => { enabled = false; }));
+    await act(async () => {});
+    rerender();
+    const calls = fetchMock.mock.calls.length;
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(15000); });
+
+    expect(fetchMock.mock.calls.length).toBe(calls);
+  });
+
+  it("reports a later sign-out again after the sign-in came back", async () => {
+    const onSignedOut = vi.fn();
+    const signedOutAnswer = { ok: false, status: 401 } as Response;
+    fetchMock
+      .mockResolvedValueOnce(signedOutAnswer)
+      .mockResolvedValueOnce(answer({ version: 1, changed: [], reset: false }))
+      .mockResolvedValueOnce(signedOutAnswer);
+
+    const { result } = renderHook(() => useChangeFeed(true, vi.fn(), undefined, onSignedOut));
+    await act(async () => {});
+    await act(async () => { await result.current(); });
+    await act(async () => { await result.current(); });
+
+    expect(onSignedOut).toHaveBeenCalledTimes(2);
+  });
+
+  it("doesn't treat other failures (a 500, a restart) as signed out", async () => {
+    const onSignedOut = vi.fn();
+    fetchMock.mockResolvedValue({ ok: false, status: 503 } as Response);
+
+    renderHook(() => useChangeFeed(true, vi.fn(), undefined, onSignedOut));
+    await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+
+    expect(onSignedOut).not.toHaveBeenCalled();
+  });
+
   it("does nothing while signed out", async () => {
     renderHook(() => useChangeFeed(false, vi.fn()));
     await act(async () => { await vi.advanceTimersByTimeAsync(15000); });

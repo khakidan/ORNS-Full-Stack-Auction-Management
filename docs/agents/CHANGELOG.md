@@ -6,6 +6,8 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **An open tab notices when its sign-in has ended.** The live-refresh check (`GET /api/changes`, every 5 seconds) ignored a 401, so a tab whose sign-in ended while it was open - the B6 deploy, an expired session, a volunteer's access ending at Close - kept looking signed in until the next action failed, and kept polling: after B6 one forgotten tab logged about 600 401 warnings in Cloud Run in under two hours. Now a 401 calls `onSignedOut` once (`useChangeFeed.ts`), which `AuctionContext` wires to the new `checkAuth` on `AuthContext` (`useGoogleAuth`'s `checkProviderAuth`): the app re-checks, shows the sign-in screen (or the volunteer thank-you screen), and the polling stops. Frontend 806 -> 811, total 1699 -> 1704.
+
 - **B14 - The tests pass however they're run.** `vitest.config.ts` starts every test worker with `--no-experimental-webstorage` (`execArgv`), so `npx vitest run src`, one file run by hand, or an editor's test runner no longer fail 32 frontend tests on Node's own `localStorage`. `npm run test:quiet` no longer needs `NODE_OPTIONS` (so it also works outside a POSIX shell); `testing-batches.md` and `README.md` updated.
 
 - **Audit items B7-B10.**
