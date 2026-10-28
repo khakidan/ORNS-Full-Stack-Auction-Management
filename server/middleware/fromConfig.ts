@@ -44,10 +44,11 @@ export const BID_MANAGEMENT_FIELDS: ConfigFields = {
   ticketPrice: "ticketPrice",
 };
 
-/** Receipts and emails also read the items. */
+/** Receipts and emails also read the items, and file receipts in this year's folder. */
 export const RECEIPT_FIELDS: ConfigFields = {
   ...BID_MANAGEMENT_FIELDS,
   itemsSpreadsheetId: "auctionItemsSpreadsheetId",
+  receiptFolderId: "receiptFolderId",
 };
 
 /** Attendee List routes: the Auction Tickets spreadsheet. */

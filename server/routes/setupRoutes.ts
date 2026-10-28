@@ -9,6 +9,7 @@ import { archiveAuctionSpreadsheets } from '../services/archiveService';
 import { isDriveId } from '../services/driveService';
 import { getActionHistorySpreadsheetId } from '../services/actionHistoryStore';
 import { updateSharedConfigFields } from '../services/configService';
+import { upsertSetting } from '../services/settingsService';
 import { CONFIG_KEY, noteChange } from '../utils/changeFeed';
 import { AlreadyRunningError, runIfIdle } from '../utils/asyncLock';
 
@@ -70,6 +71,20 @@ export default function createSetupRouter() {
           } catch (err: any) {
             configSaveError = `The new folders were created but couldn't be saved in the configuration (${err?.message || err}). Set Receipts Folder ID to ${result.bidderReceiptsFolderId} and For Print Folder ID to ${result.forPrintFolderId} in Settings.`;
             onLog(configSaveError);
+          }
+          // The Bid Management scripts read their own copy from the
+          // spreadsheet's _Settings tab (receipts pass the Config's folder
+          // now, but anything else reading it must not see last year's) -
+          // ROADMAP B1.
+          if (!configSaveError) {
+            try {
+              await upsertSetting(sheets, { spreadsheetId: bidManagementSpreadsheetId, key: "receiptFolderID", value: result.bidderReceiptsFolderId, description: "Receipts Folder ID" });
+              await upsertSetting(sheets, { spreadsheetId: bidManagementSpreadsheetId, key: "forPrintFolderID", value: result.forPrintFolderId, description: "For Print Folder ID" });
+              onLog("Saved the new folders in the Bid Management spreadsheet's _Settings tab.");
+            } catch (err: any) {
+              configSaveError = `The new folders were saved in the configuration, but the Bid Management spreadsheet's _Settings tab couldn't be updated (${err?.message || err}). Open Settings and click Save Configuration.`;
+              onLog(configSaveError);
+            }
           }
 
           await logAction(req, {

@@ -13,12 +13,18 @@ import { quoteSheetName } from "../utils/rangeUtils";
  * since the bridge functions report their own errors as
  * `{ success: false, error }` rather than failing the run.
  */
-export async function createIndividualReceipt(script: script_v1.Script, scriptId: string, bidderId: string, receiptData: BidderReceiptData) {
-    // folderID (2nd position) has never actually been wired through from
-    // Node - kept as an explicit null so receiptData lands in the same 3rd
-    // position Class_GoogleAIStudio.gs's function signature expects,
-    // rather than silently shifting it.
-    return runAppsScript(script, scriptId, "apiCreateIndividualReceipt", [String(bidderId), null, receiptData]);
+export async function createIndividualReceipt(script: script_v1.Script, scriptId: string, bidderId: string, receiptData: BidderReceiptData, folderId?: string) {
+    return runAppsScript(script, scriptId, "apiCreateIndividualReceipt", [String(bidderId), receiptFolderArg(folderId), receiptData]);
+}
+
+/**
+ * The receipt folder to hand the script: the Config's, so receipts go to
+ * this year's Bidder Receipts folder (ROADMAP B1). Without one (null), the
+ * script falls back to `receiptFolderID` in the spreadsheet's `_Settings`
+ * tab, which only Save Configuration and Setup New Auction Year update.
+ */
+function receiptFolderArg(folderId?: string): string | null {
+    return folderId?.trim() || null;
 }
 
 /**
@@ -32,8 +38,9 @@ export const RECEIPTS_PER_PART = 25;
  * Writes `receipts` into one PDF named `fileName`. (Without a file name,
  * the script makes its old "1st Half"/"2nd Half" pair instead.)
  */
-export async function createAllReceipts(script: script_v1.Script, scriptId: string, receipts: BidderReceiptData[], fileName?: string) {
-    return runAppsScript(script, scriptId, "apiCreateAllReceipts", fileName ? [null, receipts, fileName] : [null, receipts]);
+export async function createAllReceipts(script: script_v1.Script, scriptId: string, receipts: BidderReceiptData[], fileName?: string, folderId?: string) {
+    const folder = receiptFolderArg(folderId);
+    return runAppsScript(script, scriptId, "apiCreateAllReceipts", fileName ? [folder, receipts, fileName] : [folder, receipts]);
 }
 
 /** e.g. "Receipts - Part 2 of 4 (Garcia - Lopez)" */
