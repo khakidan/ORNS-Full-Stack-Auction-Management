@@ -2,13 +2,11 @@ import { Router } from "express";
 import { google } from "googleapis";
 import { getSweeperAuthClient } from "../services/paypalSweeperJob";
 import { getAdminFirestore } from "../services/firebaseAdmin";
-import { getSharedConfig } from "../services/configService";
 import { fluentFormsApiFromEnv } from "../services/fluentFormsApi";
-import { PayPalService } from "../services/paypalService";
-import { checkTicketPayment } from "../services/ticketPaymentCheck";
+import { checkTicketPayment, paypalForTickets } from "../services/ticketPaymentCheck";
 import { purchaseFromWebhook } from "../services/fluentFormsWebhookPayload";
 import { TicketPurchase } from "../services/ticketPurchaseRow";
-import { upsertTicketPurchase } from "../services/ticketPurchaseService";
+import { ticketWriteMode, upsertTicketPurchase } from "../services/ticketPurchaseService";
 import { secretMatches } from "../utils/sharedSecret";
 
 /** Largest body accepted; the form's selected fields are well under 2 KB. */
@@ -39,14 +37,6 @@ export function _resetWebhookRateLimitForTesting(): void {
 }
 
 /**
- * "write" once the switch-over is made (ROADMAP rollout step 3); until
- * then "compare" - the shadow mode, which reports and writes nothing.
- */
-export function ticketWebhookMode(): "write" | "compare" {
-  return process.env.FLUENT_FORMS_TICKETS_MODE?.trim().toLowerCase() === "write" ? "write" : "compare";
-}
-
-/**
  * What the app read from a delivery - numbers and labels only, never a
  * name, email or phone - so a test shows the parsed values in Cloud
  * Logging whatever the outcome (an "exists" never builds the row): a
@@ -72,8 +62,7 @@ async function checkPayment(sheets: ReturnType<typeof google.sheets>, entryId: s
   const fluentForms = fluentFormsApiFromEnv();
   if (!fluentForms) return { outcome: "not-configured" };
   try {
-    const paypal = new PayPalService({ isSandbox: (await getSharedConfig()).paypalIsSandbox !== false });
-    return await checkTicketPayment(sheets, entryId, { mode, fluentForms, paypal });
+    return await checkTicketPayment(sheets, entryId, { mode, fluentForms, paypal: await paypalForTickets() });
   } catch (error: any) {
     console.error("[FluentFormsWebhook] Payment check failed:", error?.message || error);
     return { outcome: "error", error: String(error?.message || error).slice(0, 500) };
@@ -128,7 +117,7 @@ export default function createWebhookRouter() {
     const purchase = purchaseFromWebhook(req.body);
     if ("error" in purchase) return res.status(400).json({ error: purchase.error });
 
-    const mode = ticketWebhookMode();
+    const mode = ticketWriteMode();
     try {
       const client = await getSweeperAuthClient();
       if (!client) {

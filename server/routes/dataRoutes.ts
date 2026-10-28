@@ -12,6 +12,7 @@ import createActionHistoryRouter from './actionHistoryRoutes';
 import createVolunteerRouter from './volunteerRoutes';
 import createChangesRouter from './changesRoutes';
 import createConfigRouter from './configRoutes';
+import createTicketPollRouter from './ticketPollRoutes';
 
 /**
  * The signed-in "/api" routes that aren't live-auction transactions
@@ -23,6 +24,7 @@ export default function createDataRouter() {
   router.use(requireAuth);
   router.use(createSyncRouter());
   router.use(createSweeperRouter());
+  router.use(createTicketPollRouter());
   router.use(createItemRouter());
   router.use(createSheetsProxyRouter());
   router.use(createDriveRouter());
