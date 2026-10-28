@@ -2,7 +2,7 @@ import { Request } from "express";
 import { sheets_v4 } from "googleapis";
 import { sheetsFor } from "../utils/googleClients";
 import { getSharedConfig } from "./configService";
-import { logAction } from "./actionLog";
+import { logAction, ActionEntry } from "./actionLog";
 import { withLock } from "../utils/asyncLock";
 import { clearCacheForSpreadsheet } from "../utils/sheetCache";
 import { BIDDER_COL } from "../utils/sheetColumns";
@@ -340,10 +340,20 @@ export async function syncBiddersFromTickets(req: Request, options: { background
     if (now - lastBackgroundRunAt < BACKGROUND_SYNC_INTERVAL_MS) return NOTHING_CHANGED;
     lastBackgroundRunAt = now;
   }
+  return syncBiddersWith(sheetsFor(req), (entry) => logAction(req, entry));
+}
+
+/**
+ * The same sync for work the server does with no person asking - a ticket
+ * bought on the website (ROADMAP W2): `sheets` is the server's own Google
+ * access, and `record` writes its Action History rows (logSystemAction).
+ * Never throws, like syncBiddersFromTickets.
+ */
+export async function syncBiddersWith(sheets: sheets_v4.Sheets, record: (entry: ActionEntry) => Promise<void>): Promise<BidderSyncResult> {
   try {
     const config = await getSharedConfig();
     if (!config.bidManagementSpreadsheetId || !config.auctionTicketsSpreadsheetId) return NOTHING_CHANGED;
-    const result = await syncBidderNamesWithTickets(sheetsFor(req), {
+    const result = await syncBidderNamesWithTickets(sheets, {
       spreadsheetId: config.bidManagementSpreadsheetId,
       ticketsSpreadsheetId: config.auctionTicketsSpreadsheetId,
       bidderNumbersSheet: config.bidderNumbersSheet,
@@ -351,7 +361,7 @@ export async function syncBiddersFromTickets(req: Request, options: { background
     });
     const describe = (n: { firstName: string; lastName: string; email: string }) => `${`${n.firstName} ${n.lastName}`.trim()} <${n.email}>`;
     if (result.renamed.length) {
-      await logAction(req, {
+      await record({
         area: "Bid Management",
         action: "Update bidders from tickets",
         target: result.renamed.map((r) => `Bidder ${r.id}`).join(", "),
@@ -362,7 +372,7 @@ export async function syncBiddersFromTickets(req: Request, options: { background
       });
     }
     if (result.added.length) {
-      await logAction(req, {
+      await record({
         area: "Bid Management",
         action: "Add bidders from tickets",
         target: result.added.map((a) => `Bidder ${a.id}`).join(", "),

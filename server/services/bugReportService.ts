@@ -2,6 +2,7 @@ import { drive_v3, sheets_v4 } from "googleapis";
 import fsPromises from "fs/promises";
 import path from "path";
 import { Readable } from "stream";
+import { sanitizeForSheetFormula } from "../utils/sheetFormula";
 import { BugReportListItem, BugReportPayload } from "../../src/types";
 
 /** Column order the whole module writes/reads Bug-Reports rows in - see appendBugReportToSheet below for the write side. */
@@ -32,20 +33,6 @@ export function buildReportFilename(report: Pick<BugReportPayload, "timestamp" |
 function formatConsoleActivityForFile(entries: BugReportPayload["consoleActivity"]): string {
   if (entries.length === 0) return "(none captured)";
   return entries.map((e) => `- [${e.timestamp}] **${e.level.toUpperCase()}**: ${e.message}`).join("\n");
-}
-
-/**
- * Neutralizes spreadsheet formula injection for a value about to be
- * written with valueInputOption: "USER_ENTERED" - this endpoint accepts
- * unauthenticated, unsanitized free text (POST /api/bug-reports/ is
- * deliberately open so a broken session can still be reported), and
- * Sheets interprets a leading =, +, -, or @ as a formula once a staff
- * member opens the Bug-Reports sheet. Prefixing with a plain quote keeps
- * Sheets treating the cell as literal text while leaving the visible
- * value unchanged.
- */
-function sanitizeForSheetFormula(value: string): string {
-  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
 }
 
 export function buildReportMarkdown(report: BugReportPayload, screenshotFilename: string | null): string {
