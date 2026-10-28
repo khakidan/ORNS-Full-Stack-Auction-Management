@@ -163,9 +163,10 @@ production values) is set on the `orns-auction-manager-gh` service in
 the Cloud Run console, not in any file in this repo. Since 2026-10-28
 the secret ones - `GOOGLE_CLIENT_SECRET`, `PAYPAL_CLIENT_SECRET`,
 `SESSION_SECRET`, `GEMINI_API_KEY`, `SWEEPER_TRIGGER_SECRET`,
-`FLUENT_FORMS_WEBHOOK_SECRET` (and `FLUENT_FORMS_API_PASSWORD`) - are
-Secret Manager secrets of the same name, referenced by the service as
-`<NAME>:latest` (Variables & Secrets > "Secrets exposed as environment
+`FLUENT_FORMS_WEBHOOK_SECRET` - are Secret Manager secrets of the same
+name, referenced by the service as `<NAME>:latest`, and
+`FLUENT_FORMS_API_PASSWORD` comes from the secret
+`fluent-forms-api-password` (Variables & Secrets > "Secrets exposed as environment
 variables"); the service account
 `firebase-adminsdk-fbsvc@orns-auction-bid-management.iam.gserviceaccount.com`
 has Secret Accessor on each. To change one, add a new version of the
@@ -234,8 +235,9 @@ new website row always starts Pending. Set-up:
     **View Entries** (`fluentform_entries_viewer`) and **View Payments**
     (`fluentform_view_payments`) for the Auction Tickets form. On its
     profile, create an **Application Password**.
-2.  Put the password in Secret Manager and expose it to the service as
-    `FLUENT_FORMS_API_PASSWORD`; set `FLUENT_FORMS_SITE_URL=https://www.orns.org`
+2.  Put the password in Secret Manager (it's `fluent-forms-api-password`)
+    and expose it to the service as `FLUENT_FORMS_API_PASSWORD` - the
+    variable's name, not the secret's, is what the app reads; set `FLUENT_FORMS_SITE_URL=https://www.orns.org`
     and `FLUENT_FORMS_API_USER` to the user's login.
 3.  In the PayPal developer dashboard, the app whose credentials the
     service uses (`PAYPAL_CLIENT_ID`) needs **Transaction Search** turned
