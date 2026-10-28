@@ -82,3 +82,13 @@ export function paymentColumnsForSheet(sheet: string): PaymentColumnSet {
     ? { paymentMethod: "T", paymentStatus: "U", totalPaid: "V" }
     : { paymentMethod: "Q", paymentStatus: "R", totalPaid: "S" };
 }
+
+/**
+ * The Fluent Forms entry ID of the purchase that made a "tickets" row
+ * (ROADMAP W1): column W, the first free one after the payment columns
+ * (T-V). Written by the ticket form's Sheets feed (and later by the
+ * webhook and poll, W2-W5), which match rows by it - never by name or
+ * email. Blank for walk-ins and rows added in the app. Only the "tickets"
+ * sheet has it; staff/sponsor tickets don't come from the form.
+ */
+export const FORM_ENTRY_ID_COLUMN = { letter: "W", index: 22 } as const;

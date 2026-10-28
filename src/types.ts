@@ -54,6 +54,8 @@ export interface Attendee {
   paymentMethod: string;
   paymentStatus: string;
   totalPaid: string;
+  /** The Fluent Forms entry that bought this ticket ("tickets" sheet only; blank when added another way) - ROADMAP W1. */
+  formEntryId?: string;
 }
 
 export interface GoogleTokens {

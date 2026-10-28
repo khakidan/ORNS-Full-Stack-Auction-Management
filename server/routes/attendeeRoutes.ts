@@ -54,6 +54,7 @@ export function badgeFields(a: Attendee): Attendee {
     ticketsPurchased: "",
     paymentMethod: "",
     totalPaid: "",
+    formEntryId: "",
     guestsInfo: a.guestsInfo.map((g) => ({ ...g, email: "" })),
   };
 }

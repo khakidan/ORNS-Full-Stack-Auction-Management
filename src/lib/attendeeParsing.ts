@@ -1,4 +1,5 @@
 import { Attendee, Guest } from "@/types";
+import { FORM_ENTRY_ID_COLUMN } from "./attendeeSheetColumns";
 
 /**
  * Parses raw rows from one ticket-purchase sheet ("tickets",
@@ -44,7 +45,8 @@ export function parseAttendeeRows(sheetName: string, values: string[][]): Attend
         guestsInfo: guests,
         paymentMethod: isGeneral ? (pm?.toString() || "") : "Comp",
         paymentStatus: isGeneral ? (ps?.toString() || "") : "Paid",
-        totalPaid: isGeneral ? (tp?.toString() || "") : "$0"
+        totalPaid: isGeneral ? (tp?.toString() || "") : "$0",
+        formEntryId: isGeneral ? (row[FORM_ENTRY_ID_COLUMN.index]?.toString().trim() || "") : ""
       };
     })
     .filter((a: Attendee) => a.firstName || a.lastName);
