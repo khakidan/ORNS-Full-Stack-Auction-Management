@@ -160,7 +160,17 @@ The Settings page's **Apps Script Versions** card shows whether each live script
 
 Production configuration (all the environment variables above, with
 production values) is set on the `orns-auction-manager-gh` service in
-the Cloud Run console, not in any file in this repo. The server binds
+the Cloud Run console, not in any file in this repo. Since 2026-10-28
+the secret ones - `GOOGLE_CLIENT_SECRET`, `PAYPAL_CLIENT_SECRET`,
+`SESSION_SECRET`, `GEMINI_API_KEY`, `SWEEPER_TRIGGER_SECRET`,
+`FLUENT_FORMS_WEBHOOK_SECRET` (and `FLUENT_FORMS_API_PASSWORD`) - are
+Secret Manager secrets of the same name, referenced by the service as
+`<NAME>:latest` (Variables & Secrets > "Secrets exposed as environment
+variables"); the service account
+`firebase-adminsdk-fbsvc@orns-auction-bid-management.iam.gserviceaccount.com`
+has Secret Accessor on each. To change one, add a new version of the
+secret and deploy a new revision (a running instance keeps the value it
+started with). Never add one back as a plain variable. The server binds
 `0.0.0.0:$PORT`; Cloud Run terminates HTTPS in front of it, and
 `app.set("trust proxy", 1)` is what lets Express treat those requests as
 secure for the `orns_session` cookie.
