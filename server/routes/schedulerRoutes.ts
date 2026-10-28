@@ -1,6 +1,6 @@
 import { Router } from "express";
-import crypto from "crypto";
 import { runPaypalSweep } from "../services/paypalSweeperJob";
+import { secretMatches } from "../utils/sharedSecret";
 
 /**
  * Endpoints called by Google Cloud Scheduler, not by people - so no
@@ -12,13 +12,6 @@ import { runPaypalSweep } from "../services/paypalSweeperJob";
  * The worst a leaked secret allows is running a sweep early - the same
  * thing the in-app "Run Sweep Now" button does.
  */
-function secretMatches(provided: unknown, expected: string): boolean {
-  if (typeof provided !== "string") return false;
-  const a = crypto.createHash("sha256").update(provided).digest();
-  const b = crypto.createHash("sha256").update(expected).digest();
-  return crypto.timingSafeEqual(a, b);
-}
-
 export default function createSchedulerRouter() {
   const router = Router();
 

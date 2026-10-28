@@ -24,6 +24,8 @@ export interface TicketPurchase {
   paymentStatus: string;
   /** Order total in dollars. */
   total: number;
+  /** The payment's transaction ID (PayPal's, for an online payment), for W4 to check with PayPal; not written to the row. */
+  transactionId?: string;
 }
 
 export interface TicketPurchaseGuest {

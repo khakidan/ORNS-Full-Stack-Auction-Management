@@ -14,6 +14,7 @@ import createProductionRouter from './routes/productionRoutes';
 import createAppsScriptRouter from './routes/appsScriptRoutes';
 import createBugReportRouter from './routes/bugReportRoutes';
 import createSchedulerRouter from './routes/schedulerRoutes';
+import createWebhookRouter from './routes/webhookRoutes';
 import createVolunteerAuthRouter from './routes/volunteerAuthRoutes';
 
 // Middleware
@@ -119,6 +120,8 @@ app.use("/api/bundle", createBundleRouter());
 // requireAuth.integration.test.ts), so registering this router first is
 // what actually lets its own routes stay reachable without a session.
 app.use("/api/bug-reports", createBugReportRouter());
+// Fluent Forms (no session - its own shared-secret check); same reason.
+app.use("/api/webhooks", createWebhookRouter());
 // Cloud Scheduler (no session - its own shared-secret check).
 app.use("/internal", createSchedulerRouter());
 app.use("/api", createBidRouter());
