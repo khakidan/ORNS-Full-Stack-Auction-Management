@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { LoadingButton } from "@/components/ui/LoadingButton";
 import { CheckCircle2, AlertTriangle, RefreshCw, Loader2, PauseCircle } from "lucide-react";
-import { useTicketPurchaseStatus } from "@/hooks/useTicketPurchaseStatus";
+import { TicketPurchaseStatusState } from "@/hooks/useTicketPurchaseStatus";
 import { PENDING_DAYS, pendingTooLong, ticketStatusProblems } from "@/lib/ticketPurchaseStatus";
 import { Attendee } from "@/types";
 import { cn } from "@/lib/utils";
@@ -23,8 +23,8 @@ const WEBHOOK_OUTCOMES: Record<string, string> = {
 
 interface TicketPurchaseStatusCardProps {
   attendees: Attendee[];
-  /** Reloads the attendee list after "Check now" added a row. */
-  onAdded: () => void;
+  /** From useTicketPurchaseStatus - the page holds it, so the tab's attention dot and this card share one status. */
+  purchases: TicketPurchaseStatusState;
 }
 
 /**
@@ -33,8 +33,8 @@ interface TicketPurchaseStatusCardProps {
  * missed webhook), the review list, and tickets still Pending after a
  * week - so a failure shows up days before the auction, not at check-in.
  */
-export default function TicketPurchaseStatusCard({ attendees, onAdded }: TicketPurchaseStatusCardProps) {
-  const { status, loading, checking, checkNow } = useTicketPurchaseStatus(onAdded);
+export default function TicketPurchaseStatusCard({ attendees, purchases }: TicketPurchaseStatusCardProps) {
+  const { status, loading, checking, checkNow } = purchases;
 
   if (loading) {
     return (

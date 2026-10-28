@@ -5,13 +5,16 @@ import { toast } from "sonner";
 
 const POLL_INTERVAL_MS = 60000;
 
+export type TicketPurchaseStatusState = ReturnType<typeof useTicketPurchaseStatus>;
+
 /**
- * Drives the Tickets page's website purchases card (ROADMAP W6): the last
+ * Drives the Tickets page's Website Purchases tab (ROADMAP W6): the last
  * webhook, the poll's last runs and what needs staff. Refreshes every
- * minute; "Check now" runs the poll on demand and calls `onAdded` when it
- * added a row, so the attendee list catches up.
+ * minute while `enabled` (staff who can see the tab); "Check now" runs the
+ * poll on demand and calls `onAdded` when it added a row, so the attendee
+ * list catches up.
  */
-export function useTicketPurchaseStatus(onAdded?: () => void) {
+export function useTicketPurchaseStatus(onAdded?: () => void, enabled = true) {
   const [status, setStatus] = useState<TicketPurchaseStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
@@ -27,10 +30,11 @@ export function useTicketPurchaseStatus(onAdded?: () => void) {
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     refresh();
     const interval = setInterval(refresh, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [refresh]);
+  }, [refresh, enabled]);
 
   const checkNow = async () => {
     setChecking(true);

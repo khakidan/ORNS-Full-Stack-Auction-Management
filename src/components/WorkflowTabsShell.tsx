@@ -10,6 +10,18 @@ export interface WorkflowTab {
   value: string;
   label: string;
   content: ReactNode;
+  /** Shown after the label - e.g. an AttentionDot when the tab has something to look at. */
+  indicator?: ReactNode;
+}
+
+/** A pulsing amber dot for a tab that needs attention (steady when the browser asks for reduced motion). */
+export function AttentionDot({ label }: { label: string }) {
+  return (
+    <span role="img" aria-label={label} title={label} className="relative flex h-2.5 w-2.5">
+      <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75 motion-safe:animate-ping" />
+      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
+    </span>
+  );
 }
 
 interface WorkflowTabsShellProps {
@@ -82,6 +94,8 @@ export function WorkflowTabsShell({
             {tabs.map((tab) => (
               <TabsTrigger key={tab.value} value={tab.value} className="gap-2 px-4 py-2">
                 {tab.label}
+                {/* The space keeps the indicator's name a separate word for screen readers. */}
+                {tab.indicator && <>{" "}{tab.indicator}</>}
               </TabsTrigger>
             ))}
           </TabsList>
