@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { fromConfig, ITEM_DOCUMENT_FIELDS, BIDDER_LABEL_FIELDS } from '../middleware/fromConfig';
 import { isAppsScriptFailure, runAppsScript } from '../utils/appsScriptRun';
 import { AlreadyRunningError, runIfIdle } from '../utils/asyncLock';
 import { google } from 'googleapis';
@@ -46,6 +47,8 @@ export default function createProductionRouter() {
     }
   };
 
+  const itemDocumentConfig = fromConfig(ITEM_DOCUMENT_FIELDS);
+
   /**
    * ITEM ENTRY SPREADSHEET COMMANDS
    *
@@ -78,35 +81,35 @@ export default function createProductionRouter() {
     }
   };
 
-  router.post("/item-entry/bundling-doc", (req, res, next) => {
+  router.post("/item-entry/bundling-doc", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateBundlingDoc");
   });
 
-  router.post("/item-entry/item-labels", (req, res, next) => {
+  router.post("/item-entry/item-labels", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateItemLabels");
   });
 
-  router.post("/item-entry/slideshow", (req, res, next) => {
+  router.post("/item-entry/slideshow", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateSlideshow");
   });
 
-  router.post("/item-entry/bidding-guide-cover", (req, res, next) => {
+  router.post("/item-entry/bidding-guide-cover", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateBiddingGuideCoverPage");
   });
 
-  router.post("/item-entry/bidding-guide-inner", (req, res, next) => {
+  router.post("/item-entry/bidding-guide-inner", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateBiddingGuideInnerPages");
   });
 
-  router.post("/item-entry/bid-sheets", (req, res, next) => {
+  router.post("/item-entry/bid-sheets", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateBidSheets");
   });
 
-  router.post("/item-entry/catalog", (req, res, next) => {
+  router.post("/item-entry/catalog", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateCatalog");
   });
 
-  router.post("/item-entry/table-tents", (req, res, next) => {
+  router.post("/item-entry/table-tents", itemDocumentConfig, (req, res, next) => {
     handleItemEntryDoc(req, res, next, "apiCreateTableTents");
   });
 
@@ -114,7 +117,7 @@ export default function createProductionRouter() {
    * TICKETS SPREADSHEET COMMANDS
    */
 
-  router.post("/tickets/bidder-labels", async (req, res, next) => {
+  router.post("/tickets/bidder-labels", fromConfig(BIDDER_LABEL_FIELDS), async (req, res, next) => {
     const { folderId, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId } = req.body;
 
     // Real auction workflow (see CHANGELOG.md): bidder labels get printed

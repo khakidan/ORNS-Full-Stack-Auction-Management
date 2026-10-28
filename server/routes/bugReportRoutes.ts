@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
+import { fromConfig, BUG_REPORT_FIELDS, BUG_REPORT_ADMIN_FIELDS } from '../middleware/fromConfig';
 import { requirePermission } from '../middleware/requirePermission';
 import { google } from "googleapis";
 import { getAuthenticatedClient } from "../services/oauth";
@@ -60,7 +61,7 @@ export default function createBugReportRouter() {
   // session are rate-limited per IP and can't attach a screenshot, every
   // text field is length-capped, and `type`/`timestamp` are validated
   // rather than written as sent.
-  router.post("/", async (req: Request, res: Response) => {
+  router.post("/", fromConfig(BUG_REPORT_FIELDS), async (req: Request, res: Response) => {
     const { title, description, type, timestamp, route, appState, browserInfo, consoleActivity, screenshotBase64, bugReportsSpreadsheetId, bugReportsFolderId } = req.body;
 
     if (!title || !description || !type) {
@@ -139,7 +140,7 @@ export default function createBugReportRouter() {
   // Viewing/resolving reports is a real admin action against a real
   // spreadsheet, unlike submission above - gated behind the normal
   // session the same as every other data-reading route in this app.
-  router.get("/list", requireAuth, requirePermission("settings"), async (req: Request, res: Response, next: NextFunction) => {
+  router.get("/list", requireAuth, requirePermission("settings"), fromConfig(BUG_REPORT_ADMIN_FIELDS, "query"), async (req: Request, res: Response, next: NextFunction) => {
     const spreadsheetId = req.query.spreadsheetId as string;
     if (!spreadsheetId) {
       return res.status(400).json({ error: "spreadsheetId is required" });
@@ -157,7 +158,7 @@ export default function createBugReportRouter() {
     }
   });
 
-  router.post("/resolve", requireAuth, requirePermission("settings"), async (req: Request, res: Response, next: NextFunction) => {
+  router.post("/resolve", requireAuth, requirePermission("settings"), fromConfig(BUG_REPORT_ADMIN_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
     const { spreadsheetId, reportId } = req.body;
     if (!spreadsheetId || !reportId) {
       return res.status(400).json({ error: "spreadsheetId and reportId are required" });

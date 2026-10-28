@@ -18,6 +18,7 @@ import { authCookieHeader } from "./helpers/session";
 import { _resetBugReportRateLimitForTesting } from "../routes/bugReportRoutes";
 import { _resetAdminNotificationsForTesting } from "../services/adminNotifications";
 import { getAuthenticatedClient } from "../services/oauth";
+import { getAdminFirestore } from "../services/firebaseAdmin";
 
 // The stored background sign-in lives in Firestore; tests never reach it.
 vi.mock("../services/paypalSweeperJob", async (importOriginal) => ({
@@ -47,6 +48,11 @@ const validBody = {
   screenshotBase64: null,
 };
 
+/** The server takes the Bug Reports spreadsheet from the Config, never the request (ROADMAP B12). */
+async function configureBugReportsSheet(id = "sheet-abc") {
+  await getAdminFirestore().collection("settings").doc("global").set({ bugReportsSpreadsheetId: id });
+}
+
 async function listBugReportFiles(): Promise<string[]> {
   try {
     return await fs.readdir(BUG_REPORTS_DIR);
@@ -74,7 +80,8 @@ describe("POST /api/bug-reports", () => {
     expect(res.body.error).toContain("required");
   });
 
-  it("saves to the configured Bug-Reports spreadsheet when authenticated and a spreadsheet ID is provided", async () => {
+  it("saves to the Config's Bug-Reports spreadsheet when authenticated", async () => {
+    await configureBugReportsSheet();
     const res = await request(app)
       .post("/api/bug-reports")
       .set(authHeader)
@@ -102,6 +109,7 @@ describe("POST /api/bug-reports", () => {
   });
 
   it("neutralizes spreadsheet formula injection in free-text fields before writing to the sheet - this endpoint is unauthenticated, so an attacker's =IMPORTXML(...)/=HYPERLINK(...) payload would otherwise execute for whichever staff member later opens the Bug-Reports sheet", async () => {
+    await configureBugReportsSheet();
     const res = await request(app)
       .post("/api/bug-reports")
       .set(authHeader)
@@ -157,6 +165,7 @@ describe("POST /api/bug-reports", () => {
   });
 
   it("writes the timestamp and Report ID columns as validated values, never as sent - they skipped the formula guard (ROADMAP.md M1)", async () => {
+    await configureBugReportsSheet();
     const res = await request(app)
       .post("/api/bug-reports")
       .set(authHeader)
@@ -168,6 +177,7 @@ describe("POST /api/bug-reports", () => {
   });
 
   it("caps each free-text field so one request can't write megabytes of text", async () => {
+    await configureBugReportsSheet();
     const res = await request(app).post("/api/bug-reports").set(authHeader).send({ ...validBody, description: "x".repeat(200_000), bugReportsSpreadsheetId: "sheet-abc" });
     expect(res.status).toBe(200);
     expect(lastAppendedRow[5]).toHaveLength(50_000);
@@ -452,6 +462,7 @@ describe("POST /api/bug-reports - 'New Auction Bug Submitted' email to web-admin
   it("emails the administrator when a signed-in user's report is saved to the sheet", async () => {
     const emails = captureEmails();
 
+    await configureBugReportsSheet();
     const res = await request(app).post("/api/bug-reports").set(authHeader).send({ ...validBody, bugReportsSpreadsheetId: "sheet-abc" });
 
     expect(res.body).toMatchObject({ success: true, storage: "sheet" });
@@ -508,6 +519,7 @@ describe("POST /api/bug-reports - 'New Auction Bug Submitted' email to web-admin
     );
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
+    await configureBugReportsSheet();
     const res = await request(app).post("/api/bug-reports").set(authHeader).send({ ...validBody, bugReportsSpreadsheetId: "sheet-abc" });
 
     expect(res.status).toBe(200);
