@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { fromConfig, SYNC_FIELDS } from '../middleware/fromConfig';
+import { fromConfig, SYNC_FIELDS, BID_MANAGEMENT_ID_FIELDS } from '../middleware/fromConfig';
 import { logAction } from '../services/actionLog';
 import { requirePermission } from '../middleware/requirePermission';
 import { sheetsFor, respondIfNotFound } from '../utils/googleClients';
@@ -40,7 +40,7 @@ export default function createSyncRouter() {
     }
   });
 
-  router.get("/bidders/setup-status", async (req: Request, res: Response, next: NextFunction) => {
+  router.get("/bidders/setup-status", fromConfig(BID_MANAGEMENT_ID_FIELDS, "query"), async (req: Request, res: Response, next: NextFunction) => {
     const spreadsheetId = req.query.spreadsheetId;
     if (typeof spreadsheetId !== "string" || !spreadsheetId) {
       return res.status(400).json({ error: "spreadsheetId is required." });

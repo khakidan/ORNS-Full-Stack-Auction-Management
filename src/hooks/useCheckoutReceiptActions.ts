@@ -65,7 +65,7 @@ export function useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, f
         console.log(`Payment URL: ${data.paymentUrl}`);
       }
       if (data.docId) {
-        window.open(`https://docs.google.com/document/d/${data.docId}/edit`, '_blank');
+        window.open(`https://docs.google.com/document/d/${data.docId}/edit`, '_blank', 'noopener,noreferrer');
       }
     } catch (error: any) {
       toast.error(error instanceof ServerUnreachableError ? NO_ANSWER_MESSAGE : error.message);

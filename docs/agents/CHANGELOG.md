@@ -6,6 +6,15 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **B14 - The tests pass however they're run.** `vitest.config.ts` starts every test worker with `--no-experimental-webstorage` (`execArgv`), so `npx vitest run src`, one file run by hand, or an editor's test runner no longer fail 32 frontend tests on Node's own `localStorage`. `npm run test:quiet` no longer needs `NODE_OPTIONS` (so it also works outside a POSIX shell); `testing-batches.md` and `README.md` updated.
+
+- **Audit items B7-B10.**
+  - **B7 - A bug report is saved and emailed once.** The dialog sends an `idempotencyKey` made once per submit, and `POST /api/bug-reports` saves and emails under `withIdempotency`, so a retry after a slow save gets the first result. A rate-limit refusal or a failed save isn't remembered, so the same report can be sent again later.
+  - **B8 - The remaining writes are in Action History** (with a `notUndoableReason`): every document from `productionRoutes.ts` ("Create auction catalog" and so on - each run makes a new Drive file), the bidder-label route's Bidder-Numbers build when it assigns numbers (also `clearCacheForSpreadsheet`), and resolving a bug report (also `clearCacheForSpreadsheet`).
+  - **B9 - Every `window.open` passes `"noopener,noreferrer"`** (the six that didn't: PayPal dashboard, Drive files, the Bid Management and workflow spreadsheet buttons, receipts). New `server/test/windowOpen.test.ts` scans `src/` so a new one can't leave it out.
+  - **B10 - `GET /api/bidders/setup-status` takes its spreadsheet from the Config** (`fromConfig(BID_MANAGEMENT_ID_FIELDS, "query")`), so a volunteer can't point it at another spreadsheet.
+  - Backend 888 -> 893, total 1694 -> 1699.
+
 - **B11 - The Config lives in one place: the Apps Scripts get it from Node on every run.** They used to read their own copy from a `_Settings` tab that only the browser's Save Configuration kept up to date, so a failed copy or a change made any other way (Setup New Auction Year) left them on stale values.
   - **Bid Management script** no longer reads `_Settings`. `apiCreateIndividualReceipt` / `apiCreateAllReceipts` take a fourth `settings` argument (`{ ornsLogoID }`) next to the receipt folder; `useRunSettings_` (`00_Class_GlobalVariables.gs`) makes them `this.config` for the run. A receipt without a logo in the Config is still made, without the logo. The unused "Configuration Required" strings are gone.
   - **Items script** keeps `_Settings` only for what the Config doesn't have (label template, auction logo, slideshow background); every document call passes `{ ornsLogoID, auctionDevFolderID }`, laid over the tab and winning. **Tickets script** is unchanged (Node already passes its folder).

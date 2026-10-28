@@ -241,6 +241,28 @@ describe("what a signed-in volunteer can do", () => {
     expect(touched.has("bm")).toBe(true);
   });
 
+  it("can't point the setup check at another spreadsheet through the query string (ROADMAP B10)", async () => {
+    const touched = new Set<string>();
+    server.use(http.all(`${SHEETS}/:id`, ({ params }) => { touched.add(String(params.id)); return HttpResponse.json({ sheets: [] }); }));
+    server.use(http.all(`${SHEETS}/:id/*`, ({ params }) => { touched.add(String(params.id)); return HttpResponse.json({ values: [["Live"]] }); }));
+
+    await request(app).get("/api/bidders/setup-status").query({ spreadsheetId: "elsewhere" }).set(volunteerSession());
+
+    expect(touched.has("elsewhere")).toBe(false);
+    expect(touched.has("bm")).toBe(true);
+  });
+
+  it("gets no setup check from the query string while the Config has no spreadsheet (ROADMAP B10)", async () => {
+    fake.docs("settings").set("global", { ...fake.docs("settings").get("global"), bidManagementSpreadsheetId: "" });
+    const touched = new Set<string>();
+    server.use(http.all(`${SHEETS}/:id`, ({ params }) => { touched.add(String(params.id)); return HttpResponse.json({ sheets: [] }); }));
+
+    const res = await request(app).get("/api/bidders/setup-status").query({ spreadsheetId: "elsewhere" }).set(volunteerSession());
+
+    expect(touched.has("elsewhere")).toBe(false);
+    expect(res.status).not.toBe(200);
+  });
+
   it("gets no spreadsheet at all from the request while the Config has none set", async () => {
     fake.docs("settings").set("global", { ...fake.docs("settings").get("global"), bidManagementSpreadsheetId: "" });
     const touched = new Set<string>();

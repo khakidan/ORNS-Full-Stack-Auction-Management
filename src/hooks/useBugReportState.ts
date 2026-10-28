@@ -97,6 +97,9 @@ export function useBugReportState() {
         screenshotBase64,
         bugReportsSpreadsheetId: config.bugReportsSpreadsheetId,
         bugReportsFolderId: config.bugReportsFolderId,
+        // Made once per submit, so postJson's retries reuse it and the
+        // server saves and emails the report once (ROADMAP B7).
+        idempotencyKey: window.crypto.randomUUID(),
       }, "Failed to save bug report");
 
       toast.success("Bug report saved");

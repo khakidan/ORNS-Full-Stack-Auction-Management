@@ -49,7 +49,7 @@ export default function PayPalIntegrationCard({ config, setConfig }: PayPalInteg
         <Button
           variant="outline"
           size="sm"
-          onClick={() => window.open(isSandbox ? PAYPAL_SANDBOX_DASHBOARD_URL : PAYPAL_LIVE_DASHBOARD_URL, "_blank")}
+          onClick={() => window.open(isSandbox ? PAYPAL_SANDBOX_DASHBOARD_URL : PAYPAL_LIVE_DASHBOARD_URL, "_blank", "noopener,noreferrer")}
         >
           <ExternalLink className="w-4 h-4 mr-2" />
           {isSandbox ? "Open PayPal Sandbox Dashboard" : "Open PayPal Business Dashboard"}

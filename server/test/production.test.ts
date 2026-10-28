@@ -10,6 +10,7 @@ import { authCookieHeader } from "./helpers/session";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app";
+import { logAction } from "../services/actionLog";
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
 import { resetHandlersState, productionScriptCallLog,
@@ -139,6 +140,9 @@ describe("Document and Presentation Creation workflow", () => {
         const folderId = (payload as any).folderId;
         const expected = expectedParams ?? [folderId, EXPECTED_DEFAULT_ITEMS, { ornsLogoID: "", auctionDevFolderID: folderId }];
         expect(lastAppsScriptParams).toEqual(expected);
+        // Each run makes a new Drive file, so it's in Action History (ROADMAP B8).
+        const created = vi.mocked(logAction).mock.calls.map(([, e]) => e).filter((e) => e.action.startsWith("Create "));
+        expect(created).toEqual([expect.objectContaining({ area: funcName === "apiCreateBidderLabels" ? "Tickets" : "Auction Items", notUndoableReason: expect.any(String) })]);
       });
 
       it("auth failure - returns 401 when unauthenticated", async () => {
@@ -329,6 +333,10 @@ describe("Document and Presentation Creation workflow", () => {
           { name: "Alice One", number: "102" },
         ],
       ]);
+      // Assigning every bidder number is in Action History (ROADMAP B8).
+      expect(vi.mocked(logAction).mock.calls.map(([, e]) => e)).toContainEqual(expect.objectContaining({
+        area: "Bid Management", action: "Build Bidder-Numbers", summary: expect.stringContaining("assigned 2 bidder number(s)"),
+      }));
     });
 
     it("does NOT rebuild Bidder-Numbers when it already has data - never reassigns a number already printed on a label", async () => {
@@ -356,6 +364,7 @@ describe("Document and Presentation Creation workflow", () => {
 
       expect(response.status).toBe(200);
       expect(ticketsSheetRead).toBe(false);
+      expect(vi.mocked(logAction).mock.calls.map(([, e]) => e.action)).not.toContain("Build Bidder-Numbers");
     });
 
     it("returns a 400 with a real error message when the Auction Tickets spreadsheet ID is missing", async () => {

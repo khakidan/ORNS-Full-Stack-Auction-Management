@@ -19,6 +19,7 @@ import { _resetBugReportRateLimitForTesting } from "../routes/bugReportRoutes";
 import { _resetAdminNotificationsForTesting } from "../services/adminNotifications";
 import { getAuthenticatedClient } from "../services/oauth";
 import { getAdminFirestore } from "../services/firebaseAdmin";
+import { logAction } from "../services/actionLog";
 
 // The stored background sign-in lives in Firestore; tests never reach it.
 vi.mock("../services/paypalSweeperJob", async (importOriginal) => ({
@@ -360,7 +361,8 @@ describe("POST /api/bug-reports/resolve", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ success: true });
     expect(updateRange).toBe("Bug-Reports!C3"); // header row 1 + report-1 row 2 -> report-2 is row 3
-    expect(updateValues).toEqual([["Fixed"]]);
+    expect(updateValues).toEqual([["Fixed"]]);    // Editing the Bug-Reports sheet is in Action History (ROADMAP B8).
+    expect(vi.mocked(logAction)).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ area: "Settings", action: "Resolve bug report", target: "report-2" }));
   });
 
   it("also deletes the report's screenshot from Drive when the row has one, so resolved reports don't leave orphaned images behind", async () => {
@@ -469,6 +471,32 @@ describe("POST /api/bug-reports - 'New Auction Bug Submitted' email to web-admin
     expect(emails).toHaveLength(1);
     expect(emails[0]).toMatchObject({ to: "web-admin@orns.org", subject: "New Auction Bug Submitted" });
     expect(emails[0].body).toContain("Checkout button does nothing");
+  });
+
+  it("saves and emails a resent report once - a retry with the same idempotency key gets the first result (ROADMAP B7)", async () => {
+    const emails = captureEmails();
+    await configureBugReportsSheet();
+    const body = { ...validBody, idempotencyKey: "report-once" };
+
+    const first = await request(app).post("/api/bug-reports").set(authHeader).send(body);
+    const resent = await request(app).post("/api/bug-reports").set(authHeader).send(body);
+
+    expect(first.body).toMatchObject({ success: true, storage: "sheet" });
+    expect(resent.body).toMatchObject({ success: true, storage: "sheet", duplicated: true });
+    expect(appendCallCount).toBe(1);
+    expect(emails).toHaveLength(1);
+  });
+
+  it("doesn't remember a rate-limit refusal, so the same report can be sent once the limit clears", async () => {
+    for (let i = 0; i < 5; i++) await request(app).post("/api/bug-reports").send({ ...validBody, idempotencyKey: `fill-${i}` });
+
+    const refused = await request(app).post("/api/bug-reports").send({ ...validBody, idempotencyKey: "after-limit" });
+    _resetBugReportRateLimitForTesting();
+    const retried = await request(app).post("/api/bug-reports").send({ ...validBody, idempotencyKey: "after-limit" });
+
+    expect(refused.status).toBe(429);
+    expect(retried.status).toBe(200);
+    expect(retried.body.duplicated).toBeUndefined();
   });
 
   it("emails the administrator for a report from someone who isn't signed in, so it can't go unnoticed", async () => {
