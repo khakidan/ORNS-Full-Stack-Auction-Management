@@ -18,7 +18,7 @@ export interface TicketPurchase {
   /** Tickets bought (the form's quantity). */
   tickets: number;
   guests: TicketPurchaseGuest[];
-  /** Fluent Forms' payment method key: "paypal", "offline" (cash or check), "test", ... */
+  /** Fluent Forms' payment method key: "paypal", or "test" - its offline (cash or check) method, which the form's Sheets feed shows as "Offline". */
   paymentMethod: string;
   /** Fluent Forms' payment status: "paid", "pending" (cash or check, paid offline), "refunded", ... */
   paymentStatus: string;
@@ -41,7 +41,12 @@ export const MAX_FIELD_LENGTH = 200;
 const MAX_TICKETS = 20;
 const MAX_GUESTS = 3;
 
-const PAYMENT_METHODS: Record<string, string> = { paypal: "PayPal", offline: "Cash or Check", test: "Test", stripe: "Stripe" };
+/**
+ * What the form's own Sheets feed writes for each method, so rows from the
+ * webhook and poll look the same as the feed's: Fluent Forms' offline
+ * (cash or check) method has the key "test" and shows as "Offline".
+ */
+const PAYMENT_METHODS: Record<string, string> = { paypal: "PayPal", test: "Offline", offline: "Offline", stripe: "Stripe" };
 const PAYMENT_STATUSES: Record<string, string> = { paid: "Paid", pending: "Pending", refunded: "Refunded", failed: "Failed", cancelled: "Cancelled" };
 
 /** Public text for a cell: trimmed, capped, never run as a formula. */
@@ -65,7 +70,8 @@ function dollars(total: number): string {
  * The purchase's `tickets` row (A-W), in the same layout as the app's Add
  * Attendee and the walk-in row: names A/B, email C, phone D, tickets E,
  * "yes" in F when there are guests, guests H-S with "yes"/"no" for their
- * own bidder number, payment method T, status U, the order total in V
+ * own bidder number, payment method T ("PayPal" or "Offline", as the
+ * form's Sheets feed writes it), status U, the order total in V
  * (the amount due while Pending, like a walk-in), entry ID in W. Text is
  * trimmed, capped and guarded against formulas.
  *

@@ -19,7 +19,7 @@ function purchase(overrides: Partial<TicketPurchase> = {}): TicketPurchase {
       { firstName: "Jo", lastName: "Lee", email: "jo@example.com", ownBidderNumber: true },
       { firstName: "Ari", lastName: "Lee", email: "ari@example.com", ownBidderNumber: true },
     ],
-    paymentMethod: "offline",
+    paymentMethod: "test",
     paymentStatus: "pending",
     total: 140,
     ...overrides,
@@ -39,7 +39,7 @@ describe("ticketRowFromPurchase", () => {
       "Sam", "Lee", "sam@example.com", "no",
       "Jo", "Lee", "jo@example.com", "yes",
       "Ari", "Lee", "ari@example.com", "yes",
-      "Cash or Check", "Pending", "$140",
+      "Offline", "Pending", "$140",
       "1433",
     ]);
   });
@@ -49,7 +49,7 @@ describe("ticketRowFromPurchase", () => {
     const [attendee] = parseAttendeeRows("tickets", [["header"], row]);
     expect(attendee).toMatchObject({
       firstName: "Pat", lastName: "Lee", email: "pat@example.com", ticketsPurchased: "4",
-      paymentMethod: "Cash or Check", paymentStatus: "Pending", totalPaid: "$140", formEntryId: "1433",
+      paymentMethod: "Offline", paymentStatus: "Pending", totalPaid: "$140", formEntryId: "1433",
     });
     expect(attendee.guestsInfo.map((g) => [g.firstName, g.ownBidderNumber])).toEqual([["Sam", "no"], ["Jo", "yes"], ["Ari", "yes"]]);
   });
@@ -69,7 +69,8 @@ describe("ticketRowFromPurchase", () => {
 
   it.each([
     ["paypal", "paid", "PayPal", "Paid"],
-    ["offline", "pending", "Cash or Check", "Pending"],
+    ["test", "pending", "Offline", "Pending"],
+    ["offline", "pending", "Offline", "Pending"],
     ["PayPal", "PAID", "PayPal", "Paid"],
     ["venmo", "refunded", "Venmo", "Refunded"],
     ["paypal", "", "PayPal", "Pending"],
