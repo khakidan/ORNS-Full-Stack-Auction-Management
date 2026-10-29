@@ -302,6 +302,18 @@ entries the poll had to add (each one a missed webhook; in shadow mode,
 entries missing from the sheet when checked) and website purchases
 still Pending a week after they were bought.
 
+**Purchases after Go Live (ROADMAP W7).** Once the auction is Live the
+ticket sync no longer adds bidders, so a website purchase arriving then
+(or after Close) gets a ticket row but no bidder number. Each one whose
+row isn't tied to a Bidder-Numbers line is listed at the top of the
+Website Ticket Check card - name, tickets, guests who want their own
+number, paid online or paying at the door - and lights the tab's dot.
+Staff register it as a walk-in, then click **Done**
+(`POST /api/tickets/fluent-forms/after-go-live/:entryId/handled`,
+auction-stage permission, in Action History). Kept in Firestore
+`ticketPurchasesAfterGoLive`; Setup New Auction Year empties it. Works
+in shadow mode too.
+
 Cloud Scheduler's free tier covers 3 jobs per billing account (these are
 2), and each run is a few seconds of Cloud Run CPU.
 

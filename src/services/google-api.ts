@@ -196,6 +196,17 @@ export async function checkWebsiteTicketsNow(): Promise<TicketPollRun> {
   return res.json();
 }
 
+export async function markLateWebsitePurchaseHandled(entryId: string): Promise<void> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/tickets/fluent-forms/after-go-live/${encodeURIComponent(entryId)}/handled`, {
+    method: "POST",
+    credentials: "include"
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to mark the purchase as registered");
+  }
+}
+
 export interface AppsScriptVersionStatus {
   label: string;
   expected: string;

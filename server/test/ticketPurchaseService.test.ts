@@ -9,7 +9,10 @@ vi.mock("../services/bidderTicketSync", async (importOriginal) => ({
   syncBiddersWith: vi.fn(async () => ({ renamed: [], added: [], unlinked: [] })),
 }));
 
+vi.mock("../services/ticketsAfterGoLive", () => ({ noteIfAfterGoLive: vi.fn(async () => false) }));
+
 import { upsertTicketPurchase, FLUENT_FORMS } from "../services/ticketPurchaseService";
+import { noteIfAfterGoLive } from "../services/ticketsAfterGoLive";
 import { TicketPurchase } from "../services/ticketPurchaseRow";
 import { syncBiddersWith } from "../services/bidderTicketSync";
 import { logSystemAction } from "../services/actionLog";
@@ -61,6 +64,29 @@ const review = () => getAdminFirestore().collection("ticketPurchaseReview");
 beforeEach(async () => {
   vi.mocked(syncBiddersWith).mockClear();
   await getAdminFirestore().collection("settings").doc("global").set({ auctionTicketsSpreadsheetId: "tk" });
+});
+
+describe("upsertTicketPurchase - purchases after Go Live (W7)", () => {
+  beforeEach(() => vi.mocked(noteIfAfterGoLive).mockClear().mockResolvedValue(false));
+
+  it("checks every purchase it places - added, already there, or (shadow mode) would add - with its row", async () => {
+    await upsertTicketPurchase(fakeSheets(["1400"]).sheets, purchase(), { mode: "write" });
+    await upsertTicketPurchase(fakeSheets(["1400", "1500"]).sheets, purchase(), { mode: "write" });
+    await upsertTicketPurchase(fakeSheets(["1400"]).sheets, purchase(), { mode: "compare" });
+
+    expect(vi.mocked(noteIfAfterGoLive).mock.calls.map(([, p, row]) => [p.entryId, row])).toEqual([["1500", 3], ["1500", 3], ["1500", null]]);
+  });
+
+  it("doesn't check one that can't be written, and a failed check never fails the purchase", async () => {
+    await upsertTicketPurchase(fakeSheets().sheets, purchase({ tickets: 0 }), { mode: "write" });
+    expect(noteIfAfterGoLive).not.toHaveBeenCalled();
+
+    vi.mocked(noteIfAfterGoLive).mockRejectedValueOnce(new Error("Sheets said no"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(upsertTicketPurchase(fakeSheets().sheets, purchase(), { mode: "write" })).resolves.toMatchObject({ outcome: "added" });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("entry 1500"), "Sheets said no");
+    warn.mockRestore();
+  });
 });
 
 describe("upsertTicketPurchase", () => {

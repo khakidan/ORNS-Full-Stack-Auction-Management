@@ -10,7 +10,7 @@ import { findBidderColumn } from "../utils/bidGrid";
 import { getColumnLetter } from "../utils/columnUtils";
 import { ensureTrackingHeaders } from "../utils/bidderNumbersHeaders";
 import { TICKETS_COL, WALK_IN_PAYMENT_METHOD } from "../utils/sheetColumns";
-import { AuctionState, parseAuctionState } from "../utils/auctionState";
+import { readAuctionState } from "../utils/auctionState";
 import { computeBidderNumbersRows, fetchTicketSheetRows } from "./syncService";
 import { bidderColumnFormatRequests, nextBidderId, nextColumnPairStart } from "./bidderService";
 import { SheetRows, TicketPerson, bidderEmail, bidderName, collectTicketPeople } from "./ticketPeople";
@@ -222,7 +222,7 @@ export async function syncBidderNamesWithTickets(
 
     // New bidders: Prep only, and only when every bidder is accounted for.
     let added: AddedBidder[] = [];
-    if (plan.newPeople.length > 0 && plan.orphans.length === 0 && (await auctionStateOf(sheets, spreadsheetId)) === "prep") {
+    if (plan.newPeople.length > 0 && plan.orphans.length === 0 && (await readAuctionState(sheets, spreadsheetId)) === "prep") {
       let nextId = nextBidderId(bnRows);
       added = plan.newPeople.map((p) => ({ id: String(nextId++), firstName: bidderName(p.firstName), lastName: bidderName(p.lastName), email: bidderEmail(p.email), ref: p.ref }));
       const firstNewRow = Math.max(bnRows.length, 1) + 1;
@@ -256,16 +256,6 @@ export async function syncBidderNamesWithTickets(
     clearCacheForSpreadsheet(spreadsheetId);
     return { renamed, added, unlinked: plan.orphans.map((b) => b.id) };
   });
-}
-
-/** The auction's state, or null if it can't be read (then nothing is added). */
-async function auctionStateOf(sheets: sheets_v4.Sheets, spreadsheetId: string): Promise<AuctionState | null> {
-  try {
-    const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Status'!A2", valueRenderOption: "UNFORMATTED_VALUE" });
-    return parseAuctionState(res.data.values?.[0]?.[0]);
-  } catch {
-    return null;
-  }
 }
 
 /** New rows' E-H as checkboxes, like Set Up's. */

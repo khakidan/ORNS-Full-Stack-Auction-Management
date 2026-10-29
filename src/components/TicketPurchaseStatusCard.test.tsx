@@ -16,13 +16,14 @@ function StatusCard({ onAdded }: { onAdded: () => void }) {
 vi.mock("@/services/google-api", () => ({
   getTicketPurchaseStatus: vi.fn(),
   checkWebsiteTicketsNow: vi.fn(),
+  markLateWebsitePurchaseHandled: vi.fn(async () => {}),
 }));
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
-import { getTicketPurchaseStatus, checkWebsiteTicketsNow } from "@/services/google-api";
+import { getTicketPurchaseStatus, checkWebsiteTicketsNow, markLateWebsitePurchaseHandled } from "@/services/google-api";
 import { toast } from "sonner";
 
 const mockedGetStatus = vi.mocked(getTicketPurchaseStatus);
@@ -37,6 +38,7 @@ const status = (overrides: Partial<TicketPurchaseStatus> = {}): TicketPurchaseSt
   missed: [],
   submittedAt: {},
   review: [],
+  afterGoLive: [],
   ...overrides,
 });
 const run = (overrides = {}) => ({ at: recent, mode: "write" as const, newEntries: 0, added: [], wouldAdd: [], needsReview: [], paymentsSet: [], paymentsWouldSet: [], paymentsNeedReview: [], errors: [], ...overrides });
@@ -62,6 +64,22 @@ describe("TicketPurchaseStatusCard", () => {
     await waitFor(() => expect(screen.getByText("Needs Attention")).toBeInTheDocument());
     expect(screen.getByText(/Pat Lee \(entry 1491\)/)).toBeInTheDocument();
     expect(screen.getByText("Entries 1485, 1488")).toBeInTheDocument();
+  });
+
+  it("lists purchases that arrived after Go Live for staff to register as walk-ins, and Done takes one off", async () => {
+    mockedGetStatus.mockResolvedValueOnce(status({ afterGoLive: [{ entryId: "1500", name: "Pat Lee", tickets: 2, guestsWantingNumbers: ["Sam Lee"], paymentStatus: "Pending", state: "live", at: recent }] }));
+    mockedGetStatus.mockResolvedValue(status());
+    render(<StatusCard onAdded={vi.fn()} />);
+
+    expect(await screen.findByText("Needs Attention")).toBeInTheDocument();
+    expect(screen.getByText("Bought after Go Live - register as walk-ins")).toBeInTheDocument();
+    expect(screen.getByText(/2 ticket\(s\), paying at the door/)).toBeInTheDocument();
+    expect(screen.getByText("Also a bidder number for: Sam Lee")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+
+    await waitFor(() => expect(markLateWebsitePurchaseHandled).toHaveBeenCalledWith("1500"));
+    await waitFor(() => expect(screen.queryByText("Bought after Go Live - register as walk-ins")).not.toBeInTheDocument());
   });
 
   it("says when the Fluent Forms API isn't set up, without a Check Now button", async () => {

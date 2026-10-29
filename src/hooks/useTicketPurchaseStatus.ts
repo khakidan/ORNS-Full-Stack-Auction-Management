@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { checkWebsiteTicketsNow, getTicketPurchaseStatus } from "@/services/google-api";
+import { checkWebsiteTicketsNow, getTicketPurchaseStatus, markLateWebsitePurchaseHandled } from "@/services/google-api";
 import { TicketPurchaseStatus } from "@/types";
 import { toast } from "sonner";
 
@@ -57,5 +57,16 @@ export function useTicketPurchaseStatus(onAdded?: () => void, enabled = true) {
     }
   };
 
-  return { status, loading, checking, checkNow };
+  /** W7: a purchase that arrived after Go Live was registered as a walk-in. */
+  const markHandled = async (entryId: string) => {
+    try {
+      await markLateWebsitePurchaseHandled(entryId);
+      toast.success("Marked as registered.");
+      await refresh();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to mark the purchase as registered");
+    }
+  };
+
+  return { status, loading, checking, checkNow, markHandled };
 }

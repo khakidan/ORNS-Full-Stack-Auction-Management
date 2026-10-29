@@ -3,6 +3,7 @@ import { getSharedConfig } from "./configService";
 import { getAdminFirestore } from "./firebaseAdmin";
 import { logSystemAction } from "./actionLog";
 import { syncBiddersWith } from "./bidderTicketSync";
+import { noteIfAfterGoLive } from "./ticketsAfterGoLive";
 import { TicketPurchase, ticketRowFromPurchase } from "./ticketPurchaseRow";
 import { withLock } from "../utils/asyncLock";
 import { clearCacheForSpreadsheet } from "../utils/sheetCache";
@@ -72,7 +73,7 @@ export async function upsertTicketPurchase(
   const spreadsheetId = (await getSharedConfig()).auctionTicketsSpreadsheetId;
   if (!spreadsheetId) throw new Error("The Auction Tickets Spreadsheet ID isn't set in Settings.");
 
-  return withLock(`ticket-entry:${entryId}`, async () => {
+  const outcome = await withLock(`ticket-entry:${entryId}`, async (): Promise<Exclude<TicketPurchaseOutcome, { outcome: "needs-review" }>> => {
     const rowIndex = await findEntryRow(sheets, spreadsheetId, entryId);
     if (rowIndex !== null) return { outcome: "exists", entryId, rowIndex };
     if (mode === "compare") return { outcome: "would-add", entryId, row: built.row };
@@ -99,6 +100,12 @@ export async function upsertTicketPurchase(
     await syncBiddersWith(sheets, (entry) => logSystemAction(sheets, FLUENT_FORMS, entry));
     return { outcome: "added", entryId, rowIndex: rowNumberOf(written) };
   });
+
+  // W7: bought once the auction was Live - no bidder number will follow, so staff register it as a walk-in.
+  // A failure here never fails the purchase; the next delivery or poll tries again.
+  await noteIfAfterGoLive(sheets, purchase, outcome.outcome === "would-add" ? null : outcome.rowIndex)
+    .catch((err) => console.warn(`[TicketPurchase] Couldn't check entry ${entryId} against Go Live:`, err?.message || err));
+  return outcome;
 }
 
 /** The 1-based row whose column W holds `entryId`, or null. */

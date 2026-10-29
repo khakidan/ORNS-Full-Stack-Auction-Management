@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LoadingButton } from "@/components/ui/LoadingButton";
+import { Button } from "@/components/ui/button";
 import { CheckCircle2, AlertTriangle, RefreshCw, Loader2, PauseCircle } from "lucide-react";
 import { TicketPurchaseStatusState } from "@/hooks/useTicketPurchaseStatus";
 import { PENDING_DAYS, pendingTooLong, ticketStatusProblems } from "@/lib/ticketPurchaseStatus";
@@ -34,7 +35,7 @@ interface TicketPurchaseStatusCardProps {
  * week - so a failure shows up days before the auction, not at check-in.
  */
 export default function TicketPurchaseStatusCard({ attendees, purchases }: TicketPurchaseStatusCardProps) {
-  const { status, loading, checking, checkNow } = purchases;
+  const { status, loading, checking, checkNow, markHandled } = purchases;
 
   if (loading) {
     return (
@@ -67,8 +68,9 @@ export default function TicketPurchaseStatusCard({ attendees, purchases }: Ticke
   const problems = ticketStatusProblems(status, now);
   const pending = pendingTooLong(attendees, status.submittedAt, now);
   const { lastWebhook, poll, missed, review } = status;
+  const { afterGoLive } = status;
 
-  const state = !status.configured ? "off" : problems.length > 0 ? "attention" : "working";
+  const state = problems.length > 0 ? "attention" : !status.configured ? "off" : "working";
   const styles = {
     attention: { card: "border-amber-200 bg-amber-50/10", badge: "bg-amber-100 text-amber-700 border-amber-200", label: "Needs Attention", icon: <AlertTriangle className="w-5 h-5 text-amber-600" /> },
     working: { card: "", badge: "bg-emerald-100 text-emerald-700 border-emerald-200", label: "Working", icon: <CheckCircle2 className="w-5 h-5 text-emerald-600" /> },
@@ -100,6 +102,28 @@ export default function TicketPurchaseStatusCard({ attendees, purchases }: Ticke
           <ul className="space-y-1 text-amber-700 font-medium">
             {problems.map((problem) => <li key={problem}>{problem}</li>)}
           </ul>
+        )}
+
+        {afterGoLive.length > 0 && (
+          <div className="rounded-md border border-amber-200 bg-amber-50/40 p-3">
+            <span className="font-medium text-amber-800">Bought after Go Live - register as walk-ins</span>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              The auction was already Live, so these buyers got a ticket but no bidder number. Register each as a walk-in, then mark it done.
+            </p>
+            <ul className="mt-2 space-y-2">
+              {afterGoLive.map((p) => (
+                <li key={p.entryId} className="flex items-start justify-between gap-3 text-xs">
+                  <span>
+                    <span className="font-medium">{p.name || "No name"}</span> (entry {p.entryId}) - {p.tickets} ticket(s), {p.paymentStatus === "Paid" ? "paid online" : "paying at the door"}
+                    {p.guestsWantingNumbers.length > 0 && <span className="block text-muted-foreground">Also a bidder number for: {p.guestsWantingNumbers.join(", ")}</span>}
+                  </span>
+                  <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={() => markHandled(p.entryId)}>
+                    Done
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <div className="flex items-start justify-between gap-3">

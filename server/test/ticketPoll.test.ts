@@ -260,12 +260,14 @@ describe("startNewTicketSeason (Setup New Auction Year)", () => {
     }
   });
 
-  it("without the Fluent Forms API, forgets the old season so the next poll starts a new one", async () => {
+  it("without the Fluent Forms API, forgets the old season (and last year's after-Go-Live list) so the next poll starts a new one", async () => {
     for (const key of ["FLUENT_FORMS_SITE_URL", "FLUENT_FORMS_API_USER", "FLUENT_FORMS_API_PASSWORD"]) delete process.env[key];
     await startAt(1300, { "1301": "paid" });
+    await getAdminFirestore().collection("ticketPurchasesAfterGoLive").doc("1301").set({ entryId: "1301", name: "Pat Lee" });
 
     expect(await startNewTicketSeason()).toBeNull();
     expect((await state().get()).exists).toBe(false);
+    expect((await getAdminFirestore().collection("ticketPurchasesAfterGoLive").doc("1301").get()).exists).toBe(false);
   });
 });
 

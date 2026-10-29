@@ -9,8 +9,11 @@ const HOUR_MS = 60 * 60 * 1000;
 
 /** What on the status card needs staff, as short sentences; empty when all is well. */
 export function ticketStatusProblems(status: TicketPurchaseStatus, now: Date): string[] {
-  if (!status.configured) return [];
-  const problems: string[] = [];
+  // W7 doesn't need the Fluent Forms API: the webhook alone finds these.
+  const late = status.afterGoLive.length;
+  const lateProblem = late > 0 ? [`${late} purchase(s) arrived after Go Live - register them as walk-ins.`] : [];
+  if (!status.configured) return lateProblem;
+  const problems: string[] = [...lateProblem];
   const lastSuccess = status.poll?.lastSuccessAt ? new Date(status.poll.lastSuccessAt).getTime() : null;
   if (lastSuccess === null) problems.push("The website check hasn't succeeded yet.");
   else if (now.getTime() - lastSuccess > POLL_STALE_HOURS * HOUR_MS) problems.push(`The website check hasn't succeeded in over ${POLL_STALE_HOURS} hours.`);
