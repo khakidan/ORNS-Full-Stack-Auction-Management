@@ -113,7 +113,9 @@ export async function checkTicketPayment(
     }
 
     if (status === "Paid") return { outcome: "unchanged", entryId, status, reason: "already Paid" };
-    const paid = paypalTransactions.find((t) => t.status === "paid");
+    // "processing": PayPal took the payment but Fluent Forms hasn't heard it's released - a review hold, or a
+    // confirmation that never arrived. PayPal's own answer decides, the same as for "paid".
+    const paid = paypalTransactions.find((t) => t.status === "paid") || paypalTransactions.find((t) => t.status === "processing" && t.chargeId);
     if (!paid) {
       const said = paypalTransactions.map((t) => t.status).join(", ") || "no payment yet";
       return { outcome: "unchanged", entryId, status, reason: `Fluent Forms says ${said}` };

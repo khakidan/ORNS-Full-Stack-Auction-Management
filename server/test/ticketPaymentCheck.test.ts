@@ -117,6 +117,7 @@ describe("checkTicketPayment", () => {
 
   it.each([
     ["Fluent Forms says pending", { transactions: [txn({ status: "pending", chargeId: "" })] }, "Fluent Forms says pending"],
+    ["Fluent Forms says processing but has no PayPal transaction ID yet", { transactions: [txn({ status: "processing", chargeId: "" })] }, "Fluent Forms says processing"],
     ["there's no payment yet", { transactions: [] }, "no payment yet"],
   ])("leaves the row Pending when %s", async (_label, payment, reason) => {
     const { sheets, updates } = fakeSheets([ticketRow("1500")]);
@@ -139,6 +140,24 @@ describe("checkTicketPayment", () => {
     expect(result).toMatchObject({ outcome: "needs-review", problems: [expect.stringContaining("holding payment")] });
     expect(updates).toEqual([]);
     expect((await review("1500").get()).data()?.problems).toEqual([expect.stringContaining("holding payment")]);
+  });
+
+  it("asks PayPal about a payment Fluent Forms still calls processing: held for review goes on the list straight away", async () => {
+    const { sheets, updates } = fakeSheets([ticketRow("1500")]);
+    const d = deps({ transactions: [txn({ status: "processing" })] }, { status: "PENDING", amount: 70, currency: "USD", pendingReason: "PENDING_REVIEW" });
+
+    const result = await checkTicketPayment(sheets, "1500", { mode: "write", ...d });
+
+    expect(d.paypal.getPayment).toHaveBeenCalledWith(CHARGE, expect.any(Date));
+    expect(result).toMatchObject({ outcome: "needs-review", problems: [expect.stringContaining("holding payment")] });
+    expect(updates).toEqual([]);
+  });
+
+  it("marks a processing payment Paid once PayPal says it's completed - even if Fluent Forms never hears", async () => {
+    const { sheets, updates } = fakeSheets([ticketRow("1500")]);
+    const result = await checkTicketPayment(sheets, "1500", { mode: "write", ...deps({ transactions: [txn({ status: "processing" })] }) });
+    expect(result).toMatchObject({ outcome: "set", to: "Paid" });
+    expect(updates).toHaveLength(1);
   });
 
   it("marks it Paid and clears the review once PayPal releases it", async () => {
