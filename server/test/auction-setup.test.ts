@@ -35,7 +35,7 @@ describe("setupRoutes - /api/auction/setup-new", () => {
   const finalLine = (text: string) => JSON.parse(text.trim().split("\n").pop()!);
 
   it("saves the new year's Bidder Receipts and For Print folders in the Config itself, keeping the other settings (ROADMAP A5)", async () => {
-    fake.docs("settings").set("global", { bidManagementSpreadsheetId: "s3", receiptFolderId: "last-year-receipts", forPrintFolderId: "last-year-print", ticketPrice: "40" });
+    fake.docs("settings").set("global", { bidManagementSpreadsheetId: "s3", receiptFolderId: "last-year-receipts", forPrintFolderId: "last-year-print", ticketPrice: "40", ticketPriceFromWebsiteAt: "2026-03-01T15:00:00.000Z" });
 
     // The scripts get the folders from the Config on every run; nothing writes their old _Settings copy (ROADMAP B11).
     const settingsWrites: { range: string; values: unknown }[] = [];
@@ -66,6 +66,8 @@ describe("setupRoutes - /api/auction/setup-new", () => {
       forPrintFolderId: result.forPrintFolderId,
       bidManagementSpreadsheetId: "s3",
       ticketPrice: "40",
+      // Editable again until this year's Set Up takes the price from the website.
+      ticketPriceFromWebsiteAt: "",
     });
   });
 

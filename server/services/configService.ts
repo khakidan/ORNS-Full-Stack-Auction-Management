@@ -26,6 +26,8 @@ const TEXT_FIELDS = {
   forPrintFolderId: 256,
   ornsLogoId: 256,
   ticketPrice: 10,
+  /** When Set Up last set ticketPrice from the website form ("" = never this year); browsers can't change it. */
+  ticketPriceFromWebsiteAt: 40,
   auctionItemsScriptId: 256,
   auctionTicketsScriptId: 256,
   bidManagementScriptId: 256,

@@ -6,6 +6,8 @@ import { sheetsFor, respondIfNotFound } from '../utils/googleClients';
 import { performSheetSync, isBidManagementSetUp } from '../services/syncService';
 import { AlreadyRunningError, runIfIdle } from '../utils/asyncLock';
 import { pollTicketPurchasesFirst } from '../services/ticketPoll';
+import { describeWebsiteTicketPrice, syncTicketPriceFromWebsite } from '../services/ticketPriceFromWebsite';
+import { CONFIG_KEY, noteChange } from '../utils/changeFeed';
 
 /** Builds Bidder-Numbers / Bid-Management from the ticket sheets (syncService.ts). */
 export default function createSyncRouter() {
@@ -20,9 +22,23 @@ export default function createSyncRouter() {
     try {
       // One Set Up at a time: a double-click would otherwise rebuild twice.
       // Website purchases first, so no bidder is missing (ROADMAP W6).
-      const result = await runIfIdle(`bidders-sync:${spreadsheetId}`, async () => {
+      // Then the ticket price from the website: ticket sales are open by now
+      // and the price won't change again this year.
+      const { result, ticketPrice } = await runIfIdle(`bidders-sync:${spreadsheetId}`, async () => {
         await pollTicketPurchasesFirst(`Set Up Bid Management App: ${req.user?.email || "unknown"}`);
-        return performSheetSync(sheetsFor(req), spreadsheetId, auctionTicketSheetsID);
+        const ticketPrice = await syncTicketPriceFromWebsite(req.user!.email);
+        if (ticketPrice.outcome === "updated" || ticketPrice.outcome === "unchanged") noteChange(CONFIG_KEY);
+        if (ticketPrice.outcome === "updated") {
+          await logAction(req, {
+            area: "Settings",
+            action: "Update ticket price from website",
+            summary: describeWebsiteTicketPrice(ticketPrice),
+            before: { ticketPrice: ticketPrice.previous },
+            after: { ticketPrice: ticketPrice.price },
+            notUndoableReason: "it's the price the website form charges - change it on the form, then run Set Up again",
+          });
+        }
+        return { ticketPrice, result: await performSheetSync(sheetsFor(req), spreadsheetId, auctionTicketSheetsID) };
       });
       await logAction(req, {
         area: "Bid Management",
@@ -30,7 +46,7 @@ export default function createSyncRouter() {
         summary: "Rebuilt Bidder-Numbers and the bid sheet from the ticket spreadsheet (the previous tabs were kept as backups)",
         notUndoableReason: "the previous tabs were kept as renamed backups in the spreadsheet",
       });
-      res.json({ success: true, result });
+      res.json({ success: true, result, ticketPrice: { ...ticketPrice, message: describeWebsiteTicketPrice(ticketPrice) } });
     } catch (error: any) {
       if (error instanceof AlreadyRunningError) return res.status(409).json({ error: "Set Up is already running. Wait for it to finish." });
       console.error(`[Sync Route Error] Native synchronization flow failed:`, error);

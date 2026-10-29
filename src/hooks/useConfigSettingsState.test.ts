@@ -85,6 +85,7 @@ const BASE_CONFIG: Config = {
   forPrintFolderId: "mock-print-folder",
   ornsLogoId: "mock-logo-id",
   ticketPrice: "35",
+  ticketPriceFromWebsiteAt: "",
   auctionItemsScriptId: "mock-items-script",
   auctionTicketsScriptId: "mock-tickets-script",
   bidManagementScriptId: "mock-bid-mgt-script",

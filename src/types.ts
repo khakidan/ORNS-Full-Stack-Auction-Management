@@ -76,6 +76,8 @@ export interface Config {
   forPrintFolderId: string;
   ornsLogoId: string;
   ticketPrice: string;
+  /** When Set Up last took ticketPrice from the website form ("" = not this year); Settings then shows the price read-only. */
+  ticketPriceFromWebsiteAt: string;
   /**
    * Unused: the server runs the scripts by its SCRIPT_ID_* environment
    * settings. Kept (and saved through unchanged) in settings/global

@@ -25,6 +25,7 @@ const defaultConfig: Config = {
   forPrintFolderId: "",
   ornsLogoId: "",
   ticketPrice: "35",
+  ticketPriceFromWebsiteAt: "",
   auctionItemsScriptId: "",
   auctionTicketsScriptId: "",
   bidManagementScriptId: "",

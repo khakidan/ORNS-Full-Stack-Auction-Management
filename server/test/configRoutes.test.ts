@@ -23,7 +23,7 @@ const STORED = {
   bidderNumbersSheet: "Bidder-Numbers", bidManagementSheet: "Bid-Management",
   receiptFolderId: "receipts", forPrintFolderId: "print", ornsLogoId: "logo", ticketPrice: "35",
   auctionItemsScriptId: "", auctionTicketsScriptId: "", bidManagementScriptId: "",
-  bugReportsSpreadsheetId: "bugs", bugReportsFolderId: "bug-folder", paypalIsSandbox: true,
+  bugReportsSpreadsheetId: "bugs", bugReportsFolderId: "bug-folder", paypalIsSandbox: true, ticketPriceFromWebsiteAt: "",
 };
 
 beforeEach(() => {
@@ -98,6 +98,20 @@ describe("POST /api/config", () => {
     expect(changesSince(before).changed).toContain("config");
     // The next read sees the save straight away, not after the cache expires.
     expect((await request(app).get("/api/config").set(plainUser)).body.ticketPrice).toBe("40");
+  });
+
+  it("keeps the ticket price once Set Up has taken it from the website - it's changed on the form now", async () => {
+    fake.docs("settings").set("global", { ...STORED, ticketPriceFromWebsiteAt: "2027-03-01T15:00:00.000Z" });
+
+    const res = await request(app).post("/api/config").set(fullAdmin).send({ ...STORED, ticketPrice: "40", ticketPriceFromWebsiteAt: "", forPrintFolderId: "print-2027" });
+
+    expect(res.status).toBe(200);
+    expect(fake.docs("settings").get("global")).toMatchObject({ ticketPrice: "35", ticketPriceFromWebsiteAt: "2027-03-01T15:00:00.000Z", forPrintFolderId: "print-2027" });
+  });
+
+  it("never lets a browser mark the price as from the website", async () => {
+    await request(app).post("/api/config").set(fullAdmin).send({ ...STORED, ticketPrice: "40", ticketPriceFromWebsiteAt: "2027-03-01T15:00:00.000Z" });
+    expect(fake.docs("settings").get("global")).toMatchObject({ ticketPrice: "40", ticketPriceFromWebsiteAt: "" });
   });
 
   it.each([
