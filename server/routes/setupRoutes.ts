@@ -66,7 +66,8 @@ export default function createSetupRouter() {
           // receipts and print documents going to last year's (ROADMAP A5).
           let configSaveError: string | undefined;
           try {
-            await updateSharedConfigFields({ receiptFolderId: result.bidderReceiptsFolderId, forPrintFolderId: result.forPrintFolderId }, req.user!.email);
+            // The ticket price is editable again until this year's Set Up reads it from the website.
+            await updateSharedConfigFields({ receiptFolderId: result.bidderReceiptsFolderId, forPrintFolderId: result.forPrintFolderId, ticketPriceFromWebsiteAt: "" }, req.user!.email);
             noteChange(CONFIG_KEY);
             onLog("Saved the new Bidder Receipts and For Print folders in the configuration.");
           } catch (err: any) {

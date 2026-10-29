@@ -18,6 +18,7 @@ const BASE_CONFIG: Config = {
   forPrintFolderId: "print-folder",
   ornsLogoId: "logo-id",
   ticketPrice: "35",
+  ticketPriceFromWebsiteAt: "",
   auctionItemsScriptId: "items-script",
   auctionTicketsScriptId: "tickets-script",
   bidManagementScriptId: "bm-script",

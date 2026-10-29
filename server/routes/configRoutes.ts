@@ -11,7 +11,8 @@ import { can } from '../utils/permissions';
  * reads it from here - staff get all of it, a volunteer only the Bid
  * Management fields - and Administrators save it. PayPal sandbox/live is
  * on the PayPal Integration tab (Full Administrators only): anyone else's
- * save keeps the stored value, whatever the request says.
+ * save keeps the stored value, whatever the request says. The same goes
+ * for the ticket price once Set Up has taken it from the website.
  */
 export default function createConfigRouter() {
   const router = Router();
@@ -33,7 +34,11 @@ export default function createConfigRouter() {
       return next(error);
     }
     try {
-      if (!can(req.user!.role, "settings.system")) config.paypalIsSandbox = (await getSharedConfig()).paypalIsSandbox;
+      const stored = await getSharedConfig();
+      if (!can(req.user!.role, "settings.system")) config.paypalIsSandbox = stored.paypalIsSandbox;
+      // Only Set Up sets the price from the website (ticketPriceFromWebsite.ts); once it has, a save keeps it.
+      config.ticketPriceFromWebsiteAt = stored.ticketPriceFromWebsiteAt;
+      if (stored.ticketPriceFromWebsiteAt) config.ticketPrice = stored.ticketPrice;
       const before = await saveSharedConfig(config, req.user!.email);
       const changed = (Object.keys(config) as (keyof typeof config)[]).filter((k) => before[k] !== config[k]);
       noteChange(CONFIG_KEY);
