@@ -26,6 +26,8 @@ Steps:
 
 If step 7 doesn't check out, cash/check checkouts will still work (the code falls back to recording the full fee-inclusive amount if the removal call fails) - but the bidder's invoice will keep showing the fee amount even though cash was collected without it. In that case let the dev know what happened in step 6/7 instead of using this feature for real auction checkouts yet.
 
+**Put the live PayPal app's credentials on the server before ticket sales open** - see "Webhooks with Fluent Forms" step 2 below. The server still has the sandbox app, so it can't confirm real website ticket payments (or, at the auction, real checkouts).
+
 ---
 
 ## 2026-10-28 Audit Backlog (whole codebase)
@@ -68,40 +70,15 @@ All items, A1-A17, are done - see `CHANGELOG.md` (search for the item ID).
 
 ### Webhooks with Fluent Forms
 
-Goal: make ticket purchasing as hardened as it can be - no purchase silently missing from the app, and payment status that's right at the door. Planned 2026-10-28; build and rehearse well before the March/April 2027 auction.
+Goal: no website ticket purchase silently missing from the app, and payment status that's right at the door. W1-W7 are built and deployed (see `CHANGELOG.md`; set-up in `README.md` "Ticket payments (W4)", "Website ticket poll", "Website Ticket Check" and "Purchases after Go Live"), and the switch-over is done (2026-10-29): the app writes each `tickets` row (Pending until PayPal confirms the payment) and its bidder, and the form's Google Sheets feed (feed 89) is off - never turn it back on while `FLUENT_FORMS_TICKETS_MODE=write`, or a purchase is added twice. What's left:
 
-**How tickets get in today** (read from the live site through the Fluent Forms connector on 2026-10-28):
+1. **Rehearse in write mode** - the 2026-10-28 rehearsal ran in shadow mode only, so the write path (appending the row, Action History, the bidder sync, setting Paid) has only run in tests. With Fluent Forms' PayPal set to Sandbox Mode paying `web-admin@orns.org` (the account that owns the server's sandbox app) and the form submitted from its Preview link:
+   - a PayPal purchase and a cash/check purchase each get their row from the app, Pending;
+   - a PayPal payment PayPal releases is set Paid by the next poll, and one PayPal holds for review (`PENDING_REVIEW`, common in the sandbox) shows on the card's Needs review list until it is - neither has been seen live yet;
+   - a refund, if the sandbox allows it (it refused while the payment was held on 2026-10-28) - the refund path has only run in tests;
+   - then delete the test rows and entries, and set Fluent Forms back to **Live Mode** paying `pavetheway@orns.org`.
+2. **Before ticket sales open:** put the **live** PayPal app's credentials on the server (`PAYPAL_CLIENT_ID`, and `PAYPAL_CLIENT_SECRET` in Secret Manager) and set PayPal to live on Settings > PayPal Integration. Until then every real PayPal ticket payment lands on the review list, because the server looks payments up with the sandbox app. Transaction Search is already on for the live app ("Auction AI Receipts").
+3. **Rotate `FLUENT_FORMS_WEBHOOK_SECRET`** (it appeared in a screenshot on 2026-10-28): a new value in Secret Manager, the same value in the form's Webhook feed request header, then redeploy.
+4. **Publish form 7** for the season, and watch the Website Ticket Check tab through the first week of real sales.
 
-- The "Auction Tickets" form (Fluent Forms form 7 on orns.org, unpublished between seasons) has one integration: a Google Sheets feed ("Auction Tickets", feed 89) that appends each submission to the Auction Tickets spreadsheet's `tickets` tab. Nothing in this codebase receives purchases - the app only learns of a ticket when that row appears.
-- The form collects name, address, email, phone, a ticket quantity (the payment field), up to 3 guests (name, email, "own bidder number?") and a payment method.
-- Payments since 2025-01-01: 46 paid ($3,045), 38 pending ($2,590). Pending means the buyer chose to pay offline by cash or check - to the Director before the auction, or at the door - so it's expected, and check-in's add-to-receipt flow handles it (decided 2026-10-28, formerly W8).
-
-**What can go wrong today:**
-
-- If the Sheets feed fails (expired Google connection, renamed tab, a Sheets error), the purchase exists in WordPress but never reaches the app, and nobody is told - it's found at the door.
-- A row written at submission says Pending; if a PayPal payment completes after the feed ran, the row may never be updated, so check-in shows "Pending" for someone who paid online. (Cash/check buyers are rightly Pending until they pay.)
-- The feed writes what the public typed: no guests-vs-tickets check, no spreadsheet-formula guard (`sanitizeForSheetFormula`), no Action History row, no change-feed refresh. The row only becomes a bidder when the once-a-minute ticket sync next runs.
-
-**Decisions made:**
-
-- **"Pending" means paying offline** (cash or check, to the Director before the auction or at the door). Those rows are real purchases and are written to the sheet like any other; they stay Pending until staff record the payment in the app.
-- **The spreadsheet stays where tickets are stored.** Everything in the app reads tickets from it. What changes is only who writes the row: eventually the app's server (webhook + poll) instead of the Sheets feed, through the same code path as the app's own Add Attendee.
-- **The webhook is the fast path; a poll 3-4 times a day is the safety net.** Up-to-the-minute data isn't needed - only certainty that nothing is missed. A webhook missed while the app is down is caught by the next poll.
-- **Shadow mode first.** The Sheets feed stays the writer until the webhook and poll have been proven against test purchases; then the feed is turned off. Never run both as writers - a webhook arriving before the feed's row would make a duplicate.
-
-**Items** (IDs are stable - refer to them in commits and `CHANGELOG.md`; W1-W3 are done, see `CHANGELOG.md`):
-
-- **W3/W5 both end in `upsertTicketPurchase` (W2, `server/services/ticketPurchaseService.ts`).** Each translates what it receives into a `TicketPurchase` (`ticketPurchaseRow.ts`) - the webhook's payload, or a REST API entry - dropping nothing the row needs, and passes `mode: "compare"` until the switch-over (rollout step 3), then `"write"`. Its outcomes (`added`, `exists`, `needs-review`, `would-add`) are what W6's status card counts.
-- **W4 - Built, waiting on set-up** (`checkTicketPayment`; see `CHANGELOG.md`). The webhook runs it after each delivery; it's off until the WordPress API user and `FLUENT_FORMS_SITE_URL`/`_API_USER`/`_API_PASSWORD` are set and Transaction Search is on for the PayPal app (`README.md` "Ticket payments (W4)"). Still to confirm against the real site in the rehearsal: that WordPress (Flywheel) passes the Application Password through, and which PayPal API finds the website's payments (Captures or Transaction Search). W5's poll calls the same function for each row still Pending whose method is PayPal.
-- **W5 - Built and scheduled** (`pollTicketPurchases`; see `CHANGELOG.md`). The original plan: **The poll: 3-4 times a day, never misses anything.** A Cloud Scheduler job (same setup as the PayPal sweeper; paused outside ticket season) calls an app endpoint 3-4 times a day. It reads form 7's entries from WordPress's REST API (Fluent Forms Pro's entries endpoint - confirm its path and paging), starting **after the last entry it fully processed** (a high-water mark in Firestore, not a time window), so an outage of any length is caught up on the next successful run. Each new entry goes through W2; each row still Pending whose payment method is PayPal is re-checked (W4) - cash/check rows are left to staff. Authenticates as a dedicated WordPress user that can only view entries and payments (`fluentform_entries_viewer`, `fluentform_view_payments`), with an Application Password in Secret Manager. A "Check now" button on the Tickets page runs it on demand; Set Up Bid Management App and bidder labels should run it first, so they never work from a list missing a purchase.
-- **W6 - Built** (`TicketPurchaseStatusCard`, and the poll runs first in Set Up Bid Management App and bidder labels; see `CHANGELOG.md`). The original plan: **Status card on the Tickets page.** When the last webhook arrived; when the last poll succeeded (warn when it's over ~12 hours, i.e. two or more missed runs); entries the poll had to add (each one is a webhook that was missed); entries waiting in "needs review"; tickets still Pending after N days. A failure then shows up days before the auction, not at check-in.
-- **W7 - Built** (`noteIfAfterGoLive`, `server/services/ticketsAfterGoLive.ts`; see `CHANGELOG.md`). The original plan: **Purchases after Go Live.** `syncBiddersFromTickets` already refuses to add bidders once the auction is Live. A purchase arriving then is written to the sheet but flagged on the status card for staff to handle as a walk-in, not silently held.
-  - PENDING means that they plan to pay with CASH or CHECK offline and will either pay the Director before the Auction or will pay-at-the-door.
-
-**Rollout:**
-
-1. **Shadow mode** (W1-W7 are built; the rehearsal is done (2026-10-28); W1-W3 are done: rows carry their entry ID in column W, and the webhook is live in shadow mode, matching the Sheets feed's rows by entry ID; W4 and W5 are built and set up - the WordPress API user and PayPal Transaction Search were done 2026-10-28): the webhook and poll compare against the sheet and report mismatches on the status card, but write nothing.
-2. **Rehearse** with the form published in test mode and PayPal sandbox: a new purchase; a guest with their own bidder number; a payment that completes later; a refund; a webhook deliberately blocked (the next poll must add it); the app stopped for a few hours (the poll must catch up from the high-water mark).
-3. **Switch over**: set `FLUENT_FORMS_TICKETS_MODE=write` on the service (the webhook and poll then write through W2), and turn the Sheets feed (feed 89) off.
-4. Watch the status card through the first week of real sales.
-
+Background (2026-10-28): the Sheets feed alone could miss a purchase without telling anyone, wrote Pending rows that were never updated when a PayPal payment completed later, and in the rehearsal wrote **Paid** for a payment PayPal was still holding for review. "Pending" means paying offline - cash or check to the Director, or at the door. The Cloud Scheduler job `fluent-forms-poll` runs all year (it's free while nothing changes).
