@@ -102,6 +102,97 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 - **T12 - No mutation testing.** Changes have been mutation-checked by hand, one at a time. *Fix:* run Stryker (`@stryker-mutator/vitest-runner`) now and then on the money paths: `financeUtils`, `checkoutService`, `ticketPaymentCheck`, `ticketPurchaseRow`, `bidderService` and `winningBidChecks`. Treat surviving mutants as missing tests.
 - **T13 - Coverage isn't measurable from the repo.** `@vitest/coverage-v8` isn't a dev dependency, so nobody can see the numbers above without installing it. *Fix:* add it, plus an `npm run test:coverage` script, and record the totals in `testing-batches.md` beside the pass counts. Hold off on a coverage threshold until T1 exists to enforce it.
 
+### Plan for writing the tests
+
+Work in order: each phase makes the next one cheaper or safer. One branch and PR per phase (or per item where marked). Every PR follows the standing rules: `npm run test:quiet`, `npm run lint`, the totals in `testing-batches.md`, and a `CHANGELOG.md` entry naming the item IDs.
+
+**How each new test is checked.** Every new test gets the mutation check used for the ticket-price work. Back up the source file with `cp`, delete or invert the line the test is meant to protect, run the test and see it **fail**, then restore from the backup. A test that still passes is rewritten before the PR. Each PR description lists the mutations tried, like #51's.
+
+**Phase 1 - T1 and T13: run the tests on every PR.** The Cloud Build trigger (`cloudrun-orns-auction-manager-gh-us-east1-...`, europe-west1) builds with buildpacks from an inline config; there is no `Dockerfile` or `cloudbuild.yaml` in the repo. So:
+
+1. Add `.github/workflows/test.yml`. On every pull request to `main` and every push to `main`, it runs `npm ci`, `npm run lint` and `npm run test:quiet` on Node 22. The `--no-experimental-webstorage` flag is already in `vitest.config.ts`.
+2. In GitHub's branch protection for `main`, require that check. `gh pr merge` then refuses a PR whose tests fail, and the deploy trigger is left alone.
+3. Add `@vitest/coverage-v8` (pinned to the installed vitest version) as a dev dependency and an `npm run test:coverage` script. Record the four percentages in `testing-batches.md`. No threshold yet.
+4. Prove it: open a throwaway PR with one deliberately failing test, confirm the check fails and the merge is blocked, then close the PR.
+
+**Phase 2 - T4: make the concurrency tests deterministic** (before adding more, so new tests don't copy the pattern).
+
+- Add a small helper, `server/test/helpers/gate.ts`:
+  - `const gate = createGate()` gives `gate.wait()` (for a fake to `await`), `gate.reached` (a promise resolved when the fake first calls `wait`) and `gate.release()`.
+  - MSW handlers and fake Sheets methods call `await gate.wait()` in place of their hand-built promise and release function.
+- *Wait, then act* tests (`auction-setup.test.ts:83`, `receipts.test.ts:611`, `auctionService.test.ts:186`, `bidderService.test.ts:189`, `itemService-concurrency.test.ts:73`): replace the `setTimeout` with `await gate.reached`, then send the second request.
+- *Wait, then check nothing happened* tests (`bidderService.test.ts:252`, `paypalSweeperJob.test.ts:352`, `specialWinnerService.test.ts:86`): record the order of events instead, and assert the guarded write comes after `"released"`. For example, `expect(order).toEqual(["other-writer-start", "released", "set-flag-done"])`. Mutation check: remove the `withLock` around the guarded write; the test must fail every time.
+- Then run `for i in $(seq 1 30); do npx vitest run server/ || break; done`. If one of the known flakes (the 429 in `bid-management`, the 401 in `tickets`, production's bidder labels, `userRoles` "a User can't change roles") still appears, capture its full output and fix it in the same PR.
+
+**Phase 3 - T2 and T3: Action History and the untested routes** (backend; one PR per area: Bid Management, Items, Volunteers, Settings).
+
+- **Action History.** For each of the 23 action names, add assertions to the route's existing happy-path test in its file (`bid-management.test.ts`, `items.test.ts`, `receipts.test.ts`, `volunteers.test.ts`, `auction-setup.test.ts`, and so on). Don't write separate "it logs" tests:
+  - `expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ area, action, target }))`, plus the `before`/`after` values where the route records them;
+  - for a route with an `undo` spec ("Set special winner"), the spec's range and before/after values;
+  - for a route without one, that `notUndoableReason` is a non-empty string;
+  - for each spreadsheet written, `expect(changesSince(v).changed).toContain(<spreadsheetId>)` (the live-refresh half of rule 7).
+
+  Mutation check: delete the route's `logAction` call, and separately its `clearCacheForSpreadsheet` call.
+- **Special-winner route.** New `describe` in `bid-management.test.ts`. The Bid-Management sheet is served by MSW with a known prize cell. The tests cover:
+  - a 400 for an unknown prize or a non-string bidder;
+  - saving a winner (the exact `values.update` body);
+  - clearing one (empty string);
+  - `addFollowUp` adding the Follow-Up row only when the bidder has checked out;
+  - a resend with the same `idempotencyKey` writing once;
+  - the logged undo spec.
+- **Walk-in ticket path.** In `bid-management.test.ts`, send `ticketsSpreadsheetId` and serve the Tickets sheet. Assert the appended ticket row (from `walkInTicketRow`, with the Config's ticket price), that both spreadsheets' caches are cleared, and that `syncBiddersFromTickets` (the global spy) was called because `ticketAppended` was true. Then check the opposite: without a tickets spreadsheet, it isn't called.
+- **Volunteer routes.** In `volunteers.test.ts`, with Gmail's send endpoint served by MSW and the fake Firestore:
+  - invite: 400 for no name, an invalid email, or an `@orns.org` address. On success, check the stored volunteer, that the emailed link's token matches the one stored, and the "Invite volunteer" log entry.
+  - resend: 404 for an unknown ID; otherwise a new token and the old link refused.
+  - revoke: 404, then status `revoked` and that volunteer's next request refused.
+  - clear-ended: removes revoked and deactivated volunteers and keeps active ones, and the response's count matches.
+  - every route: 403 for a User.
+- **`syncBiddersWith`.** In `bidderTicketSync.test.ts` (which already uses the real module), pass a `record` spy and Sheets fixtures where one ticket was renamed and one is new. Assert the two entries' targets, summaries and before/after values, and that nothing is recorded when nothing changed.
+- **`actionHistoryStore`.** New `server/test/actionHistoryStore.test.ts`, with `vi.unmock`/`vi.importActual` and the fake Firestore. It covers:
+  - the cache (a second read within 30 s doesn't touch Firestore; after 30 s it does);
+  - a Firestore failure returning the cached ID, or `""` when nothing is cached;
+  - `wasUndone`/`recordUndone` round-tripping an action ID containing `/`;
+  - **`setActionHistorySpreadsheetId` keeping an existing `editTracking`**. Write this test first and watch it fail, then add `{ merge: true }`.
+
+  Also correct `setup.ts`'s comment.
+
+**Phase 4 - T5 and T7: the browser side of the writes** (frontend).
+
+- **T5.** New `src/services/google-api.test.ts` in jsdom, with MSW's `setupServer` (already used by the backend). For each exported function, call it and assert the request MSW received: method, path, query and JSON body. Also check how it handles a 4xx (the error message surfaced) and a 401 (sign-in prompt). The cases come straight from the server routes' validation, so a renamed field fails here.
+  Longer term (separate item, if worth it): move the request body types into a shared `shared/apiTypes.ts` imported by both `src/` and `server/`, so `tsc` catches a mismatch.
+- **T7.** Component-level seam tests, using the real component and real hook, with only `@/services/google-api` (or `apiClient`) mocked:
+  - **Walk-in dialog** (`Bidders` page, `useWalkInForm`):
+    - type a first name, last name and email, then submit;
+    - assert `postJsonOnce` was called with `/api/bidders/walk-in` and exactly `{ firstName, lastName, email, ticketPrice: <Config price>, ... }`;
+    - assert the dialog closes and the new bidder number is shown;
+    - assert a server error keeps the dialog open with the message;
+    - assert that submitting twice sends once.
+  - **Add item and delete item** (`useAddAuctionItem`, `useDeleteAuctionItem`): fill the form or confirm the delete, then assert the exact payload, the refresh, and the error path.
+  - **`BidManagementWorkflow`:**
+    - Set Up sends the Config's two spreadsheet IDs once, and its toast shows the ticket-price message;
+    - Go Live asks first and does nothing if the person cancels;
+    - Close asks first;
+    - the stage buttons are absent without `auction.stage`.
+  - **`useBundling`:** the bundle and restore payloads, and the uncovered error branches.
+
+**Phase 5 - T6 and T8: real primitives and exact assertions.**
+
+- **T6.** One test file at a time, delete the `vi.mock("@/components/ui/dialog")` and `vi.mock("@/components/ui/select")` stubs and drive the real components, following `src/components/ui/select.test.tsx`:
+  - open a dialog by clicking its trigger, and find it with `screen.findByRole("dialog")`;
+  - choose an option with `user.click(screen.getByRole("combobox", { name }))` then `user.click(screen.getByRole("option", { name }))`;
+  - assert dialogs close (`queryByRole("dialog")` is null after Save or Cancel).
+
+  Add jsdom shims to the setup only if a primitive needs them, as `hasPointerCapture` and `scrollIntoView` already are. If a file can't move off a stub, change the stub to render nothing unless `open` is true.
+- **T8.** Replace each listed `toBeDefined()`/bare `toHaveBeenCalled()` with the exact value. For `items.test.ts:196` and `:596`, use the route's actual message.
+
+**Phase 6 - T9-T12: when files are next touched.** These are not sweeps of their own:
+
+- T9 and T10: fix the test file being edited for other work. Swap class assertions for `toBeVisible`/`toBeDisabled`, test IDs for role and label queries, `fireEvent` for `userEvent`, and `toBeTruthy()` for `toBeInTheDocument()`.
+- T11: add the snapshot rule to `testing-batches.md` in Phase 1's PR.
+- T12: once Phases 1-5 are done, run Stryker once on the money-path files, list the surviving mutants here as new items, and decide then whether to run it regularly.
+
+Rough size: Phase 1 is small (one workflow and one setting). Phases 2 and 5 are medium. Phase 3 is the largest, at about 60-80 new or extended tests. Phase 4 is about 30-40 tests. Expected totals after Phases 1-5: roughly 1,050-1,100 frontend and 1,150-1,200 backend.
+
 ### Confirmed fine (don't "fix")
 
 - No skipped, `.only` or `todo` tests. No test mocks the module it is testing, and no pure helper in `src/lib`/`server/utils` is mocked (the mocked `errorBuffer`, `bidOutbox` and `screenshotCapture` hold browser or global state).
