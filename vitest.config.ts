@@ -41,6 +41,8 @@ export default defineConfig({
       // (server/test/handlers.ts), never real PayPal, sandbox or otherwise.
       PAYPAL_CLIENT_ID: "test-paypal-client-id",
       PAYPAL_CLIENT_SECRET: "test-paypal-client-secret",
+      SANDBOX_PAYPAL_CLIENT_ID: "test-sandbox-paypal-client-id",
+      SANDBOX_PAYPAL_CLIENT_SECRET: "test-sandbox-paypal-client-secret",
       PAYPAL_IS_SANDBOX: "true",
       // The default test session (server/test/helpers/session.ts) signs in
       // as this address, so it is a Full Administrator without Firestore.
