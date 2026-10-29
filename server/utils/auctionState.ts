@@ -1,3 +1,5 @@
+import { sheets_v4 } from "googleapis";
+
 /**
  * The auction's state, kept as text in the Bid Management spreadsheet's
  * `Auction-Status!A2`. Only ever moves forward: Prep -> Live -> Closed.
@@ -23,4 +25,14 @@ export function parseAuctionState(cell: unknown): AuctionState {
   if (text === "false" || text === "closed") return "closed";
   if (text === "live") return "live";
   return "prep";
+}
+
+/** The auction's state read from its Bid Management spreadsheet, or null if it can't be read. */
+export async function readAuctionState(sheets: sheets_v4.Sheets, spreadsheetId: string): Promise<AuctionState | null> {
+  try {
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: "'Auction-Status'!A2", valueRenderOption: "UNFORMATTED_VALUE" });
+    return parseAuctionState(res.data.values?.[0]?.[0]);
+  } catch {
+    return null;
+  }
 }

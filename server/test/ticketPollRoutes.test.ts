@@ -70,7 +70,7 @@ describe("GET /api/tickets/fluent-forms/status", () => {
   it("before anything has happened: no webhook, no poll, nothing to review", async () => {
     const res = await request(app).get(STATUS).set(authCookieHeader(tokens));
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ mode: "compare", lastWebhook: null, poll: null, missed: [], submittedAt: {}, review: [] });
+    expect(res.body).toMatchObject({ mode: "compare", lastWebhook: null, poll: null, missed: [], submittedAt: {}, review: [], afterGoLive: [] });
   });
 
   it("gathers the last webhook, the poll's runs, the missed entries and the review list", async () => {
@@ -94,6 +94,7 @@ describe("GET /api/tickets/fluent-forms/status", () => {
       missed: [{ entryId: "1485", at: "2027-02-01T11:00:00.000Z" }, { entryId: "1488", at: "2027-02-02T11:00:00.000Z" }],
       submittedAt: { "1485": "2027-01-30 10:00:00" },
       review: [expect.objectContaining({ entryId: "1489", name: "Sam Roe" }), expect.objectContaining({ entryId: "1491", name: "Pat Lee" })],
+      afterGoLive: [],
     });
   });
 
@@ -101,5 +102,28 @@ describe("GET /api/tickets/fluent-forms/status", () => {
     await getAdminFirestore().collection("userRoles").doc("helper@orns.org").set({ role: "user" });
     const res = await request(app).get(STATUS).set(authCookieHeader(tokens, "helper@orns.org"));
     expect(res.status).toBe(403);
+  });
+});
+
+describe("POST /api/tickets/fluent-forms/after-go-live/:entryId/handled (W7)", () => {
+  const late = () => getAdminFirestore().collection("ticketPurchasesAfterGoLive");
+  const handled = (id: string, email?: string) => request(app).post(`/api/tickets/fluent-forms/after-go-live/${id}/handled`).set(authCookieHeader(tokens, email));
+
+  it("takes a late purchase off the card once staff register the walk-in, and records who", async () => {
+    await late().doc("1500").set({ entryId: "1500", name: "Pat Lee", tickets: 2, guestsWantingNumbers: [], paymentStatus: "Pending", state: "live", at: "2027-03-20T19:00:00.000Z" });
+    expect((await request(app).get("/api/tickets/fluent-forms/status").set(authCookieHeader(tokens))).body.afterGoLive).toEqual([expect.objectContaining({ entryId: "1500" })]);
+
+    const res = await handled("1500");
+
+    expect(res.status).toBe(200);
+    expect((await request(app).get("/api/tickets/fluent-forms/status").set(authCookieHeader(tokens))).body.afterGoLive).toEqual([]);
+    expect(vi.mocked(logAction)).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ area: "Tickets", action: "Register late website purchase", target: "Pat Lee" }));
+    expect((await handled("1500")).status).toBe(404);
+  });
+
+  it("is for staff who can run the auction's stages", async () => {
+    await late().doc("1500").set({ entryId: "1500", name: "Pat Lee", at: "x" });
+    await getAdminFirestore().collection("userRoles").doc("helper@orns.org").set({ role: "user" });
+    expect((await handled("1500", "helper@orns.org")).status).toBe(403);
   });
 });

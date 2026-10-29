@@ -32,6 +32,7 @@ const status = (overrides: Partial<TicketPurchaseStatus> = {}): TicketPurchaseSt
   missed: [],
   submittedAt: {},
   review: [],
+  afterGoLive: [],
   ...overrides,
 });
 

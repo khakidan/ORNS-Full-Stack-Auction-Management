@@ -12,6 +12,7 @@ const status = (overrides: Partial<TicketPurchaseStatus> = {}): TicketPurchaseSt
   missed: [],
   submittedAt: {},
   review: [],
+  afterGoLive: [],
   ...overrides,
 });
 
@@ -41,6 +42,12 @@ describe("ticketStatusProblems", () => {
       review: [{ entryId: "1491", name: "Pat Lee", problems: ["x"], firstSeenAt: "", lastSeenAt: "" }],
     }), NOW);
     expect(problems).toEqual([expect.stringContaining("stopped"), expect.stringContaining("failed"), "1 purchase(s) need review."]);
+  });
+
+  it("asks staff to register purchases that arrived after Go Live - even without the Fluent Forms API", () => {
+    const late = [{ entryId: "1500", name: "Pat Lee", tickets: 2, guestsWantingNumbers: [], paymentStatus: "Pending", state: "live" as const, at: "" }];
+    expect(ticketStatusProblems(status({ afterGoLive: late }), NOW)).toEqual(["1 purchase(s) arrived after Go Live - register them as walk-ins."]);
+    expect(ticketStatusProblems(status({ configured: false, poll: null, afterGoLive: late }), NOW)).toEqual(["1 purchase(s) arrived after Go Live - register them as walk-ins."]);
   });
 
   it("says nothing while the Fluent Forms API isn't set up - the card says that itself", () => {

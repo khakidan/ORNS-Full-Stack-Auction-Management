@@ -185,6 +185,21 @@ export interface TicketPurchaseStatus {
   /** Entry ID -> when it was submitted (WordPress's local time, "2027-02-01 10:00:00"). */
   submittedAt: Record<string, string>;
   review: { entryId: string; name: string; problems: string[]; firstSeenAt: string; lastSeenAt: string }[];
+  /** W7: bought once the auction was Live - no bidder number follows, so staff register each as a walk-in. */
+  afterGoLive: TicketPurchaseAfterGoLive[];
+}
+
+/** A website purchase that arrived after Go Live (server/services/ticketsAfterGoLive.ts). */
+export interface TicketPurchaseAfterGoLive {
+  entryId: string;
+  name: string;
+  tickets: number;
+  /** Guests who asked for their own bidder number. */
+  guestsWantingNumbers: string[];
+  /** "Pending" = paying cash or check at the door. */
+  paymentStatus: string;
+  state: "live" | "closed";
+  at: string;
 }
 
 /** What one poll run did (server/services/ticketPoll.ts). */

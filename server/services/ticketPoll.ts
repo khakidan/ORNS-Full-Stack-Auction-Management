@@ -4,6 +4,7 @@ import { FluentFormsApi, fluentFormsApiFromEnv, purchaseFromEntry } from "./flue
 import { getSweeperAuthClient } from "./paypalSweeperJob";
 import { TicketPaymentDeps, checkTicketPayment, paypalForTickets } from "./ticketPaymentCheck";
 import { ticketWriteMode, upsertTicketPurchase } from "./ticketPurchaseService";
+import { clearAfterGoLive } from "./ticketsAfterGoLive";
 import { runIfIdle } from "../utils/asyncLock";
 
 const STATE = () => getAdminFirestore().collection("system").doc("fluentFormsPoll");
@@ -197,9 +198,10 @@ export async function pollTicketPurchasesNow(trigger: string): Promise<TicketPol
  * Setup New Auction Year: the new season starts after the newest entry, so
  * last year's purchases are never added to the cleared sheet. Without the
  * Fluent Forms API the state is just removed, and the next poll starts the
- * season itself.
+ * season itself. Last year's after-Go-Live list (W7) goes too.
  */
 export async function startNewTicketSeason(): Promise<number | null> {
+  await clearAfterGoLive();
   const fluentForms = fluentFormsApiFromEnv();
   if (!fluentForms) {
     await STATE().delete();
