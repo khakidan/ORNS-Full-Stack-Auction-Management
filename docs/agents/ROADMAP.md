@@ -108,7 +108,7 @@ Work in order: each phase makes the next one cheaper or safer. One branch and PR
 
 **How each new test is checked.** Every new test gets the mutation check used for the ticket-price work. Back up the source file with `cp`, delete or invert the line the test is meant to protect, run the test and see it **fail**, then restore from the backup. A test that still passes is rewritten before the PR. Each PR description lists the mutations tried, like #51's.
 
-**Phase 1 - T1 and T13: run the tests on every PR.** *Done 2026-10-29 (branch `test-ci`): workflow on Node 24 (the active LTS) rather than 22; coverage totals in `testing-batches.md`.* The Cloud Build trigger (`cloudrun-orns-auction-manager-gh-us-east1-...`, europe-west1) builds with buildpacks from an inline config; there is no `Dockerfile` or `cloudbuild.yaml` in the repo. So:
+**Phase 1 - T1 and T13: run the tests on every PR.** *Done 2026-10-29 (branch `test-ci`): workflow on Node 24 (the active LTS) rather than 22; coverage totals in `testing-batches.md`. Proved with throwaway PR #54: one failing test, the check failed and GitHub marked the PR BLOCKED; closed unmerged.* The Cloud Build trigger (`cloudrun-orns-auction-manager-gh-us-east1-...`, europe-west1) builds with buildpacks from an inline config; there is no `Dockerfile` or `cloudbuild.yaml` in the repo. So:
 
 1. Add `.github/workflows/test.yml`. On every pull request to `main` and every push to `main`, it runs `npm ci`, `npm run lint` and `npm run test:quiet` on Node 22. The `--no-experimental-webstorage` flag is already in `vitest.config.ts`.
 2. In GitHub's branch protection for `main`, require that check. `gh pr merge` then refuses a PR whose tests fail, and the deploy trigger is left alone.
