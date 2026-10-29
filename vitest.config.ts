@@ -12,6 +12,12 @@ export default defineConfig({
     // so `npx vitest run src`, an editor's test runner, or one test file run
     // by hand behave the same (ROADMAP B14).
     execArgv: ["--no-experimental-webstorage"],
+    // `npm run test:coverage`: a summary in the terminal, and the full
+    // report in coverage/index.html (gitignored). No threshold yet (ROADMAP T13).
+    coverage: {
+      provider: "v8",
+      reporter: ["text-summary", "html"],
+    },
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },

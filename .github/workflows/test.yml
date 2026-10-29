@@ -1,0 +1,32 @@
+# Runs the type check and the whole test suite on every pull request to main,
+# and on every push to main. Branch protection on main requires the "test"
+# check, so a PR whose tests fail can't be merged (and so can't deploy).
+# The Cloud Build deploy trigger is separate and unchanged.
+name: Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:quiet

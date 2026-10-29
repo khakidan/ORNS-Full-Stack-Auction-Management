@@ -30,6 +30,180 @@ If step 7 doesn't check out, cash/check checkouts will still work (the code fall
 
 ---
 
+## 2026-10-29 Test Quality Audit (whole suite)
+
+A review of all 181 test files (1924 tests: 1085 backend, 839 frontend), at `404adf1`. It measured them against [`testing-philosophy.md`](./testing-philosophy.md): the GOOD/SHALLOW/CIRCULAR/SMOKE scale, the seam test standard and the mocking boundaries. It also used Testing Library's guidance on queries, `userEvent` and implementation details, and general standards for test suites: tests that pass for the wrong reason, deterministic concurrency tests, coverage of critical paths, and running the tests before release.
+
+How it was done:
+
+- every test file was scanned for known smells;
+- the files that stood out were read;
+- coverage was measured once with `@vitest/coverage-v8`, installed `--no-save` because it isn't a dependency: **lines 90.1%, branches 78.8%, functions 85.0%, statements 88.2%**;
+- the backend suite was run 15 times to look for flaky tests.
+
+The suite is in good shape overall. The problems are specific gaps, not systemic CIRCULAR or SHALLOW testing.
+
+Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries. **High** means a real defect could ship unnoticed; **Medium** means the test can pass for the wrong reason or misses a rule; **Low** is about style and maintainability.
+
+### High
+
+- **[DONE 2026-10-29, Phase 1] T1 - Nothing runs the tests before a deploy.** There is no GitHub Actions workflow and no git hook, and the Cloud Build trigger only builds and deploys. So `main` deploys whatever was merged, whether or not `npm run test:quiet` and `npm run lint` were run. Every other item depends on the suite actually running.
+  *Fix:* run `npm ci && npm run lint && npm run test:quiet` as a Cloud Build step before the image build, so a failure stops the deploy. Or add a GitHub Actions check and require it on `main`.
+- **T2 - Most Action History entries are never checked (AGENTS.md rule 7).** `logAction` is a global spy (`server/test/setup.ts`), but only 16 of the 39 `action:` names in `server/routes` and `server/services` appear in any test. A route that stopped logging, or logged the wrong before/after values, would pass. The 23 untested names:
+  - Bid Management: "Go Live", "Close auction", "Register walk-in", "Set special winner", "Check in with ticket payment", "Print receipt", "Print all receipts", "Email all receipts", "Add bidders from tickets", "Update bidders from tickets"
+  - Items: "Add item", "Delete item", "Bulk edit items", "Bundle items", "Restore bundle"
+  - Tickets: "Delete attendee"
+  - Volunteers: "Invite volunteer", "Resend volunteer link", "Revoke volunteer", "Clear ended volunteers"
+  - Settings: "Set up new auction year", "Archive auction", "Create Action History spreadsheet"
+
+  Likewise `clearCacheForSpreadsheet` (rule 7's "every server write") is checked in only 6 test files, while 13 route and service files call it.
+  *Fix:* in each route's existing happy-path test, assert `logAction` was called with `objectContaining({ action, before, after })`, and assert `changesSince(before).changed` contains the spreadsheet.
+- **T3 - Some route bodies have never run in a test** (from coverage):
+  - `POST /api/auction/special-winner` (`bidRoutes.ts`) has no HTTP test. `specialWinnerService` is tested on its own, but the route's validation, idempotency, and Action History undo spec are not.
+  - The walk-in route's ticket path: clearing the tickets spreadsheet's cache, then `syncBiddersFromTickets` when `result.ticketAppended`.
+  - The volunteer routes in `volunteerRoutes.ts` (60%): invite (including the refusal of `@orns.org` addresses and of invalid emails), resend, revoke and clear-ended, plus their 404s.
+  - `syncBiddersWith` in `bidderTicketSync.ts`: the Action History records for renamed and added bidders. Every route test replaces it with the global spy, and its own test doesn't reach these lines.
+  - `server/services/actionHistoryStore.ts` (0%). It is globally mocked, and `setup.ts` says "actionHistoryStore.test.ts covers the real module", but that file doesn't exist. This module holds `wasUndone`/`recordUndone`, the guard that stops an action being undone twice (A1). Reading it also turned up a likely bug: `setActionHistorySpreadsheetId` writes `system/actionHistory` without `merge`, so creating the spreadsheet would erase the `editTracking` record (A11) that `setEditTrackingRecord` merged in. Settings would then show edit tracking with no owner while the triggers are still installed.
+  *Fix:* supertest cases for each route above, through the real app with MSW. For the store, a real `actionHistoryStore.test.ts` (fake Firestore, `vi.importActual`) covering the cache, the undo guard, and that creating the spreadsheet keeps `editTracking`; then fix the `merge`.
+
+### Medium
+
+- **T4 - Concurrency tests that wait a fixed time.** Two patterns use a real `setTimeout` instead of waiting for a signal:
+  - *Wait, then act* ("give both a moment to reach the gate"): `auction-setup.test.ts:83`, `receipts.test.ts:611`, `auctionService.test.ts:186`, `bidderService.test.ts:189` and `itemService-concurrency.test.ts:73`. On a busy machine the first call may not have reached the lock yet, and the test fails.
+  - *Wait, then check nothing happened*: `bidderService.test.ts:252`, `paypalSweeperJob.test.ts:352` and `specialWinnerService.test.ts:86`. These can pass even with the lock removed, because the code simply hasn't got there in 20-50 ms.
+  The suite has intermittent single-run failures that pass on a rerun: a 429 in `bid-management.test.ts`, a 401 in `tickets.test.ts`, production's bidder labels, and `userRoles.test.ts` "a User can't change roles" (1 failure in 15 backend runs during this audit). Fixed-time waits are the likely cause of some of them.
+  *Fix:* have the gated fake record that it was reached (a promise resolved inside the handler), and `await vi.waitFor(() => expect(reached)...)` before acting, as `ticketPoll.test.ts` does. To prove a write is held, assert it happens only after `release()`, not that nothing happened within N ms. Then rerun the suite in a loop to confirm the flakes are gone.
+- **T5 - The browser-to-server requests are untested.** 43 test files mock `@/services/google-api` wholesale (the API seam, which is allowed), but `google-api.ts` itself is only 32% covered. The paths, methods and request bodies it builds are never checked, so a field renamed on one side would pass every test on both.
+  *Fix:* test `google-api.ts` with MSW in jsdom, asserting each function's method, path and body. Or, better, share the request types between `src/` and `server/` so the compiler catches a mismatch.
+- **T6 - Stubbed UI primitives hide real behaviour.**
+  - The Dialog stub renders its children whether or not `open` is set (`ActionHistoryAdmin`, `Bidders`, `BundlingDialog`, `ConfigSettings`, `TicketAttendeeTab` and `VolunteersAdmin` tests). So those tests can't catch a dialog that never opens or never closes.
+  - The Select stub swaps Base UI's select for a native `<select>` in 10 test files, so a select showing the wrong label, or one that can't be picked by keyboard, isn't caught.
+  `src/components/ui/select.test.tsx` already drives the real Select in jsdom.
+  *Fix:* use the real primitives (opening and choosing through their roles). Where a stub is kept, make it honour `open`.
+- **T7 - Frontend writes with little coverage:**
+  - `useWalkInForm` (21%): the walk-in registration form.
+  - `useAddAuctionItem` (27%) and `useDeleteAuctionItem` (24%).
+  - `BidManagementWorkflow` (26%): Set Up, Go Live and Close, including the new ticket-price message from Set Up.
+  - `useBundling` (75%).
+  These are the seam standard's main case: a user action becomes an API call. *Fix:* render the component, act with `userEvent`, and assert the exact payload sent to the API.
+- **T8 - Assertions that accept any value:**
+  - `items.test.ts:196` and `:596` assert only that `response.body.error` is defined, so any error passes. Assert the message.
+  - Some positive bare `toHaveBeenCalled()` calls are on calls whose arguments matter: `useAttendeesData.test.ts:241` (`getSheetData`), `ConfigSettings.test.tsx:227` (`mockSaveConfig`), `AuctionItemsTab.editing.test.tsx:216` (`mockRefresh`) and `syncRoutes.ticketPrice.test.ts:79` (`performSheetSync`). Use `toHaveBeenCalledWith`. The other bare calls (a toast, `next()` in middleware) are fine.
+
+### Low
+
+- **T9 - Tests of CSS classes (61 assertions).** The main ones are in `ItemRow`, `FilterToolbar`, `select`, `BugReportsAdmin` and `AuctionItemsTab` ("does not tint the Select all bar"). They break on a restyle that changes nothing a user notices. Keep them only where the class *is* the behaviour, such as hidden, disabled or truncated text. Otherwise assert `toBeVisible`, `toBeDisabled` or accessible attributes.
+- **T10 - Query and event style** (Testing Library guidance):
+  - 108 `getByTestId` calls (25 in `Bidders.test.tsx`, many on the stubs from T6) where a role or label query would do.
+  - 60 `fireEvent` calls (`ConfigSettings` 14, `AuctionItemsTab.bundling` 10, `BugReportButton` 8) where `userEvent` would be closer to a real user.
+  - `toBeTruthy()`/`toBeFalsy()` on `getBy*`/`queryBy*` results (`Checkout.test.tsx` 17, `BugReportsAdmin.test.tsx` 6) instead of `toBeInTheDocument()`.
+  Change these whenever the file is next touched; they aren't worth a sweep on their own.
+- **[DONE 2026-10-29, Phase 1] T11 - Recorded snapshots on the money paths.** These snapshots are intentional golden masters that pin every Sheets and PayPal call while those paths are restructured (`moneyPaths.recorded`, `checkoutMarkPaid.recorded`, `syncService`). The risk is `vitest -u` accepting a changed write without anyone reading it. *Fix:* add a rule to `testing-batches.md`: never update these snapshots without reading the diff and naming the change in the commit.
+- **T12 - No mutation testing.** Changes have been mutation-checked by hand, one at a time. *Fix:* run Stryker (`@stryker-mutator/vitest-runner`) now and then on the money paths: `financeUtils`, `checkoutService`, `ticketPaymentCheck`, `ticketPurchaseRow`, `bidderService` and `winningBidChecks`. Treat surviving mutants as missing tests.
+- **[DONE 2026-10-29, Phase 1] T13 - Coverage isn't measurable from the repo.** `@vitest/coverage-v8` isn't a dev dependency, so nobody can see the numbers above without installing it. *Fix:* add it, plus an `npm run test:coverage` script, and record the totals in `testing-batches.md` beside the pass counts. Hold off on a coverage threshold until T1 exists to enforce it.
+
+### Plan for writing the tests
+
+Work in order: each phase makes the next one cheaper or safer. One branch and PR per phase (or per item where marked). Every PR follows the standing rules: `npm run test:quiet`, `npm run lint`, the totals in `testing-batches.md`, and a `CHANGELOG.md` entry naming the item IDs.
+
+**How each new test is checked.** Every new test gets the mutation check used for the ticket-price work. Back up the source file with `cp`, delete or invert the line the test is meant to protect, run the test and see it **fail**, then restore from the backup. A test that still passes is rewritten before the PR. Each PR description lists the mutations tried, like #51's.
+
+**Phase 1 - T1 and T13: run the tests on every PR.** *Done 2026-10-29 (branch `test-ci`): workflow on Node 24 (the active LTS) rather than 22; coverage totals in `testing-batches.md`. Proved with throwaway PR #54: one failing test, the check failed and GitHub marked the PR BLOCKED; closed unmerged.* The Cloud Build trigger (`cloudrun-orns-auction-manager-gh-us-east1-...`, europe-west1) builds with buildpacks from an inline config; there is no `Dockerfile` or `cloudbuild.yaml` in the repo. So:
+
+1. Add `.github/workflows/test.yml`. On every pull request to `main` and every push to `main`, it runs `npm ci`, `npm run lint` and `npm run test:quiet` on Node 22. The `--no-experimental-webstorage` flag is already in `vitest.config.ts`.
+2. In GitHub's branch protection for `main`, require that check. `gh pr merge` then refuses a PR whose tests fail, and the deploy trigger is left alone.
+3. Add `@vitest/coverage-v8` (pinned to the installed vitest version) as a dev dependency and an `npm run test:coverage` script. Record the four percentages in `testing-batches.md`. No threshold yet.
+4. Prove it: open a throwaway PR with one deliberately failing test, confirm the check fails and the merge is blocked, then close the PR.
+
+**Phase 2 - T4: make the concurrency tests deterministic** (before adding more, so new tests don't copy the pattern).
+
+- Add a small helper, `server/test/helpers/gate.ts`:
+  - `const gate = createGate()` gives `gate.wait()` (for a fake to `await`), `gate.reached` (a promise resolved when the fake first calls `wait`) and `gate.release()`.
+  - MSW handlers and fake Sheets methods call `await gate.wait()` in place of their hand-built promise and release function.
+- *Wait, then act* tests (`auction-setup.test.ts:83`, `receipts.test.ts:611`, `auctionService.test.ts:186`, `bidderService.test.ts:189`, `itemService-concurrency.test.ts:73`): replace the `setTimeout` with `await gate.reached`, then send the second request.
+- *Wait, then check nothing happened* tests (`bidderService.test.ts:252`, `paypalSweeperJob.test.ts:352`, `specialWinnerService.test.ts:86`): record the order of events instead, and assert the guarded write comes after `"released"`. For example, `expect(order).toEqual(["other-writer-start", "released", "set-flag-done"])`. Mutation check: remove the `withLock` around the guarded write; the test must fail every time.
+- Then run `for i in $(seq 1 30); do npx vitest run server/ || break; done`. If one of the known flakes (the 429 in `bid-management`, the 401 in `tickets`, production's bidder labels, `userRoles` "a User can't change roles") still appears, capture its full output and fix it in the same PR.
+
+**Phase 3 - T2 and T3: Action History and the untested routes** (backend; one PR per area: Bid Management, Items, Volunteers, Settings).
+
+- **Action History.** For each of the 23 action names, add assertions to the route's existing happy-path test in its file (`bid-management.test.ts`, `items.test.ts`, `receipts.test.ts`, `volunteers.test.ts`, `auction-setup.test.ts`, and so on). Don't write separate "it logs" tests:
+  - `expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ area, action, target }))`, plus the `before`/`after` values where the route records them;
+  - for a route with an `undo` spec ("Set special winner"), the spec's range and before/after values;
+  - for a route without one, that `notUndoableReason` is a non-empty string;
+  - for each spreadsheet written, `expect(changesSince(v).changed).toContain(<spreadsheetId>)` (the live-refresh half of rule 7).
+
+  Mutation check: delete the route's `logAction` call, and separately its `clearCacheForSpreadsheet` call.
+- **Special-winner route.** New `describe` in `bid-management.test.ts`. The Bid-Management sheet is served by MSW with a known prize cell. The tests cover:
+  - a 400 for an unknown prize or a non-string bidder;
+  - saving a winner (the exact `values.update` body);
+  - clearing one (empty string);
+  - `addFollowUp` adding the Follow-Up row only when the bidder has checked out;
+  - a resend with the same `idempotencyKey` writing once;
+  - the logged undo spec.
+- **Walk-in ticket path.** In `bid-management.test.ts`, send `ticketsSpreadsheetId` and serve the Tickets sheet. Assert the appended ticket row (from `walkInTicketRow`, with the Config's ticket price), that both spreadsheets' caches are cleared, and that `syncBiddersFromTickets` (the global spy) was called because `ticketAppended` was true. Then check the opposite: without a tickets spreadsheet, it isn't called.
+- **Volunteer routes.** In `volunteers.test.ts`, with Gmail's send endpoint served by MSW and the fake Firestore:
+  - invite: 400 for no name, an invalid email, or an `@orns.org` address. On success, check the stored volunteer, that the emailed link's token matches the one stored, and the "Invite volunteer" log entry.
+  - resend: 404 for an unknown ID; otherwise a new token and the old link refused.
+  - revoke: 404, then status `revoked` and that volunteer's next request refused.
+  - clear-ended: removes revoked and deactivated volunteers and keeps active ones, and the response's count matches.
+  - every route: 403 for a User.
+- **`syncBiddersWith`.** In `bidderTicketSync.test.ts` (which already uses the real module), pass a `record` spy and Sheets fixtures where one ticket was renamed and one is new. Assert the two entries' targets, summaries and before/after values, and that nothing is recorded when nothing changed.
+- **`actionHistoryStore`.** New `server/test/actionHistoryStore.test.ts`, with `vi.unmock`/`vi.importActual` and the fake Firestore. It covers:
+  - the cache (a second read within 30 s doesn't touch Firestore; after 30 s it does);
+  - a Firestore failure returning the cached ID, or `""` when nothing is cached;
+  - `wasUndone`/`recordUndone` round-tripping an action ID containing `/`;
+  - **`setActionHistorySpreadsheetId` keeping an existing `editTracking`**. Write this test first and watch it fail, then add `{ merge: true }`.
+
+  Also correct `setup.ts`'s comment.
+
+**Phase 4 - T5 and T7: the browser side of the writes** (frontend).
+
+- **T5.** New `src/services/google-api.test.ts` in jsdom, with MSW's `setupServer` (already used by the backend). For each exported function, call it and assert the request MSW received: method, path, query and JSON body. Also check how it handles a 4xx (the error message surfaced) and a 401 (sign-in prompt). The cases come straight from the server routes' validation, so a renamed field fails here.
+  Longer term (separate item, if worth it): move the request body types into a shared `shared/apiTypes.ts` imported by both `src/` and `server/`, so `tsc` catches a mismatch.
+- **T7.** Component-level seam tests, using the real component and real hook, with only `@/services/google-api` (or `apiClient`) mocked:
+  - **Walk-in dialog** (`Bidders` page, `useWalkInForm`):
+    - type a first name, last name and email, then submit;
+    - assert `postJsonOnce` was called with `/api/bidders/walk-in` and exactly `{ firstName, lastName, email, ticketPrice: <Config price>, ... }`;
+    - assert the dialog closes and the new bidder number is shown;
+    - assert a server error keeps the dialog open with the message;
+    - assert that submitting twice sends once.
+  - **Add item and delete item** (`useAddAuctionItem`, `useDeleteAuctionItem`): fill the form or confirm the delete, then assert the exact payload, the refresh, and the error path.
+  - **`BidManagementWorkflow`:**
+    - Set Up sends the Config's two spreadsheet IDs once, and its toast shows the ticket-price message;
+    - Go Live asks first and does nothing if the person cancels;
+    - Close asks first;
+    - the stage buttons are absent without `auction.stage`.
+  - **`useBundling`:** the bundle and restore payloads, and the uncovered error branches.
+
+**Phase 5 - T6 and T8: real primitives and exact assertions.**
+
+- **T6.** One test file at a time, delete the `vi.mock("@/components/ui/dialog")` and `vi.mock("@/components/ui/select")` stubs and drive the real components, following `src/components/ui/select.test.tsx`:
+  - open a dialog by clicking its trigger, and find it with `screen.findByRole("dialog")`;
+  - choose an option with `user.click(screen.getByRole("combobox", { name }))` then `user.click(screen.getByRole("option", { name }))`;
+  - assert dialogs close (`queryByRole("dialog")` is null after Save or Cancel).
+
+  Add jsdom shims to the setup only if a primitive needs them, as `hasPointerCapture` and `scrollIntoView` already are. If a file can't move off a stub, change the stub to render nothing unless `open` is true.
+- **T8.** Replace each listed `toBeDefined()`/bare `toHaveBeenCalled()` with the exact value. For `items.test.ts:196` and `:596`, use the route's actual message.
+
+**Phase 6 - T9-T12: when files are next touched.** These are not sweeps of their own:
+
+- T9 and T10: fix the test file being edited for other work. Swap class assertions for `toBeVisible`/`toBeDisabled`, test IDs for role and label queries, `fireEvent` for `userEvent`, and `toBeTruthy()` for `toBeInTheDocument()`.
+- T11: add the snapshot rule to `testing-batches.md` in Phase 1's PR.
+- T12: once Phases 1-5 are done, run Stryker once on the money-path files, list the surviving mutants here as new items, and decide then whether to run it regularly.
+
+Rough size: Phase 1 is small (one workflow and one setting). Phases 2 and 5 are medium. Phase 3 is the largest, at about 60-80 new or extended tests. Phase 4 is about 30-40 tests. Expected totals after Phases 1-5: roughly 1,050-1,100 frontend and 1,150-1,200 backend.
+
+### Confirmed fine (don't "fix")
+
+- No skipped, `.only` or `todo` tests. No test mocks the module it is testing, and no pure helper in `src/lib`/`server/utils` is mocked (the mocked `errorBuffer`, `bidOutbox` and `screenshotCapture` hold browser or global state).
+- About 2.2 assertions per test, and 307 exact-payload assertions (`toHaveBeenCalledWith`), against 28 positive bare `toHaveBeenCalled()`: the seam standard is broadly followed.
+- Route tests go through the real Express app with a real signed `orns_session` cookie (`helpers/session.ts`). All Google, PayPal and WordPress traffic goes through MSW, Firestore is an in-memory fake for every test, and per-test resets (`_reset...ForTesting`, `afterEach` clears) keep tests independent.
+- The data-hook tests checked (`useAuctionStatusData`, for example) feed raw sheet values in and assert the state derived from them. That isn't CIRCULAR.
+- The global spies in `setup.ts` for `logAction`, `bidderTicketSync`, `sharedConfig` and `idempotencyStore` are acceptable: each real module has its own test through `vi.importActual` (`actionHistory.test.ts`, `bidderTicketSync.test.ts`, `sharedConfig.test.ts`, `idempotencyStore.test.ts`). The exception is `actionHistoryStore`, under T3. T2 is about using these spies, not removing them.
+- Areas are well covered: `server/middleware` 98%, `src/lib` 98%, `server/utils` 95%, `server/services` 94%.
+
+---
+
 ## 2026-10-28 Audit Backlog (whole codebase)
 
 A read of the whole codebase after A1-A17 shipped (`8f3a1ea`), measured against the same criteria as the 2026-10-21 and 2026-10-27 audits: bugs, security, data integrity and operations, plus the rules in `AGENTS.md` and the guides under `docs/agents/`. Each item was confirmed by reading the cited code. At audit time the suite was green (849 backend / 807 frontend) and lint was clean.

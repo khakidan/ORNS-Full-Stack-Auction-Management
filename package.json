@@ -13,6 +13,7 @@
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "test:quiet": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "gas:stamp": "node scripts/apps-script/cli.mjs stamp",
     "gas:deploy": "node scripts/apps-script/cli.mjs deploy",
     "gas:check": "node scripts/apps-script/cli.mjs check"
@@ -55,6 +56,7 @@
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.1",
     "@types/supertest": "^7.2.0",
+    "@vitest/coverage-v8": "4.1.12",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.28.0",
     "jsdom": "^29.1.1",

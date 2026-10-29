@@ -78,7 +78,7 @@ The app was originally built in Google AI Studio. AI Studio is no longer part of
 
 For the complete guidelines and background, see [`/docs/agents/patterns.md`](./docs/agents/patterns.md).
 
-1.  **Testing Mandate**: Always run `npm run test:quiet` (the full suite) and `npm run lint`, and confirm the totals in [`testing-batches.md`](./docs/agents/testing-batches.md), before declaring a task complete. Update those totals when they change.
+1.  **Testing Mandate**: Always run `npm run test:quiet` (the full suite) and `npm run lint`, and confirm the totals in [`testing-batches.md`](./docs/agents/testing-batches.md), before declaring a task complete. Update those totals when they change. GitHub Actions runs both on every pull request, and `main` won't merge a PR whose check fails.
 2.  **Never push straight to `main`**: it deploys to production. Push a branch and let the user decide when to merge.
 3.  **Session Cookie Rules**: The session cookie **MUST** remain named **`orns_session`** - renaming it signs every user out. Do not revert it to the legacy `__session`.
 4.  **Code Splitting Rules**: The `manualChunks` function inside `vite.config.ts` must use the dynamic functional matcher structure.
