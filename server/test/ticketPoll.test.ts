@@ -160,6 +160,17 @@ describe("pollTicketPurchases", () => {
     expect(checkTicketPayment).not.toHaveBeenCalled();
   });
 
+  it("keeps checking a PayPal purchase Fluent Forms calls processing - PayPal may be holding it", async () => {
+    await startAt(1480);
+    await state().set({ highWaterEntryId: 1481 }, { merge: true });
+    const d = deps([entry(1481, { paymentStatus: "processing" })]);
+
+    await pollTicketPurchases(d);
+    await pollTicketPurchases(d);
+
+    expect(vi.mocked(checkTicketPayment).mock.calls.map(([, id]) => id)).toEqual(["1481", "1481"]);
+  });
+
   it("checks a settled purchase again when Fluent Forms reports a refund", async () => {
     await startAt(1480, { "1481": "paid" });
     await state().set({ highWaterEntryId: 1481 }, { merge: true });

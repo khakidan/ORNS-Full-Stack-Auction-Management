@@ -10,7 +10,7 @@ import { runIfIdle } from "../utils/asyncLock";
 const STATE = () => getAdminFirestore().collection("system").doc("fluentFormsPoll");
 
 /** Fluent Forms payment statuses that can change a PayPal row (W4). */
-const SETTLING_STATUSES = new Set(["paid", "refunded", "partially-refunded"]);
+const SETTLING_STATUSES = new Set(["paid", "processing", "refunded", "partially-refunded"]);
 
 export interface TicketPollState {
   /** Entries up to this ID are last year's (or before the poll began) - never added. */
@@ -79,7 +79,7 @@ function stateFrom(data: Record<string, any> | undefined): TicketPollState | nul
  *    one handled - so an outage of any length is caught up next time. An
  *    error stops there; the next run starts from that entry again.
  * 2. Every PayPal entry this season whose Fluent Forms payment status is
- *    paid or refunded, and hasn't been settled at that status, goes
+ *    paid, processing (PayPal holding it) or refunded, and hasn't been settled at that status, goes
  *    through checkTicketPayment (W4). Cash/check is left to staff.
  *
  * The season starts after the newest entry when the poll first runs (and
