@@ -76,20 +76,13 @@ export class PayPalService {
   private clientId: string;
   private clientSecret: string;
   private isSandbox: boolean;
+  /** The env vars this mode's credentials come from, for the "missing" error. */
+  private credentialVars: string;
   private baseUrl: string;
   private merchantEmail: string;
 
   constructor(overrides: PayPalServiceOverrides = {}) {
     this.fetcher = overrides.fetcher || fetch;
-
-    this.clientId = (overrides.clientId !== undefined
-      ? overrides.clientId
-      : (process.env.PAYPAL_CLIENT_ID || "")
-    ).trim();
-    this.clientSecret = (overrides.clientSecret !== undefined
-      ? overrides.clientSecret
-      : (process.env.PAYPAL_CLIENT_SECRET || "")
-    ).trim();
 
     if (overrides.isSandbox !== undefined) {
       this.isSandbox = overrides.isSandbox;
@@ -98,13 +91,28 @@ export class PayPalService {
       this.isSandbox = sandboxRaw === "true" || sandboxRaw === "";
     }
 
+    // The server holds both PayPal apps' credentials, so Settings' sandbox/live
+    // switch is all it takes to change PayPal: SANDBOX_PAYPAL_* for the sandbox
+    // app, PAYPAL_* for the live one. Never one in place of the other - sandbox
+    // with no sandbox credentials fails clearly instead of using live ones.
+    const prefix = this.isSandbox ? "SANDBOX_PAYPAL" : "PAYPAL";
+    this.credentialVars = `${prefix}_CLIENT_ID / ${prefix}_CLIENT_SECRET`;
+    this.clientId = (overrides.clientId !== undefined
+      ? overrides.clientId
+      : (process.env[`${prefix}_CLIENT_ID`] || "")
+    ).trim();
+    this.clientSecret = (overrides.clientSecret !== undefined
+      ? overrides.clientSecret
+      : (process.env[`${prefix}_CLIENT_SECRET`] || "")
+    ).trim();
+
     this.baseUrl = this.isSandbox ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
     this.merchantEmail = "pavetheway@orns.org";
   }
 
   private async getAccessToken_(): Promise<string> {
     if (!this.clientId || !this.clientSecret) {
-      throw new Error("Missing PayPal credentials in your environment variables!");
+      throw new Error(`Missing PayPal ${this.isSandbox ? "sandbox" : "live"} credentials in your environment variables (${this.credentialVars})!`);
     }
     const authString = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64");
 

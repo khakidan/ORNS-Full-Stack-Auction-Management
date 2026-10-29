@@ -44,7 +44,8 @@ are set on the service itself and there is no `.env`.
 *   `SESSION_SECRET`: Long random string that signs the `orns_session` cookie
 *   `APP_URL`: The URL the server is reached at (`http://localhost:<PORT>` locally, `https://orns-auction-manager.cloud.run` in production). The OAuth redirect URI is built from it as `<APP_URL>/auth/callback`
 *   `GEMINI_API_KEY`: Key for the server-side Gemini bundle-suggestion features
-*   `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET`: PayPal Invoicing API credentials (sandbox credentials locally)
+*   `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET`: the **live** PayPal REST app's credentials ("Auction AI Receipts")
+*   `SANDBOX_PAYPAL_CLIENT_ID` / `SANDBOX_PAYPAL_CLIENT_SECRET`: the **sandbox** PayPal REST app's credentials ("Auction Sandbox Test"). The server holds both, so **Settings > PayPal Integration**'s sandbox/live switch is all it takes to change PayPal - no server change. A mode whose pair is missing fails with an error naming it; it never uses the other pair. Locally, the sandbox pair is enough
 *   `SWEEPER_TRIGGER_SECRET`: Shared secret Cloud Scheduler sends to `POST /internal/paypal-sweep` to run the PayPal sweep (see "Deployment"). Production only; leave it empty locally, which turns that endpoint off
 *   `FLUENT_FORMS_WEBHOOK_SECRET`: Shared secret the Auction Tickets form's Webhook feed sends in an `X-ORNS-Webhook-Secret` header to `POST /api/webhooks/fluent-forms/tickets` (see "Fluent Forms ticket webhook"). Leave it empty locally, which turns that endpoint off
 *   `FLUENT_FORMS_TICKETS_MODE` (optional): `write` makes the ticket webhook add rows to the tickets tab. Unset (the default) is shadow mode: it reports what it would do (Cloud Logging, `jsonPayload.fluentFormsWebhook`) and writes nothing. Set it to `write` only at the switch-over, when the form's Google Sheets feed is turned off - never run both as writers
@@ -162,7 +163,7 @@ Production configuration (all the environment variables above, with
 production values) is set on the `orns-auction-manager-gh` service in
 the Cloud Run console, not in any file in this repo. Since 2026-10-28
 the secret ones - `GOOGLE_CLIENT_SECRET`, `PAYPAL_CLIENT_SECRET`,
-`SESSION_SECRET`, `GEMINI_API_KEY`, `SWEEPER_TRIGGER_SECRET`,
+`SANDBOX_PAYPAL_CLIENT_SECRET` (since 2026-10-29), `SESSION_SECRET`, `GEMINI_API_KEY`, `SWEEPER_TRIGGER_SECRET`,
 `FLUENT_FORMS_WEBHOOK_SECRET` - are Secret Manager secrets of the same
 name, referenced by the service as `<NAME>:latest`, and
 `FLUENT_FORMS_API_PASSWORD` comes from the secret
@@ -239,9 +240,9 @@ new website row always starts Pending. Set-up:
     and expose it to the service as `FLUENT_FORMS_API_PASSWORD` - the
     variable's name, not the secret's, is what the app reads; set `FLUENT_FORMS_SITE_URL=https://www.orns.org`
     and `FLUENT_FORMS_API_USER` to the user's login.
-3.  In the PayPal developer dashboard, the app whose credentials the
-    service uses (`PAYPAL_CLIENT_ID`) needs **Transaction Search** turned
-    on - PayPal Standard payments are only found there. The Settings
+3.  In the PayPal developer dashboard, both REST apps the service holds
+    (`PAYPAL_CLIENT_ID` live, `SANDBOX_PAYPAL_CLIENT_ID` sandbox) need
+    **Transaction Search** turned on (done 2026-10-28) - PayPal Standard payments are only found there. The Settings
     sandbox/live switch picks which PayPal it asks, so a live purchase
     checked against the sandbox is never confirmed (it goes on the review
     list instead).

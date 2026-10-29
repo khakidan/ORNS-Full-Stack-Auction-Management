@@ -65,11 +65,30 @@ describe("PayPalService.extractInvoiceIdFromUrl", () => {
 });
 
 describe("PayPalService credential resolution", () => {
-  it("falls back to env vars when no overrides are given", async () => {
+  /** The Basic auth header the token request sends, decoded to "id:secret". */
+  async function credentialsSent(isSandbox: boolean) {
+    const fetcher = vi.fn().mockResolvedValue(mockFetchResponse(200, { access_token: "tok" }));
+    await (new PayPalService({ fetcher, isSandbox }) as any).getAccessToken_();
+    const auth = fetcher.mock.calls[0][1].headers.Authorization as string;
+    return Buffer.from(auth.replace(/^Basic /, ""), "base64").toString();
+  }
+
+  it("uses the sandbox app's credentials in sandbox and the live app's in live - Settings' switch is all it takes", async () => {
+    expect(await credentialsSent(true)).toBe("test-sandbox-paypal-client-id:test-sandbox-paypal-client-secret");
+    expect(await credentialsSent(false)).toBe("test-paypal-client-id:test-paypal-client-secret");
+  });
+
+  it("never uses the live credentials in sandbox, or the other way round - a missing pair fails and says which", async () => {
+    vi.stubEnv("SANDBOX_PAYPAL_CLIENT_ID", "");
+    vi.stubEnv("SANDBOX_PAYPAL_CLIENT_SECRET", "");
+    await expect((new PayPalService({ fetcher: vi.fn(), isSandbox: true }) as any).getAccessToken_())
+      .rejects.toThrow("Missing PayPal sandbox credentials in your environment variables (SANDBOX_PAYPAL_CLIENT_ID / SANDBOX_PAYPAL_CLIENT_SECRET)!");
+    vi.unstubAllEnvs();
+
     vi.stubEnv("PAYPAL_CLIENT_ID", "");
     vi.stubEnv("PAYPAL_CLIENT_SECRET", "");
-    const paypal = new PayPalService({ fetcher: vi.fn() });
-    await expect((paypal as any).getAccessToken_()).rejects.toThrow(/Missing PayPal credentials/);
+    await expect((new PayPalService({ fetcher: vi.fn(), isSandbox: false }) as any).getAccessToken_())
+      .rejects.toThrow("Missing PayPal live credentials in your environment variables (PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET)!");
     vi.unstubAllEnvs();
   });
 });
@@ -131,7 +150,7 @@ describe("PayPalService.cancelInvoice", () => {
 describe("PayPalService.getAccessToken_", () => {
   it("throws when credentials are missing", async () => {
     const paypal = newService({ clientId: "", clientSecret: "" });
-    await expect((paypal as any).getAccessToken_()).rejects.toThrow(/Missing PayPal credentials/);
+    await expect((paypal as any).getAccessToken_()).rejects.toThrow(/Missing PayPal (sandbox|live) credentials/);
   });
 
   it("returns the access token on a 200 response", async () => {
