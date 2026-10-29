@@ -17,6 +17,22 @@ npm run lint         # tsc --noEmit
 
 Run both commands, and confirm the totals below, before declaring any task complete.
 
+## On Every Pull Request (GitHub Actions)
+
+`.github/workflows/test.yml` runs `npm ci`, `npm run lint` and `npm run test:quiet` on Node 24 for every pull request to `main` and every push to `main`. Branch protection on `main` requires its `test` check, so a PR whose type check or tests fail can't be merged - and so can't deploy (the Cloud Build deploy trigger is separate and unchanged). Still run both commands locally first; the check is the backstop, not the loop.
+
+## Coverage
+
+```bash
+npm run test:coverage   # the whole suite, with a coverage summary; full report in coverage/index.html
+```
+
+There is no coverage threshold. Record the four totals in the table below when they move; a drop on a change that adds code means the new code went untested.
+
+## Recorded Snapshots
+
+`server/test/__snapshots__/` holds golden masters that pin every Sheets and PayPal call on the money paths (`moneyPaths.recorded`, `checkoutMarkPaid.recorded`, `syncService`). **Never update them with `vitest -u` without reading the diff.** Each changed line is a changed write to a spreadsheet or to PayPal: confirm it is the change you meant, and name it in the commit message ("snapshot: Mark Paid now also writes column N"). If you can't say why a line changed, the code is wrong, not the snapshot.
+
 ## Run One Layer
 
 Useful for a faster loop, or to get the per-layer counts for the table below:
@@ -38,3 +54,10 @@ npx vitest run src/           # frontend
 | **Backend** | `server/test/` | **1085 passed** |
 | **Frontend** | `src/` | **839 passed** |
 | **Total** | `npm run test:quiet` | **1924 passed** |
+
+| Coverage (`npm run test:coverage`, 2026-10-29) | |
+|---|---|
+| Lines | 90.85% |
+| Branches | 79.52% |
+| Functions | 85.53% |
+| Statements | 88.95% |

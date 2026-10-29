@@ -47,7 +47,7 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 
 ### High
 
-- **T1 - Nothing runs the tests before a deploy.** There is no GitHub Actions workflow and no git hook, and the Cloud Build trigger only builds and deploys. So `main` deploys whatever was merged, whether or not `npm run test:quiet` and `npm run lint` were run. Every other item depends on the suite actually running.
+- **[DONE 2026-10-29, Phase 1] T1 - Nothing runs the tests before a deploy.** There is no GitHub Actions workflow and no git hook, and the Cloud Build trigger only builds and deploys. So `main` deploys whatever was merged, whether or not `npm run test:quiet` and `npm run lint` were run. Every other item depends on the suite actually running.
   *Fix:* run `npm ci && npm run lint && npm run test:quiet` as a Cloud Build step before the image build, so a failure stops the deploy. Or add a GitHub Actions check and require it on `main`.
 - **T2 - Most Action History entries are never checked (AGENTS.md rule 7).** `logAction` is a global spy (`server/test/setup.ts`), but only 16 of the 39 `action:` names in `server/routes` and `server/services` appear in any test. A route that stopped logging, or logged the wrong before/after values, would pass. The 23 untested names:
   - Bid Management: "Go Live", "Close auction", "Register walk-in", "Set special winner", "Check in with ticket payment", "Print receipt", "Print all receipts", "Email all receipts", "Add bidders from tickets", "Update bidders from tickets"
@@ -98,9 +98,9 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
   - 60 `fireEvent` calls (`ConfigSettings` 14, `AuctionItemsTab.bundling` 10, `BugReportButton` 8) where `userEvent` would be closer to a real user.
   - `toBeTruthy()`/`toBeFalsy()` on `getBy*`/`queryBy*` results (`Checkout.test.tsx` 17, `BugReportsAdmin.test.tsx` 6) instead of `toBeInTheDocument()`.
   Change these whenever the file is next touched; they aren't worth a sweep on their own.
-- **T11 - Recorded snapshots on the money paths.** These snapshots are intentional golden masters that pin every Sheets and PayPal call while those paths are restructured (`moneyPaths.recorded`, `checkoutMarkPaid.recorded`, `syncService`). The risk is `vitest -u` accepting a changed write without anyone reading it. *Fix:* add a rule to `testing-batches.md`: never update these snapshots without reading the diff and naming the change in the commit.
+- **[DONE 2026-10-29, Phase 1] T11 - Recorded snapshots on the money paths.** These snapshots are intentional golden masters that pin every Sheets and PayPal call while those paths are restructured (`moneyPaths.recorded`, `checkoutMarkPaid.recorded`, `syncService`). The risk is `vitest -u` accepting a changed write without anyone reading it. *Fix:* add a rule to `testing-batches.md`: never update these snapshots without reading the diff and naming the change in the commit.
 - **T12 - No mutation testing.** Changes have been mutation-checked by hand, one at a time. *Fix:* run Stryker (`@stryker-mutator/vitest-runner`) now and then on the money paths: `financeUtils`, `checkoutService`, `ticketPaymentCheck`, `ticketPurchaseRow`, `bidderService` and `winningBidChecks`. Treat surviving mutants as missing tests.
-- **T13 - Coverage isn't measurable from the repo.** `@vitest/coverage-v8` isn't a dev dependency, so nobody can see the numbers above without installing it. *Fix:* add it, plus an `npm run test:coverage` script, and record the totals in `testing-batches.md` beside the pass counts. Hold off on a coverage threshold until T1 exists to enforce it.
+- **[DONE 2026-10-29, Phase 1] T13 - Coverage isn't measurable from the repo.** `@vitest/coverage-v8` isn't a dev dependency, so nobody can see the numbers above without installing it. *Fix:* add it, plus an `npm run test:coverage` script, and record the totals in `testing-batches.md` beside the pass counts. Hold off on a coverage threshold until T1 exists to enforce it.
 
 ### Plan for writing the tests
 
@@ -108,7 +108,7 @@ Work in order: each phase makes the next one cheaper or safer. One branch and PR
 
 **How each new test is checked.** Every new test gets the mutation check used for the ticket-price work. Back up the source file with `cp`, delete or invert the line the test is meant to protect, run the test and see it **fail**, then restore from the backup. A test that still passes is rewritten before the PR. Each PR description lists the mutations tried, like #51's.
 
-**Phase 1 - T1 and T13: run the tests on every PR.** The Cloud Build trigger (`cloudrun-orns-auction-manager-gh-us-east1-...`, europe-west1) builds with buildpacks from an inline config; there is no `Dockerfile` or `cloudbuild.yaml` in the repo. So:
+**Phase 1 - T1 and T13: run the tests on every PR.** *Done 2026-10-29 (branch `test-ci`): workflow on Node 24 (the active LTS) rather than 22; coverage totals in `testing-batches.md`.* The Cloud Build trigger (`cloudrun-orns-auction-manager-gh-us-east1-...`, europe-west1) builds with buildpacks from an inline config; there is no `Dockerfile` or `cloudbuild.yaml` in the repo. So:
 
 1. Add `.github/workflows/test.yml`. On every pull request to `main` and every push to `main`, it runs `npm ci`, `npm run lint` and `npm run test:quiet` on Node 22. The `--no-experimental-webstorage` flag is already in `vitest.config.ts`.
 2. In GitHub's branch protection for `main`, require that check. `gh pr merge` then refuses a PR whose tests fail, and the deploy trigger is left alone.
