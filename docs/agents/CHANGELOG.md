@@ -6,6 +6,8 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **Website tickets switched over** (2026-10-29): `FLUENT_FORMS_TICKETS_MODE=write` set on the Cloud Run service (revision 00057, with #47's code) and the Auction Tickets form's Google Sheets feed (feed 89) turned off, so the webhook and the poll now write each website purchase's `tickets` row and bidder. The first poll afterwards ran in write mode with no new entries and no errors. Done months before ticket sales so the write path can be rehearsed with sandbox purchases first (ROADMAP).
+
 - **W7 - Purchases after Go Live go on the Website Ticket Check card** (`noteIfAfterGoLive`, `server/services/ticketsAfterGoLive.ts`).
   - `upsertTicketPurchase` checks each purchase it places (added, exists, or would-add in shadow mode): if the auction is Live or Closed and the purchase's `tickets` row isn't tied to a Bidder-Numbers line (column O ref `tickets!<row>`), it's recorded in Firestore `ticketPurchasesAfterGoLive/<entryId>` - name, tickets, guests wanting their own number, Paid or Pending (paying at the door), the state. Each purchase is recorded once; one staff marked done never comes back. A failed check is logged and never fails the purchase.
   - The status route returns the list (`afterGoLive`); the card lists it at the top with a **Done** button (`POST /api/tickets/fluent-forms/after-go-live/:entryId/handled`, auction-stage, in Action History), and it raises Needs Attention and the tab's dot - even without the Fluent Forms API, since the webhook alone finds these. Setup New Auction Year empties the list (`startNewTicketSeason`).
