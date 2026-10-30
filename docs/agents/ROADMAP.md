@@ -49,7 +49,7 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 
 - **[DONE 2026-10-29, Phase 1] T1 - Nothing runs the tests before a deploy.** There is no GitHub Actions workflow and no git hook, and the Cloud Build trigger only builds and deploys. So `main` deploys whatever was merged, whether or not `npm run test:quiet` and `npm run lint` were run. Every other item depends on the suite actually running.
   *Fix:* run `npm ci && npm run lint && npm run test:quiet` as a Cloud Build step before the image build, so a failure stops the deploy. Or add a GitHub Actions check and require it on `main`.
-- **T2 - Most Action History entries are never checked (AGENTS.md rule 7).** `logAction` is a global spy (`server/test/setup.ts`), but only 16 of the 39 `action:` names in `server/routes` and `server/services` appear in any test. A route that stopped logging, or logged the wrong before/after values, would pass. The 23 untested names:
+- **[DONE 2026-10-29, Phase 3] T2 - Most Action History entries are never checked (AGENTS.md rule 7).** `logAction` is a global spy (`server/test/setup.ts`), but only 16 of the 39 `action:` names in `server/routes` and `server/services` appear in any test. A route that stopped logging, or logged the wrong before/after values, would pass. The 23 untested names:
   - Bid Management: "Go Live", "Close auction", "Register walk-in", "Set special winner", "Check in with ticket payment", "Print receipt", "Print all receipts", "Email all receipts", "Add bidders from tickets", "Update bidders from tickets"
   - Items: "Add item", "Delete item", "Bulk edit items", "Bundle items", "Restore bundle"
   - Tickets: "Delete attendee"
@@ -58,7 +58,7 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 
   Likewise `clearCacheForSpreadsheet` (rule 7's "every server write") is checked in only 6 test files, while 13 route and service files call it.
   *Fix:* in each route's existing happy-path test, assert `logAction` was called with `objectContaining({ action, before, after })`, and assert `changesSince(before).changed` contains the spreadsheet.
-- **T3 - Some route bodies have never run in a test** (from coverage):
+- **[DONE 2026-10-29, Phase 3] T3 - Some route bodies have never run in a test** (from coverage):
   - `POST /api/auction/special-winner` (`bidRoutes.ts`) has no HTTP test. `specialWinnerService` is tested on its own, but the route's validation, idempotency, and Action History undo spec are not.
   - The walk-in route's ticket path: clearing the tickets spreadsheet's cache, then `syncBiddersFromTickets` when `result.ticketAppended`.
   - The volunteer routes in `volunteerRoutes.ts` (60%): invite (including the refusal of `@orns.org` addresses and of invalid emails), resend, revoke and clear-ended, plus their 404s.
@@ -132,7 +132,7 @@ Work in order: each phase makes the next one cheaper or safer. One branch and PR
 - *Wait, then check nothing happened* tests (`bidderService.test.ts:252`, `paypalSweeperJob.test.ts:352`, `specialWinnerService.test.ts:86`): record the order of events instead, and assert the guarded write comes after `"released"`. For example, `expect(order).toEqual(["other-writer-start", "released", "set-flag-done"])`. Mutation check: remove the `withLock` around the guarded write; the test must fail every time.
 - Then run `for i in $(seq 1 30); do npx vitest run server/ || break; done`. If one of the known flakes (the 429 in `bid-management`, the 401 in `tickets`, production's bidder labels, `userRoles` "a User can't change roles") still appears, capture its full output and fix it in the same PR.
 
-**Phase 3 - T2 and T3: Action History and the untested routes** (backend; one PR per area: Bid Management, Items, Volunteers, Settings).
+**Phase 3 - T2 and T3: Action History and the untested routes** (backend; one PR per area: Bid Management, Items, Volunteers, Settings). *Done 2026-10-29 (branch `action-history-tests`, one PR with a commit per area). All 39 action names are now asserted; "Record winning bid" was missing from the list below too. It found and fixed three bugs: the `merge` in `actionHistoryStore` (as predicted), and two rule-7 gaps - receipts' invoice/emailed writes and Setup New Auction Year never cleared the sheet cache. Also: `setup.ts` now empties the sheet cache between tests. Noted, not changed: record-winning-bid logs its range unquoted (`Bid-Management!A4:B4`); fine for the current tab names.*
 
 - **Action History.** For each of the 23 action names, add assertions to the route's existing happy-path test in its file (`bid-management.test.ts`, `items.test.ts`, `receipts.test.ts`, `volunteers.test.ts`, `auction-setup.test.ts`, and so on). Don't write separate "it logs" tests:
   - `expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ area, action, target }))`, plus the `before`/`after` values where the route records them;

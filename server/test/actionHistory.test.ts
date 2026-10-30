@@ -187,6 +187,9 @@ describe("/api/action-history", () => {
     ]);
     expect(header).toEqual([...ACTION_HISTORY_HEADER]);
     expect(setActionHistorySpreadsheetId).toHaveBeenCalledWith("new-log", TEST_ADMIN_EMAIL);
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Settings", action: "Create Action History spreadsheet", summary: "Started recording actions in a new Action History spreadsheet", notUndoableReason: "the log itself",
+    });
   });
 
   it("won't make a second spreadsheet while the current one still opens", async () => {

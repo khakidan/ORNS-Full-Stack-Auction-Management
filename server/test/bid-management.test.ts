@@ -100,6 +100,7 @@ describe("bidRoutes - /api/auction/record-winning-bid", () => {
 
   it("records a winning bid successfully", async () => {
     setupBidMocks();
+    const version = changesSince(0).version;
 
     const response = await request(app)
       .post("/api/auction/record-winning-bid")
@@ -114,6 +115,16 @@ describe("bidRoutes - /api/auction/record-winning-bid", () => {
         expect.arrayContaining([validBody.itemId, validBody.price])
       ])
     );
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Bid Management",
+      action: "Record winning bid",
+      target: "Item I01",
+      summary: "Bidder 1001 won item I01 for $100.00",
+      after: { bidderId: "1001", itemId: "I01", price: 100 },
+      location: "Bid Management Bid-Management!A4:B4",
+      undo: { kind: "cells", spreadsheetId: "ss-id", range: "Bid-Management!A4:B4", before: [["", ""]], after: [["I01", 100]], lock: "bidder-numbers:ss-id" },
+    });
+    expect(changesSince(version).changed).toContain("ss-id");
   });
 
   it("returns cached response for duplicate idempotency key", async () => {
