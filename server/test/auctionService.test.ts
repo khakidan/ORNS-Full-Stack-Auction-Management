@@ -26,6 +26,7 @@ vi.mock("googleapis", () => ({
 
 import { google } from "googleapis";
 import { recordWinningBid, checkoutMarkPaid } from "../services/auctionService";
+import { createGate, waitUntilQueuedOnLock } from "./helpers/gate";
 
 const SPREADSHEET_ID = "bm-spreadsheet-id";
 const BIDDER_NUMBERS_SHEET = "Bidder-Numbers";
@@ -129,8 +130,7 @@ describe("checkoutMarkPaid - concurrency (defense-in-depth)", () => {
   // 42's has fully completed.
   it("does not start a second concurrent checkout's Bidder-Numbers lookup until the first one (same spreadsheet) has fully finished", async () => {
     const callOrder: string[] = [];
-    let releaseBidder42: () => void;
-    const bidder42Gate = new Promise<void>((resolve) => { releaseBidder42 = resolve; });
+    const bidder42Gate = createGate();
 
     // Both bidders have no invoice URL (columns J/K blank), so the "cash"
     // branch never calls out to PayPalService at all - keeps this test
@@ -158,7 +158,7 @@ describe("checkoutMarkPaid - concurrency (defense-in-depth)", () => {
               wideReadCount++;
               const isFirst = wideReadCount === 1;
               callOrder.push(isFirst ? "42-start" : "99-start");
-              if (isFirst) await bidder42Gate;
+              if (isFirst) await bidder42Gate.wait();
             }
             return { data: { values: bidderNumbersRows.map((r) => [...r]) } };
           }),
@@ -179,12 +179,12 @@ describe("checkoutMarkPaid - concurrency (defense-in-depth)", () => {
       bidderId: "99", spreadsheetId: "same-bm-id", bidderNumbersSheet: "Bidder-Numbers", paymentMethod: "cash",
     });
 
-    // Fired both without awaiting either yet. Without the lock, bidder 99
-    // (never gated) would race ahead and finish well before bidder 42's
-    // gate is released below. Give both a moment to actually reach the
-    // mocked Bidder-Numbers read, then release 42.
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    releaseBidder42!();
+    // Fired both without awaiting either yet. Release 42 only once it's
+    // inside its Bidder-Numbers read and 99 is queued on the lock behind
+    // it. Without the lock, 99 never queues, so this wait fails the test.
+    await bidder42Gate.reached;
+    await waitUntilQueuedOnLock("bidder-numbers:same-bm-id");
+    bidder42Gate.release();
 
     const [result42, result99] = await Promise.all([checkout42, checkout99]);
 

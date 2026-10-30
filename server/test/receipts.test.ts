@@ -16,6 +16,7 @@ import { resetHandlersState, appsScriptCallCount,
          productionScriptCallLog, lastAppsScriptParams } from "./handlers";
 import { calculatePayPalSurcharge } from "../utils/financeUtils";
 import { authCookieHeader } from "./helpers/session";
+import { createGate } from "./helpers/gate";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -102,6 +103,7 @@ describe('Receipt Generate workflow', () => {
     // request's J/K write is visible to the second request's read.
     const bidderRow = ['42', 'John', 'Doe', 'john@example.com', 'TRUE', '', '', '', '', '', ''];
     let invoicesCreated = 0;
+    const paypal = createGate();
     server.use(
       http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
         const range = decodeURIComponent(new URL(request.url).pathname.split('/').pop() || '');
@@ -124,9 +126,9 @@ describe('Receipt Generate workflow', () => {
       }),
       http.post('https://api-m.sandbox.paypal.com/v2/invoicing/invoices', async () => {
         invoicesCreated++;
-        // Widen the race window - without the lock, both requests read
+        // Held open: without the guard, the second request would read
         // "no invoice yet" while this one is still in flight.
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await paypal.wait();
         return HttpResponse.json({ id: 'INV2-MOCK-0000-0000-0001' }, { status: 201 });
       })
     );
@@ -135,11 +137,15 @@ describe('Receipt Generate workflow', () => {
       .post('/api/receipts/generate')
       .set(authHeader)
       .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id' });
-    const [first, second] = await Promise.all([send(), send()]);
+    const firstRequest = send().then((r) => r);
+    await paypal.reached;
+    const second = await send();
+    paypal.release();
+    const first = await firstRequest;
 
     // The second would make a duplicate receipt PDF, so it gets 409
     // instead of running after the first.
-    expect([first.status, second.status].sort()).toEqual([200, 409]);
+    expect([first.status, second.status]).toEqual([200, 409]);
     expect(invoicesCreated).toBe(1);
     expect(appsScriptCallCount).toBe(1);
 
@@ -418,15 +424,19 @@ describe('Receipt Generate-All workflow', () => {
     });
 
     it('turns away a second print while one is running', async () => {
-      // A slow script run, so the second request arrives mid-run.
+      // The script run is held open, so the second request arrives mid-run.
+      const script = createGate();
       server.use(
         http.post('https://script.googleapis.com/v1/scripts/:scriptId\\:run', async () => {
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          await script.wait();
           return HttpResponse.json({ response: { result: { success: true } } });
         })
       );
-      const [a, b] = await Promise.all([printPart(1), printPart(1)]);
-      expect([a.status, b.status].sort()).toEqual([200, 409]);
+      const a = printPart(1).then((r) => r);
+      await script.reached;
+      const b = await printPart(1);
+      script.release();
+      expect([(await a).status, b.status]).toEqual([200, 409]);
     });
 
     it("stops with the script's reason when a part fails", async () => {
@@ -601,16 +611,15 @@ describe('Receipt Email-Only workflow', () => {
   });
 
   it("turns away a second email for the same bidder while the first is still sending (a double-click)", async () => {
-    let release!: () => void;
-    const gate = new Promise<void>((r) => { release = r; });
-    server.use(http.post("https://gmail.googleapis.com/gmail/v1/users/:userId/messages/send", async () => { await gate; return HttpResponse.json({ id: "m" }); }));
+    const gmail = createGate();
+    server.use(http.post("https://gmail.googleapis.com/gmail/v1/users/:userId/messages/send", async () => { await gmail.wait(); return HttpResponse.json({ id: "m" }); }));
     const send = (key: string) => request(app).post('/api/receipts/email-only').set(authHeader)
       .send({ bidderId: '42', spreadsheetId: 'test-spreadsheet-id', itemsSpreadsheetId: 'test-items-spreadsheet-id', idempotencyKey: key });
 
     const first = send('click-1').then((r) => r);
-    await new Promise((r) => setTimeout(r, 200));
+    await gmail.reached;
     const second = await send('click-2');
-    release();
+    gmail.release();
     await first;
 
     expect(second.status).toBe(409);

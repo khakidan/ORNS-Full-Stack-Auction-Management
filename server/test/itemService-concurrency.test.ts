@@ -17,12 +17,12 @@
  */
 import { describe, it, expect } from "vitest";
 import { addItem } from "../services/itemService";
+import { createGate, waitUntilQueuedOnLock } from "./helpers/gate";
 
 describe("itemService/bundleService Auction-Items lock (defense-in-depth)", () => {
   it("does not start a second concurrent addItem's Auction-Items read until the first one (same spreadsheet) has fully finished writing", async () => {
     const callOrder: string[] = [];
-    let releaseFirst: () => void;
-    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const firstGate = createGate();
 
     const header = [
       "Auction Item ID", "Category", "Item Name", "Description", "Value",
@@ -40,7 +40,7 @@ describe("itemService/bundleService Auction-Items lock (defense-in-depth)", () =
               readCount++;
               const isFirst = readCount === 1;
               callOrder.push(isFirst ? "A-start" : "B-start");
-              if (isFirst) await firstGate;
+              if (isFirst) await firstGate.wait();
               return { data: { values: auctionItemsRows.map((r) => [...r]) } };
             }
             // Categories / Value Calculations reads: empty is fine.
@@ -68,10 +68,12 @@ describe("itemService/bundleService Auction-Items lock (defense-in-depth)", () =
       spreadsheetId: "same-items-id", category: "Food", name: "Item B",
     });
 
-    // Fired both without awaiting either yet. Give both a moment to
-    // actually reach the mocked read, then release A.
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    releaseFirst!();
+    // Fired both without awaiting either yet. Release A only once it's
+    // inside its read and B is queued on the lock behind it. Without the
+    // lock, B never queues, so this wait fails the test.
+    await firstGate.reached;
+    await waitUntilQueuedOnLock("auction-items:same-items-id");
+    firstGate.release();
 
     const [resultA, resultB] = await Promise.all([addA, addB]);
 

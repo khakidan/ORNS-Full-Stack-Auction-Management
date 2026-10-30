@@ -7,6 +7,7 @@
  * that maps over the various document creation endpoints to produce 18 total tests.
  */
 import { authCookieHeader } from "./helpers/session";
+import { createGate } from "./helpers/gate";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { app } from "../app";
@@ -421,18 +422,21 @@ describe("Document runs - no duplicates, real error text", () => {
     .send({ folderId: "test-folder-id", spreadsheetId: "test-items-ss-id" });
 
   it("turns away a second request for the same document while the first is running", async () => {
+    const script = createGate();
     server.use(
       http.post("https://script.googleapis.com/v1/scripts/:scriptId\\:run", async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await script.wait();
         return HttpResponse.json({ response: { result: { success: true } } });
       })
     );
 
-    const [a, b] = await Promise.all([createCatalog(), createCatalog()]);
+    const first = createCatalog().then((r) => r);
+    await script.reached;
+    const second = await createCatalog();
+    script.release();
 
-    expect([a.status, b.status].sort()).toEqual([200, 409]);
-    const turnedAway = a.status === 409 ? a : b;
-    expect(turnedAway.body.error).toContain("already being created");
+    expect([(await first).status, second.status]).toEqual([200, 409]);
+    expect(second.body.error).toContain("already being created");
   });
 
   it("reports the script's real error when the run itself fails", async () => {

@@ -11,6 +11,7 @@ import { http, HttpResponse } from "msw";
 import { resetHandlersState, clearedRanges, sheetBatchUpdateRequests, lastBulkWritePayload, bundleWritePayload } from "./handlers";
 import { AUCTION_TICKETS_ITEM_ID } from "../utils/categoryHelpers";
 import { authCookieHeader } from "./helpers/session";
+import { createGate } from "./helpers/gate";
 import { createFakeFirestore } from "./helpers/fakeFirestore";
 import { _resetConfigCacheForTesting } from "../services/configService";
 
@@ -72,17 +73,16 @@ describe("setupRoutes - /api/auction/setup-new", () => {
   });
 
   it("turns away a second setup while one is running, instead of running it again (ROADMAP A17)", async () => {
-    let release!: () => void;
-    const gate = new Promise<void>((r) => { release = r; });
+    const drive = createGate();
     server.use(http.get("https://www.googleapis.com/drive/v3/files", async () => {
-      await gate;
+      await drive.wait();
       return HttpResponse.json({ files: [] });
     }));
 
     const first = request(app).post("/api/auction/setup-new").set(authHeader).send(setupBody).then((r) => r);
-    await new Promise((r) => setTimeout(r, 50));
+    await drive.reached;
     const second = await request(app).post("/api/auction/setup-new").set(authHeader).send(setupBody);
-    release();
+    drive.release();
     await first;
 
     expect(second.status).toBe(409);
