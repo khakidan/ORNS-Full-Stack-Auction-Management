@@ -6,6 +6,8 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **Live PayPal credentials checked on Cloud Run** (ROADMAP "Before ticket sales open", 2026-10-30). `PAYPAL_CLIENT_ID` (not the sandbox ID) and the `PAYPAL_CLIENT_SECRET` secret are both set, and live PayPal accepts them; the sandbox server rejects them. The token includes Invoicing, Transaction Search and payment lookup. What remains is the switch to live on the day sales open, now the first step of the launch-day test.
+
 - **The write-mode rehearsal in the sandbox is done** (ROADMAP "Webhooks with Fluent Forms" item 1, 2026-10-30).
   - The app wrote each purchase's row itself, Pending (entries 1486/1487, 2026-10-29).
   - Payments PayPal held for review showed on Needs review (1488/1489).
