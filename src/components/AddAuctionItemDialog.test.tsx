@@ -1,9 +1,8 @@
 /**
  * @vitest-environment jsdom
  *
- * `@/components/ui/select` is mocked here (matching
- * EditAuctionItemDialog.test.tsx/BundlingDialog.test.tsx's convention)
- * since the real base-ui Select needs jsdom stubs this file doesn't set up.
+ * The real Dialog and Select (ROADMAP T6); setup.ts gives jsdom the
+ * pointer stubs the Select needs.
  */
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
@@ -12,17 +11,6 @@ import { describe, it, expect, vi } from "vitest";
 import { AddAuctionItemDialog } from "./AddAuctionItemDialog";
 import { AuctionItem } from "@/types";
 
-vi.mock("@/components/ui/select", () => ({
-  Select: ({ value, onValueChange, children }: any) => (
-    <select value={value} onChange={(e) => onValueChange(e.target.value)} data-testid="mock-select">
-      {children}
-    </select>
-  ),
-  SelectTrigger: ({ children }: any) => <>{children}</>,
-  SelectValue: () => null,
-  SelectContent: ({ children }: any) => <>{children}</>,
-  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
-}));
 
 function renderDialog(newItem: Partial<AuctionItem> = {}, overrides: Partial<Parameters<typeof AddAuctionItemDialog>[0]> = {}) {
   const onNewItemChange = vi.fn();

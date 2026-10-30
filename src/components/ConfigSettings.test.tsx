@@ -22,15 +22,6 @@ vi.mock("@/components/ui/card", () => ({
   CardDescription: ({ children }: any) => <div>{children}</div>,
 }));
 
-// Prevent Radix Dialog portal from causing JSDOM issues
-vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ children }: any) => <div>{children}</div>,
-  DialogContent: ({ children }: any) => <div>{children}</div>,
-  DialogHeader: ({ children }: any) => <div>{children}</div>,
-  DialogTitle: ({ children }: any) => <div>{children}</div>,
-  DialogDescription: ({ children }: any) => <div>{children}</div>,
-  DialogFooter: ({ children }: any) => <div>{children}</div>,
-}));
 
 // Defined outside the mock factory so it is always the same object
 // reference across renders. ConfigSettings has a useEffect with
@@ -224,7 +215,11 @@ describe("ConfigSettings", () => {
     render(<ConfigSettings />);
     fireEvent.click(screen.getByText("Save Configuration"));
 
-    await waitFor(() => expect(mockSaveConfig).toHaveBeenCalled());
+    await waitFor(() => expect(mockSaveConfig).toHaveBeenCalledWith(expect.objectContaining({
+      auctionItemsSpreadsheetId: "mock-items-id",
+      auctionTicketsSpreadsheetId: "mock-tickets-id",
+      bidManagementSpreadsheetId: "mock-bid-mgt-id",
+    })));
     await new Promise((r) => setTimeout(r, 0));
     expect(fetchWithRetry).not.toHaveBeenCalledWith(expect.stringContaining("/api/settings"), expect.anything());
     expect(toast.error).not.toHaveBeenCalled();

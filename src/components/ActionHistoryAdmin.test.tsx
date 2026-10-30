@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ActionHistoryAdmin from "./ActionHistoryAdmin";
 import { fetchWithRetry } from "@/services/google-api";
@@ -20,23 +20,6 @@ let mockAuction = { dataVersion: 0, lastChangedKeys: [] as string[], checkForCha
 vi.mock("@/context/AuctionContext", () => ({ useAuction: () => mockAuction }));
 vi.mock("@/context/ConfigContext", () => ({ useConfig: () => ({ config: CONFIG }) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock("@/components/ui/select", () => ({
-  Select: ({ value, onValueChange, children }: any) => (
-    <select value={value} onChange={(e) => onValueChange(e.target.value)}>{children}</select>
-  ),
-  SelectTrigger: () => null,
-  SelectValue: () => null,
-  SelectContent: ({ children }: any) => <>{children}</>,
-  SelectItem: ({ value, children }: any) => <option value={value}>{typeof children === "string" ? children : value}</option>,
-}));
-vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ open, children }: any) => (open ? <div role="dialog">{children}</div> : null),
-  DialogContent: ({ children }: any) => <div>{children}</div>,
-  DialogHeader: ({ children }: any) => <div>{children}</div>,
-  DialogTitle: ({ children }: any) => <div>{children}</div>,
-  DialogDescription: ({ children }: any) => <div>{children}</div>,
-  DialogFooter: ({ children }: any) => <div>{children}</div>,
-}));
 
 const base = { timestamp: "2026-03-14T23:42:00Z", role: "", location: "", before: "", after: "", undoOf: "", undo: "", undoPreview: "" };
 const ACTIONS = [
@@ -78,15 +61,18 @@ describe("ActionHistoryAdmin", () => {
   });
 
   it("filters by person and by search", async () => {
+    const user = userEvent.setup();
     render(<ActionHistoryAdmin />);
     await screen.findByTestId("action-row-a3");
 
-    fireEvent.change(screen.getAllByRole("combobox")[1], { target: { value: "jane@orns.org" } });
+    await user.click(screen.getByRole("combobox", { name: "People" }));
+    await user.click(await screen.findByRole("option", { name: "jane@orns.org" }));
     expect(screen.queryByTestId("action-row-a3")).not.toBeInTheDocument();
     expect(screen.getByTestId("action-row-a2")).toBeInTheDocument();
 
-    fireEvent.change(screen.getAllByRole("combobox")[1], { target: { value: "all" } });
-    await userEvent.type(screen.getByPlaceholderText("Search actions..."), "item 312");
+    await user.click(screen.getByRole("combobox", { name: "People" }));
+    await user.click(await screen.findByRole("option", { name: "All People" }));
+    await user.type(screen.getByPlaceholderText("Search actions..."), "item 312");
     expect(screen.getByTestId("action-row-a3")).toBeInTheDocument();
     expect(screen.queryByTestId("action-row-a2")).not.toBeInTheDocument();
   });

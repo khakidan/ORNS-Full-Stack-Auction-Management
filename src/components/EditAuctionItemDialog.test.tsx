@@ -6,10 +6,8 @@
  * AuctionItemRow.tsx with a single dialog covering every editable field
  * at once - mirrors EditAttendeeDialog.tsx's pattern on the Attendee
  * List exactly (see EditAttendeeDialog.test.tsx's own convention: the
- * real Dialog is left unmocked). `@/components/ui/select` is mocked here
- * (matching BundlingDialog.test.tsx's convention) since the real
- * base-ui Select needs jsdom stubs (pointerCapture/scrollIntoView) this
- * file doesn't set up.
+ * real Dialog is left unmocked). The Select is the real one too (ROADMAP
+ * T6); setup.ts gives jsdom the pointer stubs it needs.
  */
 import "@testing-library/jest-dom";
 import { render, screen, fireEvent } from "@testing-library/react";
@@ -18,17 +16,6 @@ import { describe, it, expect, vi } from "vitest";
 import { EditAuctionItemDialog } from "./EditAuctionItemDialog";
 import { AuctionItem } from "@/types";
 
-vi.mock("@/components/ui/select", () => ({
-  Select: ({ value, onValueChange, children }: any) => (
-    <select value={value} onChange={(e) => onValueChange(e.target.value)} data-testid="mock-select">
-      {children}
-    </select>
-  ),
-  SelectTrigger: ({ children }: any) => <>{children}</>,
-  SelectValue: () => null,
-  SelectContent: ({ children }: any) => <>{children}</>,
-  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
-}));
 
 function makeItem(overrides: Partial<AuctionItem> = {}): AuctionItem {
   return {
@@ -163,11 +150,13 @@ describe("EditAuctionItemDialog - saving", () => {
   });
 
   it("changing category sends the category field", async () => {
+    const user = userEvent.setup();
     const { onSave } = renderDialog(makeItem({ rowIndex: 5, category: "Collectibles" }));
 
-    const categorySelect = screen.getAllByTestId("mock-select")[0];
-    fireEvent.change(categorySelect, { target: { value: "Decor" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await user.click(screen.getByRole("combobox", { name: "Category" }));
+    await user.click(await screen.findByRole("option", { name: "Decor" }));
+    expect(screen.getByRole("combobox", { name: "Category" })).toHaveTextContent("Decor");
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
 
     expect(onSave).toHaveBeenCalledWith(5, [{ field: "category", value: "Decor" }]);
   });

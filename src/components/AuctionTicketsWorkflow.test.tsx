@@ -7,9 +7,6 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TicketPurchaseStatus } from "@/types";
 
-window.HTMLElement.prototype.hasPointerCapture = vi.fn();
-window.HTMLElement.prototype.scrollIntoView = vi.fn();
-
 let mockCan = true;
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ can: () => mockCan }) }));
 vi.mock("@/context/ConfigContext", () => ({ useConfig: () => ({ config: { auctionTicketsSpreadsheetId: "" } }) }));

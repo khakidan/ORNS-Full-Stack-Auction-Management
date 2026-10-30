@@ -52,12 +52,12 @@ npx vitest run src/           # frontend
 | Layer | Path | Tests |
 |---|---|---|
 | **Backend** | `server/test/` | **1117 passed** |
-| **Frontend** | `src/` | **839 passed** |
-| **Total** | `npm run test:quiet` | **1956 passed** |
+| **Frontend** | `src/` | **899 passed** |
+| **Total** | `npm run test:quiet` | **2016 passed** |
 
 | Coverage (`npm run test:coverage`, 2026-10-29) | |
 |---|---|
-| Lines | 90.85% |
-| Branches | 79.52% |
-| Functions | 85.53% |
-| Statements | 88.95% |
+| Lines | 93.79% |
+| Branches | 81.65% |
+| Functions | 88.47% |
+| Statements | 91.74% |

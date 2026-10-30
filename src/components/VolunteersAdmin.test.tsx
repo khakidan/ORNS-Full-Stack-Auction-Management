@@ -15,14 +15,6 @@ vi.mock("@/services/google-api", () => ({
 vi.mock("@/services/apiClient", () => ({ postJsonOnce: vi.fn() }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/context/AuctionContext", () => ({ useAuction: () => ({ auctionState: "prep" }) }));
-vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ open, children }: any) => (open ? <div role="dialog">{children}</div> : null),
-  DialogContent: ({ children }: any) => <div>{children}</div>,
-  DialogHeader: ({ children }: any) => <div>{children}</div>,
-  DialogTitle: ({ children }: any) => <div>{children}</div>,
-  DialogDescription: ({ children }: any) => <div>{children}</div>,
-  DialogFooter: ({ children }: any) => <div>{children}</div>,
-}));
 
 const VOLUNTEERS = [
   { id: "v1", email: "pat@gmail.com", name: "Pat Lee", status: "invited", invitedBy: "dan@orns.org", invitedAt: "2026-03-01T00:00:00Z" },

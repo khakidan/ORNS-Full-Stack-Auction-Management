@@ -73,20 +73,20 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
   - *Wait, then check nothing happened*: `bidderService.test.ts:252`, `paypalSweeperJob.test.ts:352` and `specialWinnerService.test.ts:86`. These can pass even with the lock removed, because the code simply hasn't got there in 20-50 ms.
   The suite has intermittent single-run failures that pass on a rerun: a 429 in `bid-management.test.ts`, a 401 in `tickets.test.ts`, production's bidder labels, and `userRoles.test.ts` "a User can't change roles" (1 failure in 15 backend runs during this audit). Fixed-time waits are the likely cause of some of them.
   *Fix:* have the gated fake record that it was reached (a promise resolved inside the handler), and `await vi.waitFor(() => expect(reached)...)` before acting, as `ticketPoll.test.ts` does. To prove a write is held, assert it happens only after `release()`, not that nothing happened within N ms. Then rerun the suite in a loop to confirm the flakes are gone.
-- **T5 - The browser-to-server requests are untested.** 43 test files mock `@/services/google-api` wholesale (the API seam, which is allowed), but `google-api.ts` itself is only 32% covered. The paths, methods and request bodies it builds are never checked, so a field renamed on one side would pass every test on both.
+- **[DONE 2026-10-29, Phase 4] T5 - The browser-to-server requests are untested.** 43 test files mock `@/services/google-api` wholesale (the API seam, which is allowed), but `google-api.ts` itself is only 32% covered. The paths, methods and request bodies it builds are never checked, so a field renamed on one side would pass every test on both.
   *Fix:* test `google-api.ts` with MSW in jsdom, asserting each function's method, path and body. Or, better, share the request types between `src/` and `server/` so the compiler catches a mismatch.
-- **T6 - Stubbed UI primitives hide real behaviour.**
+- **[DONE 2026-10-29, Phase 5] T6 - Stubbed UI primitives hide real behaviour.**
   - The Dialog stub renders its children whether or not `open` is set (`ActionHistoryAdmin`, `Bidders`, `BundlingDialog`, `ConfigSettings`, `TicketAttendeeTab` and `VolunteersAdmin` tests). So those tests can't catch a dialog that never opens or never closes.
   - The Select stub swaps Base UI's select for a native `<select>` in 10 test files, so a select showing the wrong label, or one that can't be picked by keyboard, isn't caught.
   `src/components/ui/select.test.tsx` already drives the real Select in jsdom.
   *Fix:* use the real primitives (opening and choosing through their roles). Where a stub is kept, make it honour `open`.
-- **T7 - Frontend writes with little coverage:**
+- **[DONE 2026-10-29, Phase 4] T7 - Frontend writes with little coverage:**
   - `useWalkInForm` (21%): the walk-in registration form.
   - `useAddAuctionItem` (27%) and `useDeleteAuctionItem` (24%).
   - `BidManagementWorkflow` (26%): Set Up, Go Live and Close, including the new ticket-price message from Set Up.
   - `useBundling` (75%).
   These are the seam standard's main case: a user action becomes an API call. *Fix:* render the component, act with `userEvent`, and assert the exact payload sent to the API.
-- **T8 - Assertions that accept any value:**
+- **[DONE 2026-10-29, Phase 5] T8 - Assertions that accept any value:**
   - `items.test.ts:196` and `:596` assert only that `response.body.error` is defined, so any error passes. Assert the message.
   - Some positive bare `toHaveBeenCalled()` calls are on calls whose arguments matter: `useAttendeesData.test.ts:241` (`getSheetData`), `ConfigSettings.test.tsx:227` (`mockSaveConfig`), `AuctionItemsTab.editing.test.tsx:216` (`mockRefresh`) and `syncRoutes.ticketPrice.test.ts:79` (`performSheetSync`). Use `toHaveBeenCalledWith`. The other bare calls (a toast, `next()` in middleware) are fine.
 
@@ -164,7 +164,7 @@ Work in order: each phase makes the next one cheaper or safer. One branch and PR
 
   Also correct `setup.ts`'s comment.
 
-**Phase 4 - T5 and T7: the browser side of the writes** (frontend).
+**Phase 4 - T5 and T7: the browser side of the writes** (frontend). *Done 2026-10-29 (branch `frontend-write-tests`). Changes from the plan: T5 uses a recording `fetch` instead of MSW, because MSW can't intercept the app's relative `/api/...` URLs under jsdom. No 401 cases: these functions don't handle 401 (the change feed and the bid outbox do, and have their own tests). The walk-in, add-item and delete-item tests use the real Dialog and Select, moving those flows ahead of T6. The shared request types (`shared/apiTypes.ts`) are still open.*
 
 - **T5.** New `src/services/google-api.test.ts` in jsdom, with MSW's `setupServer` (already used by the backend). For each exported function, call it and assert the request MSW received: method, path, query and JSON body. Also check how it handles a 4xx (the error message surfaced) and a 401 (sign-in prompt). The cases come straight from the server routes' validation, so a renamed field fails here.
   Longer term (separate item, if worth it): move the request body types into a shared `shared/apiTypes.ts` imported by both `src/` and `server/`, so `tsc` catches a mismatch.
@@ -183,7 +183,7 @@ Work in order: each phase makes the next one cheaper or safer. One branch and PR
     - the stage buttons are absent without `auction.stage`.
   - **`useBundling`:** the bundle and restore payloads, and the uncovered error branches.
 
-**Phase 5 - T6 and T8: real primitives and exact assertions.**
+**Phase 5 - T6 and T8: real primitives and exact assertions.** *Done 2026-10-29 (branch `real-ui-primitives`). Every stub was removed; no file needed to keep one. The toolbars' unlabelled dropdowns got `aria-label`s (a screen-reader fix as well as what the tests query by). One vacuous test turned up: "payment fields aren't shown" in the add-attendee dialog had never opened the dialog.*
 
 - **T6.** One test file at a time, delete the `vi.mock("@/components/ui/dialog")` and `vi.mock("@/components/ui/select")` stubs and drive the real components, following `src/components/ui/select.test.tsx`:
   - open a dialog by clicking its trigger, and find it with `screen.findByRole("dialog")`;

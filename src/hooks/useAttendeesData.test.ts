@@ -232,13 +232,18 @@ describe("useAttendeesData.addAttendee", () => {
     const row = ["Alice", "One", "alice@example.com"];
 
     const { result } = renderHook(() => useAttendeesData("ss-id"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    mockedGetSheetData.mockClear();
     await act(async () => {
       await result.current.addAttendee("tickets", row);
     });
 
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Attendee record synced successfully"));
     expect(appendAttendeeRow).toHaveBeenCalledWith("ss-id", "tickets", row);
-    expect(getSheetData).toHaveBeenCalled(); // fetchAttendees() re-fetch after success
+    // fetchAttendees() re-reads every ticket tab after the add.
+    expect(mockedGetSheetData.mock.calls).toEqual([
+      ["ss-id", "tickets!A:Z"], ["ss-id", "staff tickets!A:Z"], ["ss-id", "sponsor tickets!A:Z"],
+    ]);
   });
 
   it("rolls back the optimistic add on a failed sync", async () => {

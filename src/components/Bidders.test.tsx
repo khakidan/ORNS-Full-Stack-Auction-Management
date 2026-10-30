@@ -20,49 +20,8 @@ vi.mock("motion/react", () => ({
   AnimatePresence: ({ children }: any) => children,
 }));
 
-// Mock standard select component as a native HTML select element for easy and reliable testing
-vi.mock("@/components/ui/select", () => ({
-  Select: ({ value, onValueChange, children }: any) => (
-    <select 
-      value={value} 
-      onChange={(e) => {
-        onValueChange(e.target.value);
-      }}
-      data-testid="mock-select"
-    >
-      {children}
-    </select>
-  ),
-  SelectTrigger: ({ children }: any) => <>{children}</>,
-  SelectValue: ({ placeholder }: any) => <option value="" disabled>{placeholder}</option>,
-  SelectContent: ({ children }: any) => <>{children}</>,
-  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
-}));
 
-// Mock Dialog & AlertDialog components
-vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ children }: any) => <div data-testid="mock-dialog">{children}</div>,
-  DialogContent: ({ children }: any) => <div>{children}</div>,
-  DialogHeader: ({ children }: any) => <div>{children}</div>,
-  DialogTitle: ({ children }: any) => <div>{children}</div>,
-  DialogDescription: ({ children }: any) => <div>{children}</div>,
-  DialogFooter: ({ children }: any) => <div>{children}</div>,
-  DialogTrigger: ({ children }: any) => <>{children}</>,
-}));
 
-vi.mock("@/components/ui/alert-dialog", () => ({
-  AlertDialog: ({ children }: any) => <div data-testid="mock-alert-dialog">{children}</div>,
-  AlertDialogContent: ({ children }: any) => <div>{children}</div>,
-  AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
-  AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
-  AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
-  AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
-  // Forward onClick - a prior version of this mock dropped it entirely,
-  // which would silently no-op any test that clicks a confirm/cancel
-  // button in a dialog built on these primitives (see CHANGELOG.md).
-  AlertDialogCancel: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
-  AlertDialogAction: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
-}));
 
 // Mock ScrollArea component
 vi.mock("@/components/ui/scroll-area", () => ({
@@ -313,7 +272,7 @@ describe('Bidders - Layout', () => {
   it('keeps the filter selects on one row instead of wrapping', () => {
     render(<Bidders />);
 
-    const statusSelect = screen.getAllByTestId("mock-select")[0];
+    const statusSelect = screen.getByRole("combobox", { name: "Filter by check-in status" });
     // BiddersFilterControls' selects render inside FilterToolbar's filters
     // wrapper - that wrapper is what must stay non-wrapping.
     const filtersWrapper = statusSelect.parentElement;
@@ -330,6 +289,12 @@ describe('Bidders - Layout', () => {
   });
 });
 
+/** Picks an option from one of the toolbar's real dropdowns. */
+async function choose(user: ReturnType<typeof userEvent.setup>, dropdown: string, option: string) {
+  await user.click(screen.getByRole("combobox", { name: dropdown }));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
+
 describe('Bidders - Sort and Filter', () => {
   let user: ReturnType<typeof userEvent.setup>;
 
@@ -341,11 +306,9 @@ describe('Bidders - Sort and Filter', () => {
   it('Check-in status filter — checked in: Assert only checked-in bidders are visible', async () => {
     render(<Bidders />);
     
-    const selects = screen.getAllByTestId("mock-select");
-    const statusSelect = selects[0];
 
     // Select "Checked In" status ('checked-in')
-    await user.selectOptions(statusSelect, "checked-in");
+    await choose(user, "Filter by check-in status", "Checked In");
 
     // John Doe and Jane Smith should be visible
     expect(screen.getByText("John Doe")).toBeInTheDocument();
@@ -361,11 +324,9 @@ describe('Bidders - Sort and Filter', () => {
   it('Check-in status filter — not checked in: Assert only non-checked-in bidders are visible', async () => {
     render(<Bidders />);
     
-    const selects = screen.getAllByTestId("mock-select");
-    const statusSelect = selects[0];
 
     // Select "Pending" status ('pending' matches non-checked-in and non-proxy)
-    await user.selectOptions(statusSelect, "pending");
+    await choose(user, "Filter by check-in status", "Pending");
 
     // Alice Green and Bob White should be visible
     expect(screen.getByText("Alice Green")).toBeInTheDocument();
@@ -381,11 +342,9 @@ describe('Bidders - Sort and Filter', () => {
   it('Payment status filter — paid: Assert only paid bidders are visible', async () => {
     render(<Bidders />);
     
-    const selects = screen.getAllByTestId("mock-select");
-    const paymentSelect = selects[1];
 
     // Select "Paid" payment ('paid')
-    await user.selectOptions(paymentSelect, "paid");
+    await choose(user, "Filter by payment", "Paid");
 
     // John Doe and Charlie Brown should be visible (both have Paid attendee records)
     expect(screen.getByText("John Doe")).toBeInTheDocument();
@@ -401,11 +360,9 @@ describe('Bidders - Sort and Filter', () => {
   it('Payment status filter — unpaid/pending: Assert correct bidders visible', async () => {
     render(<Bidders />);
     
-    const selects = screen.getAllByTestId("mock-select");
-    const paymentSelect = selects[1];
 
     // Select "Pending" payment ('pending' matches registered with Pending status)
-    await user.selectOptions(paymentSelect, "pending");
+    await choose(user, "Filter by payment", "Pending");
 
     // Jane Smith and David Black should be visible
     expect(screen.getByText("Jane Smith")).toBeInTheDocument();
@@ -421,12 +378,10 @@ describe('Bidders - Sort and Filter', () => {
   it('Source filter — walk-in: Assert only walk-in bidders are visible', async () => {
     render(<Bidders />);
     
-    const selects = screen.getAllByTestId("mock-select");
-    const sourceSelect = selects[2];
 
     // Select "General" source ('general' matches no attendee record i.e. walk-in bidders, as well as general tickets sheet)
     // Since our mock registered attendees are sponsor/staff tickets, walk-ins Alice Green & Bob White are the only ones filtered
-    await user.selectOptions(sourceSelect, "general");
+    await choose(user, "Filter by source", "General");
 
     // Alice Green and Bob White should be visible
     expect(screen.getByText("Alice Green")).toBeInTheDocument();
@@ -442,16 +397,14 @@ describe('Bidders - Sort and Filter', () => {
   it('Clearing any filter restores all bidders: Assert all 6 are visible after clearing', async () => {
     render(<Bidders />);
     
-    const selects = screen.getAllByTestId("mock-select");
-    const statusSelect = selects[0];
 
     // Apply "Checked In" filter first
-    await user.selectOptions(statusSelect, "checked-in");
+    await choose(user, "Filter by check-in status", "Checked In");
     expect(screen.getByText("John Doe")).toBeInTheDocument();
     expect(screen.queryByText("Alice Green")).not.toBeInTheDocument();
 
     // Clear filter by selecting "All Statuses" ('all')
-    await user.selectOptions(statusSelect, "all");
+    await choose(user, "Filter by check-in status", "All Statuses");
 
     // All 6 bidders should now be visible again
     expect(screen.getByText("John Doe")).toBeInTheDocument();
@@ -479,9 +432,7 @@ describe('Bidders - Sort and Filter', () => {
     expect(rowOrder()[0]).toBe("bidder-row-101");
     expect(rowOrder()[rowOrder().length - 1]).toBe("bidder-row-108");
 
-    const selects = screen.getAllByTestId("mock-select");
-    const sortSelect = selects[3];
-    await user.selectOptions(sortSelect, "id-desc");
+    await choose(user, "Sort bidders by", "Bidder # (High to Low)");
 
     expect(rowOrder()[0]).toBe("bidder-row-108");
     expect(rowOrder()[rowOrder().length - 1]).toBe("bidder-row-101");

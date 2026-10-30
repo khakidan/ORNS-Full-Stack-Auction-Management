@@ -7,9 +7,6 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { AttentionDot, WorkflowTabsShell } from "./WorkflowTabsShell";
 
-window.HTMLElement.prototype.hasPointerCapture = vi.fn();
-window.HTMLElement.prototype.scrollIntoView = vi.fn();
-
 const tabs = [
   { value: "one", label: "Tab One", content: <div>Content One</div> },
   { value: "two", label: "Tab Two", content: <div>Content Two</div> },
