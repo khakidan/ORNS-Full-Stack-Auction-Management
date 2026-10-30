@@ -102,22 +102,28 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 - **[DONE 2026-10-29, Phase 1] T11 - Recorded snapshots on the money paths.** These snapshots are intentional golden masters that pin every Sheets and PayPal call while those paths are restructured (`moneyPaths.recorded`, `checkoutMarkPaid.recorded`, `syncService`). The risk is `vitest -u` accepting a changed write without anyone reading it. *Fix:* add a rule to `testing-batches.md`: never update these snapshots without reading the diff and naming the change in the commit.
 - **[DONE 2026-10-29, Phase 6] T12 - No mutation testing.** Changes have been mutation-checked by hand, one at a time. *Fix:* run Stryker (`@stryker-mutator/vitest-runner`) now and then on the money paths: `financeUtils`, `checkoutService`, `ticketPaymentCheck`, `ticketPurchaseRow`, `bidderService` and `winningBidChecks`. Treat surviving mutants as missing tests.
   *Done: `npm run test:mutation` (Stryker 10.1, `stryker.config.json`, about 4 minutes; HTML report in `reports/mutation/`, gitignored). There is no `checkoutService`; checkout is in `bidderService`. First run: score 78.6% (598 killed, 127 survived, 36 in untested code). `financeUtils` scored 100%. The survivors that matter are T15-T18. The rest are low-risk: optional chaining, empty-array fallbacks, log text, and lock keys collapsed to one (still serialised). Decision: don't run it in CI (too slow for every PR, and the score isn't a useful gate yet). Run it after changing a money-path file and once before the auction, and treat new survivors as missing tests.*
-- **T15 - Ticket payment check: untested decisions** (Stryker, `ticketPaymentCheck.ts`). Each of these mutants survived:
+- **[DONE 2026-10-29] T15 - Ticket payment check: untested decisions** (Stryker, `ticketPaymentCheck.ts`). Each of these mutants survived:
   - Which PayPal it asks: forcing live or sandbox (line 35) passes every test. On sales day it could check the wrong account unnoticed.
   - Check-only mode: `mode === "write"` -> `true` before `flagForReview` (line 109) survives, so a check that should only report could write a review flag.
   - The status write's `clearCacheForSpreadsheet` and its Action History name ("Confirm ticket payment" / "Record ticket refund") aren't asserted.
   - Only PayPal transactions count (line 102), and `PENDING` + `PENDING_REVIEW` (line 128). The 0.005 amount tolerance has no test at the boundary.
-- **T16 - Online ticket rows: mapping and limits** (Stryker, `ticketPurchaseRow.ts`).
+- **[DONE 2026-10-29] T16 - Online ticket rows: mapping and limits** (Stryker, `ticketPurchaseRow.ts`).
   - Blanking any entry of `PAYMENT_STATUSES` (paid -> Paid, pending/processing -> Pending, refunded...) survives.
   - So do `tickets >= MAX_TICKETS`, a total of 0 rejected, the "more than MAX_GUESTS guests" problem, and a guest needing only one of first or last name.
   - Trimming of the entry ID and names, and the entry-ID regex's `^` anchor, are untested.
-- **T17 - Winning-bid checks: the already-won scan** (Stryker, `winningBidChecks.ts`).
+- **[DONE 2026-10-29] T17 - Winning-bid checks: the already-won scan** (Stryker, `winningBidChecks.ts`).
   - "Allow multiple winners" stored as a real boolean `true` (not the text "TRUE") is never tested.
   - Which column holds the item number (the "item number"/"number"/"id" names and the fallback) and skipping the header row aren't tested.
   - Whitespace around IDs and blank bidder headers are untested.
-- **T18 - Bidder service: undo values and walk-in setup** (Stryker, `bidderService.ts`).
+- **[DONE 2026-10-29] T18 - Bidder service: undo values and walk-in setup** (Stryker, `bidderService.ts`).
   - Setting a bidder flag returns `before` for undo; every mutation of it survives (line 326), so an undo could restore the wrong value.
   - Walk-in: finding the tickets tab by any capitalisation, the missing-sheet guard (line 150), and the size of the column append (line 169) are untested. "Bid sheet is empty" and "Bidder column not found" (lines 256-258) are too.
+  *Done (T15-T18): 51 new tests. Stryker went from 78.6% to 91.1% on the five files. Some of the items above turned out to be equivalent mutants: changes the code can't show. "Allow multiple winners" as a real `true` is already handled, because `String(true)` is "TRUE". Blanking a `PAYMENT_STATUSES` label is caught by the capitalised fallback and the Paid -> Pending rule. Only `processing` mattered, and it was already tested. The remaining survivors are equivalent too:
+    - fallback values that are never compared or written
+    - arrays sized one short, which later writes extend anyway
+    - optional chaining that only matters with malformed Google responses
+    - lock keys collapsed to one, which still serialise
+    - the half-cent boundary under floating point*
 - **[DONE 2026-10-29, Phase 1] T13 - Coverage isn't measurable from the repo.** `@vitest/coverage-v8` isn't a dev dependency, so nobody can see the numbers above without installing it. *Fix:* add it, plus an `npm run test:coverage` script, and record the totals in `testing-batches.md` beside the pass counts. Hold off on a coverage threshold until T1 exists to enforce it.
 
 - **[DONE 2026-10-29, Phase 6] T14 - Rare 401s and timeouts in full parallel runs** (found in Phase 2's loop, 2026-10-29). Not from fixed waits; Phase 2 didn't fix them.

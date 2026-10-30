@@ -116,3 +116,53 @@ describe("ticketRowFromPurchase", () => {
     expect("row" in ticketRowFromPurchase(purchase({ email: "", phone: "" }))).toBe(true);
   });
 });
+
+// ROADMAP T16: limits and trimming Stryker showed no test checked.
+describe("ticketRowFromPurchase - edges the mutation run found untested", () => {
+  const problemsOf = (p: TicketPurchase) => {
+    const result = ticketRowFromPurchase(p);
+    return "problems" in result ? result.problems : [];
+  };
+
+  it("takes exactly 20 tickets, the most there can be", () => {
+    expect(rowOf(purchase({ tickets: 20 }))[4]).toBe(20);
+  });
+
+  it("takes a $0 order (a comped ticket) - only a negative total is wrong", () => {
+    expect(rowOf(purchase({ total: 0 }))[21]).toBe("$0");
+  });
+
+  it("says when there are more guests than the sheet has room for, even with enough tickets", () => {
+    const guest = purchase().guests[0];
+    expect(problemsOf(purchase({ tickets: 6, guests: [guest, guest, guest, guest] }))).toEqual(["There are 4 guests; the sheet has room for 3."]);
+  });
+
+  it.each([
+    ["only a first name", { firstName: "Sam", lastName: "" }],
+    ["only a last name", { firstName: "", lastName: "Lee" }],
+  ])("takes a guest with %s", (_label, name) => {
+    expect(problemsOf(purchase({ tickets: 2, guests: [{ ...name, email: "", ownBidderNumber: false }] }))).toEqual([]);
+  });
+
+  it.each([
+    ["first", { firstName: "   ", lastName: "" }],
+    ["last", { firstName: "", lastName: "   " }],
+  ])("doesn't count spaces as a guest's %s name", (_label, name) => {
+    expect(problemsOf(purchase({ tickets: 2, guests: [{ ...name, email: "sam@example.com", ownBidderNumber: false }] }))).toEqual(["Guest 1 has no name."]);
+  });
+
+  it("doesn't count spaces as the buyer's first name", () => {
+    expect(problemsOf(purchase({ firstName: "   " }))).toEqual(["The buyer's first or last name is missing."]);
+  });
+
+  it("takes an entry ID with spaces around it and writes it without them, but not one with anything else before the number", () => {
+    expect(rowOf(purchase({ entryId: " 1433 " }))[22]).toBe("1433");
+    expect(problemsOf(purchase({ entryId: "x1433" }))).toEqual(["The entry ID is missing or isn't a number."]);
+  });
+
+  it("trims names, the payment method and an all-spaces status", () => {
+    const row = rowOf(purchase({ firstName: "  Pat  ", paymentMethod: " PayPal ", paymentStatus: "   " }));
+    expect([row[0], row[19], row[20]]).toEqual(["Pat", "PayPal", "Pending"]);
+  });
+});
+

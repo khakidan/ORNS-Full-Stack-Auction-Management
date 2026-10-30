@@ -6,6 +6,26 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **The money-path gaps the mutation run found are tested** (ROADMAP T15-T18, 2026-10-29). 51 new backend tests. Stryker went from 78.6% to 91.1% on the five files; every remaining survivor is equivalent.
+  - **Ticket payment check:**
+    - which PayPal it asks (live, sandbox, or sandbox when unset), checked against the host it actually calls
+    - compare mode never writing a review flag
+    - the cache clear and the exact Action History entry, for payments and refunds
+    - a refund listed only under Fluent Forms' refunds
+    - only PayPal transactions counting, and pending ones never sent to PayPal
+    - PENDING_REVIEW only while PENDING
+    - the half-cent amount tolerance and a missing Tickets spreadsheet
+  - **Online ticket rows:** 20 tickets, a $0 order, more guests than slots, guests with one name or only spaces, the entry-ID anchor, and trimming.
+  - **Winning-bid checks:** the item-number column found by header or fallback, the asked-for row (not the first), blank bidder columns, and spaces around IDs.
+  - **Bidder service:**
+    - the `before` value an undo restores, from the flag's own column
+    - the walk-in's tickets tab found however it's capitalised, with its fallback
+    - the missing-tab refusal writing nothing
+    - the grid growing by the right number of columns
+    - check-in's two refusals
+  - Not gaps after all: the boolean "Allow multiple winners" and the payment-status labels were equivalent mutants (see ROADMAP T18).
+  - Backend 1118 -> 1169, total 2011 -> 2062.
+
 - **The rare 401s and timeouts in full test runs are fixed** (ROADMAP T14, 2026-10-29). These were in the tests, not the app.
   - supertest listened on `[::]` but sent to `127.0.0.1`. On macOS, the port it was given could already be held on `127.0.0.1` by another program (VS Code's helper, CleanMyMac), and the request went there. A failure whose body was VS Code's own "Invalid authentication" error proved it.
   - `setup.ts` now has supertest listen on `127.0.0.1` and wait for the bind. `testHarness.test.ts` guards this. 2 failures in 50 backend runs before, 0 in 50 after.
