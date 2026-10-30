@@ -8,26 +8,6 @@ This document holds the **ORNS Charity Auction Manager**'s outstanding work: the
 
 ## ⚠️ DO THIS BEFORE THE AUCTION
 
-**Test the cash/check surcharge removal against real PayPal (sandbox mode) at least once.** It's covered by unit tests that simulate PayPal's API (see `CHANGELOG.md`'s L3 entry, `PayPalService.removeSurchargeLine` in `server/services/paypalService.ts`).
-
-*First run (2026-10-30, bidder 115, invoice #0085): the fee stayed on and $104.12 was recorded. PayPal refused the update with `USER_NOT_FOUND`, because invoices named `pavetheway@orns.org` as the invoicer and the sandbox account doesn't have that email. Fixed (see `CHANGELOG.md`). Run it again with a bidder who has no invoice yet, so step 3 makes a new one; #0085 was made before the fix.*
-
-Steps:
-
-1. Confirm the app is in PayPal sandbox mode (Config's `paypalIsSandbox`, or check the PayPal Integration tab in Settings).
-2. Pick a test bidder who's won at least one item but hasn't checked out.
-3. Print or email that bidder's receipt first, so a PayPal invoice exists for them (Checkout page, or Bidders page).
-4. Log into the PayPal sandbox dashboard and find that invoice; note its total (it should include the processing fee).
-5. In the app's Checkout page, mark that bidder paid with **Cash** (or **Check**).
-6. If a yellow warning toast appears, the fee removal didn't go through cleanly - read what it says (it tells you what to do, e.g. mark the invoice paid by hand in PayPal) and note the wording so it can be looked into.
-7. If no warning appears, refresh the invoice in the PayPal sandbox dashboard and confirm:
-   - The processing-fee line item is gone.
-   - The invoice total is now just the sum of the bidder's winning bids (no fee).
-   - The invoice shows as **Paid**.
-8. Once this works, remove this item and note the result in `CHANGELOG.md`.
-
-If step 7 doesn't check out, cash/check checkouts will still work (the code falls back to recording the full fee-inclusive amount if the removal call fails) - but the bidder's invoice will keep showing the fee amount even though cash was collected without it. In that case let the dev know what happened in step 6/7 instead of using this feature for real auction checkouts yet.
-
 **Put the live PayPal app's credentials on the server before ticket sales open** - see "Webhooks with Fluent Forms" step 2 below. The server still has the sandbox app, so it can't confirm real website ticket payments (or, at the auction, real checkouts).
 
 ---

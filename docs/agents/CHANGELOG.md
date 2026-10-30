@@ -6,6 +6,11 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **Cash/check fee removal tested against PayPal itself (sandbox), and passed** (the ROADMAP's before-auction test, 2026-10-30).
+  - Bidder 115 won one item ($100) and their receipt made invoice #0086 for $104.12, with the $4.12 fee as its own line. Marked paid with Cash, PayPal took the fee line off ("You updated the invoice") and recorded $100.00 paid, leaving $0.00 due. The app showed no warning.
+  - The first run (#0085) found the `USER_NOT_FOUND` problem fixed in the entry below.
+  - Column K (Invoiced Amount) keeps $104.12 on purpose: the receipt step compares against it to reuse the invoice. No total reads it; "total raised" is the sum of the winning bids.
+
 - **Cash/check checkout: the card fee comes off in sandbox, and staff are told when it can't** (found by the first real sandbox test, 2026-10-30).
   - **What happened:** bidder 115 paid $100 cash, but PayPal invoice #0085 kept its $4.12 fee and recorded $104.12 paid, with no warning. The server log showed PayPal refusing the update: `422 USER_NOT_FOUND - User is not associated with paypal based on invoicer email`. Every invoice named `pavetheway@orns.org` as the invoicer, which the sandbox app's account doesn't have. PayPal checks that email on an update, not on create.
   - **Fixed in three places:**
