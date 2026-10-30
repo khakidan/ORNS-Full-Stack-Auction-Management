@@ -6,6 +6,7 @@ import { PayPalService } from "./paypalService";
 import { attachInvoice, buildBidderReceipt, BidderReceiptWithInvoice, DEFAULT_SHEET_NAMES, SheetNames } from "./receiptDataService";
 import { quoteSheetName } from "../utils/rangeUtils";
 import { isValidEmailAddress } from "../utils/emailAddress";
+import { clearCacheForSpreadsheet } from "../utils/sheetCache";
 
 /**
  * Bidder-Numbers columns M/N record each receipt email: when it was sent,
@@ -169,6 +170,7 @@ export async function recordReceiptEmailed(
     valueInputOption: "RAW",
     requestBody: { values: [[new Date().toISOString(), paymentUrl]] },
   });
+  clearCacheForSpreadsheet(spreadsheetId);
 }
 
 /**

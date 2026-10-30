@@ -17,6 +17,8 @@ import { resetHandlersState, appsScriptCallCount,
 import { calculatePayPalSurcharge } from "../utils/financeUtils";
 import { authCookieHeader } from "./helpers/session";
 import { createGate } from "./helpers/gate";
+import { logAction } from "../services/actionLog";
+import { changesSince } from "../utils/changeFeed";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -87,6 +89,7 @@ describe('Receipt Generate workflow', () => {
   });
 
   it('Happy path — calls apiCreateIndividualReceipt via Apps Script', async () => {
+    const version = changesSince(0).version;
     const response = await request(app)
       .post('/api/receipts/generate')
       .set(authHeader)
@@ -96,6 +99,11 @@ describe('Receipt Generate workflow', () => {
     expect(response.body.success).toBe(true);
     expect(appsScriptCallCount).toBe(1);
     expect(productionScriptCallLog).toContain('apiCreateIndividualReceipt');
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      area: 'Bid Management', action: 'Print receipt', target: 'Bidder 42', summary: "Created bidder 42's receipt", notUndoableReason: expect.stringMatching(/\S/),
+    }));
+    // Its invoice may have been saved to Bidder-Numbers J/K (AGENTS.md rule 7).
+    expect(changesSince(version).changed).toContain('test-spreadsheet-id');
   });
 
   it('A second request for the same bidder while the first runs is turned away, and only one PayPal invoice is made (ROADMAP.md H1)', async () => {
@@ -340,6 +348,7 @@ describe('Receipt Generate-All workflow', () => {
   });
 
   it('Happy path — calls apiCreateAllReceipts via Apps Script', async () => {
+    const version = changesSince(0).version;
     const response = await request(app)
       .post('/api/receipts/generate-all')
       .set(authHeader)
@@ -351,6 +360,10 @@ describe('Receipt Generate-All workflow', () => {
     expect(productionScriptCallLog).toContain('apiCreateAllReceipts');
     // One named PDF for this part (the 3rd parameter).
     expect(lastAppsScriptParams[2]).toBe('Receipts - Part 1 of 1 (Doe)');
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      area: 'Bid Management', action: 'Print all receipts', target: 'Part 1 of 1', summary: 'Printed Receipts - Part 1 of 1 (Doe) (1 bidder(s))', notUndoableReason: expect.stringMatching(/\S/),
+    }));
+    expect(changesSince(version).changed).toContain('test-spreadsheet-id');
   });
 
   describe('printing in parts', () => {
@@ -511,6 +524,7 @@ describe('Receipt Email-All workflow', () => {
   });
 
   it('Happy path — reads bidder list and sends emails, returns sentCount', async () => {
+    const version = changesSince(0).version;
     const response = await request(app)
       .post('/api/receipts/email-all')
       .set(authHeader)
@@ -520,6 +534,12 @@ describe('Receipt Email-All workflow', () => {
     expect(response.body.success).toBe(true);
     // One bidder with a valid email exists in the mock Bidder-Numbers sheet
     expect(response.body.sentCount).toBe(1);
+    const { success: _success, ...result } = response.body;
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      area: 'Bid Management', action: 'Email all receipts', after: result, notUndoableReason: expect.stringMatching(/\S/),
+    }));
+    // Each email is recorded in Bidder-Numbers M/N.
+    expect(changesSince(version).changed).toContain('test-spreadsheet-id');
   });
 
   it('Auth failure', async () => {
@@ -553,6 +573,7 @@ describe('Receipt Email-Only workflow', () => {
   });
 
   it('Happy path — sends email for a single bidder', async () => {
+    const version = changesSince(0).version;
     const response = await request(app)
       .post('/api/receipts/email-only')
       .set(authHeader)
@@ -560,6 +581,10 @@ describe('Receipt Email-Only workflow', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      area: 'Bid Management', action: 'Email receipt', target: 'Bidder 42', notUndoableReason: expect.stringMatching(/\S/),
+    }));
+    expect(changesSince(version).changed).toContain('test-spreadsheet-id');
   });
 
   it('Uses the PayPal environment from Firestore, not the request body (ROADMAP.md M3)', async () => {
