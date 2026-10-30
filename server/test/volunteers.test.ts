@@ -13,6 +13,7 @@ import * as volunteerService from "../services/volunteerService";
 import { hashToken, _resetVolunteerCachesForTesting } from "../services/volunteerService";
 import { _resetVolunteerLinkRateLimitForTesting } from "../routes/volunteerAuthRoutes";
 import { _resetUserCacheForTesting } from "../services/userService";
+import { logAction } from "../services/actionLog";
 
 const SHEETS = "https://sheets.googleapis.com/v4/spreadsheets";
 const tokens = { access_token: "t", refresh_token: "r", expiry_date: Date.now() + 3600000 };
@@ -63,17 +64,96 @@ describe("inviting volunteers (Users tab)", () => {
     expect(JSON.stringify(stored)).not.toContain(token);
     expect(sent).toContain("To: pat@gmail.com");
     expect(res.body.volunteer.tokenHash).toBeUndefined();
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Users", action: "Invite volunteer", target: "pat@gmail.com", summary: "Invited Pat Lee (pat@gmail.com) as a volunteer", notUndoableReason: "revoke the volunteer instead",
+    });
   });
 
-  it("refuses @orns.org addresses (staff get a role instead) and non-Full-Admins", async () => {
-    expect((await request(app).post("/api/volunteers").set(admin).send({ name: "Sam", email: "sam@orns.org" })).status).toBe(400);
-    expect((await request(app).post("/api/volunteers").set(authCookieHeader(tokens, "sam@orns.org")).send({ name: "Pat", email: "pat@gmail.com" })).status).toBe(403);
+  it.each([
+    ["no name", { name: " ", email: "pat@gmail.com" }],
+    ["an invalid email", { name: "Pat", email: "pat@" }],
+    ["an @orns.org address (staff get a role instead)", { name: "Sam", email: "Sam@ORNS.org" }],
+  ])("refuses %s with 400, storing and sending nothing", async (_label, body) => {
+    const res = await request(app).post("/api/volunteers").set(admin).send(body);
+
+    expect(res.status).toBe(400);
+    expect(fake.docs("volunteers").size).toBe(0);
+    expect(logAction).not.toHaveBeenCalled();
   });
 
-  it("revoke ends access and forgets the link", async () => {
-    addVolunteer("v1", { status: "invited", tokenHash: hashToken("tok") });
+  it.each([
+    ["POST", "/api/volunteers", { name: "Pat", email: "pat@gmail.com" }],
+    ["POST", "/api/volunteers/v1/resend", {}],
+    ["POST", "/api/volunteers/v1/revoke", {}],
+    ["POST", "/api/volunteers/clear-ended", {}],
+  ])("refuses a User: %s %s", async (_method, path, body) => {
+    addVolunteer("v1", { status: "revoked" });
+
+    const res = await request(app).post(path).set(authCookieHeader(tokens, "sam@orns.org")).send(body);
+
+    expect(res.status).toBe(403);
+    expect(fake.docs("volunteers").get("v1")).toMatchObject({ status: "revoked" });
+  });
+
+  it("resend sends a new link and the old one stops working", async () => {
+    addVolunteer("v1", { status: "invited", tokenHash: hashToken("old-token") });
+    let sent = "";
+    server.use(http.post("https://gmail.googleapis.com/gmail/v1/users/:userId/messages/send", async ({ request }) => {
+      sent = Buffer.from(((await request.json()) as any).raw, "base64url").toString("utf8");
+      return HttpResponse.json({ id: "m" });
+    }));
+
+    const res = await request(app).post("/api/volunteers/v1/resend").set(admin);
+
+    expect(res.status).toBe(200);
+    const token = /token=([A-Za-z0-9_-]+)/.exec(sent)![1];
+    expect(token).not.toBe("old-token");
+    expect(fake.docs("volunteers").get("v1")).toMatchObject({ status: "invited", tokenHash: hashToken(token) });
+    expect((await request(app).get("/auth/volunteer?token=old-token")).status).toBe(410);
+    expect((await request(app).get(`/auth/volunteer?token=${token}`)).status).toBe(200);
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Users", action: "Resend volunteer link", target: "pat@gmail.com",
+      summary: "Sent pat@gmail.com a new sign-in link (the old one no longer works)", notUndoableReason: "revoke the volunteer instead",
+    });
+  });
+
+  it.each(["resend", "revoke"])("%s answers 404 for a volunteer who isn't in the list", async (action) => {
+    const res = await request(app).post(`/api/volunteers/nobody/${action}`).set(admin);
+
+    expect(res.status).toBe(404);
+    expect(fake.docs("volunteers").has("nobody")).toBe(false);
+    expect(logAction).not.toHaveBeenCalled();
+  });
+
+  it("revoke ends access and forgets the link, and the volunteer's next request is refused", async () => {
+    addVolunteer("v1", { status: "active", tokenHash: hashToken("tok") });
+    const volunteer = volunteerSession();
+    expect((await request(app).get(`/api/sheets/bm/${encodeURIComponent("Bidder-Numbers!A:L")}`).set(volunteer)).status).toBe(200);
+
     await request(app).post("/api/volunteers/v1/revoke").set(admin);
+
     expect(fake.docs("volunteers").get("v1")).toMatchObject({ status: "revoked", tokenHash: "" });
+    const after = await request(app).get(`/api/sheets/bm/${encodeURIComponent("Bidder-Numbers!A:L")}`).set(volunteer);
+    expect(after.status).toBe(401);
+    expect(after.body.reason).toBe("volunteer_access_ended");
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Users", action: "Revoke volunteer", target: "v1", summary: "Ended a volunteer's access", notUndoableReason: expect.stringMatching(/\S/),
+    });
+  });
+
+  it("clear-ended removes revoked and deactivated volunteers, keeps the rest, and says how many", async () => {
+    addVolunteer("revoked", { status: "revoked" });
+    addVolunteer("closed", { status: "deactivated" });
+    addVolunteer("active", { status: "active" });
+    addVolunteer("invited", { status: "invited" });
+
+    const res = await request(app).post("/api/volunteers/clear-ended").set(admin);
+
+    expect(res.body).toEqual({ removed: 2 });
+    expect([...fake.docs("volunteers").keys()].sort()).toEqual(["active", "invited"]);
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Users", action: "Clear ended volunteers", summary: "Removed 2 revoked or deactivated volunteer(s) from the list", notUndoableReason: "the records are deleted",
+    });
   });
 });
 

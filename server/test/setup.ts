@@ -18,6 +18,9 @@ afterEach(async () => {
   try { admin._clearDefaultFakeFirestore() } catch { /* not the default fake */ }
   const { _resetConfigCacheForTesting } = await import('../services/configService')
   _resetConfigCacheForTesting()
+  // Sheet reads the server cached (5 s) mustn't answer the next test.
+  const { sheetCache } = await import('../utils/sheetCache')
+  sheetCache.clear()
 })
 
 // PayPal sandbox/live is read from Firestore server-side (sharedConfig.ts,
