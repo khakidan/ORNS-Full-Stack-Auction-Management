@@ -6,6 +6,12 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **Tests use the real Dialog and Select, and check exact values** (ROADMAP T6, T8, 2026-10-29).
+  - No test stubs the Dialog, AlertDialog or Select any more (12 files). Tests open dialogs through their triggers and pick options through the real dropdowns. jsdom's pointer shims moved into `setup.ts`. The add-attendee tests now open the dialog first: with the stub always rendering it, "payment fields aren't shown" passed without the dialog ever being open.
+  - **Accessibility:** the toolbars' dropdowns had no accessible name, so screen readers announced each as just "combobox". They now have `aria-label`s: Filter by category / item type / source / check-in status / payment, and Sort items / bidders by.
+  - T8: the two `error).toBeDefined()` checks in `items.test.ts` now assert the route's message; bare `toHaveBeenCalled()` on saveConfig, the attendee re-read, the edit 409's reload and Set Up's sheet rebuild now assert the arguments or count. The attendee re-read check clears the load-time reads first, so it tests the re-read itself.
+  - 11 mutations, all caught. No test count change (2016).
+
 - **The browser side of the writes is tested** (ROADMAP T5, T7, 2026-10-29).
   - `google-api.ts` (32% -> 98%): what each of its 15 request functions sends (method, path, credentials, body, matching the server routes' field names), each one's error path, unset spreadsheets sending nothing, and `postOnce` never retrying.
   - Seam tests (the real component and hook, only the API mocked) for the walk-in dialog (21% -> 92%, with the real Dialog), adding and deleting an item (27% / 24% -> 100%, real Dialog and Select), the Bid Management page's Set Up / Go Live / Close (26% -> 96%), and `useBundling`'s payloads and AI suggestion paths. Each asserts the exact payload, what the person sees, and the failure path.

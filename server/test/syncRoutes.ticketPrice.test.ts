@@ -76,7 +76,7 @@ describe("Set Up Bid Management App - the ticket price from the website", () => 
     const res = await setUp();
 
     expect(res.status).toBe(200);
-    expect(performSheetSync).toHaveBeenCalled();
+    expect(performSheetSync).toHaveBeenCalledWith(expect.anything(), "bm", "tk");
     expect(res.body.ticketPrice.message).toContain("No website ticket purchases yet");
     expect(logAction).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: "Update ticket price from website" }));
   });

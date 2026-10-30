@@ -75,7 +75,7 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
   *Fix:* have the gated fake record that it was reached (a promise resolved inside the handler), and `await vi.waitFor(() => expect(reached)...)` before acting, as `ticketPoll.test.ts` does. To prove a write is held, assert it happens only after `release()`, not that nothing happened within N ms. Then rerun the suite in a loop to confirm the flakes are gone.
 - **[DONE 2026-10-29, Phase 4] T5 - The browser-to-server requests are untested.** 43 test files mock `@/services/google-api` wholesale (the API seam, which is allowed), but `google-api.ts` itself is only 32% covered. The paths, methods and request bodies it builds are never checked, so a field renamed on one side would pass every test on both.
   *Fix:* test `google-api.ts` with MSW in jsdom, asserting each function's method, path and body. Or, better, share the request types between `src/` and `server/` so the compiler catches a mismatch.
-- **T6 - Stubbed UI primitives hide real behaviour.**
+- **[DONE 2026-10-29, Phase 5] T6 - Stubbed UI primitives hide real behaviour.**
   - The Dialog stub renders its children whether or not `open` is set (`ActionHistoryAdmin`, `Bidders`, `BundlingDialog`, `ConfigSettings`, `TicketAttendeeTab` and `VolunteersAdmin` tests). So those tests can't catch a dialog that never opens or never closes.
   - The Select stub swaps Base UI's select for a native `<select>` in 10 test files, so a select showing the wrong label, or one that can't be picked by keyboard, isn't caught.
   `src/components/ui/select.test.tsx` already drives the real Select in jsdom.
@@ -86,7 +86,7 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
   - `BidManagementWorkflow` (26%): Set Up, Go Live and Close, including the new ticket-price message from Set Up.
   - `useBundling` (75%).
   These are the seam standard's main case: a user action becomes an API call. *Fix:* render the component, act with `userEvent`, and assert the exact payload sent to the API.
-- **T8 - Assertions that accept any value:**
+- **[DONE 2026-10-29, Phase 5] T8 - Assertions that accept any value:**
   - `items.test.ts:196` and `:596` assert only that `response.body.error` is defined, so any error passes. Assert the message.
   - Some positive bare `toHaveBeenCalled()` calls are on calls whose arguments matter: `useAttendeesData.test.ts:241` (`getSheetData`), `ConfigSettings.test.tsx:227` (`mockSaveConfig`), `AuctionItemsTab.editing.test.tsx:216` (`mockRefresh`) and `syncRoutes.ticketPrice.test.ts:79` (`performSheetSync`). Use `toHaveBeenCalledWith`. The other bare calls (a toast, `next()` in middleware) are fine.
 
@@ -183,7 +183,7 @@ Work in order: each phase makes the next one cheaper or safer. One branch and PR
     - the stage buttons are absent without `auction.stage`.
   - **`useBundling`:** the bundle and restore payloads, and the uncovered error branches.
 
-**Phase 5 - T6 and T8: real primitives and exact assertions.**
+**Phase 5 - T6 and T8: real primitives and exact assertions.** *Done 2026-10-29 (branch `real-ui-primitives`). Every stub was removed; no file needed to keep one. The toolbars' unlabelled dropdowns got `aria-label`s (a screen-reader fix as well as what the tests query by). One vacuous test turned up: "payment fields aren't shown" in the add-attendee dialog had never opened the dialog.*
 
 - **T6.** One test file at a time, delete the `vi.mock("@/components/ui/dialog")` and `vi.mock("@/components/ui/select")` stubs and drive the real components, following `src/components/ui/select.test.tsx`:
   - open a dialog by clicking its trigger, and find it with `screen.findByRole("dialog")`;

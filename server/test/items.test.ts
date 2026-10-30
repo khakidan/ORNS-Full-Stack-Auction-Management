@@ -209,7 +209,7 @@ describe("Add Auction Item workflow", () => {
       .send(invalidBody);
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toBeDefined();
+    expect(response.body.error).toBe("Missing required parameters for adding item");
   });
 
   it("returns 500 for external service failure", async () => {
@@ -625,7 +625,7 @@ describe("Update Auction Item workflow", () => {
       });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toBeDefined();
+    expect(response.body.error).toBe("Invalid field: nonExistentField");
   });
 
   it("category change triggers re-sequencing test", async () => {

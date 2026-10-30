@@ -197,6 +197,7 @@ describe("AuctionItemsTab - real single-item edit wiring", () => {
     await user.click(within(dialog).getByRole("button", { name: "Save Changes" }));
 
     expect(toast.error).toHaveBeenCalledWith("This item changed since you opened it. Refresh the list and try again.");
-    expect(mockRefresh).toHaveBeenCalled();
+    // Reloads so the person sees the item as it is now.
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 });

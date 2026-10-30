@@ -215,7 +215,11 @@ describe("ConfigSettings", () => {
     render(<ConfigSettings />);
     fireEvent.click(screen.getByText("Save Configuration"));
 
-    await waitFor(() => expect(mockSaveConfig).toHaveBeenCalled());
+    await waitFor(() => expect(mockSaveConfig).toHaveBeenCalledWith(expect.objectContaining({
+      auctionItemsSpreadsheetId: "mock-items-id",
+      auctionTicketsSpreadsheetId: "mock-tickets-id",
+      bidManagementSpreadsheetId: "mock-bid-mgt-id",
+    })));
     await new Promise((r) => setTimeout(r, 0));
     expect(fetchWithRetry).not.toHaveBeenCalledWith(expect.stringContaining("/api/settings"), expect.anything());
     expect(toast.error).not.toHaveBeenCalled();
