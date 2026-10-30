@@ -468,6 +468,30 @@ describe("routes record what they did", () => {
     }));
   });
 
+  it("an attendee delete records the row it cleared and how to put it back, and tells open browsers", async () => {
+    const cleared: string[] = [];
+    server.use(
+      http.get(`${SHEETS}/:id/values/:range`, () => HttpResponse.json({ values: [["Pat", "Lee", "pat@x.org", "", 2]] })),
+      http.post(`${SHEETS}/:id/values/:range`, ({ params }) => { cleared.push(`${params.id} ${decodeURIComponent(String(params.range))}`); return HttpResponse.json({}); }),
+    );
+    const version = changesSince(0).version;
+
+    const res = await request(app).post("/api/attendees/delete").set(admin).send({ spreadsheetId: "tk", sheet: "tickets", rowIndex: 4 });
+
+    expect(res.status).toBe(200);
+    expect(cleared).toEqual(["tk-sheet 'tickets'!A4:Z4:clear"]);
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Tickets",
+      action: "Delete attendee",
+      target: "Pat Lee",
+      summary: "Deleted Pat Lee from tickets (row 4)",
+      before: ["Pat", "Lee", "pat@x.org", "", 2],
+      location: "Auction Tickets 'tickets'!A4:Z4",
+      undo: { kind: "cells", spreadsheetId: "tk-sheet", range: "'tickets'!A4:Z4", before: [["Pat", "Lee", "pat@x.org", "", 2]], after: [[]] },
+    });
+    expect(changesSince(version).changed).toContain("tk-sheet");
+  });
+
   it("an attendee add resent with the same key (a retry after a dropped connection) adds the row once (ROADMAP A4)", async () => {
     let appends = 0;
     server.use(http.post(`${SHEETS}/:id/values/:range\\:append`, () => {
