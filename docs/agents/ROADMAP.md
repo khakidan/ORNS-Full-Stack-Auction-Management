@@ -28,8 +28,6 @@ Steps:
 
 If step 7 doesn't check out, cash/check checkouts will still work (the code falls back to recording the full fee-inclusive amount if the removal call fails) - but the bidder's invoice will keep showing the fee amount even though cash was collected without it. In that case let the dev know what happened in step 6/7 instead of using this feature for real auction checkouts yet.
 
-**Check the live PayPal app belongs to the account with `pavetheway@orns.org`.** Live invoices name that email as the invoicer, and PayPal refuses changes to an invoice whose invoicer email isn't on the app's account. The app now retries without the email, so cash/check checkouts still work, but the fee removal should succeed first time. In the PayPal developer dashboard, the live app ("Auction AI Receipts") should be under the business account whose emails include `pavetheway@orns.org`.
-
 **Put the live PayPal app's credentials on the server before ticket sales open** - see "Webhooks with Fluent Forms" step 2 below. The server still has the sandbox app, so it can't confirm real website ticket payments (or, at the auction, real checkouts).
 
 ---

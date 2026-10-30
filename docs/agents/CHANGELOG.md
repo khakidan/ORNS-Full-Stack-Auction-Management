@@ -11,6 +11,7 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
   - **Fixed in three places:**
     - Sandbox invoices no longer name an invoicer, so PayPal uses the account's own. Live ones still name `pavetheway@orns.org`.
     - `removeSurchargeLine` retries a `USER_NOT_FOUND` refusal once without the invoicer email, keeping the rest of the invoicer. This covers invoices made before the fix, and a live app on a different account.
+  - **Live checked (2026-10-30):** the live app ("Auction AI Receipts") is on the account whose primary email is `pavetheway@orns.org`, so live updates should succeed first time.
     - When the fee can't be removed, checkout still records the full amount (as before), but now also warns staff. The warning says PayPal shows the fee included, and to undo that payment in PayPal, delete the fee line and record it again. Before, this only went to the server log, though the ROADMAP's test steps expected a warning.
   - Backend 1170 -> 1174, total 2063 -> 2067.
 
