@@ -6,6 +6,12 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **The write-mode rehearsal in the sandbox is done** (ROADMAP "Webhooks with Fluent Forms" item 1, 2026-10-30).
+  - The app wrote each purchase's row itself, Pending (entries 1486/1487, 2026-10-29).
+  - Payments PayPal held for review showed on Needs review (1488/1489).
+  - With the reused-row fix deployed, a purchase landing on a deleted row's number got its own new bidder number.
+  - The test rows, bidders and entries were then cleared.
+
 - **ROADMAP: PayPal Paid and Refunded move to a live test on the day sales open** (2026-10-30). The sandbox held test payments 1488/1489 for review and never released them, and wouldn't refund them, so those two steps leave the sandbox rehearsal. They become one real ticket bought, checked, refunded and cleared once live PayPal is set up.
 
 - **A reused ticket row no longer takes over the old bidder** (found in the write-mode rehearsal, 2026-10-30).
