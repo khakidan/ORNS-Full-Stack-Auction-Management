@@ -17,7 +17,7 @@
  * lock were removed (verified directly - see the fix's own commit
  * history/sanity-check discipline).
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { registerWalkInBidder, checkInBidderWithBid, setBidderFlag } from "../services/bidderService";
 import { withLock } from "../utils/asyncLock";
 import { createGate, waitUntilQueuedOnLock } from "./helpers/gate";
@@ -256,5 +256,146 @@ describe("setBidderFlag", () => {
     otherWriter.release();
     await Promise.all([held, flag]);
     expect(order).toEqual(["other-writer-start", "other-writer-end", "set-flag-done"]);
+  });
+});
+
+// ROADMAP T18: what Stryker showed no test checked.
+describe("setBidderFlag - the old value it reports for undo", () => {
+  function sheetsWithRow(cells: unknown[]) {
+    return {
+      spreadsheets: {
+        values: {
+          get: async () => ({ data: { values: [["ID", "First", "Last", "Email", "Checked In", "Proxy Bidder"], cells] } }),
+          update: async () => ({ data: {} }),
+        },
+      },
+    } as any;
+  }
+
+  it.each([
+    [true, true],
+    ["TRUE", true],
+    ["true", true],
+    [false, false],
+    ["FALSE", false],
+    ["", false],
+    [undefined, false],
+  ])("reports Checked In %j as before: %s", async (cell, before) => {
+    const sheets = sheetsWithRow(["101", "Pat", "Lee", "", cell, "TRUE"]);
+    const result = await setBidderFlag(sheets, { spreadsheetId: SPREADSHEET_ID, bidderNumbersSheet: BIDDER_NUMBERS_SHEET, bidderId: "101", flag: "checkedIn" });
+    expect(result).toEqual({ success: true, range: "'Bidder-Numbers'!E2", before });
+  });
+
+  it("reads the old value from the flag's own column (F for Proxy Bidder), on the bidder's own row", async () => {
+    const sheets = {
+      spreadsheets: {
+        values: {
+          get: async () => ({ data: { values: [["ID"], ["100", "", "", "", "TRUE", "TRUE"], ["101", "Pat", "Lee", "", "TRUE", "FALSE"], ["102", "", "", "", "TRUE", "TRUE"]] } }),
+          update: async () => ({ data: {} }),
+        },
+      },
+    } as any;
+    const result = await setBidderFlag(sheets, { spreadsheetId: SPREADSHEET_ID, bidderNumbersSheet: BIDDER_NUMBERS_SHEET, bidderId: "101", flag: "isProxy" });
+    expect(result).toEqual({ success: true, range: "'Bidder-Numbers'!F3", before: false });
+  });
+
+  it("writes the tick as a real checkbox value (USER_ENTERED)", async () => {
+    const update = vi.fn(async () => ({ data: {} }));
+    const sheets = { spreadsheets: { values: { get: async () => ({ data: { values: [["ID"], ["101"]] } }), update } } } as any;
+    await setBidderFlag(sheets, { spreadsheetId: SPREADSHEET_ID, bidderNumbersSheet: BIDDER_NUMBERS_SHEET, bidderId: "101", flag: "checkedIn" });
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ valueInputOption: "USER_ENTERED", requestBody: { values: [[true]] } }));
+  });
+});
+
+describe("registerWalkInBidder - setup checks and the grid", () => {
+  const TICKETS_ID = "tickets-spreadsheet-id";
+
+  function walkInSheets({ bmTabs = [BIDDER_NUMBERS_SHEET, BID_MANAGEMENT_SHEET, "Auction-Status"], ticketTabs = ["Summary", "Tickets"], gridWidth = 26, usedWidth = 4 } = {}) {
+    const batchUpdates: any[] = [];
+    const appends: string[] = [];
+    const writes: string[] = [];
+    const sheets = {
+      spreadsheets: {
+        get: async ({ spreadsheetId }: any) => ({
+          data: {
+            sheets: (spreadsheetId === TICKETS_ID ? ticketTabs : bmTabs).map((title, i) => ({ properties: { title, sheetId: 10 + i, gridProperties: { columnCount: gridWidth } } })),
+          },
+        }),
+        batchUpdate: async ({ requestBody }: any) => { batchUpdates.push(...requestBody.requests); return { data: {} }; },
+        values: {
+          get: async ({ range }: { range: string }) => {
+            if (range.includes(BIDDER_NUMBERS_SHEET)) return { data: { values: [["ID"], [104]] } };
+            if (range.includes("1:5")) return { data: { values: [new Array(usedWidth).fill("x")] } };
+            return { data: { values: [] } };
+          },
+          update: async ({ range }: any) => { writes.push(range); return { data: {} }; },
+          append: async ({ range }: any) => { appends.push(range); return { data: { updates: { updatedRange: range } } }; },
+        },
+      },
+    } as any;
+    return { sheets, batchUpdates, appends, writes };
+  }
+  const params = (overrides = {}) => ({
+    firstName: "Pat", lastName: "Lee", email: "pat@example.com", spreadsheetId: SPREADSHEET_ID, ticketsSpreadsheetId: TICKETS_ID,
+    ticketPrice: 35, bidderNumbersSheet: BIDDER_NUMBERS_SHEET, bidManagementSheet: BID_MANAGEMENT_SHEET, ...overrides,
+  });
+
+  it("adds the ticket to the tickets tab however it's capitalised", async () => {
+    const { sheets, appends } = walkInSheets({ ticketTabs: ["Summary", "TICKETS"] });
+    const result = await registerWalkInBidder(sheets, params());
+    expect(result.ticketAppended).toBe(true);
+    expect(appends).toContain("'TICKETS'!A:V");
+  });
+
+  it("falls back to a tab called 'tickets' when the tickets spreadsheet has none by that name", async () => {
+    const { sheets, appends } = walkInSheets({ ticketTabs: ["Summary"] });
+    await registerWalkInBidder(sheets, params());
+    expect(appends).toContain("'tickets'!A:V");
+  });
+
+  it.each([
+    ["Bid-Management", [BIDDER_NUMBERS_SHEET, "Auction-Status"]],
+    ["Bidder-Numbers", [BID_MANAGEMENT_SHEET, "Auction-Status"]],
+  ])("refuses, writing nothing, when the %s tab is missing", async (_missing, bmTabs) => {
+    const { sheets, appends, writes, batchUpdates } = walkInSheets({ bmTabs });
+    await expect(registerWalkInBidder(sheets, params())).rejects.toThrow("Could not find required sheets");
+    expect([appends, writes, batchUpdates]).toEqual([[], [], []]);
+  });
+
+  it("widens the Bid-Management grid by enough columns for the new pair, on the Bid-Management tab", async () => {
+    const { sheets, batchUpdates } = walkInSheets({ gridWidth: 26, usedWidth: 26 });
+    await registerWalkInBidder(sheets, params());
+    expect(batchUpdates[0]).toEqual({ appendDimension: { sheetId: 11, dimension: "COLUMNS", length: 4 } });
+  });
+
+  it("doesn't widen the grid when the new pair already fits", async () => {
+    const { sheets, batchUpdates } = walkInSheets({ gridWidth: 26, usedWidth: 4 });
+    await registerWalkInBidder(sheets, params());
+    expect(batchUpdates.some((r) => r.appendDimension)).toBe(false);
+  });
+});
+
+describe("checkInBidderWithBid - refusals", () => {
+  function sheetsWithGrid(grid: unknown[][]) {
+    const writes: string[] = [];
+    const sheets = {
+      spreadsheets: {
+        values: {
+          get: async ({ range }: { range: string }) => ({ data: { values: range.includes(BID_MANAGEMENT_SHEET) ? grid : [["ID"], ["101"]] } }),
+          update: async ({ range }: any) => { writes.push(range); return { data: {} }; },
+        },
+      },
+    } as any;
+    return { sheets, writes };
+  }
+  const params = { spreadsheetId: SPREADSHEET_ID, bidderId: "101", bidManagementSheet: BID_MANAGEMENT_SHEET, bidderNumbersSheet: BIDDER_NUMBERS_SHEET, bidValue: 35 };
+
+  it.each([
+    ["an empty Bid-Management sheet", [], "Bid sheet is empty"],
+    ["no column for the bidder", [["102", ""], ["Kim", "Ng"], ["Item #:", "Price:"]], "Bidder column not found in Bid Management"],
+  ])("refuses %s, writing nothing", async (_label, grid, message) => {
+    const { sheets, writes } = sheetsWithGrid(grid as unknown[][]);
+    await expect(checkInBidderWithBid(sheets, params as any)).rejects.toThrow(message);
+    expect(writes).toEqual([]);
   });
 });

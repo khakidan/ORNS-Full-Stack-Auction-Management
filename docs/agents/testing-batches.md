@@ -35,7 +35,7 @@ There is no coverage threshold. Record the four totals in the table below when t
 npm run test:mutation   # Stryker on the money paths, about 4 minutes; report in reports/mutation/index.html
 ```
 
-`stryker.config.json` lists the files: `financeUtils`, `winningBidChecks`, `ticketPaymentCheck`, `ticketPurchaseRow` and `bidderService`. It isn't run in CI. Run it after changing one of those files, and once before the auction. A surviving mutant is a change to the code that no test notices: add the test, or note why it can't matter (an equivalent mutant). First run (2026-10-29): 78.6%, survivors listed as ROADMAP T15-T18.
+`stryker.config.json` lists the files: `financeUtils`, `winningBidChecks`, `ticketPaymentCheck`, `ticketPurchaseRow` and `bidderService`. It isn't run in CI. Run it after changing one of those files, and once before the auction. A surviving mutant is a change to the code that no test notices: add the test, or note why it can't matter (an equivalent mutant). First run (2026-10-29): 78.6%, survivors listed as ROADMAP T15-T18. After those were fixed: 91.1%, and every remaining survivor is equivalent (see T18 in the ROADMAP).
 
 ## Recorded Snapshots
 
@@ -59,9 +59,9 @@ npx vitest run src/           # frontend
 
 | Layer | Path | Tests |
 |---|---|---|
-| **Backend** | `server/test/` | **1118 passed** |
+| **Backend** | `server/test/` | **1169 passed** |
 | **Frontend** | `src/` | **893 passed** |
-| **Total** | `npm run test:quiet` | **2011 passed** |
+| **Total** | `npm run test:quiet` | **2062 passed** |
 
 | Coverage (`npm run test:coverage`, 2026-10-29) | |
 |---|---|

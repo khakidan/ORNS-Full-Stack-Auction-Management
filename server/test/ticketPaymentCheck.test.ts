@@ -3,7 +3,10 @@
  * itself - Fluent Forms' record and PayPal - never the form (ROADMAP W4).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { checkTicketPayment } from "../services/ticketPaymentCheck";
+import { http, HttpResponse } from "msw";
+import { server } from "./setup";
+import { checkTicketPayment, paypalForTickets } from "../services/ticketPaymentCheck";
+import { sheetCache } from "../utils/sheetCache";
 import { FluentFormsEntryPayment, FluentFormsTransaction } from "../services/fluentFormsApi";
 import { PayPalPayment } from "../services/paypalService";
 import { FLUENT_FORMS } from "../services/ticketPurchaseService";
@@ -257,5 +260,173 @@ describe("checkTicketPayment", () => {
 
     await expect(checkTicketPayment(sheets, "1500", { mode: "write", ...d })).rejects.toThrow("403");
     expect(updates).toEqual([]);
+  });
+});
+
+// ROADMAP T15: decisions Stryker showed no test checked.
+describe("checkTicketPayment - what the mutation run found untested", () => {
+  it("asks live PayPal when Settings says live, and the sandbox otherwise - live purchases only exist in live", async () => {
+    const hosts: string[] = [];
+    const record = ({ request }: { request: Request }) => {
+      hosts.push(new URL(request.url).host);
+      return request.url.includes("/oauth2/token")
+        ? HttpResponse.json({ access_token: "t" })
+        : HttpResponse.json({ status: "COMPLETED", amount: { value: "70.00", currency_code: "USD" } });
+    };
+    server.use(http.all("https://api-m.paypal.com/*", record), http.all("https://api-m.sandbox.paypal.com/*", record));
+
+    for (const [setting, host] of [[false, "api-m.paypal.com"], [true, "api-m.sandbox.paypal.com"], [undefined, "api-m.sandbox.paypal.com"]] as const) {
+      const { _resetConfigCacheForTesting } = await import("../services/configService");
+      await getAdminFirestore().collection("settings").doc("global").set({ auctionTicketsSpreadsheetId: "tk", ...(setting === undefined ? {} : { paypalIsSandbox: setting }) });
+      _resetConfigCacheForTesting();
+      hosts.length = 0;
+
+      await (await paypalForTickets()).getPayment(CHARGE, new Date());
+
+      expect([...new Set(hosts)]).toEqual([host]);
+    }
+  });
+
+  it("refuses to run without the Tickets spreadsheet set, rather than guessing one", async () => {
+    await getAdminFirestore().collection("settings").doc("global").set({});
+    const { _resetConfigCacheForTesting } = await import("../services/configService");
+    _resetConfigCacheForTesting();
+    const { sheets, updates } = fakeSheets([ticketRow("1500")]);
+
+    await expect(checkTicketPayment(sheets, "1500", { mode: "write", ...deps() })).rejects.toThrow("The Auction Tickets Spreadsheet ID isn't set in Settings.");
+    expect(sheets.spreadsheets.values.get).not.toHaveBeenCalled();
+    expect(updates).toEqual([]);
+  });
+
+  it("tells open screens about the write and logs it with the payment in the summary", async () => {
+    sheetCache.set("tk:someone:'tickets'!A:W", { data: "stale", timestamp: Date.now() });
+    sheetCache.set("other:someone:A1", { data: "keep", timestamp: Date.now() });
+    const { sheets } = fakeSheets([ticketRow("1500")]);
+
+    await checkTicketPayment(sheets, "1500", { mode: "write", ...deps() });
+
+    expect(sheetCache.has("tk:someone:'tickets'!A:W")).toBe(false);
+    expect(sheetCache.has("other:someone:A1")).toBe(true);
+    expect(vi.mocked(logSystemAction)).toHaveBeenCalledWith(sheets, FLUENT_FORMS, {
+      area: "Tickets",
+      action: "Confirm ticket payment",
+      target: "Pat Lee",
+      summary: `Marked Pat Lee's ticket purchase Paid: PayPal confirmed payment ${CHARGE} for $70 (Fluent Forms entry 1500)`,
+      before: ["Pending"],
+      after: ["Paid"],
+      location: "Auction Tickets 'tickets'!U2",
+      notUndoableReason: expect.stringContaining("it was read from PayPal"),
+    });
+    // RAW, so nothing in the row can be read as a formula.
+    expect(sheets.spreadsheets.values.update).toHaveBeenCalledWith(expect.objectContaining({ valueInputOption: "RAW" }));
+  });
+
+  it("treats a refund Fluent Forms lists only under refunds (the payment itself still says paid) as a refund", async () => {
+    const { sheets, updates } = fakeSheets([ticketRow("1500", "Paid")]);
+
+    const result = await checkTicketPayment(sheets, "1500", {
+      mode: "write",
+      ...deps({ transactions: [txn()], refunds: [txn({ status: "refunded" })] }, { status: "REFUNDED", amount: 70, currency: "USD" }),
+    });
+
+    expect(result).toMatchObject({ outcome: "set", from: "Paid", to: "Refunded" });
+    expect(updates).toEqual([{ range: "'tickets'!U2", values: [["Refunded"]] }]);
+  });
+
+  it("names a buyer with no last name without a trailing space", async () => {
+    const row = ticketRow("1500");
+    row[1] = "";
+    const { sheets } = fakeSheets([row]);
+    await checkTicketPayment(sheets, "1500", { mode: "write", ...deps() });
+    expect(vi.mocked(logSystemAction)).toHaveBeenCalledWith(sheets, FLUENT_FORMS, expect.objectContaining({ target: "Pat" }));
+  });
+
+  it("logs a confirmed refund as a refund, not a payment", async () => {
+    const { sheets } = fakeSheets([ticketRow("1500", "Paid")]);
+
+    await checkTicketPayment(sheets, "1500", {
+      mode: "write",
+      ...deps({ transactions: [txn({ status: "refunded" })] }, { status: "REFUNDED", amount: 70, currency: "USD" }),
+    });
+
+    expect(vi.mocked(logSystemAction)).toHaveBeenCalledWith(sheets, FLUENT_FORMS, expect.objectContaining({
+      action: "Record ticket refund",
+      summary: `Marked Pat Lee's ticket purchase Refunded: PayPal reports payment ${CHARGE} refunded (Fluent Forms entry 1500)`,
+      before: ["Paid"],
+      after: ["Refunded"],
+      location: "Auction Tickets 'tickets'!U2",
+    }));
+  });
+
+  it("in compare mode, a refund PayPal confirms is only reported - nothing goes on the review list", async () => {
+    const { sheets, updates } = fakeSheets([ticketRow("1500", "Paid")]);
+
+    const result = await checkTicketPayment(sheets, "1500", {
+      mode: "compare",
+      ...deps({ transactions: [txn({ status: "refunded" })] }, { status: "REFUNDED", amount: 70, currency: "USD" }),
+    });
+
+    expect(result).toEqual({ outcome: "would-set", entryId: "1500", from: "Paid", to: "Refunded", transactionId: CHARGE });
+    expect((await review("1500").get()).exists).toBe(false);
+    expect(updates).toEqual([]);
+  });
+
+  it("counts only PayPal's transactions: a paid one by another method doesn't make the PayPal purchase paid", async () => {
+    const { sheets, updates } = fakeSheets([ticketRow("1500")]);
+    const d = deps({ transactions: [txn({ paymentMethod: "offline", status: "paid" })] });
+
+    const result = await checkTicketPayment(sheets, "1500", { mode: "write", ...d });
+
+    expect(result).toEqual({ outcome: "unchanged", entryId: "1500", status: "Pending", reason: "Fluent Forms says no payment yet" });
+    expect(d.paypal.getPayment).not.toHaveBeenCalled();
+    expect(updates).toEqual([]);
+  });
+
+  it("doesn't ask PayPal about a transaction Fluent Forms still calls pending, even one with an ID", async () => {
+    const { sheets, updates } = fakeSheets([ticketRow("1500")]);
+    const d = deps({ transactions: [txn({ status: "pending" }), txn({ status: "failed" })] });
+
+    const result = await checkTicketPayment(sheets, "1500", { mode: "write", ...d });
+
+    expect(result).toEqual({ outcome: "unchanged", entryId: "1500", status: "Pending", reason: "Fluent Forms says pending, failed" });
+    expect(d.paypal.getPayment).not.toHaveBeenCalled();
+    expect(updates).toEqual([]);
+  });
+
+  it("only treats PENDING_REVIEW as a hold while the payment is still PENDING", async () => {
+    const { sheets } = fakeSheets([ticketRow("1500")]);
+    const result = await checkTicketPayment(sheets, "1500", { mode: "write", ...deps({}, { status: "COMPLETED", amount: 70, currency: "USD", pendingReason: "PENDING_REVIEW" }) });
+    expect(result).toMatchObject({ outcome: "set", to: "Paid" });
+  });
+
+  it.each([
+    [70.004, "set"],
+    [70.01, "needs-review"],
+    [69.99, "needs-review"],
+  ])("accepts PayPal's amount only within half a cent of Fluent Forms' ($%s)", async (amount, outcome) => {
+    const { sheets } = fakeSheets([ticketRow("1500")]);
+    const result = await checkTicketPayment(sheets, "1500", { mode: "write", ...deps({}, { status: "COMPLETED", amount, currency: "USD" }) });
+    expect(result.outcome).toBe(outcome);
+  });
+
+  it.each([
+    ["PayPal says nothing about the payment", deps({ transactions: [txn({ status: "refunded" })] }, null), `PayPal says nothing for ${CHARGE}`],
+    ["Fluent Forms' refund has no transaction ID", deps({ transactions: [txn({ status: "refunded", chargeId: "" })] }), "PayPal says nothing for this entry (no transaction ID)"],
+  ])("puts a refund on the review list when %s", async (_label, d, problem) => {
+    const { sheets, updates } = fakeSheets([ticketRow("1500", "Paid")]);
+    const result = await checkTicketPayment(sheets, "1500", { mode: "write", ...d });
+    expect(result).toMatchObject({ outcome: "needs-review", problems: [expect.stringContaining(problem)] });
+    expect(updates).toEqual([]);
+  });
+
+  it("still checks a PayPal row whose cells have spaces around them", async () => {
+    const { sheets } = fakeSheets([ticketRow("1500", " Pending ", " PayPal ")]);
+    expect(await checkTicketPayment(sheets, "1500", { mode: "write", ...deps() })).toMatchObject({ outcome: "set", from: "Pending", to: "Paid" });
+  });
+
+  it("assumes USD when Fluent Forms leaves the currency blank, in the problem it reports", async () => {
+    const { sheets } = fakeSheets([ticketRow("1500")]);
+    const result = await checkTicketPayment(sheets, "1500", { mode: "write", ...deps({ transactions: [txn({ currency: "" })] }, { status: "COMPLETED", amount: 35, currency: "USD" }) });
+    expect(result).toMatchObject({ outcome: "needs-review", problems: ["PayPal's payment is $35 USD, but Fluent Forms recorded $70 USD."] });
   });
 });
