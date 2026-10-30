@@ -18,13 +18,14 @@ vi.mock("@/services/google-api", () => ({
   getTicketPurchaseStatus: vi.fn(),
   checkWebsiteTicketsNow: vi.fn(),
   markLateWebsitePurchaseHandled: vi.fn(async () => {}),
+  clearWebsitePurchaseReview: vi.fn(async () => {}),
 }));
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
-import { getTicketPurchaseStatus, checkWebsiteTicketsNow, markLateWebsitePurchaseHandled } from "@/services/google-api";
+import { getTicketPurchaseStatus, checkWebsiteTicketsNow, markLateWebsitePurchaseHandled, clearWebsitePurchaseReview } from "@/services/google-api";
 import { toast } from "sonner";
 
 const mockedGetStatus = vi.mocked(getTicketPurchaseStatus);
@@ -65,6 +66,18 @@ describe("TicketPurchaseStatusCard", () => {
     await waitFor(() => expect(screen.getByText("Needs Attention")).toBeInTheDocument());
     expect(screen.getByText(/Pat Lee \(entry 1491\)/)).toBeInTheDocument();
     expect(screen.getByText("Entries 1485, 1488")).toBeInTheDocument();
+  });
+
+  it("Clear takes a sorted-out purchase off the review list", async () => {
+    const user = userEvent.setup();
+    mockedGetStatus.mockResolvedValueOnce(status({ review: [{ entryId: "1488", name: "Pat Lee", problems: ["PayPal says payment X is REFUNDED, not completed."], firstSeenAt: recent, lastSeenAt: recent }] }));
+    mockedGetStatus.mockResolvedValue(status());
+    render(<StatusCard onAdded={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: "Clear entry 1488" }));
+
+    await waitFor(() => expect(clearWebsitePurchaseReview).toHaveBeenCalledWith("1488"));
+    await waitFor(() => expect(screen.queryByText(/Pat Lee \(entry 1488\)/)).not.toBeInTheDocument());
   });
 
   it("lists purchases that arrived after Go Live for staff to register as walk-ins, and Done takes one off", async () => {

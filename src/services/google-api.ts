@@ -208,6 +208,17 @@ export async function markLateWebsitePurchaseHandled(entryId: string): Promise<v
   }
 }
 
+export async function clearWebsitePurchaseReview(entryId: string): Promise<void> {
+  const res = await fetchWithRetry(`${getBaseUrl()}/api/tickets/fluent-forms/review/${encodeURIComponent(entryId)}/clear`, {
+    method: "POST",
+    credentials: "include"
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to clear the purchase from the review list");
+  }
+}
+
 export interface AppsScriptVersionStatus {
   label: string;
   expected: string;

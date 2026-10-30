@@ -6,6 +6,15 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **A reused ticket row no longer takes over the old bidder** (found in the write-mode rehearsal, 2026-10-30).
+  - **What happened:** old test rows on `tickets` were deleted, but their bidders (116-124) stayed in Bidder-Numbers, each still tied to its row by column O. The next two website purchases landed on rows 3 and 4, so the sync renamed bidders 119 and 121 to the new buyers instead of giving them numbers. The same could happen for real: a refunded buyer's row deleted, and the next purchase lands on it. Once Live, the Go-Live check also counted that stale tie as "already has a bidder" and didn't flag the purchase.
+  - **Now:**
+    - A recorded tie holds only while the row still shares the bidder's email or name. A row sharing neither holds someone else: the old bidder is matched again by email or name. Failing that, they keep their name, column O becomes `tickets!3 - now someone else`, and the Bidders tab shows "No ticket link". The newcomer gets their own number (Prep only, as before). A bidder who had a tie is never re-tied by Set Up's number order.
+    - The trade-off: changing a ticket's name *and* email in one edit now counts as a different person. Change one, save, then the other, to keep the bidder.
+    - The Go-Live check (W7) counts a bidder tied to the purchase's row only if they share the buyer's email or name.
+  - **Website Ticket Check: Clear on each Needs review line.** Before, only PayPal confirming a payment took an entry off the list, so a refunded or trashed test entry stayed for good. Clear takes it off, and it's recorded in Action History. A check that finds the same problem puts it back.
+  - Backend 1174 -> 1183, frontend 893 -> 897, total 2067 -> 2080.
+
 - **Cash/check checkout: the card fee comes off in sandbox, and staff are told when it can't** (found by the first real sandbox test, 2026-10-30).
   - **What happened:** bidder 115 paid $100 cash, but PayPal invoice #0085 kept its $4.12 fee and recorded $104.12 paid, with no warning. The server log showed PayPal refusing the update: `422 USER_NOT_FOUND - User is not associated with paypal based on invoicer email`. Every invoice named `pavetheway@orns.org` as the invoicer, which the sandbox app's account doesn't have. PayPal checks that email on an update, not on create.
   - **Fixed in three places:**

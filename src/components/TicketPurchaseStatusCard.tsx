@@ -35,7 +35,7 @@ interface TicketPurchaseStatusCardProps {
  * week - so a failure shows up days before the auction, not at check-in.
  */
 export default function TicketPurchaseStatusCard({ attendees, purchases }: TicketPurchaseStatusCardProps) {
-  const { status, loading, checking, checkNow, markHandled } = purchases;
+  const { status, loading, checking, checkNow, markHandled, clearReview } = purchases;
 
   if (loading) {
     return (
@@ -162,10 +162,18 @@ export default function TicketPurchaseStatusCard({ attendees, purchases }: Ticke
         {review.length > 0 && (
           <div>
             <span className="text-amber-700 font-medium">Needs review: {review.length}</span>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Once you've sorted one out (checked it in PayPal, fixed the ticket row, or it was a test), clear it. A check that finds the same problem puts it back.
+            </p>
             <ul className="mt-1 space-y-1 text-xs">
               {review.map((item) => (
-                <li key={item.entryId}>
-                  <span className="font-medium">{item.name || "No name"} (entry {item.entryId})</span>: {item.problems.join("; ")}
+                <li key={item.entryId} className="flex items-start justify-between gap-3">
+                  <span>
+                    <span className="font-medium">{item.name || "No name"} (entry {item.entryId})</span>: {item.problems.join("; ")}
+                  </span>
+                  <Button variant="outline" size="sm" className="h-7 shrink-0" aria-label={`Clear entry ${item.entryId}`} onClick={() => clearReview(item.entryId)}>
+                    Clear
+                  </Button>
                 </li>
               ))}
             </ul>

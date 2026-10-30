@@ -31,17 +31,19 @@ import { SheetRows, TicketPerson, bidderEmail, bidderName, collectTicketPeople }
  * every bidder already tied agrees with that order (it hasn't shifted).
  *
  * A tie is trusted while the ticket still shares the bidder's email or
- * name (an edit changes one at a time), or when nobody else claims that
- * ticket person (both were changed directly in the sheet). It is dropped
- * when the row now holds exactly another bidder - rows were sorted or
- * moved by hand - and the bidder is matched again. A ticket that has been
- * cleared never blanks a bidder.
+ * name (an edit changes one at a time). A row sharing neither now holds
+ * someone else - rows sorted by hand, or a deleted row's number reused by
+ * the next purchase - so the bidder is matched again by email or name,
+ * never renamed to the newcomer. Matched nowhere, their column O becomes
+ * "tickets!12 - now someone else" (REPLACED_REF), which the Bidders tab
+ * shows as "No ticket link". A ticket that has been cleared never blanks a bidder.
  *
  * While the auction is in Prep, someone on the tickets with no bidder (a
  * ticket bought after Set Up, a guest who now wants their own number) is
  * added - a new number, a Bidder-Numbers row and a grid column pair - but
- * only when every existing bidder is tied, so a renamed person is never
- * added twice. Never once the auction is Live or Closed.
+ * only when every existing bidder is tied (or known to have been replaced
+ * on their row), so a renamed person is never added twice. Never once the
+ * auction is Live or Closed.
  *
  * Runs after every ticket change made in the app, when Bid Management
  * loads, before receipts, labels and checkout use bidder names, and about
@@ -81,6 +83,14 @@ interface BidderLine {
   ref: string;
 }
 
+/**
+ * Column O for a bidder whose ticket row now holds someone else:
+ * "tickets!12 - now someone else" (after the ref, so it never reads as one).
+ */
+const REPLACED_SUFFIX = " - now someone else";
+export const REPLACED_REF = (ref: string) => `${ref}${REPLACED_SUFFIX}`;
+const wasReplaced = (b: BidderLine) => b.ref.endsWith(REPLACED_SUFFIX);
+
 const fullName = (first: string, last: string) => `${first} ${last}`.trim().toLowerCase();
 const personName = (p: TicketPerson) => fullName(bidderName(p.firstName), bidderName(p.lastName));
 const sharesEmail = (p: TicketPerson, b: BidderLine) => !!bidderEmail(p.email) && bidderEmail(p.email) === bidderEmail(b.email);
@@ -98,6 +108,8 @@ export interface BidderSyncPlan {
   ties: { bidder: BidderLine; person: TicketPerson }[];
   /** Bidders tied to no ticket. */
   orphans: BidderLine[];
+  /** Orphans whose recorded row now holds someone else (column O to become REPLACED_REF). */
+  replaced: BidderLine[];
   /** Ticket people with no bidder, once (the same person listed twice counts once, as in Set Up). */
   newPeople: TicketPerson[];
 }
@@ -113,12 +125,13 @@ export function planBidderSync(bidders: BidderLine[], people: TicketPerson[], se
   const tied = new Map<string, TicketPerson>();
   const tie = (b: BidderLine, p: TicketPerson) => { tied.set(b.id, p); taken.add(p.ref); };
 
-  // 1. Ties already recorded, unless the row now plainly belongs to someone else.
+  // 1. Ties already recorded, while the row still shares the bidder's email or name.
+  const lostRow = new Set<string>();
   for (const b of bidders) {
     const p = b.ref ? byRef.get(b.ref) : undefined;
     if (!p || taken.has(p.ref)) continue;
-    const holdsSomeoneElse = !sharesEmail(p, b) && !sharesName(p, b) && bidders.some((other) => other !== b && isExactly(p, other));
-    if (!holdsSomeoneElse) tie(b, p);
+    if (sharesEmail(p, b) || sharesName(p, b)) tie(b, p);
+    else lostRow.add(b.id);
   }
 
   // 2. Bidders without a (usable) tie: the one free ticket person with the same email, else the same name.
@@ -129,15 +142,17 @@ export function planBidderSync(bidders: BidderLine[], people: TicketPerson[], se
     if (p) tie(b, p);
   }
 
-  // 3. Still untied (name and email both changed before the tie existed):
-  // the bidder number, if the tied bidders show Set Up's order still holds.
+  // 3. Still untied and never tied (name and email both changed before the
+  // tie existed): the bidder number, if the tied bidders show Set Up's order
+  // still holds. Not a bidder who had a tie - a row reused by someone new
+  // can carry their old number.
   const orderHolds = tied.size > 0 && [...tied.entries()].every(([id, p]) => {
     const n = setUpNumbers.get(p.ref);
     return n === undefined || n === Number(id);
   });
   if (orderHolds) {
     for (const b of bidders) {
-      if (tied.has(b.id)) continue;
+      if (tied.has(b.id) || b.ref) continue;
       const p = people.find((q) => !taken.has(q.ref) && setUpNumbers.get(q.ref) === Number(b.id));
       if (p) tie(b, p);
     }
@@ -148,6 +163,7 @@ export function planBidderSync(bidders: BidderLine[], people: TicketPerson[], se
     return p ? [{ bidder: b, person: p }] : [];
   });
   const orphans = bidders.filter((b) => !tied.has(b.id));
+  const replaced = orphans.filter((b) => lostRow.has(b.id));
 
   // Ticket people nobody is tied to - except a repeat of someone already
   // there (Set Up gives the same name and email one number).
@@ -160,7 +176,7 @@ export function planBidderSync(bidders: BidderLine[], people: TicketPerson[], se
     seen.add(key);
     newPeople.push(p);
   }
-  return { ties, orphans, newPeople };
+  return { ties, orphans, replaced, newPeople };
 }
 
 /** The number Set Up would give each ticket person today (walk-in tickets left out - Set Up never numbers them). */
@@ -220,9 +236,15 @@ export async function syncBidderNamesWithTickets(
       }
     }
 
-    // New bidders: Prep only, and only when every bidder is accounted for.
+    for (const b of plan.replaced) {
+      writes.push({ range: `'${bidderNumbersSheet}'!O${b.rowNumber}`, values: [[REPLACED_REF(b.ref)]] });
+    }
+
+    // New bidders: Prep only, and only when every bidder is accounted for -
+    // one replaced on their row can't be the newcomer.
+    const unaccounted = plan.orphans.filter((b) => !plan.replaced.includes(b) && !wasReplaced(b));
     let added: AddedBidder[] = [];
-    if (plan.newPeople.length > 0 && plan.orphans.length === 0 && (await readAuctionState(sheets, spreadsheetId)) === "prep") {
+    if (plan.newPeople.length > 0 && unaccounted.length === 0 && (await readAuctionState(sheets, spreadsheetId)) === "prep") {
       let nextId = nextBidderId(bnRows);
       added = plan.newPeople.map((p) => ({ id: String(nextId++), firstName: bidderName(p.firstName), lastName: bidderName(p.lastName), email: bidderEmail(p.email), ref: p.ref }));
       const firstNewRow = Math.max(bnRows.length, 1) + 1;

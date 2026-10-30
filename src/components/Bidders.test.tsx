@@ -266,6 +266,17 @@ describe('Bidders - ticket links', () => {
       delete alice.ticketRef;
     }
   });
+
+  it("flags a bidder whose ticket row now holds someone else (column O \"tickets!12 - now someone else\")", () => {
+    const alice = mockBidders[2] as any;
+    alice.ticketRef = "tickets!12 - now someone else";
+    try {
+      render(<Bidders />);
+      expect(screen.getByTestId("bidder-row-103")).toHaveTextContent("No ticket link");
+    } finally {
+      delete alice.ticketRef;
+    }
+  });
 });
 
 describe('Bidders - Layout', () => {

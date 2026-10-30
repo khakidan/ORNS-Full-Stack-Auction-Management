@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Bidder } from "@/types";
 import { BidderAttendeeInfo } from "@/lib/bidderAttendeeInfo";
+import { parseTicketRef } from "@/lib/ticketRef";
 import { cn } from "@/lib/utils";
 import { RowIdTile } from "@/components/RowIdTile";
 
@@ -90,13 +91,14 @@ export function BidderRow({
             </Badge>
           )}
 
-          {bidder.ticketRef === "" && (
+          {bidder.ticketRef !== undefined && !parseTicketRef(bidder.ticketRef) && (
             // Bidders follow their tickets (server bidderTicketSync.ts); this one
-            // couldn't be matched to any ticket, so their name won't update on its own.
+            // couldn't be matched to any ticket ("" or "tickets!12 - now someone else" - their
+            // row now holds someone else), so their name won't update on its own.
             <Badge
               variant="outline"
               className="text-amber-700 border-amber-200 bg-amber-50 w-fit text-xs font-normal"
-              title="Couldn't match this bidder to a ticket, so their name and email won't follow ticket changes. Check the Auction Tickets list for them."
+              title="Couldn't match this bidder to a ticket (none found, or their ticket row now holds someone else), so their name and email won't follow ticket changes. Check the Auction Tickets list for them."
             >
               <AlertCircle className="w-3 h-3 mr-1" /> No ticket link
             </Badge>
