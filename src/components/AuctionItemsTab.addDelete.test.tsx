@@ -14,10 +14,6 @@ import { postJson, HttpError } from "@/services/apiClient";
 import { deleteAuctionItem } from "@/services/google-api";
 import { toast } from "sonner";
 
-window.HTMLElement.prototype.hasPointerCapture = vi.fn();
-window.HTMLElement.prototype.releasePointerCapture = vi.fn();
-window.HTMLElement.prototype.scrollIntoView = vi.fn();
-
 vi.mock("@/context/ConfigContext", () => ({ useConfig: () => ({ config: { auctionItemsSpreadsheetId: "items-sheet" } }) }));
 vi.mock("@/context/AuctionContext", () => ({ useAuction: () => ({ isAuctionClosed: false }) }));
 

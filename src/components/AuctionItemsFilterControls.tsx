@@ -84,7 +84,7 @@ export function AuctionItemsFilterControls({
   return (
     <>
       <Select value={selectedCategory} onValueChange={onSelectedCategoryChange}>
-        <SelectTrigger className="h-10 w-45 shrink-0">
+        <SelectTrigger aria-label="Filter by category" className="h-10 w-45 shrink-0">
           <Filter className="w-3.5 h-3.5 mr-2 opacity-70" />
           <SelectValue placeholder="Category">{categoryLabel}</SelectValue>
         </SelectTrigger>
@@ -99,7 +99,7 @@ export function AuctionItemsFilterControls({
       </Select>
 
       <Select value={selectedItemType} onValueChange={onSelectedItemTypeChange}>
-        <SelectTrigger className="h-10 w-37.5 shrink-0">
+        <SelectTrigger aria-label="Filter by item type" className="h-10 w-37.5 shrink-0">
           <Filter className="w-3.5 h-3.5 mr-2 opacity-70" />
           <SelectValue placeholder="Item Type">{itemTypeLabel}</SelectValue>
         </SelectTrigger>
@@ -118,7 +118,7 @@ export function AuctionItemsFilterControls({
           if (option) onSortConfigChange(option.config);
         }}
       >
-        <SelectTrigger className="h-10 w-52 shrink-0">
+        <SelectTrigger aria-label="Sort items by" className="h-10 w-52 shrink-0">
           <ArrowUpDown className="w-3.5 h-3.5 mr-2 opacity-70" />
           <SelectValue placeholder="Sort by">{(value: string) => SORT_LABELS[value] ?? value}</SelectValue>
         </SelectTrigger>

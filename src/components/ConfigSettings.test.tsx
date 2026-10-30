@@ -22,15 +22,6 @@ vi.mock("@/components/ui/card", () => ({
   CardDescription: ({ children }: any) => <div>{children}</div>,
 }));
 
-// Prevent Radix Dialog portal from causing JSDOM issues
-vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ children }: any) => <div>{children}</div>,
-  DialogContent: ({ children }: any) => <div>{children}</div>,
-  DialogHeader: ({ children }: any) => <div>{children}</div>,
-  DialogTitle: ({ children }: any) => <div>{children}</div>,
-  DialogDescription: ({ children }: any) => <div>{children}</div>,
-  DialogFooter: ({ children }: any) => <div>{children}</div>,
-}));
 
 // Defined outside the mock factory so it is always the same object
 // reference across renders. ConfigSettings has a useEffect with

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import UsersAdmin from "./UsersAdmin";
 import { fetchWithRetry } from "@/services/google-api";
@@ -16,16 +16,6 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 let mockMyRole = "full_admin";
 vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({ user: { email: "me@orns.org", role: mockMyRole } }),
-}));
-// base-ui Select needs real layout; a native <select> is enough here.
-vi.mock("@/components/ui/select", () => ({
-  Select: ({ value, onValueChange, children, disabled }: any) => (
-    <select aria-label="Role" value={value} disabled={disabled} onChange={(e) => onValueChange(e.target.value)}>{children}</select>
-  ),
-  SelectTrigger: () => null,
-  SelectValue: () => null,
-  SelectContent: ({ children }: any) => <>{children}</>,
-  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
 }));
 
 const USERS = [
@@ -49,7 +39,7 @@ describe("UsersAdmin", () => {
     render(<UsersAdmin />);
 
     const jane = await screen.findByTestId("staff-row-jane@orns.org");
-    expect(within(jane).getByRole("combobox", { name: "Role" })).toHaveValue("admin");
+    expect(within(jane).getByRole("combobox", { name: "Role" })).toHaveTextContent(/^Administrator/);
     expect(within(screen.getByTestId("staff-row-boss@orns.org")).queryByRole("combobox")).not.toBeInTheDocument();
     expect(within(screen.getByTestId("staff-row-boss@orns.org")).getByText("Full Administrator")).toBeInTheDocument();
     expect(within(screen.getByTestId("staff-row-me@orns.org")).queryByRole("combobox")).not.toBeInTheDocument();
@@ -61,12 +51,19 @@ describe("UsersAdmin", () => {
     vi.mocked(fetchWithRetry).mockImplementation(async () =>
       json({ users: [...USERS, { email: "alex@orns.org", role: "full_admin", bootstrap: false }] }));
     try {
+      const user = userEvent.setup();
       render(<UsersAdmin />);
       const sam = await screen.findByTestId("staff-row-sam@orns.org");
-      const values = (select: HTMLElement) => [...(select as HTMLSelectElement).options].map((o) => o.value);
+      const offered = async (select: HTMLElement) => {
+        await user.click(select);
+        const names = (await screen.findAllByRole("option")).map((o) => o.textContent);
+        await user.keyboard("{Escape}");
+        await waitFor(() => expect(screen.queryByRole("option")).not.toBeInTheDocument());
+        return names;
+      };
 
-      expect(values(within(sam).getByRole("combobox", { name: "Role" }))).toEqual(["admin", "user"]);
-      expect(values(screen.getAllByRole("combobox", { name: "Role" })[0])).toEqual(["admin", "user"]);
+      expect(await offered(within(sam).getByRole("combobox", { name: "Role" }))).toEqual(["Administrator", "User"]);
+      expect(await offered(screen.getAllByRole("combobox", { name: "Role" })[0])).toEqual(["Administrator", "User"]);
       const alex = screen.getByTestId("staff-row-alex@orns.org");
       expect(within(alex).queryByRole("combobox")).not.toBeInTheDocument();
       expect(within(alex).getByTitle("Only a Full Administrator can change a Full Administrator's role")).toBeInTheDocument();
@@ -76,10 +73,12 @@ describe("UsersAdmin", () => {
   });
 
   it("changes a role from the row's dropdown", async () => {
+    const user = userEvent.setup();
     render(<UsersAdmin />);
     const sam = await screen.findByTestId("staff-row-sam@orns.org");
 
-    fireEvent.change(within(sam).getByRole("combobox", { name: "Role" }), { target: { value: "admin" } });
+    await user.click(within(sam).getByRole("combobox", { name: "Role" }));
+    await user.click(await screen.findByRole("option", { name: "Administrator" }));
 
     await waitFor(() =>
       expect(fetchWithRetry).toHaveBeenCalledWith("/api/users/sam%40orns.org/role", expect.objectContaining({ method: "PUT", body: JSON.stringify({ role: "admin" }) }))

@@ -15,30 +15,7 @@ import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { BundlingDialog } from "./BundlingDialog";
 
-vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ children }: any) => <div>{children}</div>,
-  DialogContent: ({ children }: any) => <div>{children}</div>,
-  DialogHeader: ({ children }: any) => <div>{children}</div>,
-  DialogTitle: ({ children }: any) => <div>{children}</div>,
-  DialogDescription: ({ children }: any) => <div>{children}</div>,
-  DialogFooter: ({ children }: any) => <div>{children}</div>,
-}));
 
-vi.mock("@/components/ui/select", () => ({
-  Select: ({ value, onValueChange, children }: any) => (
-    <select
-      value={value}
-      onChange={(e) => onValueChange(e.target.value)}
-      data-testid="mock-select"
-    >
-      {children}
-    </select>
-  ),
-  SelectTrigger: ({ children }: any) => <>{children}</>,
-  SelectValue: () => null,
-  SelectContent: ({ children }: any) => <>{children}</>,
-  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
-}));
 
 vi.mock("@/components/ui/badge", () => ({
   Badge: ({ children, onClick }: any) => (

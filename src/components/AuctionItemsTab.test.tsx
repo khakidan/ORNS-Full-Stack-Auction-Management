@@ -3,7 +3,7 @@
  */
 import React from "react";
 import "@testing-library/jest-dom";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AuctionItemsTab from "./AuctionItemsTab";
 import { vi, describe, it, expect, beforeEach } from "vitest";
@@ -20,30 +20,8 @@ vi.mock('motion/react', () => ({
   AnimatePresence: ({ children }: any) => children,
 }));
 
-vi.mock("@/components/ui/select", () => ({
-  Select: ({ value, onValueChange, children }: any) => (
-    <select 
-      value={value} 
-      onChange={(e) => {
-        onValueChange(e.target.value);
-      }}
-      data-testid="mock-select"
-    >
-      {children}
-    </select>
-  ),
-  SelectTrigger: ({ children }: any) => <>{children}</>,
-  SelectValue: ({ placeholder }: any) => <option value="" disabled>{placeholder}</option>,
-  SelectContent: ({ children }: any) => <>{children}</>,
-  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
-}));
-
 // Quick trick to log sorting array
 vi.spyOn(console, "log");
-
-window.HTMLElement.prototype.hasPointerCapture = vi.fn();
-window.HTMLElement.prototype.releasePointerCapture = vi.fn();
-window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
 vi.mock("@/context/ConfigContext", () => ({
   useConfig: () => ({
@@ -144,14 +122,19 @@ describe("AuctionItemsTab - Sort and Filter", () => {
     vi.clearAllMocks();
   });
 
+  /** Picks an option from one of the toolbar's real dropdowns. */
+  async function choose(user: ReturnType<typeof userEvent.setup>, dropdown: string, option: string) {
+    await user.click(screen.getByRole("combobox", { name: dropdown }));
+    await user.click(await screen.findByRole("option", { name: option }));
+  }
+
   it("Category filter - selecting 'Food' shows only Food items", async () => {
     const user = userEvent.setup();
     render(<AuctionItemsTab />);
 
-    const selects = screen.getAllByTestId("mock-select");
-    const categorySelect = selects[0];
-    fireEvent.change(categorySelect, { target: { value: "Food" } });
+    await choose(user, "Filter by category", "Food");
 
+    expect(screen.getByRole("combobox", { name: "Filter by category" })).toHaveTextContent("Food");
     expect(screen.getByText("Food 1")).toBeInTheDocument();
     expect(screen.getByText("Food 2")).toBeInTheDocument();
     expect(screen.queryByText("Health 1")).not.toBeInTheDocument();
@@ -162,9 +145,7 @@ describe("AuctionItemsTab - Sort and Filter", () => {
     const user = userEvent.setup();
     render(<AuctionItemsTab />);
 
-    const selects = screen.getAllByTestId("mock-select");
-    const typeSelect = selects[1];
-    fireEvent.change(typeSelect, { target: { value: "Certificate" } });
+    await choose(user, "Filter by item type", "Certificate");
 
     expect(screen.getByText("Food 1")).toBeInTheDocument();
     expect(screen.getByText("Health 1")).toBeInTheDocument();
@@ -176,9 +157,8 @@ describe("AuctionItemsTab - Sort and Filter", () => {
     const user = userEvent.setup();
     render(<AuctionItemsTab />);
 
-    const selects = screen.getAllByTestId("mock-select");
-    fireEvent.change(selects[0], { target: { value: "Food" } });
-    fireEvent.change(selects[1], { target: { value: "Certificate" } });
+    await choose(user, "Filter by category", "Food");
+    await choose(user, "Filter by item type", "Certificate");
 
     expect(screen.getByText("Food 1")).toBeInTheDocument();
     expect(screen.queryByText("Food 2")).not.toBeInTheDocument();
@@ -190,16 +170,12 @@ describe("AuctionItemsTab - Sort and Filter", () => {
     const user = userEvent.setup();
     render(<AuctionItemsTab />);
 
-    const selects = screen.getAllByTestId("mock-select");
-    const categorySelect = selects[0];
-    fireEvent.change(categorySelect, { target: { value: "Food" } });
-    
-    // verify filter applied
+    await choose(user, "Filter by category", "Food");
     expect(screen.queryByText("Health 1")).not.toBeInTheDocument();
 
-    // clear it
-    fireEvent.change(categorySelect, { target: { value: "all" } });
+    await choose(user, "Filter by category", "All Categories");
 
+    expect(screen.getByRole("combobox", { name: "Filter by category" })).toHaveTextContent("All Categories");
     expect(screen.getByText("Food 1")).toBeInTheDocument();
     expect(screen.getByText("Food 2")).toBeInTheDocument();
     expect(screen.getByText("Health 1")).toBeInTheDocument();
@@ -207,18 +183,16 @@ describe("AuctionItemsTab - Sort and Filter", () => {
   });
 
   it("Sort by Category - items grouped", async () => {
+    const user = userEvent.setup();
     render(<AuctionItemsTab />);
 
     // The old clickable column-header sort was replaced by a "Sort by"
     // select once the table became a flexible row list - see
     // CHANGELOG.md's "UI / Layout Tweaks" item.
-    const selects = screen.getAllByTestId("mock-select");
-    const sortSelect = selects[2];
-
     const rowOrder = () =>
       screen.getAllByTestId(/^auction-item-row-/).map((el) => el.getAttribute("data-testid"));
 
-    fireEvent.change(sortSelect, { target: { value: "category-asc" } });
+    await choose(user, "Sort items by", "Category (A to Z)");
 
     // Sorted by Category ascending: "Food" (rows 2,3) before "Health & Beauty" (rows 4,5).
     expect(rowOrder()).toEqual([
@@ -229,7 +203,7 @@ describe("AuctionItemsTab - Sort and Filter", () => {
     ]);
 
     // Reverse sort
-    fireEvent.change(sortSelect, { target: { value: "category-desc" } });
+    await choose(user, "Sort items by", "Category (Z to A)");
 
     expect(rowOrder()).toEqual([
       "auction-item-row-4",

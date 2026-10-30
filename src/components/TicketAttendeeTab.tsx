@@ -53,7 +53,7 @@ export default function TicketAttendeeTab() {
         searchInputClassName="h-10"
         filters={
           <Select value={state.filterSource} onValueChange={state.setFilterSource}>
-            <SelectTrigger className="w-45 h-10">
+            <SelectTrigger aria-label="Filter by source" className="w-45 h-10">
               <Filter className="w-4 h-4 mr-2" />
               <SelectValue placeholder="Source">{(value: string) => SOURCE_LABELS[value] ?? value}</SelectValue>
             </SelectTrigger>

@@ -16,22 +16,6 @@ import userEvent from "@testing-library/user-event";
 import AuctionItemsTab from "./AuctionItemsTab";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 
-vi.mock("@/components/ui/select", () => ({
-  Select: ({ value, onValueChange, children }: any) => (
-    <select value={value} onChange={(e) => onValueChange(e.target.value)} data-testid="mock-select">
-      {children}
-    </select>
-  ),
-  SelectTrigger: ({ children }: any) => <>{children}</>,
-  SelectValue: ({ placeholder }: any) => <option value="" disabled>{placeholder}</option>,
-  SelectContent: ({ children }: any) => <>{children}</>,
-  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
-}));
-
-window.HTMLElement.prototype.hasPointerCapture = vi.fn();
-window.HTMLElement.prototype.releasePointerCapture = vi.fn();
-window.HTMLElement.prototype.scrollIntoView = vi.fn();
-
 vi.mock("@/context/ConfigContext", () => ({
   useConfig: () => ({ config: { auctionItemsSpreadsheetId: "test-sheet-id" } })
 }));
@@ -148,8 +132,8 @@ describe("AuctionItemsTab - real single-item edit wiring", () => {
     const donorInput = within(dialog).getByDisplayValue("Donor A");
     await user.clear(donorInput);
     await user.type(donorInput, "Donor Z");
-    const categorySelect = within(dialog).getAllByTestId("mock-select")[0];
-    await user.selectOptions(categorySelect, "Health & Beauty");
+    await user.click(within(dialog).getByRole("combobox", { name: "Category" }));
+    await user.click(await screen.findByRole("option", { name: "Health & Beauty" }));
     await user.click(within(dialog).getByRole("button", { name: "Save Changes" }));
 
     expect(mockedFetchWithRetry).toHaveBeenCalledTimes(1);

@@ -29,26 +29,6 @@ vi.mock('motion/react', () => ({
   AnimatePresence: ({ children }: any) => children,
 }));
 
-vi.mock("@/components/ui/select", () => ({
-  Select: ({ value, onValueChange, children }: any) => (
-    <select
-      value={value}
-      onChange={(e) => onValueChange(e.target.value)}
-      data-testid="mock-select"
-    >
-      {children}
-    </select>
-  ),
-  SelectTrigger: ({ children }: any) => <>{children}</>,
-  SelectValue: ({ placeholder }: any) => <option value="" disabled>{placeholder}</option>,
-  SelectContent: ({ children }: any) => <>{children}</>,
-  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
-}));
-
-window.HTMLElement.prototype.hasPointerCapture = vi.fn();
-window.HTMLElement.prototype.releasePointerCapture = vi.fn();
-window.HTMLElement.prototype.scrollIntoView = vi.fn();
-
 vi.mock("@/context/ConfigContext", () => ({
   useConfig: () => ({ config: { auctionItemsSpreadsheetId: "test-sheet-id" } })
 }));

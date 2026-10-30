@@ -29,35 +29,7 @@ vi.mock('motion/react', () => ({
   AnimatePresence: ({ children }: any) => children,
 }));
 
-// Mock standard select component as a native HTML elect element for easy/reliable testing
-vi.mock("@/components/ui/select", () => ({
-  Select: ({ value, onValueChange, children }: any) => (
-    <select
-      value={value}
-      onChange={(e) => {
-        onValueChange(e.target.value);
-      }}
-      data-testid="mock-select"
-    >
-      {children}
-    </select>
-  ),
-  SelectTrigger: () => null,
-  SelectValue: ({ placeholder }: any) => <option value="" disabled>{placeholder}</option>,
-  SelectContent: ({ children }: any) => <>{children}</>,
-  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
-}));
 
-// Dialog component mock with support of custom 'render' trigger prop used in the code
-vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ children, open }: any) => <div data-testid="mock-dialog" data-open={open}>{children}</div>,
-  DialogContent: ({ children }: any) => <div>{children}</div>,
-  DialogHeader: ({ children }: any) => <div>{children}</div>,
-  DialogTitle: ({ children }: any) => <div>{children}</div>,
-  DialogDescription: ({ children }: any) => <div>{children}</div>,
-  DialogFooter: ({ children }: any) => <div>{children}</div>,
-  DialogTrigger: ({ children, render }: any) => <>{children || render}</>,
-}));
 
 // Mock Google Sheets/API functions
 vi.mock("@/services/google-api", () => ({
@@ -161,6 +133,12 @@ vi.mock("@/context/AuctionContext", () => ({
   })
 }));
 
+/** Picks an option from one of the page's real dropdowns. */
+async function chooseSource(user: ReturnType<typeof userEvent.setup>, dropdown: string, option: string) {
+  await user.click(screen.getByRole("combobox", { name: dropdown }));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
+
 describe('TicketAttendeeTab - Layout', () => {
   it('does not add extra bottom padding under the Attendee List header', () => {
     render(<TicketAttendeeTab />);
@@ -203,11 +181,8 @@ describe('TicketAttendeeTab - Sort and Filter', () => {
     const user = userEvent.setup();
     render(<TicketAttendeeTab />);
 
-    // Get the first dropdown which is the filter select
-    const filterSelect = screen.getAllByTestId("mock-select")[0];
-
     // Select General Tickets option ('tickets')
-    await user.selectOptions(filterSelect, "tickets");
+    await chooseSource(user, "Filter by source", "General Tickets");
 
     // General attendees "Alice" and "Bob" should be visible
     expect(screen.getByText("Alice")).toBeInTheDocument();
@@ -222,10 +197,8 @@ describe('TicketAttendeeTab - Sort and Filter', () => {
     const user = userEvent.setup();
     render(<TicketAttendeeTab />);
 
-    const filterSelect = screen.getAllByTestId("mock-select")[0];
-
     // Select Sponsors option ('sponsor tickets')
-    await user.selectOptions(filterSelect, "sponsor tickets");
+    await chooseSource(user, "Filter by source", "Sponsors");
 
     // "Diana" should be visible
     expect(screen.getByText("Diana")).toBeInTheDocument();
@@ -240,10 +213,8 @@ describe('TicketAttendeeTab - Sort and Filter', () => {
     const user = userEvent.setup();
     render(<TicketAttendeeTab />);
 
-    const filterSelect = screen.getAllByTestId("mock-select")[0];
-
     // Select Staff option ('staff tickets')
-    await user.selectOptions(filterSelect, "staff tickets");
+    await chooseSource(user, "Filter by source", "Staff");
 
     // "Charlie" should be visible
     expect(screen.getByText("Charlie")).toBeInTheDocument();
@@ -258,14 +229,12 @@ describe('TicketAttendeeTab - Sort and Filter', () => {
     const user = userEvent.setup();
     render(<TicketAttendeeTab />);
 
-    const filterSelect = screen.getAllByTestId("mock-select")[0];
-
     // Filter first (e.g., to "Staff Tickets")
-    await user.selectOptions(filterSelect, "staff tickets");
+    await chooseSource(user, "Filter by source", "Staff");
     expect(screen.queryByText("Alice")).not.toBeInTheDocument();
 
     // Select "All Sources" ('all')
-    await user.selectOptions(filterSelect, "all");
+    await chooseSource(user, "Filter by source", "All Sources");
 
     // Assert that all four mock entries are successfully retrieved and displayed
     expect(screen.getByText("Alice")).toBeInTheDocument();
@@ -356,8 +325,15 @@ describe('TicketAttendeeTab - Search', () => {
       user = userEvent.setup();
     });
 
-    it('payment method and payment status fields are not shown in the form', () => {
+    /** Opens the real Add New Entry dialog, as staff do. */
+    async function openAddEntry() {
+      await user.click(screen.getByRole('button', { name: /Add Entry/ }));
+      await screen.findByRole('dialog', { name: 'Add New Entry' });
+    }
+
+    it('payment method and payment status fields are not shown in the form', async () => {
       render(<TicketAttendeeTab />);
+      await openAddEntry();
       // Workflow doc: these are set automatically — never shown to the user
       expect(screen.queryByText(/payment method/i)).not.toBeInTheDocument();
       expect(screen.queryByText(/payment status/i)).not.toBeInTheDocument();
@@ -365,6 +341,7 @@ describe('TicketAttendeeTab - Search', () => {
 
     it('General Ticket — calls addAttendee with source "tickets" and Pending payment status', async () => {
       render(<TicketAttendeeTab />);
+      await openAddEntry();
 
       await user.type(screen.getByPlaceholderText('First'), 'Maria');
       await user.type(screen.getByPlaceholderText('Last'), 'Garcia');
@@ -383,10 +360,9 @@ describe('TicketAttendeeTab - Search', () => {
 
     it('Staff — calls addAttendee with source "staff tickets" and Paid status', async () => {
       render(<TicketAttendeeTab />);
+      await openAddEntry();
 
-      // Source select is the second mock-select in the DOM (first is the filter select)
-      const sourceSelect = screen.getAllByTestId('mock-select')[1];
-      await user.selectOptions(sourceSelect, 'staff tickets');
+      await chooseSource(user, 'Source', 'Staff');
       await user.type(screen.getByPlaceholderText('First'), 'John');
       await user.type(screen.getByPlaceholderText('Last'), 'Staff');
       await user.click(screen.getByText('Save Entry'));
@@ -407,9 +383,9 @@ describe('TicketAttendeeTab - Search', () => {
 
     it('Sponsor — calls addAttendee with source "sponsor tickets" and Paid status', async () => {
       render(<TicketAttendeeTab />);
+      await openAddEntry();
 
-      const sourceSelect = screen.getAllByTestId('mock-select')[1];
-      await user.selectOptions(sourceSelect, 'sponsor tickets');
+      await chooseSource(user, 'Source', 'Sponsor');
       await user.type(screen.getByPlaceholderText('First'), 'Dana');
       await user.type(screen.getByPlaceholderText('Last'), 'Sponsor');
       await user.click(screen.getByText('Save Entry'));
@@ -424,6 +400,7 @@ describe('TicketAttendeeTab - Search', () => {
 
     it('Missing first name — shows toast error and does not call addAttendee', async () => {
       render(<TicketAttendeeTab />);
+      await openAddEntry();
 
       await user.type(screen.getByPlaceholderText('Last'), 'Garcia');
       await user.click(screen.getByText('Save Entry'));
@@ -434,6 +411,7 @@ describe('TicketAttendeeTab - Search', () => {
 
     it('Missing last name — shows toast error and does not call addAttendee', async () => {
       render(<TicketAttendeeTab />);
+      await openAddEntry();
 
       await user.type(screen.getByPlaceholderText('First'), 'Maria');
       await user.click(screen.getByText('Save Entry'));
@@ -444,6 +422,7 @@ describe('TicketAttendeeTab - Search', () => {
 
     it('No Bid Management interaction — only addAttendee is called, nothing else', async () => {
       render(<TicketAttendeeTab />);
+      await openAddEntry();
 
       await user.type(screen.getByPlaceholderText('First'), 'Maria');
       await user.type(screen.getByPlaceholderText('Last'), 'Garcia');

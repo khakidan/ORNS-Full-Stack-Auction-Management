@@ -2,6 +2,14 @@ import { setupServer } from 'msw/node'
 import { handlers } from './handlers'
 import { beforeAll, afterAll, afterEach, vi } from 'vitest'
 
+// jsdom has no pointer capture or scrollIntoView; the real Base UI Select
+// and Dialog call them. Frontend tests use the real primitives (ROADMAP T6).
+if (typeof window !== 'undefined') {
+  window.HTMLElement.prototype.hasPointerCapture = vi.fn()
+  window.HTMLElement.prototype.releasePointerCapture = vi.fn()
+  window.HTMLElement.prototype.scrollIntoView = vi.fn()
+}
+
 // No test reaches real Firestore: without this, an unmocked read (the
 // Config, a role) went out over the network with whatever Google
 // credentials the machine had. Every test gets an empty in-memory
