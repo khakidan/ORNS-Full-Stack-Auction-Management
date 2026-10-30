@@ -6,6 +6,12 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **The browser side of the writes is tested** (ROADMAP T5, T7, 2026-10-29).
+  - `google-api.ts` (32% -> 98%): what each of its 15 request functions sends (method, path, credentials, body, matching the server routes' field names), each one's error path, unset spreadsheets sending nothing, and `postOnce` never retrying.
+  - Seam tests (the real component and hook, only the API mocked) for the walk-in dialog (21% -> 92%, with the real Dialog), adding and deleting an item (27% / 24% -> 100%, real Dialog and Select), the Bid Management page's Set Up / Go Live / Close (26% -> 96%), and `useBundling`'s payloads and AI suggestion paths. Each asserts the exact payload, what the person sees, and the failure path.
+  - 40 mutations, all caught. Coverage: lines 90.85% -> 93.79%, branches 79.52% -> 81.65%.
+  - Frontend 839 -> 899, total 1956 -> 2016.
+
 - **Every Action History entry is now checked by a test, and three gaps it found are fixed** (ROADMAP T2, T3, 2026-10-29).
   - **Fixed - creating the Action History spreadsheet erased edit tracking's owner.** `setActionHistorySpreadsheetId` wrote `system/actionHistory` without `merge`, wiping the `editTracking` record (A11). Now merged. The new `actionHistoryStore.test.ts` (the real module: cache, Firestore-down fallback, the undo guard) failed on this first.
   - **Fixed - receipts didn't tell open browsers about their writes.** Printing saves the bidder's PayPal invoice to Bidder-Numbers J/K, and emailing records the send in M/N, with no `clearCacheForSpreadsheet` (AGENTS.md rule 7): the server kept serving the old rows and other screens didn't refresh. `persistInvoice` and `recordReceiptEmailed` now clear it.

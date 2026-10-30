@@ -202,4 +202,107 @@ describe("useBundling", () => {
       expect(fetchWithRetry).not.toHaveBeenCalled();
     });
   });
+
+  describe("what it sends (ROADMAP T7)", () => {
+    const reply = (body: unknown, ok = true) => ({ ok, status: ok ? 200 : 500, json: async () => body }) as Response;
+    const sent = (path: string) => {
+      const call = mockedFetchWithRetry.mock.calls.find(([url]) => String(url).endsWith(path));
+      return call && { url: String(call[0]), method: (call[1] as RequestInit).method, body: JSON.parse(String((call[1] as RequestInit).body)) };
+    };
+    const items = [
+      makeItem({ rowIndex: 2, id: "801", name: "Pizza Night", donor: "Joe's Pizza" }),
+      makeItem({ rowIndex: 3, id: "803", name: "Sushi Dinner", value: "$150.00", donor: "Sushi Place" }),
+      makeItem({ rowIndex: 4, id: "301", name: "Spa Day" }),
+    ];
+    const selected = { 2: true, 3: true };
+
+    it("bundle: the selected items' IDs and every field from the bundle form, with one key", async () => {
+      mockedFetchWithRetry.mockResolvedValue(reply({ ui_history_log: { bundle_item_name: "Dinner Duo", bundle_token: "BND-1" } }));
+      const { result } = renderHook(() => useBundling(items, selected, "ss-id", [], onBundleComplete));
+      act(() => result.current.openBundlingModal());
+      act(() => result.current.setBundleDetails((prev) => ({ ...prev, name: "Dinner Duo", openingBid: "$90.00", minRaise: "$10.00" })));
+
+      await act(async () => { await result.current.executeBundle(); });
+
+      expect(sent("/api/bundle/process")).toEqual({
+        url: "http://localhost:3000/api/bundle/process",
+        method: "POST",
+        body: {
+          spreadsheetId: "ss-id",
+          targetIds: ["801", "803"],
+          newName: "Dinner Duo",
+          newDescription: "- Pizza Night: A pizza dinner\n\n- Sushi Dinner: A pizza dinner",
+          targetCategory: "Food",
+          value: "$200.00",
+          openingBid: "$90.00",
+          minRaise: "$10.00",
+          donor: "Joe's Pizza, Sushi Place",
+          itemType: "Certificate",
+          bundleEventToken: expect.stringMatching(/^BND-\d+$/),
+          idempotencyKey: expect.any(String),
+        },
+      });
+      expect(toast.success).toHaveBeenCalledWith('Items bundled into "Dinner Duo" successfully! Token: BND-1');
+    });
+
+    it("restore: the bundle's token, and clears it once done", async () => {
+      mockedFetchWithRetry.mockResolvedValue(reply({ ui_history_log: { original_item_names: ["Pizza Night", "Sushi Dinner"] } }));
+      const { result } = renderHook(() => useBundling([], {}, "ss-id", [], onBundleComplete));
+
+      await act(async () => { await result.current.handleRestoreBundle("BND-123"); });
+
+      expect(sent("/api/bundle/restore")?.body).toEqual({ spreadsheetId: "ss-id", targetBundleToken: "BND-123", idempotencyKey: expect.any(String) });
+      expect(toast.success).toHaveBeenCalledWith("Bundle restored! Items: Pizza Night, Sushi Dinner");
+      expect(result.current.restoreBundleId).toBe("");
+      expect(result.current.isExecutingRestore).toBe(false);
+    });
+
+    it("name ideas: sends only the selected items and shows what comes back", async () => {
+      mockedFetchWithRetry.mockResolvedValue(reply({ suggestions: ["Dinner Duo", "Taste of the Town"] }));
+      const { result } = renderHook(() => useBundling(items, selected, "ss-id", [], onBundleComplete));
+
+      await act(async () => { await result.current.getAiSuggestions(); });
+
+      expect(sent("/api/bundle/suggest-names")?.body.items.map((i: AuctionItem) => i.id)).toEqual(["801", "803"]);
+      expect(result.current.aiSuggestions).toEqual(["Dinner Duo", "Taste of the Town"]);
+      expect(result.current.loadingSuggestions).toBe(false);
+    });
+
+    it("name ideas: says why when the AI fails, and keeps the list empty", async () => {
+      mockedFetchWithRetry.mockResolvedValue(reply({ error: "Gemini quota exceeded" }));
+      const { result } = renderHook(() => useBundling(items, selected, "ss-id", [], onBundleComplete));
+
+      await act(async () => { await result.current.getAiSuggestions(); });
+
+      expect(toast.error).toHaveBeenCalledWith("AI naming failed: Gemini quota exceeded");
+      expect(result.current.aiSuggestions).toEqual([]);
+      expect(result.current.loadingSuggestions).toBe(false);
+    });
+
+    it("description: sends the selected items and puts the AI's description in the form, keeping the rest", async () => {
+      mockedFetchWithRetry.mockResolvedValue(reply({ description: "Two great dinners." }));
+      const { result } = renderHook(() => useBundling(items, selected, "ss-id", [], onBundleComplete));
+      act(() => result.current.openBundlingModal());
+      act(() => result.current.setBundleDetails((prev) => ({ ...prev, name: "Dinner Duo" })));
+
+      await act(async () => { await result.current.getAiDescriptionSuggestion(); });
+
+      expect(sent("/api/bundle/suggest-description")?.body.items.map((i: AuctionItem) => i.id)).toEqual(["801", "803"]);
+      expect(result.current.bundleDetails).toMatchObject({ name: "Dinner Duo", description: "Two great dinners.", value: "$200.00" });
+      expect(toast.success).toHaveBeenCalledWith("AI description generated!");
+    });
+
+    it("description: says why when the AI fails, and leaves the description alone", async () => {
+      mockedFetchWithRetry.mockRejectedValue(new Error("No answer from the server"));
+      const { result } = renderHook(() => useBundling(items, selected, "ss-id", [], onBundleComplete));
+      act(() => result.current.openBundlingModal());
+      const before = result.current.bundleDetails.description;
+
+      await act(async () => { await result.current.getAiDescriptionSuggestion(); });
+
+      expect(toast.error).toHaveBeenCalledWith("AI description failed: No answer from the server");
+      expect(result.current.bundleDetails.description).toBe(before);
+      expect(result.current.loadingDescription).toBe(false);
+    });
+  });
 });
