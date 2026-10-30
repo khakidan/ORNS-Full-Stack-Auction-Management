@@ -18,6 +18,15 @@ export default function AuctionConfigurationCard({ config, setConfig, isOpen, on
       <CardHeader
         className="cursor-pointer hover:bg-slate-50 transition-colors rounded-t-lg"
         onClick={onToggle}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggle();
+          }
+        }}
       >
         <div className="flex items-center justify-between">
           <div>

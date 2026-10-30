@@ -25,6 +25,8 @@ const USERS = [
   { email: "sam@orns.org", role: "user", bootstrap: false },
 ];
 
+// A table row's accessible name is its cells' text, so this finds a person's row as a screen reader would.
+const rowName = (email: string) => ({ name: new RegExp(`\\b${email.replace(/[.]/g, "\\.")}`) });
 const json = (body: unknown, ok = true) => ({ ok, status: ok ? 200 : 400, json: async () => body }) as Response;
 
 describe("UsersAdmin", () => {
@@ -38,12 +40,12 @@ describe("UsersAdmin", () => {
   it("lists staff with their role, locking the server-set Full Admin and your own row", async () => {
     render(<UsersAdmin />);
 
-    const jane = await screen.findByTestId("staff-row-jane@orns.org");
+    const jane = await screen.findByRole("row", rowName("jane@orns.org"));
     expect(within(jane).getByRole("combobox", { name: "Role" })).toHaveTextContent(/^Administrator/);
-    expect(within(screen.getByTestId("staff-row-boss@orns.org")).queryByRole("combobox")).not.toBeInTheDocument();
-    expect(within(screen.getByTestId("staff-row-boss@orns.org")).getByText("Full Administrator")).toBeInTheDocument();
-    expect(within(screen.getByTestId("staff-row-me@orns.org")).queryByRole("combobox")).not.toBeInTheDocument();
-    expect(within(screen.getByTestId("staff-row-sam@orns.org")).getByText("Never")).toBeInTheDocument();
+    expect(within(screen.getByRole("row", rowName("boss@orns.org"))).queryByRole("combobox")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("row", rowName("boss@orns.org"))).getByText("Full Administrator")).toBeInTheDocument();
+    expect(within(screen.getByRole("row", rowName("me@orns.org"))).queryByRole("combobox")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("row", rowName("sam@orns.org"))).getByText("Never")).toBeInTheDocument();
   });
 
   it("lets an Administrator give only Administrator or User, and locks a Full Administrator's row", async () => {
@@ -53,7 +55,7 @@ describe("UsersAdmin", () => {
     try {
       const user = userEvent.setup();
       render(<UsersAdmin />);
-      const sam = await screen.findByTestId("staff-row-sam@orns.org");
+      const sam = await screen.findByRole("row", rowName("sam@orns.org"));
       const offered = async (select: HTMLElement) => {
         await user.click(select);
         const names = (await screen.findAllByRole("option")).map((o) => o.textContent);
@@ -64,7 +66,7 @@ describe("UsersAdmin", () => {
 
       expect(await offered(within(sam).getByRole("combobox", { name: "Role" }))).toEqual(["Administrator", "User"]);
       expect(await offered(screen.getAllByRole("combobox", { name: "Role" })[0])).toEqual(["Administrator", "User"]);
-      const alex = screen.getByTestId("staff-row-alex@orns.org");
+      const alex = screen.getByRole("row", rowName("alex@orns.org"));
       expect(within(alex).queryByRole("combobox")).not.toBeInTheDocument();
       expect(within(alex).getByTitle("Only a Full Administrator can change a Full Administrator's role")).toBeInTheDocument();
     } finally {
@@ -75,7 +77,7 @@ describe("UsersAdmin", () => {
   it("changes a role from the row's dropdown", async () => {
     const user = userEvent.setup();
     render(<UsersAdmin />);
-    const sam = await screen.findByTestId("staff-row-sam@orns.org");
+    const sam = await screen.findByRole("row", rowName("sam@orns.org"));
 
     await user.click(within(sam).getByRole("combobox", { name: "Role" }));
     await user.click(await screen.findByRole("option", { name: "Administrator" }));
@@ -87,7 +89,7 @@ describe("UsersAdmin", () => {
 
   it("gives a role to an address that hasn't signed in yet, only for @orns.org addresses", async () => {
     render(<UsersAdmin />);
-    await screen.findByTestId("staff-row-sam@orns.org");
+    await screen.findByRole("row", rowName("sam@orns.org"));
     const input = screen.getByLabelText("Give a role to");
     const save = screen.getByRole("button", { name: "Save Role" });
 

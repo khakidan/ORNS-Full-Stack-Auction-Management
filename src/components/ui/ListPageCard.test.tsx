@@ -7,21 +7,6 @@ import { describe, it, expect } from "vitest";
 import { ListPageCard } from "./ListPageCard";
 
 describe("ListPageCard", () => {
-  it("renders a bare CardHeader with no padding override, so it can't reintroduce the Card gap-4 double-spacing bug", () => {
-    render(
-      <ListPageCard title="Bidder Check-In" description="Search by last name.">
-        <div>content</div>
-      </ListPageCard>
-    );
-
-    const heading = screen.getByText("Bidder Check-In");
-    // heading (CardTitle) -> CardHeader
-    const cardHeader = heading.parentElement;
-    const classes = cardHeader?.className.split(/\s+/) ?? [];
-    expect(classes).not.toContain("pb-3");
-    expect(classes).not.toContain("py-6");
-  });
-
   it("renders CardContent with p-0, merging in any extra contentClassName", () => {
     render(
       <ListPageCard title="Title" description="Description" contentClassName="flex-1 overflow-auto">

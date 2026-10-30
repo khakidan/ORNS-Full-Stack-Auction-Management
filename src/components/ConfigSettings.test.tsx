@@ -3,25 +3,12 @@
  */
 import React from "react";
 import "@testing-library/jest-dom";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import ConfigSettings from "./ConfigSettings";
 import { fetchWithRetry } from "@/services/google-api";
 import { toast } from "sonner";
-
-// Card mock must forward onClick so the collapsible CardHeader
-// state toggles fire correctly via fireEvent.click + event bubbling
-vi.mock("@/components/ui/card", () => ({
-  Card: ({ children, className }: any) => <div className={className}>{children}</div>,
-  CardHeader: ({ children, onClick, className }: any) => (
-    <div onClick={onClick} className={className}>{children}</div>
-  ),
-  CardContent: ({ children, className }: any) => <div className={className}>{children}</div>,
-  CardTitle: ({ children }: any) => <div>{children}</div>,
-  CardDescription: ({ children }: any) => <div>{children}</div>,
-}));
-
 
 // Defined outside the mock factory so it is always the same object
 // reference across renders. ConfigSettings has a useEffect with
@@ -115,10 +102,10 @@ describe("ConfigSettings", () => {
     expect(screen.getByText("Save Configuration")).toBeInTheDocument();
   });
 
-  it("expanding Auction Configuration reveals all spreadsheet ID fields", () => {
+  it("expanding Auction Configuration reveals all spreadsheet ID fields", async () => {
+    const user = userEvent.setup();
     render(<ConfigSettings />);
-    // Click the CardTitle text — bubbles up to CardHeader onClick
-    fireEvent.click(screen.getByText("Auction Configuration"));
+    await user.click(screen.getByRole("button", { name: /Auction Configuration/ }));
 
     expect(screen.getByLabelText("1. Auction Item Data Entry Spreadsheet ID")).toBeInTheDocument();
     expect(screen.getByLabelText("2. Auction Tickets Spreadsheet ID")).toBeInTheDocument();
@@ -127,36 +114,52 @@ describe("ConfigSettings", () => {
     expect(screen.getByLabelText("Bug Reports Screenshots Folder ID")).toBeInTheDocument();
   });
 
-  it("has no Script ID boxes or Apps Script section - the server uses its own SCRIPT_ID_* settings, so editing them here changed nothing", () => {
+  it("Auction Configuration opens and closes from the keyboard and says whether it's open", async () => {
+    const user = userEvent.setup();
     render(<ConfigSettings />);
-    fireEvent.click(screen.getByText("Auction Configuration"));
+    const header = screen.getByRole("button", { name: /Auction Configuration/ });
+    expect(header).toHaveAttribute("aria-expanded", "false");
+
+    header.focus();
+    await user.keyboard("{Enter}");
+    expect(header).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByLabelText("1. Auction Item Data Entry Spreadsheet ID")).toBeInTheDocument();
+
+    await user.keyboard(" ");
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("1. Auction Item Data Entry Spreadsheet ID")).not.toBeInTheDocument();
+  });
+
+  it("has no Script ID boxes or Apps Script section - the server uses its own SCRIPT_ID_* settings, so editing them here changed nothing", async () => {
+    const user = userEvent.setup();
+    render(<ConfigSettings />);
+    await user.click(screen.getByRole("button", { name: /Auction Configuration/ }));
 
     expect(screen.queryByLabelText(/Script ID/)).not.toBeInTheDocument();
     expect(screen.queryByText("Google Apps Script Workflows")).not.toBeInTheDocument();
     expect(screen.queryByText(/They can't be changed here/)).not.toBeInTheDocument();
   });
 
-  it("fields display current config values from useConfig", () => {
+  it("fields display current config values from useConfig", async () => {
+    const user = userEvent.setup();
     render(<ConfigSettings />);
     // ticketPrice is always visible
     expect(screen.getByLabelText("Walk-In Ticket Price ($)")).toHaveValue(35);
 
-    // Expand Auction Configuration and check a few IDs
-    fireEvent.click(screen.getByText("Auction Configuration"));
+    await user.click(screen.getByRole("button", { name: /Auction Configuration/ }));
     expect(screen.getByLabelText("1. Auction Item Data Entry Spreadsheet ID")).toHaveValue("mock-items-id");
     expect(screen.getByLabelText("2. Auction Tickets Spreadsheet ID")).toHaveValue("mock-tickets-id");
     expect(screen.getByLabelText("3. Bid Management Spreadsheet ID")).toHaveValue("mock-bid-mgt-id");
   });
 
   it("clicking Save Configuration calls saveConfig with the current values", async () => {
+    const user = userEvent.setup();
     render(<ConfigSettings />);
 
-    // Change ticket price — fireEvent works for controlled inputs
-    fireEvent.change(screen.getByLabelText("Walk-In Ticket Price ($)"), {
-      target: { value: "42" },
-    });
+    await user.clear(screen.getByLabelText("Walk-In Ticket Price ($)"));
+    await user.type(screen.getByLabelText("Walk-In Ticket Price ($)"), "42");
 
-    fireEvent.click(screen.getByText("Save Configuration"));
+    await user.click(screen.getByRole("button", { name: "Save Configuration" }));
 
     // handleSave is async — wait for saveConfig to be called
     await waitFor(() => {
@@ -167,6 +170,7 @@ describe("ConfigSettings", () => {
   });
 
   it("clicking Save Configuration extracts the bare ID from a pasted Google Sheets URL, not the raw URL", async () => {
+    const user = userEvent.setup();
     // Every existing "Save Configuration" test leaves the ID fields at
     // their already-clean fixture values, so extractId's URL-parsing
     // regex branches (useConfigSettingsState.ts) never actually fire -
@@ -174,12 +178,11 @@ describe("ConfigSettings", () => {
     // "spreadsheet ID" without this.
     render(<ConfigSettings />);
 
-    fireEvent.click(screen.getByText("Auction Configuration"));
-    fireEvent.change(screen.getByLabelText("3. Bid Management Spreadsheet ID"), {
-      target: { value: "https://docs.google.com/spreadsheets/d/1AbC-XyZ_123/edit#gid=0" },
-    });
+    await user.click(screen.getByRole("button", { name: /Auction Configuration/ }));
+    await user.clear(screen.getByLabelText("3. Bid Management Spreadsheet ID"));
+    await user.paste("https://docs.google.com/spreadsheets/d/1AbC-XyZ_123/edit#gid=0");
 
-    fireEvent.click(screen.getByText("Save Configuration"));
+    await user.click(screen.getByRole("button", { name: "Save Configuration" }));
 
     await waitFor(() => {
       expect(mockSaveConfig).toHaveBeenCalledWith(
@@ -189,17 +192,16 @@ describe("ConfigSettings", () => {
   });
 
   it("clicking Save Configuration saves an edited Bug Reports spreadsheet/folder ID", async () => {
+    const user = userEvent.setup();
     render(<ConfigSettings />);
 
-    fireEvent.click(screen.getByText("Auction Configuration"));
-    fireEvent.change(screen.getByLabelText("Bug Reports Spreadsheet ID"), {
-      target: { value: "https://docs.google.com/spreadsheets/d/1BugReports_XyZ/edit#gid=0" },
-    });
-    fireEvent.change(screen.getByLabelText("Bug Reports Screenshots Folder ID"), {
-      target: { value: "https://drive.google.com/drive/folders/1BugScreenshots_XyZ" },
-    });
+    await user.click(screen.getByRole("button", { name: /Auction Configuration/ }));
+    await user.clear(screen.getByLabelText("Bug Reports Spreadsheet ID"));
+    await user.paste("https://docs.google.com/spreadsheets/d/1BugReports_XyZ/edit#gid=0");
+    await user.clear(screen.getByLabelText("Bug Reports Screenshots Folder ID"));
+    await user.paste("https://drive.google.com/drive/folders/1BugScreenshots_XyZ");
 
-    fireEvent.click(screen.getByText("Save Configuration"));
+    await user.click(screen.getByRole("button", { name: "Save Configuration" }));
 
     await waitFor(() => {
       expect(mockSaveConfig).toHaveBeenCalledWith(
@@ -212,8 +214,9 @@ describe("ConfigSettings", () => {
   });
 
   it("saves only the Config - the Apps Scripts get these values from the server, so nothing is copied to a _Settings tab (ROADMAP B11)", async () => {
+    const user = userEvent.setup();
     render(<ConfigSettings />);
-    fireEvent.click(screen.getByText("Save Configuration"));
+    await user.click(screen.getByRole("button", { name: "Save Configuration" }));
 
     await waitFor(() => expect(mockSaveConfig).toHaveBeenCalledWith(expect.objectContaining({
       auctionItemsSpreadsheetId: "mock-items-id",

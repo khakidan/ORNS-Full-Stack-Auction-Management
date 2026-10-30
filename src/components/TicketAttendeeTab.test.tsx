@@ -139,15 +139,6 @@ async function chooseSource(user: ReturnType<typeof userEvent.setup>, dropdown: 
   await user.click(await screen.findByRole("option", { name: option }));
 }
 
-describe('TicketAttendeeTab - Layout', () => {
-  it('does not add extra bottom padding under the Attendee List header', () => {
-    render(<TicketAttendeeTab />);
-
-    const heading = screen.getByText("Attendee List");
-    const cardHeader = heading.parentElement;
-    expect(cardHeader?.className.split(/\s+/)).not.toContain("pb-3");
-  });
-});
 
 describe('TicketAttendeeTab - view-only for a User (tickets.edit)', () => {
   afterEach(() => { mockCanEditTickets = true; });

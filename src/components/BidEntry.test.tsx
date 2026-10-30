@@ -77,11 +77,11 @@ describe("BidEntry", () => {
 
     const itemInput = screen.getByPlaceholderText("e.g. 1301");
     await userEvent.type(itemInput, "1301");
-    expect(await screen.findByText("Sample Item")).toBeTruthy();
+    expect(await screen.findByText("Sample Item")).toBeInTheDocument();
 
     const bidderInput = screen.getByPlaceholderText("e.g. 142");
     await userEvent.type(bidderInput, "142");
-    expect(await screen.findByText("Test Bidder")).toBeTruthy();
+    expect(await screen.findByText("Test Bidder")).toBeInTheDocument();
 
     const priceInput = screen.getByPlaceholderText("150.00");
     await userEvent.type(priceInput, "150");
@@ -143,15 +143,6 @@ describe("BidEntry", () => {
 
     expect(screen.queryByText("New Art Bundle")).not.toBeInTheDocument();
     expect(screen.queryByText("Blank Bidder")).not.toBeInTheDocument();
-  });
-
-  it("gives each field's Label some breathing room from its Input", () => {
-    render(<BidEntry />);
-
-    for (const labelText of ["Item Number", "Bidder ID", "Winning Bid ($)"]) {
-      const label = screen.getByText(labelText);
-      expect(label.parentElement?.className).toContain("space-y-2");
-    }
   });
 
   it("form clears after successful submission", async () => {

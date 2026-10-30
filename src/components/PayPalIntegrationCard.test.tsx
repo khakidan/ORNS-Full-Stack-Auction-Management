@@ -3,7 +3,8 @@
  */
 import React from "react";
 import "@testing-library/jest-dom";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import PayPalIntegrationCard from "./PayPalIntegrationCard";
 import { Config } from "@/types";
@@ -44,40 +45,44 @@ describe("PayPalIntegrationCard", () => {
     expect(screen.getByText(/production mode is on/i)).toBeInTheDocument();
   });
 
-  it("unchecking the checkbox flips paypalIsSandbox to false", () => {
+  it("unchecking the checkbox flips paypalIsSandbox to false", async () => {
+    const user = userEvent.setup();
     const setConfig = vi.fn();
     render(<PayPalIntegrationCard config={BASE_CONFIG} setConfig={setConfig} />);
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /sandbox mode/i }));
+    await user.click(screen.getByRole("checkbox", { name: /sandbox mode/i }));
 
     expect(setConfig).toHaveBeenCalledWith({ ...BASE_CONFIG, paypalIsSandbox: false });
   });
 
-  it("checking the checkbox flips paypalIsSandbox back to true", () => {
+  it("checking the checkbox flips paypalIsSandbox back to true", async () => {
+    const user = userEvent.setup();
     const setConfig = vi.fn();
     const productionConfig = { ...BASE_CONFIG, paypalIsSandbox: false };
     render(<PayPalIntegrationCard config={productionConfig} setConfig={setConfig} />);
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /sandbox mode/i }));
+    await user.click(screen.getByRole("checkbox", { name: /sandbox mode/i }));
 
     expect(setConfig).toHaveBeenCalledWith({ ...productionConfig, paypalIsSandbox: true });
   });
 
-  it("links to the PayPal sandbox dashboard when in sandbox mode", () => {
+  it("links to the PayPal sandbox dashboard when in sandbox mode", async () => {
+    const user = userEvent.setup();
     const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
     render(<PayPalIntegrationCard config={BASE_CONFIG} setConfig={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /open paypal sandbox dashboard/i }));
+    await user.click(screen.getByRole("button", { name: /open paypal sandbox dashboard/i }));
 
     expect(openSpy).toHaveBeenCalledWith("https://developer.paypal.com/dashboard/accounts", "_blank", "noopener,noreferrer");
     openSpy.mockRestore();
   });
 
-  it("links to the PayPal live business dashboard when in production mode", () => {
+  it("links to the PayPal live business dashboard when in production mode", async () => {
+    const user = userEvent.setup();
     const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
     render(<PayPalIntegrationCard config={{ ...BASE_CONFIG, paypalIsSandbox: false }} setConfig={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /open paypal business dashboard/i }));
+    await user.click(screen.getByRole("button", { name: /open paypal business dashboard/i }));
 
     expect(openSpy).toHaveBeenCalledWith("https://www.paypal.com/businessexp/summary", "_blank", "noopener,noreferrer");
     openSpy.mockRestore();

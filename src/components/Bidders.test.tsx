@@ -280,13 +280,6 @@ describe('Bidders - Layout', () => {
     expect(filtersWrapper?.className).not.toContain("flex-wrap");
   });
 
-  it('does not use the old oversized header padding', () => {
-    render(<Bidders />);
-
-    const heading = screen.getByText("Bidder Check-In");
-    const cardHeader = heading.parentElement;
-    expect(cardHeader?.className).not.toContain("py-6");
-  });
 });
 
 /** Picks an option from one of the toolbar's real dropdowns. */

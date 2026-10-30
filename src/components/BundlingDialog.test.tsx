@@ -2,15 +2,14 @@
  * @vitest-environment jsdom
  * 
  * Test suite for the BundlingDialog component.
- * 
- * NOTE: This component is a pure props-driven form with mocked state. Because of this,
- * `fireEvent.change` is used for the name input test instead of `userEvent.type`. 
- * `userEvent.type` relies on the parent re-rendering to process consecutive keystrokes properly, 
- * which fails on controlled inputs backed by mocked setters. `fireEvent` sends the whole payload at once.
+ *
+ * NOTE: This component is a pure props-driven form with mocked state, so the
+ * name input never re-renders with what was typed. `userEvent.type` would send
+ * one keystroke at a time onto an empty value; `user.paste` sends it at once.
  */
 import React from "react";
 import "@testing-library/jest-dom";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { BundlingDialog } from "./BundlingDialog";
@@ -134,10 +133,11 @@ describe("BundlingDialog", () => {
     expect(baseProps.setIsBundling).toHaveBeenCalledWith(false);
   });
 
-  it("name input change calls setBundleDetails with updated name", () => {
+  it("name input change calls setBundleDetails with updated name", async () => {
     render(<BundlingDialog {...baseProps} />);
     const nameInput = screen.getByPlaceholderText(/ultimate family staycation/i);
-    fireEvent.change(nameInput, { target: { value: 'Test Bundle Name' } });
+    await user.click(nameInput);
+    await user.paste('Test Bundle Name');
     expect(baseProps.setBundleDetails).toHaveBeenLastCalledWith(
       expect.objectContaining({ name: 'Test Bundle Name' })
     );

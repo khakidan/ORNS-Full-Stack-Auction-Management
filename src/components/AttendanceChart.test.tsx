@@ -4,6 +4,7 @@
  * The pie is lazy-loaded (keeps recharts off the first page load), so
  * this checks the card shows at once and the pie still arrives.
  */
+import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import { AttendanceChart } from "./AttendanceChart";
@@ -19,8 +20,8 @@ describe("AttendanceChart", () => {
       />
     );
 
-    expect(screen.getByText("Attendance Overview")).toBeTruthy();
-    expect(await screen.findByText("Checked In")).toBeTruthy();
-    expect(screen.getByText("Not Present")).toBeTruthy();
+    expect(screen.getByText("Attendance Overview")).toBeInTheDocument();
+    expect(await screen.findByText("Checked In")).toBeInTheDocument();
+    expect(screen.getByText("Not Present")).toBeInTheDocument();
   });
 });

@@ -73,9 +73,9 @@ describe("BugReportsAdmin", () => {
 
     render(<BugReportsAdmin />);
 
-    expect(await screen.findByText("Clipping of Circular Checked In State")).toBeTruthy();
-    expect(screen.getByText("Payload too large")).toBeTruthy();
-    expect(screen.getByText("/BidManagement (workflow: bids, tab: dashboard)")).toBeTruthy();
+    expect(await screen.findByText("Clipping of Circular Checked In State")).toBeInTheDocument();
+    expect(screen.getByText("Payload too large")).toBeInTheDocument();
+    expect(screen.getByText("/BidManagement (workflow: bids, tab: dashboard)")).toBeInTheDocument();
   });
 
   it("fetches from the real list endpoint with the configured spreadsheet ID", async () => {
@@ -92,7 +92,7 @@ describe("BugReportsAdmin", () => {
   it("shows the empty state when there are no open reports", async () => {
     render(<BugReportsAdmin />);
 
-    expect(await screen.findByText("No open bug reports.")).toBeTruthy();
+    expect(await screen.findByText("No open bug reports.")).toBeInTheDocument();
   });
 
   it("only shows a Screenshot link for reports that actually have one", async () => {
@@ -136,7 +136,7 @@ describe("BugReportsAdmin", () => {
       expect(screen.queryByText("Clipping of Circular Checked In State")).not.toBeInTheDocument();
     });
     // The other, un-resolved report must still be there.
-    expect(screen.getByText("Payload too large")).toBeTruthy();
+    expect(screen.getByText("Payload too large")).toBeInTheDocument();
   });
 
   it("Refresh button triggers a new fetch", async () => {
@@ -175,7 +175,7 @@ describe("BugReportsAdmin", () => {
 
     render(<BugReportsAdmin />);
 
-    expect(await screen.findByText("No Bug Reports Spreadsheet Configured")).toBeTruthy();
+    expect(await screen.findByText("No Bug Reports Spreadsheet Configured")).toBeInTheDocument();
     expect(fetchWithRetry).not.toHaveBeenCalled();
   });
 

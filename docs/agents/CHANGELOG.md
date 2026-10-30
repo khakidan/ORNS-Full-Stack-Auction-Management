@@ -6,6 +6,23 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **Tests query like a user, and stop checking cosmetic classes** (ROADMAP T9, T10, 2026-10-29).
+  - **Accessibility fixes found on the way:**
+    - The Batch Bid Entry boxes had no labels (screen readers heard three unnamed boxes per row); they're now "Row 1 item number", "Row 1 bidder number" and "Row 1 price".
+    - The item list's checkboxes are now "Select item 101" and "Select all items".
+    - The Settings page's "Auction Configuration" header was a clickable `div`, so keyboard users couldn't open it. It's now a focusable button that opens with Enter or Space and tells screen readers whether it's open (`aria-expanded`).
+  - T10:
+    - No frontend test uses `fireEvent` any more (it was in 14 files); they use `userEvent`. The pasted-URL tests now paste, as a person would; typing a URL one key at a time behaved differently.
+    - ConfigSettings no longer mocks the Card.
+    - `toBeTruthy()`/`toBeFalsy()` on queries became `toBeInTheDocument()`.
+    - The Users, Volunteers and Batch Bid Entry tables are found by row and label instead of test ids, and those ids are gone from the components.
+    - Test ids remain only on the div-based lists, which have no role to query, and on elements the tests create themselves.
+  - T9:
+    - Kept the class checks where the class is the behaviour (wrapping, truncation and overflow, dropdown widths, hover- and focus-revealed buttons, colour coding, class pass-through props).
+    - Removed 7 tests and 4 assertions that only checked cosmetic classes: padding, font tokens, label spacing, the "Select all" tint, the default Select height and ConfigErrorCard's centring.
+    - "Filter bar is above the Card" now checks where the search box sits.
+  - 10 mutations, all caught. Frontend 899 -> 893, total 2016 -> 2010.
+
 - **Tests use the real Dialog and Select, and check exact values** (ROADMAP T6, T8, 2026-10-29).
   - No test stubs the Dialog, AlertDialog or Select any more (12 files). Tests open dialogs through their triggers and pick options through the real dropdowns. jsdom's pointer shims moved into `setup.ts`. The add-attendee tests now open the dialog first: with the stub always rendering it, "payment fields aren't shown" passed without the dialog ever being open.
   - **Accessibility:** the toolbars' dropdowns had no accessible name, so screen readers announced each as just "combobox". They now have `aria-label`s: Filter by category / item type / source / check-in status / payment, and Sort items / bidders by.

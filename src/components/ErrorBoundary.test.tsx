@@ -8,7 +8,8 @@
  * recovery path.
  */
 import "@testing-library/jest-dom";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ErrorBoundary } from "./ErrorBoundary";
 import * as errorBuffer from "@/lib/errorBuffer";
@@ -66,7 +67,8 @@ describe("ErrorBoundary", () => {
     expect(recordErrorSpy).toHaveBeenCalledWith("Error: Boom from a child component");
   });
 
-  it("reloads the page when the Reload button is clicked", () => {
+  it("reloads the page when the Reload button is clicked", async () => {
+    const user = userEvent.setup();
     const reloadSpy = vi.fn();
     const originalLocation = window.location;
     Object.defineProperty(window, "location", {
@@ -80,7 +82,7 @@ describe("ErrorBoundary", () => {
       </ErrorBoundary>
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Reload Page" }));
+    await user.click(screen.getByRole("button", { name: "Reload Page" }));
     expect(reloadSpy).toHaveBeenCalled();
 
     Object.defineProperty(window, "location", { configurable: true, value: originalLocation });

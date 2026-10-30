@@ -78,23 +78,13 @@ vi.mock("@/hooks/useBundling", () => ({
 }));
 
 describe("AuctionItemsTab - Layout", () => {
-  it("does not tint the 'Select all' bar's background, so it doesn't read as an oddly-empty highlighted box", () => {
-    render(<AuctionItemsTab />);
-
-    const selectAllText = screen.getByText(/Select all \d+ items/);
-    const selectAllBar = selectAllText.parentElement;
-    expect(selectAllBar?.className).not.toContain("bg-slate-50");
-  });
-
   it("renders the search/filter bar above the Card, matching Bidders.tsx/TicketAttendeeTab.tsx's convention, instead of as a bespoke bar inside it", () => {
     render(<AuctionItemsTab />);
 
-    const heading = screen.getByText("Auction Items Database");
-    // Bare CardHeader (no override) is correct once the filter bar is no
-    // longer a Card child - see CHANGELOG.md's "Search & Filter Actions
-    // inside the main content area" fix.
-    const cardHeader = heading.parentElement;
-    expect(cardHeader?.className).not.toContain("flex-row");
+    const card = screen.getByText("Auction Items Database").closest('[data-slot="card"]')!;
+    const search = screen.getByPlaceholderText("Search by name, description, donor...");
+    expect(card).not.toContainElement(search);
+    expect(search.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 

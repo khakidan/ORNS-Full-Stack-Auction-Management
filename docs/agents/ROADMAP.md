@@ -92,12 +92,13 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 
 ### Low
 
-- **T9 - Tests of CSS classes (61 assertions).** The main ones are in `ItemRow`, `FilterToolbar`, `select`, `BugReportsAdmin` and `AuctionItemsTab` ("does not tint the Select all bar"). They break on a restyle that changes nothing a user notices. Keep them only where the class *is* the behaviour, such as hidden, disabled or truncated text. Otherwise assert `toBeVisible`, `toBeDisabled` or accessible attributes.
-- **T10 - Query and event style** (Testing Library guidance):
+- **[DONE 2026-10-29, Phase 6] T9 - Tests of CSS classes (61 assertions).** The main ones are in `ItemRow`, `FilterToolbar`, `select`, `BugReportsAdmin` and `AuctionItemsTab` ("does not tint the Select all bar"). They break on a restyle that changes nothing a user notices. Keep them only where the class *is* the behaviour, such as hidden, disabled or truncated text. Otherwise assert `toBeVisible`, `toBeDisabled` or accessible attributes.
+- **[DONE 2026-10-29, Phase 6] T10 - Query and event style** (Testing Library guidance):
   - 108 `getByTestId` calls (25 in `Bidders.test.tsx`, many on the stubs from T6) where a role or label query would do.
   - 60 `fireEvent` calls (`ConfigSettings` 14, `AuctionItemsTab.bundling` 10, `BugReportButton` 8) where `userEvent` would be closer to a real user.
   - `toBeTruthy()`/`toBeFalsy()` on `getBy*`/`queryBy*` results (`Checkout.test.tsx` 17, `BugReportsAdmin.test.tsx` 6) instead of `toBeInTheDocument()`.
   Change these whenever the file is next touched; they aren't worth a sweep on their own.
+  *Done as one sweep: no `fireEvent` or truthy checks left. Test ids remain only on the div-based lists (no role to query) and on elements a test creates itself.*
 - **[DONE 2026-10-29, Phase 1] T11 - Recorded snapshots on the money paths.** These snapshots are intentional golden masters that pin every Sheets and PayPal call while those paths are restructured (`moneyPaths.recorded`, `checkoutMarkPaid.recorded`, `syncService`). The risk is `vitest -u` accepting a changed write without anyone reading it. *Fix:* add a rule to `testing-batches.md`: never update these snapshots without reading the diff and naming the change in the commit.
 - **T12 - No mutation testing.** Changes have been mutation-checked by hand, one at a time. *Fix:* run Stryker (`@stryker-mutator/vitest-runner`) now and then on the money paths: `financeUtils`, `checkoutService`, `ticketPaymentCheck`, `ticketPurchaseRow`, `bidderService` and `winningBidChecks`. Treat surviving mutants as missing tests.
 - **[DONE 2026-10-29, Phase 1] T13 - Coverage isn't measurable from the repo.** `@vitest/coverage-v8` isn't a dev dependency, so nobody can see the numbers above without installing it. *Fix:* add it, plus an `npm run test:coverage` script, and record the totals in `testing-batches.md` beside the pass counts. Hold off on a coverage threshold until T1 exists to enforce it.

@@ -13,7 +13,7 @@
  */
 import React from "react";
 import "@testing-library/jest-dom";
-import { render, screen, act, within, fireEvent } from "@testing-library/react";
+import { render, screen, act, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AuctionItemsTab from "./AuctionItemsTab";
 import { vi, describe, it, expect, beforeEach } from "vitest";
@@ -80,11 +80,8 @@ describe("AuctionItemsTab - real bundling wiring (useBundling unmocked)", () => 
     const user = userEvent.setup();
     render(<AuctionItemsTab />);
 
-    // Re-query fresh before each click - the base-ui Checkbox re-renders
-    // its DOM node on state change, so a captured stale reference silently
-    // no-ops on the second click.
-    fireEvent.click(screen.getAllByRole("checkbox")[1]);
-    fireEvent.click(screen.getAllByRole("checkbox")[2]);
+    await user.click(screen.getByRole("checkbox", { name: "Select item 101" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select item 102" }));
 
     expect(screen.getByText("2 items selected")).toBeInTheDocument();
   });
@@ -93,9 +90,9 @@ describe("AuctionItemsTab - real bundling wiring (useBundling unmocked)", () => 
     const user = userEvent.setup();
     render(<AuctionItemsTab />);
 
-    fireEvent.click(screen.getAllByRole("checkbox")[1]);
-    fireEvent.click(screen.getAllByRole("checkbox")[2]);
-    fireEvent.click(screen.getByRole("button", { name: "Bundle" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select item 101" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select item 102" }));
+    await user.click(screen.getByRole("button", { name: "Bundle" }));
 
     const dialog = await screen.findByRole("dialog");
     // Combined value $100 + $200 = $300, computed by the real calculateAutoBids.
@@ -113,9 +110,9 @@ describe("AuctionItemsTab - real bundling wiring (useBundling unmocked)", () => 
     const user = userEvent.setup();
     render(<AuctionItemsTab />);
 
-    fireEvent.click(screen.getAllByRole("checkbox")[1]);
-    fireEvent.click(screen.getAllByRole("checkbox")[2]);
-    fireEvent.click(screen.getByRole("button", { name: "Bundle" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select item 101" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select item 102" }));
+    await user.click(screen.getByRole("button", { name: "Bundle" }));
 
     const dialog = await screen.findByRole("dialog");
     await user.type(within(dialog).getByPlaceholderText(/Ultimate Family Staycation/i), "Combo Pack");
@@ -144,9 +141,8 @@ describe("AuctionItemsTab - real bundling wiring (useBundling unmocked)", () => 
     // The bulk action bar itself shows for any count >= 1 - only
     // openBundlingModal's own real guard (via useBundling) blocks opening
     // the dialog with fewer than 2 items selected.
-    const checkboxes = screen.getAllByRole("checkbox");
-    fireEvent.click(checkboxes[1]);
-    fireEvent.click(screen.getByRole("button", { name: "Bundle" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select item 101" }));
+    await user.click(screen.getByRole("button", { name: "Bundle" }));
 
     expect(toast.error).toHaveBeenCalledWith("Select at least 2 items to bundle");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
