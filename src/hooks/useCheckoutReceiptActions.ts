@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { errorTextFrom, getBaseUrl, NO_ANSWER_MESSAGE, postOnce, ServerUnreachableError } from "@/services/google-api";
 import type { WinnerRecord } from "./useCheckoutState";
 import { postJson } from "@/services/apiClient";
+import type { GenerateReceiptRequest } from "../../shared/apiTypes";
 
 interface UseCheckoutReceiptActionsArgs {
   spreadsheetId: string;
@@ -53,7 +54,7 @@ export function useCheckoutReceiptActions({ spreadsheetId, itemsSpreadsheetId, f
         bidderNumbersSheet,
         bidManagementSheet,
         receiptFolderId: folderId
-      });
+      } satisfies GenerateReceiptRequest);
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.success === false) {

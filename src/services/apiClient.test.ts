@@ -85,3 +85,14 @@ describe("postJsonOnce (ROADMAP A7)", () => {
     expect(error.message).toBe("Already undone");
   });
 });
+
+// Compile-time only (never called): npm run lint fails if a listed path stops
+// checking its body against shared/apiTypes.ts (ROADMAP T5).
+export function _bodiesAreTypeChecked() {
+  // @ts-expect-error - a misspelt field
+  postJson("/api/auction/special-winner", { spreadsheetId: "s", prize: "raffle", bidderId: "1", addFollowup: false, idempotencyKey: "k" }, "");
+  // @ts-expect-error - a missing field
+  postJsonOnce("/api/bidders/set-flag", { spreadsheetId: "s", bidderNumbersSheet: "B", bidderId: "1" }, "");
+  // An unlisted path still takes any body.
+  postJson("/api/volunteers/x/resend", {}, "");
+}

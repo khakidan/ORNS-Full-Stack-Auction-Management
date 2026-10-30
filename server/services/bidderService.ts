@@ -13,7 +13,8 @@ export interface WalkInParams {
   email?: string;
   spreadsheetId: string;
   ticketsSpreadsheetId?: string;
-  ticketPrice?: number;
+  /** As text from the Config ("35", "37.50") - kept as typed so "$37.50" keeps its cents - or a number. */
+  ticketPrice?: string | number;
   bidderNumbersSheet: string;
   bidManagementSheet: string;
 }
@@ -79,7 +80,7 @@ export function nextColumnPairStart(gridTopRows: unknown[][]): number {
 }
 
 /** A walk-in's rows 1-4 in their Bid-Management column pair: ID, name, captions, and their ticket as the first "bid". */
-export function walkInGridValues(id: number, first: string, last: string, ticketPrice: number): (string | number)[][] {
+export function walkInGridValues(id: number, first: string, last: string, ticketPrice: string | number): (string | number)[][] {
   return [
     [id, ""],
     [first, last],
@@ -111,7 +112,7 @@ export function bidderColumnFormatRequests(sheetId: number | null | undefined, s
 }
 
 /** The walk-in's row for the 'tickets' tab (A-V): one ticket, no guests, paid at checkout. */
-export function walkInTicketRow(firstName: string, lastName: string, email: string, ticketPrice: number): string[] {
+export function walkInTicketRow(firstName: string, lastName: string, email: string, ticketPrice: string | number): string[] {
   const row = new Array(TICKETS_COL.totalPaid + 1).fill("");
   row[TICKETS_COL.firstName] = firstName;
   row[TICKETS_COL.lastName] = lastName;

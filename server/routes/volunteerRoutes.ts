@@ -13,6 +13,7 @@ import {
   revokeVolunteer,
   Volunteer,
 } from '../services/volunteerService';
+import type { InviteVolunteerRequest } from "../../shared/apiTypes";
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
@@ -54,8 +55,9 @@ export default function createVolunteerRouter() {
   });
 
   router.post("/volunteers", requirePermission("users.manage"), async (req: Request, res: Response, next: NextFunction) => {
-    const name = String(req.body?.name || "").trim();
-    const email = String(req.body?.email || "").trim().toLowerCase();
+    const body = (req.body || {}) as Partial<InviteVolunteerRequest>;
+    const name = String(body.name || "").trim();
+    const email = String(body.email || "").trim().toLowerCase();
     if (!name || !isValidEmailAddress(email)) {
       return res.status(400).json({ error: "A name and a valid email address are required." });
     }

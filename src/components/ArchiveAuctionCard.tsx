@@ -38,7 +38,7 @@ export default function ArchiveAuctionCard({ config }: { config: Config }) {
     setArchiving(true);
     setFolderLink(null);
     try {
-      const reply = await postJson<ArchiveReply>("/api/auction/archive", {
+      const reply: ArchiveReply = await postJson("/api/auction/archive", {
         year: Number(year),
         ticketsSpreadsheetId: extractId(config.auctionTicketsSpreadsheetId),
         itemEntrySpreadsheetId: extractId(config.auctionItemsSpreadsheetId),

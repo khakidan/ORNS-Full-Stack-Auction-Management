@@ -4,6 +4,7 @@ import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { ROLLBACK_SYNC_ERROR_MESSAGE } from "@/lib/toastMessages";
 import { Bidder, Attendee } from "@/types";
 import type { WinnerRecord } from "./useCheckoutState";
+import type { CheckoutMarkPaidRequest } from "../../shared/apiTypes";
 
 interface UseCheckoutPaymentFlowArgs {
   bidders: Bidder[];
@@ -134,9 +135,8 @@ export function useCheckoutPaymentFlow({
         bidManagementSheet,
         attendeeInfo: attendee && attendee.sheet === 'tickets' ? { sheet: attendee.sheet, rowIndex: attendee.rowIndex } : null,
         paymentMethod: mappedMethod,
-        amount: winner.total,
         idempotencyKey
-      }),
+      } satisfies CheckoutMarkPaidRequest),
       credentials: "include"
     })
       .then(async (res) => {

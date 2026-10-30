@@ -8,13 +8,14 @@ import { AlreadyRunningError, runIfIdle } from '../utils/asyncLock';
 import { pollTicketPurchasesFirst } from '../services/ticketPoll';
 import { describeWebsiteTicketPrice, syncTicketPriceFromWebsite } from '../services/ticketPriceFromWebsite';
 import { CONFIG_KEY, noteChange } from '../utils/changeFeed';
+import type { SyncBiddersRequest } from "../../shared/apiTypes";
 
 /** Builds Bidder-Numbers / Bid-Management from the ticket sheets (syncService.ts). */
 export default function createSyncRouter() {
   const router = Router();
 
   router.post("/bidders/sync", requirePermission("auction.stage"), fromConfig(SYNC_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, auctionTicketSheetsID } = req.body;
+    const { spreadsheetId, auctionTicketSheetsID } = req.body as SyncBiddersRequest;
     if (!spreadsheetId) {
       return res.status(400).json({ error: "spreadsheetId is required to sync and setup bid management." });
     }

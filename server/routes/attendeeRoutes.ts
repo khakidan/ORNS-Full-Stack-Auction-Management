@@ -10,6 +10,7 @@ import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { getSharedConfig } from '../services/configService';
 import { parseAttendeeRows } from '../../src/lib/attendeeParsing';
 import { Attendee } from '../../src/types';
+import type { AddAttendeeRequest, DeleteAttendeeRequest, UpdateAttendeeRequest } from "../../shared/apiTypes";
 
 /** The Auction Tickets spreadsheet's attendee tabs. */
 export const TICKET_SHEETS = ["tickets", "staff tickets", "sponsor tickets"];
@@ -91,7 +92,7 @@ export default function createAttendeeRouter() {
    * first result instead (ROADMAP A4).
    */
   router.post("/attendees/add", requirePermission("tickets.edit"), fromConfig(TICKET_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, sheet, row, idempotencyKey } = req.body || {};
+    const { spreadsheetId, sheet, row, idempotencyKey } = (req.body || {}) as Partial<AddAttendeeRequest>;
     if (!spreadsheetId || !TICKET_SHEETS.includes(sheet) || !Array.isArray(row)) {
       return res.status(400).json({ error: "spreadsheetId, a ticket sheet name and the new row are required." });
     }
@@ -127,7 +128,7 @@ export default function createAttendeeRouter() {
   });
 
   router.post("/attendees/update", requirePermission("tickets.edit"), fromConfig(TICKET_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, range, values } = req.body || {};
+    const { spreadsheetId, range, values } = (req.body || {}) as Partial<UpdateAttendeeRequest>;
     const target = parseTicketRange(range);
     if (!spreadsheetId || !target || !Array.isArray(values) || values.length !== 1 || !Array.isArray(values[0])) {
       return res.status(400).json({ error: "spreadsheetId, cells in one row of a ticket sheet, and one row of values are required." });
@@ -168,7 +169,7 @@ export default function createAttendeeRouter() {
    * be bypassed).
    */
   router.post("/attendees/delete", requirePermission("attendees.delete"), fromConfig(TICKET_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, sheet, rowIndex } = req.body || {};
+    const { spreadsheetId, sheet, rowIndex } = (req.body || {}) as Partial<DeleteAttendeeRequest>;
     if (!spreadsheetId || !TICKET_SHEETS.includes(sheet) || !Number.isInteger(rowIndex) || rowIndex < 2) {
       return res.status(400).json({ error: "spreadsheetId, a ticket sheet name and a data row number are required." });
     }

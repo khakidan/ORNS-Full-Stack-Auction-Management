@@ -13,6 +13,7 @@ import { logAction, ActionArea } from '../services/actionLog';
 import { google } from 'googleapis';
 import { getAuthenticatedClient } from '../services/oauth';
 import { runAppsScript } from '../utils/appsScriptRun';
+import type { EditTrackingRequest } from "../../shared/apiTypes";
 
 const sheetUrl = (id: string) => `https://docs.google.com/spreadsheets/d/${id}`;
 
@@ -89,7 +90,7 @@ export default function createActionHistoryRouter() {
    */
   async function runOnTrackedScripts(req: Request, functionName: string, params: (spreadsheetId: string | undefined) => unknown[] | string) {
     const script = google.script({ version: "v1", auth: getAuthenticatedClient(req.session!.tokens!) });
-    const { itemsSpreadsheetId, ticketsSpreadsheetId } = req.body || {};
+    const { itemsSpreadsheetId, ticketsSpreadsheetId } = (req.body || {}) as Partial<EditTrackingRequest>;
     const targets = [
       { name: "Auction Items", scriptId: process.env.SCRIPT_ID_ITEM_ENTRY, spreadsheetId: itemsSpreadsheetId },
       { name: "Auction Tickets", scriptId: process.env.SCRIPT_ID_TICKETS, spreadsheetId: ticketsSpreadsheetId },
@@ -135,7 +136,7 @@ export default function createActionHistoryRouter() {
    * every admin's trigger from recording.
    */
   router.post("/action-history/edit-tracking", requirePermission("settings"), async (req: Request, res: Response, next: NextFunction) => {
-    const enabled = req.body?.enabled !== false;
+    const enabled = (req.body as Partial<EditTrackingRequest> | undefined)?.enabled !== false;
     try {
       const logId = await getActionHistorySpreadsheetId();
       if (!logId) return res.status(409).json({ error: "Create the Action History spreadsheet first." });

@@ -37,7 +37,7 @@ export default function BidManagementWorkflow({ activeBidTab, onBidTabChange, is
     const toastId = toast.loading("Checking credentials and backing up existing Bid-Management layers...");
     try {
       // Sent once: a resend would rebuild the bid sheet a second time (ROADMAP B3).
-      const reply = await postJsonOnce<{ ticketPrice?: { outcome: string; message: string } }>("/api/bidders/sync", {
+      const reply: { ticketPrice?: { outcome: string; message: string } } = await postJsonOnce("/api/bidders/sync", {
         spreadsheetId: config.bidManagementSpreadsheetId,
         auctionTicketSheetsID: config.auctionTicketsSpreadsheetId,
       }, "Failed to setup bid management app");

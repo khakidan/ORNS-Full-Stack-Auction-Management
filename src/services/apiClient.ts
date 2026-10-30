@@ -1,4 +1,5 @@
 import { fetchWithRetry, getBaseUrl, postOnce } from "@/services/google-api";
+import type { ApiRequestBody } from "../../shared/apiTypes";
 
 /** A request the server answered with an error (4xx/5xx, or an `error` in the body). */
 export class HttpError extends Error {
@@ -24,15 +25,19 @@ export class HttpError extends Error {
  *
  * Not for requests that mustn't be repeated (use postOnce) or that need
  * the raw Response (the winning-bid outbox, checkout).
+ *
+ * `body` must match the path's type in shared/apiTypes.ts, so a field
+ * renamed on either side fails the type check. The reply isn't checked:
+ * annotate the variable it's assigned to.
  */
-export async function postJson<T = any>(path: string, body: unknown, fallbackError: string): Promise<T> {
+export async function postJson<P extends string>(path: P, body: ApiRequestBody<P>, fallbackError: string): Promise<any> {
   const res = await fetchWithRetry(`${getBaseUrl()}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
     credentials: "include",
   });
-  return readReply<T>(res, fallbackError);
+  return readReply(res, fallbackError);
 }
 
 /**
@@ -40,11 +45,11 @@ export async function postJson<T = any>(path: string, body: unknown, fallbackErr
  * resent invite emails a second link (and the first stops working), a
  * resent Undo reports "already undone" though it worked (ROADMAP A7).
  */
-export async function postJsonOnce<T = any>(path: string, body: unknown, fallbackError: string): Promise<T> {
-  return readReply<T>(await postOnce(`${getBaseUrl()}${path}`, body), fallbackError);
+export async function postJsonOnce<P extends string>(path: P, body: ApiRequestBody<P>, fallbackError: string): Promise<any> {
+  return readReply(await postOnce(`${getBaseUrl()}${path}`, body), fallbackError);
 }
 
-async function readReply<T>(res: Response, fallbackError: string): Promise<T> {
+async function readReply(res: Response, fallbackError: string): Promise<any> {
   const data = await res.json().catch(() => ({}));
   if (!res.ok || data?.error) {
     const reason = (!res.ok && data?.message) || data?.error || (res.ok ? fallbackError : `${fallbackError} (status ${res.status})`);

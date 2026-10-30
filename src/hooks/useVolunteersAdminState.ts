@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { errorTextFrom, fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { postJsonOnce } from "@/services/apiClient";
+import type { InviteVolunteerRequest } from "../../shared/apiTypes";
 
 export type VolunteerStatus = "invited" | "active" | "deactivated" | "revoked";
 
@@ -72,7 +73,7 @@ export function useVolunteersAdminState() {
     loading,
     busyId,
     fetchVolunteers,
-    invite: (name: string, email: string) => run("invite", "/api/volunteers", { name, email }, `Sent ${email} a sign-in link`),
+    invite: (name: string, email: string) => run("invite", "/api/volunteers", { name, email } satisfies InviteVolunteerRequest, `Sent ${email} a sign-in link`),
     resend: (v: Volunteer) => run(v.id, `/api/volunteers/${encodeURIComponent(v.id)}/resend`, {}, `Sent ${v.email} a new link`),
     revoke: (v: Volunteer) => run(v.id, `/api/volunteers/${encodeURIComponent(v.id)}/revoke`, {}, `Ended ${v.email}'s access`),
     clearEnded: () => run("clear", "/api/volunteers/clear-ended", {}, "Cleared ended volunteers from the list"),

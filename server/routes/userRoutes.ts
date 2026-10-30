@@ -3,6 +3,7 @@ import { logAction } from '../services/actionLog';
 import { requirePermission } from '../middleware/requirePermission';
 import { getRole, listUsers, normalizeEmail, roleChangeRefusal, setRole } from '../services/userService';
 import { isRole, ROLE_LABELS } from '../utils/permissions';
+import type { SetRoleRequest } from "../../shared/apiTypes";
 
 /** The Settings page's Users tab: staff roles (Administrators - users.manage). */
 export default function createUserRouter() {
@@ -19,7 +20,7 @@ export default function createUserRouter() {
   /** Sets a role. "user" removes an admin role. `roleChangeRefusal` says who can't be changed. */
   router.put("/users/:email/role", requirePermission("users.manage"), async (req: Request, res: Response, next: NextFunction) => {
     const email = normalizeEmail(decodeURIComponent(req.params.email));
-    const { role } = req.body || {};
+    const { role } = (req.body || {}) as Partial<SetRoleRequest>;
     try {
       const before = await getRole(email);
       const refusal = roleChangeRefusal(email, role, req.user!, before);

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
+import type { RecordWinningBidRequest } from "../../shared/apiTypes";
 
 /**
  * Winning bids saved on this device because the server couldn't be
@@ -19,16 +20,7 @@ import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
  * another device meanwhile - a 409) moves to "needsReview" with the
  * server's reason, for staff to deal with in the banner's review list.
  */
-export interface RecordWinningBidBody {
-  bidderId: string;
-  itemId: string;
-  price: number;
-  spreadsheetId: string;
-  bidManagementSheet: string;
-  bidderNumbersSheet: string;
-  itemsSpreadsheetId?: string;
-  idempotencyKey: string;
-}
+export type RecordWinningBidBody = RecordWinningBidRequest;
 
 export type OutboxStatus = "waiting" | "sending" | "needsReview";
 

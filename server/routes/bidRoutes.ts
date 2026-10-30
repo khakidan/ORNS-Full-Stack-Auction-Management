@@ -12,6 +12,7 @@ import { sheetsFor, googleAuthFor } from '../utils/googleClients';
 import { logAction } from '../services/actionLog';
 import { deactivateAllVolunteers, forgetAuctionState } from '../services/volunteerService';
 import { syncBiddersFromTickets } from '../services/bidderTicketSync';
+import type { CheckInWithBidRequest, CheckoutMarkPaidRequest, CloseAuctionRequest, GoLiveRequest, RecordWinningBidRequest, SetBidderFlagRequest, SpecialWinnerRequest, WalkInRequest } from "../../shared/apiTypes";
 
 export default function createBidRouter() {
   const router = Router();
@@ -28,7 +29,7 @@ export default function createBidRouter() {
       bidderNumbersSheet,
       itemsSpreadsheetId,
       idempotencyKey 
-    } = req.body;
+    } = req.body as RecordWinningBidRequest;
 
     if (!bidderId || !itemId || !price || !spreadsheetId || !bidManagementSheet || !bidderNumbersSheet) {
       return res.status(400).json({ error: "Missing required fields for recording winning bid." });
@@ -101,7 +102,7 @@ export default function createBidRouter() {
       attendeeInfo,
       paymentMethod,
       idempotencyKey
-    } = req.body;
+    } = req.body as CheckoutMarkPaidRequest;
 
     if (!spreadsheetId || !bidderId || !bidderNumbersSheet) {
       return res.status(400).json({ error: "Missing required parameters for checkout" });
@@ -159,7 +160,7 @@ export default function createBidRouter() {
   });
 
   router.post("/auction/go-live", requirePermission("auction.stage"), fromConfig(BID_MANAGEMENT_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId } = req.body;
+    const { spreadsheetId } = req.body as GoLiveRequest;
     if (!spreadsheetId) {
       return res.status(400).json({ error: "Missing the Bid Management spreadsheet ID." });
     }
@@ -180,7 +181,7 @@ export default function createBidRouter() {
   });
 
   router.post("/auction/close-and-cleanup", requirePermission("auction.stage"), fromConfig(BID_MANAGEMENT_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, bidderNumbersSheet, bidManagementSheet } = req.body;
+    const { spreadsheetId, bidderNumbersSheet, bidManagementSheet } = req.body as CloseAuctionRequest;
     if (!spreadsheetId || !bidderNumbersSheet || !bidManagementSheet) {
       return res.status(400).json({ error: "Missing required spreadsheet parameters for cleanup." });
     }
@@ -242,7 +243,7 @@ export default function createBidRouter() {
       bidderNumbersSheet,
       bidManagementSheet,
       idempotencyKey 
-    } = req.body;
+    } = req.body as WalkInRequest;
 
     if (!firstName || !lastName || !spreadsheetId || !bidderNumbersSheet || !bidManagementSheet) {
       return res.status(400).json({ error: "Missing required fields for walk-in." });
@@ -289,7 +290,7 @@ export default function createBidRouter() {
 
   // Dashboard: save the gift-card / raffle winner (plus a Follow-Up row if they already checked out)
   router.post("/auction/special-winner", fromConfig(BID_MANAGEMENT_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, prize, bidderId, addFollowUp, idempotencyKey } = req.body;
+    const { spreadsheetId, prize, bidderId, addFollowUp, idempotencyKey } = req.body as SpecialWinnerRequest;
     if (!spreadsheetId || !Object.hasOwn(SPECIAL_PRIZES, prize) || typeof bidderId !== "string") {
       return res.status(400).json({ error: "Missing or invalid parameters for saving a special winner." });
     }
@@ -320,7 +321,7 @@ export default function createBidRouter() {
 
   // Tick a bidder's Checked In or Proxy Bidder box (locked, like every Bidder-Numbers write)
   router.post("/bidders/set-flag", fromConfig(BID_MANAGEMENT_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, bidderNumbersSheet, bidderId, flag } = req.body;
+    const { spreadsheetId, bidderNumbersSheet, bidderId, flag } = req.body as SetBidderFlagRequest;
     if (!spreadsheetId || !bidderNumbersSheet || !bidderId || !Object.hasOwn(BIDDER_FLAG_COLUMNS, flag)) {
       return res.status(400).json({ error: "Missing or invalid parameters for setting a bidder flag." });
     }
@@ -358,7 +359,7 @@ export default function createBidRouter() {
       bidderNumbersSheet, 
       bidValue,
       idempotencyKey 
-    } = req.body;
+    } = req.body as CheckInWithBidRequest;
 
     if (!bidderId || !spreadsheetId || !bidManagementSheet || !bidderNumbersSheet || !bidValue) {
       return res.status(400).json({ error: "Missing required parameters for check-in with bid." });
