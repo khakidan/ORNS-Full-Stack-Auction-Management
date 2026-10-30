@@ -6,6 +6,12 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **The rare 401s and timeouts in full test runs are fixed** (ROADMAP T14, 2026-10-29). These were in the tests, not the app.
+  - supertest listened on `[::]` but sent to `127.0.0.1`. On macOS, the port it was given could already be held on `127.0.0.1` by another program (VS Code's helper, CleanMyMac), and the request went there. A failure whose body was VS Code's own "Invalid authentication" error proved it.
+  - `setup.ts` now has supertest listen on `127.0.0.1` and wait for the bind. `testHarness.test.ts` guards this. 2 failures in 50 backend runs before, 0 in 50 after.
+  - The earlier `requireAuth` logging was silent because Vitest's default reporter, as run here, hides console output from passing tests (`--reporter=verbose` shows it).
+  - Backend 1117 -> 1118, total 2016 -> 2017.
+
 - **Tests use the real Dialog and Select, and check exact values** (ROADMAP T6, T8, 2026-10-29).
   - No test stubs the Dialog, AlertDialog or Select any more (12 files). Tests open dialogs through their triggers and pick options through the real dropdowns. jsdom's pointer shims moved into `setup.ts`. The add-attendee tests now open the dialog first: with the stub always rendering it, "payment fields aren't shown" passed without the dialog ever being open.
   - **Accessibility:** the toolbars' dropdowns had no accessible name, so screen readers announced each as just "combobox". They now have `aria-label`s: Filter by category / item type / source / check-in status / payment, and Sort items / bidders by.
