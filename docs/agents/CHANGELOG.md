@@ -6,6 +6,12 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **The rare 401s and timeouts in full test runs are fixed** (ROADMAP T14, 2026-10-29). These were in the tests, not the app.
+  - supertest listened on `[::]` but sent to `127.0.0.1`. On macOS, the port it was given could already be held on `127.0.0.1` by another program (VS Code's helper, CleanMyMac), and the request went there. A failure whose body was VS Code's own "Invalid authentication" error proved it.
+  - `setup.ts` now has supertest listen on `127.0.0.1` and wait for the bind. `testHarness.test.ts` guards this. 2 failures in 50 backend runs before, 0 in 50 after.
+  - The earlier `requireAuth` logging was silent because Vitest's default reporter, as run here, hides console output from passing tests (`--reporter=verbose` shows it).
+  - Backend 1117 -> 1118.
+
 - **Mutation testing on the money paths** (ROADMAP T12, 2026-10-29).
   - `npm run test:mutation` runs Stryker on `financeUtils`, `winningBidChecks`, `ticketPaymentCheck`, `ticketPurchaseRow` and `bidderService`. Not in CI; see `testing-batches.md`.
   - First score 78.6%: 598 mutants killed, 127 survived, 36 in untested code. `financeUtils` scored 100%.
@@ -26,7 +32,8 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
     - Kept the class checks where the class is the behaviour (wrapping, truncation and overflow, dropdown widths, hover- and focus-revealed buttons, colour coding, class pass-through props).
     - Removed 7 tests and 4 assertions that only checked cosmetic classes: padding, font tokens, label spacing, the "Select all" tint, the default Select height and ConfigErrorCard's centring.
     - "Filter bar is above the Card" now checks where the search box sits.
-  - 10 mutations, all caught. Frontend 899 -> 893, total 2016 -> 2010.
+  - 10 mutations, all caught. Frontend 899 -> 893.
+  - Phase 6 together: total 2016 -> 2011.
 
 - **Tests use the real Dialog and Select, and check exact values** (ROADMAP T6, T8, 2026-10-29).
   - No test stubs the Dialog, AlertDialog or Select any more (12 files). Tests open dialogs through their triggers and pick options through the real dropdowns. jsdom's pointer shims moved into `setup.ts`. The add-attendee tests now open the dialog first: with the stub always rendering it, "payment fields aren't shown" passed without the dialog ever being open.
