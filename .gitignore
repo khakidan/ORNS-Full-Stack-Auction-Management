@@ -10,3 +10,5 @@ coverage/
 sessions/
 bug-reports/
 gen/
+.stryker-tmp/
+reports/

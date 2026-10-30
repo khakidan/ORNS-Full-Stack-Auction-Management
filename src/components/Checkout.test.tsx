@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import "@testing-library/jest-dom";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Checkout from "./Checkout";
@@ -111,12 +112,12 @@ describe("Checkout", () => {
   it("Renders bidder checkout information", async () => {
     render(<Checkout />);
 
-    expect(await screen.findByText("Jane Doe")).toBeTruthy();
-    expect(await screen.findByText("John Smith")).toBeTruthy();
+    expect(await screen.findByText("Jane Doe")).toBeInTheDocument();
+    expect(await screen.findByText("John Smith")).toBeInTheDocument();
 
-    expect(screen.getByText("Art Class")).toBeTruthy();
+    expect(screen.getByText("Art Class")).toBeInTheDocument();
     expect(screen.getAllByText("$50.00").length).toBeGreaterThan(0);
-    expect(screen.getByText("Pizza Party")).toBeTruthy();
+    expect(screen.getByText("Pizza Party")).toBeInTheDocument();
     expect(screen.getAllByText("$75.00").length).toBeGreaterThan(0);
   });
 
@@ -131,10 +132,10 @@ describe("Checkout", () => {
     try {
       render(<Checkout />);
 
-      expect(await screen.findByText("Jane Doe")).toBeTruthy();
-      expect(await screen.findByText("John Smith")).toBeTruthy();
-      expect(screen.queryByText("Pending Checkout")).toBeFalsy();
-      expect(screen.queryByText("Already Checked Out")).toBeFalsy();
+      expect(await screen.findByText("Jane Doe")).toBeInTheDocument();
+      expect(await screen.findByText("John Smith")).toBeInTheDocument();
+      expect(screen.queryByText("Pending Checkout")).not.toBeInTheDocument();
+      expect(screen.queryByText("Already Checked Out")).not.toBeInTheDocument();
     } finally {
       mockBidders[1].checkedOut = false;
     }
@@ -333,8 +334,8 @@ describe("Checkout", () => {
 
     render(<Checkout />);
 
-    expect(await screen.findByText("No winners found in this category.")).toBeTruthy();
-    expect(screen.queryByText("Jane Doe")).toBeFalsy();
+    expect(await screen.findByText("No winners found in this category.")).toBeInTheDocument();
+    expect(screen.queryByText("Jane Doe")).not.toBeInTheDocument();
   });
 
   describe("Mark paid / payment method dialog", () => {
@@ -344,10 +345,10 @@ describe("Checkout", () => {
 
       await userEvent.click(screen.getAllByText("Checkout")[0]);
 
-      expect(await screen.findByText("Select Payment Method")).toBeTruthy();
+      expect(await screen.findByText("Select Payment Method")).toBeInTheDocument();
       const dialog = screen.getByRole("dialog");
-      expect(within(dialog).getByText(/How is Jane Doe paying/)).toBeTruthy();
-      expect(within(dialog).getByText("$50.00")).toBeTruthy(); // Jane (bidder 101) won only item1
+      expect(within(dialog).getByText(/How is Jane Doe paying/)).toBeInTheDocument();
+      expect(within(dialog).getByText("$50.00")).toBeInTheDocument(); // Jane (bidder 101) won only item1
     });
 
     it("Confirm Payment is disabled until a method is selected", async () => {
@@ -488,9 +489,9 @@ describe("Checkout", () => {
       await userEvent.click(screen.getByText("Confirm Payment"));
 
       await waitFor(() => {
-        expect(screen.getByText("Pending Verification")).toBeTruthy();
+        expect(screen.getByText("Pending Verification")).toBeInTheDocument();
       });
-      expect(screen.queryByText("Paid")).toBeFalsy();
+      expect(screen.queryByText("Paid")).not.toBeInTheDocument();
     });
 
     it("rolls back the optimistic update and shows an error toast when the checkout request fails", async () => {
@@ -511,7 +512,7 @@ describe("Checkout", () => {
       await waitFor(() => {
         expect(screen.getAllByText("Checkout").length).toBeGreaterThan(0);
       });
-      expect(screen.queryByText("Paid")).toBeFalsy();
+      expect(screen.queryByText("Paid")).not.toBeInTheDocument();
 
       const { toast } = await import("sonner");
       expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("reverted"));
@@ -545,7 +546,7 @@ describe("Checkout", () => {
         expect.objectContaining({ description: expect.stringContaining("Gift Basket") })
       );
       // The payment dialog itself should not have opened yet
-      expect(screen.queryByText("Select Payment Method")).toBeFalsy();
+      expect(screen.queryByText("Select Payment Method")).not.toBeInTheDocument();
     });
   });
 });

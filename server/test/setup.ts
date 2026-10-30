@@ -1,6 +1,8 @@
 import { setupServer } from 'msw/node'
 import { handlers } from './handlers'
 import { beforeAll, afterAll, afterEach, vi } from 'vitest'
+import http from 'node:http'
+import { createRequire } from 'node:module'
 
 // jsdom has no pointer capture or scrollIntoView; the real Base UI Select
 // and Dialog call them. Frontend tests use the real primitives (ROADMAP T6).
@@ -8,6 +10,38 @@ if (typeof window !== 'undefined') {
   window.HTMLElement.prototype.hasPointerCapture = vi.fn()
   window.HTMLElement.prototype.releasePointerCapture = vi.fn()
   window.HTMLElement.prototype.scrollIntoView = vi.fn()
+}
+
+// supertest's request(app) calls app.listen(0) with no host, which binds
+// [::], then sends to 127.0.0.1. On macOS that port can be one another
+// process already holds on 127.0.0.1 (VS Code and others do), and the
+// request then reaches that process: the rare 401s ("Invalid
+// authentication", from VS Code) and timeouts in full runs (ROADMAP T14).
+// So its servers listen on 127.0.0.1, which only hands out ports free
+// there. That bind is asynchronous, so each request waits for it.
+const SupertestTest = createRequire(import.meta.url)('supertest/lib/test.js')
+SupertestTest.prototype.serverAddress = function (app: http.Server, path: string) {
+  if (!app.address() && !app.listening) {
+    if (!(app as any)._bindingForTest) {
+      ;(app as any)._bindingForTest = true
+      app.once('listening', () => { (app as any)._bindingForTest = false })
+      app.listen(0, '127.0.0.1')
+      this._server = app
+    }
+  }
+  this._pathForTest = path
+  return `http://127.0.0.1:0${path}`
+}
+const supertestEnd = SupertestTest.prototype.end
+SupertestTest.prototype.end = function (fn: unknown) {
+  const send = () => {
+    this.url = `http://127.0.0.1:${(this.app.address() as { port: number }).port}${this._pathForTest}`
+    return supertestEnd.call(this, fn)
+  }
+  if (typeof this.app === 'string') return supertestEnd.call(this, fn)
+  if (this.app.listening) return send()
+  this.app.once('listening', send)
+  return this
 }
 
 // No test reaches real Firestore: without this, an unmocked read (the

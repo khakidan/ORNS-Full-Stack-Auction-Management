@@ -2,7 +2,8 @@
  * @vitest-environment jsdom
  */
 import "@testing-library/jest-dom";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import TicketPurchaseStatusCard from "./TicketPurchaseStatusCard";
 import { useTicketPurchaseStatus } from "@/hooks/useTicketPurchaseStatus";
@@ -67,6 +68,7 @@ describe("TicketPurchaseStatusCard", () => {
   });
 
   it("lists purchases that arrived after Go Live for staff to register as walk-ins, and Done takes one off", async () => {
+    const user = userEvent.setup();
     mockedGetStatus.mockResolvedValueOnce(status({ afterGoLive: [{ entryId: "1500", name: "Pat Lee", tickets: 2, guestsWantingNumbers: ["Sam Lee"], paymentStatus: "Pending", state: "live", at: recent }] }));
     mockedGetStatus.mockResolvedValue(status());
     render(<StatusCard onAdded={vi.fn()} />);
@@ -76,7 +78,7 @@ describe("TicketPurchaseStatusCard", () => {
     expect(screen.getByText(/2 ticket\(s\), paying at the door/)).toBeInTheDocument();
     expect(screen.getByText("Also a bidder number for: Sam Lee")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
 
     await waitFor(() => expect(markLateWebsitePurchaseHandled).toHaveBeenCalledWith("1500"));
     await waitFor(() => expect(screen.queryByText("Bought after Go Live - register as walk-ins")).not.toBeInTheDocument());
@@ -90,22 +92,24 @@ describe("TicketPurchaseStatusCard", () => {
   });
 
   it("Check Now runs the check and reloads the attendee list when it added a row", async () => {
+    const user = userEvent.setup();
     mockedGetStatus.mockResolvedValue(status());
     mockedCheckNow.mockResolvedValue(run({ newEntries: 1, added: ["1492"] }));
     const onAdded = vi.fn();
     render(<StatusCard onAdded={onAdded} />);
-    fireEvent.click(await screen.findByText("Check Now"));
+    await user.click(await screen.findByRole("button", { name: "Check Now" }));
     await waitFor(() => expect(onAdded).toHaveBeenCalled());
     expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("1 new, 1 missing from the sheet"));
     expect(mockedGetStatus).toHaveBeenCalledTimes(2);
   });
 
   it("Check Now shows why a check stopped", async () => {
+    const user = userEvent.setup();
     mockedGetStatus.mockResolvedValue(status());
     mockedCheckNow.mockResolvedValue(run({ errors: ["WordPress said no"] }));
     const onAdded = vi.fn();
     render(<StatusCard onAdded={onAdded} />);
-    fireEvent.click(await screen.findByText("Check Now"));
+    await user.click(await screen.findByRole("button", { name: "Check Now" }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("The check stopped: WordPress said no"));
     expect(onAdded).not.toHaveBeenCalled();
   });

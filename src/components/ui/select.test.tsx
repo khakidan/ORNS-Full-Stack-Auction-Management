@@ -24,7 +24,8 @@
  * codebase already uses elsewhere for identical jsdom limitations.
  */
 import "@testing-library/jest-dom";
-import { render, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect } from "vitest";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 
@@ -67,12 +68,6 @@ describe("SelectTrigger height", () => {
       </Select>
     );
 
-  it("is 32px (h-8) by default", () => {
-    renderTrigger({});
-    const trigger = document.querySelector('[data-slot="select-trigger"]');
-    expect(trigger).toHaveClass("h-8");
-  });
-
   it("lets a height passed by the caller replace the default, rather than losing to it", () => {
     renderTrigger({ className: "h-10 w-45" });
     const trigger = document.querySelector('[data-slot="select-trigger"]');
@@ -89,9 +84,10 @@ describe("SelectTrigger height", () => {
 });
 
 describe("SelectContent popup width", () => {
-  it("sizes the popup to its own content (w-max), not a fixed bind to the trigger's width", () => {
+  it("sizes the popup to its own content (w-max), not a fixed bind to the trigger's width", async () => {
+    const user = userEvent.setup();
     renderSelect();
-    fireEvent.click(document.querySelector('[role="combobox"]')!);
+    await user.click(screen.getByRole("combobox"));
 
     const popup = document.querySelector('[data-slot="select-content"]');
     expect(popup).toBeInTheDocument();
@@ -99,9 +95,10 @@ describe("SelectContent popup width", () => {
     expect(popup).not.toHaveClass("w-(--anchor-width)");
   });
 
-  it("still floors the popup width at the trigger's own width, so it's never narrower than what it opens from", () => {
+  it("still floors the popup width at the trigger's own width, so it's never narrower than what it opens from", async () => {
+    const user = userEvent.setup();
     renderSelect();
-    fireEvent.click(document.querySelector('[role="combobox"]')!);
+    await user.click(screen.getByRole("combobox"));
 
     const popup = document.querySelector('[data-slot="select-content"]');
     expect(popup).toHaveClass("min-w-(--anchor-width)");

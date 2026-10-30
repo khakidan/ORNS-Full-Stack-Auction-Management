@@ -7,7 +7,8 @@
  * contexts and the network/screenshot boundaries mocked.
  */
 import "@testing-library/jest-dom";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { BugReportButton } from "./BugReportButton";
 
@@ -60,32 +61,35 @@ describe("BugReportButton", () => {
     mockedFetchWithRetry.mockResolvedValue({ ok: true, json: async () => ({ success: true }) } as Response);
   });
 
-  it("renders a low-contrast floating trigger and opens the dialog on click", () => {
+  it("renders a low-contrast floating trigger and opens the dialog on click", async () => {
+    const user = userEvent.setup();
     render(<BugReportButton />);
 
     expect(screen.queryByText("Report a Bug or Issue")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Report a bug or issue" }));
+    await user.click(screen.getByRole("button", { name: "Report a bug or issue" }));
 
     expect(screen.getByText("Report a Bug or Issue")).toBeInTheDocument();
   });
 
-  it("opens the dialog via the Ctrl+Shift+B shortcut without clicking the button", () => {
+  it("opens the dialog via the Ctrl+Shift+B shortcut without clicking the button", async () => {
+    const user = userEvent.setup();
     render(<BugReportButton />);
 
-    fireEvent.keyDown(window, { key: "b", ctrlKey: true, shiftKey: true });
+    await user.keyboard("{Control>}{Shift>}b{/Shift}{/Control}");
 
     expect(screen.getByText("Report a Bug or Issue")).toBeInTheDocument();
   });
 
   it("submits the real form end-to-end: fills fields, picks a type, saves, and posts the expected payload", async () => {
+    const user = userEvent.setup();
     render(<BugReportButton />);
-    fireEvent.click(screen.getByRole("button", { name: "Report a bug or issue" }));
+    await user.click(screen.getByRole("button", { name: "Report a bug or issue" }));
 
-    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Checkout button does nothing" } });
-    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Clicked it twice, no response" } });
+    await user.type(screen.getByLabelText("Title"), "Checkout button does nothing");
+    await user.type(screen.getByLabelText("Description"), "Clicked it twice, no response");
 
-    fireEvent.click(screen.getByText("Save Report"));
+    await user.click(screen.getByRole("button", { name: "Save Report" }));
 
     await waitFor(() => expect(mockedFetchWithRetry).toHaveBeenCalledTimes(1));
     const body = JSON.parse((mockedFetchWithRetry.mock.calls[0][1] as RequestInit).body as string);
@@ -96,11 +100,12 @@ describe("BugReportButton", () => {
     await waitFor(() => expect(screen.queryByText("Report a Bug or Issue")).not.toBeInTheDocument());
   });
 
-  it("closes without saving on Cancel", () => {
+  it("closes without saving on Cancel", async () => {
+    const user = userEvent.setup();
     render(<BugReportButton />);
-    fireEvent.click(screen.getByRole("button", { name: "Report a bug or issue" }));
+    await user.click(screen.getByRole("button", { name: "Report a bug or issue" }));
 
-    fireEvent.click(screen.getByText("Cancel"));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(screen.queryByText("Report a Bug or Issue")).not.toBeInTheDocument();
     expect(mockedFetchWithRetry).not.toHaveBeenCalled();

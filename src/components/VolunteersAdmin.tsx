@@ -65,13 +65,13 @@ export default function VolunteersAdmin() {
         </CardHeader>
         <CardContent className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
           {state.account?.connected ? (
-            <span className="flex items-center gap-2 text-sm" data-testid="volunteer-account-status">
+            <span className="flex items-center gap-2 text-sm">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               Connected: {state.account.email}
               {state.account.connectedBy && <span className="text-muted-foreground">· by {state.account.connectedBy} on {when(state.account.connectedAt)}</span>}
             </span>
           ) : (
-            <span className="text-sm text-amber-700" data-testid="volunteer-account-status">
+            <span className="text-sm text-amber-700">
               Not connected - volunteer links won't work until {state.account?.email || "the volunteer account"} is connected.
             </span>
           )}
@@ -115,7 +115,7 @@ export default function VolunteersAdmin() {
           }
           emptyMessage="No volunteers invited yet."
           renderRow={(v) => (
-            <TableRow key={v.id} data-testid={`volunteer-row-${v.email}`}>
+            <TableRow key={v.id}>
               <TableCell className="font-medium">{v.name}</TableCell>
               <TableCell>{v.email}</TableCell>
               <TableCell>

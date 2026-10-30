@@ -48,6 +48,7 @@ export function AuctionItemsList({
     <div className="flex flex-col">
       <div className="flex items-center gap-3 px-5 py-2.5 border-b text-xs">
         <Checkbox
+          aria-label="Select all items"
           checked={selectedItemsCount === items.length && items.length > 0}
           onCheckedChange={onToggleAll}
         />

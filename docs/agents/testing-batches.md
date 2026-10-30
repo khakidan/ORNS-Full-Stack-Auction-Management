@@ -29,6 +29,14 @@ npm run test:coverage   # the whole suite, with a coverage summary; full report 
 
 There is no coverage threshold. Record the four totals in the table below when they move; a drop on a change that adds code means the new code went untested.
 
+## Mutation Testing
+
+```bash
+npm run test:mutation   # Stryker on the money paths, about 4 minutes; report in reports/mutation/index.html
+```
+
+`stryker.config.json` lists the files: `financeUtils`, `winningBidChecks`, `ticketPaymentCheck`, `ticketPurchaseRow` and `bidderService`. It isn't run in CI. Run it after changing one of those files, and once before the auction. A surviving mutant is a change to the code that no test notices: add the test, or note why it can't matter (an equivalent mutant). First run (2026-10-29): 78.6%, survivors listed as ROADMAP T15-T18.
+
 ## Recorded Snapshots
 
 `server/test/__snapshots__/` holds golden masters that pin every Sheets and PayPal call on the money paths (`moneyPaths.recorded`, `checkoutMarkPaid.recorded`, `syncService`). **Never update them with `vitest -u` without reading the diff.** Each changed line is a changed write to a spreadsheet or to PayPal: confirm it is the change you meant, and name it in the commit message ("snapshot: Mark Paid now also writes column N"). If you can't say why a line changed, the code is wrong, not the snapshot.
@@ -51,9 +59,9 @@ npx vitest run src/           # frontend
 
 | Layer | Path | Tests |
 |---|---|---|
-| **Backend** | `server/test/` | **1117 passed** |
-| **Frontend** | `src/` | **899 passed** |
-| **Total** | `npm run test:quiet` | **2016 passed** |
+| **Backend** | `server/test/` | **1118 passed** |
+| **Frontend** | `src/` | **893 passed** |
+| **Total** | `npm run test:quiet` | **2011 passed** |
 
 | Coverage (`npm run test:coverage`, 2026-10-29) | |
 |---|---|

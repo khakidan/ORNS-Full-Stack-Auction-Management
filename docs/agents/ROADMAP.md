@@ -92,17 +92,38 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 
 ### Low
 
-- **T9 - Tests of CSS classes (61 assertions).** The main ones are in `ItemRow`, `FilterToolbar`, `select`, `BugReportsAdmin` and `AuctionItemsTab` ("does not tint the Select all bar"). They break on a restyle that changes nothing a user notices. Keep them only where the class *is* the behaviour, such as hidden, disabled or truncated text. Otherwise assert `toBeVisible`, `toBeDisabled` or accessible attributes.
-- **T10 - Query and event style** (Testing Library guidance):
+- **[DONE 2026-10-29, Phase 6] T9 - Tests of CSS classes (61 assertions).** The main ones are in `ItemRow`, `FilterToolbar`, `select`, `BugReportsAdmin` and `AuctionItemsTab` ("does not tint the Select all bar"). They break on a restyle that changes nothing a user notices. Keep them only where the class *is* the behaviour, such as hidden, disabled or truncated text. Otherwise assert `toBeVisible`, `toBeDisabled` or accessible attributes.
+- **[DONE 2026-10-29, Phase 6] T10 - Query and event style** (Testing Library guidance):
   - 108 `getByTestId` calls (25 in `Bidders.test.tsx`, many on the stubs from T6) where a role or label query would do.
   - 60 `fireEvent` calls (`ConfigSettings` 14, `AuctionItemsTab.bundling` 10, `BugReportButton` 8) where `userEvent` would be closer to a real user.
   - `toBeTruthy()`/`toBeFalsy()` on `getBy*`/`queryBy*` results (`Checkout.test.tsx` 17, `BugReportsAdmin.test.tsx` 6) instead of `toBeInTheDocument()`.
   Change these whenever the file is next touched; they aren't worth a sweep on their own.
+  *Done as one sweep: no `fireEvent` or truthy checks left. Test ids remain only on the div-based lists (no role to query) and on elements a test creates itself.*
 - **[DONE 2026-10-29, Phase 1] T11 - Recorded snapshots on the money paths.** These snapshots are intentional golden masters that pin every Sheets and PayPal call while those paths are restructured (`moneyPaths.recorded`, `checkoutMarkPaid.recorded`, `syncService`). The risk is `vitest -u` accepting a changed write without anyone reading it. *Fix:* add a rule to `testing-batches.md`: never update these snapshots without reading the diff and naming the change in the commit.
-- **T12 - No mutation testing.** Changes have been mutation-checked by hand, one at a time. *Fix:* run Stryker (`@stryker-mutator/vitest-runner`) now and then on the money paths: `financeUtils`, `checkoutService`, `ticketPaymentCheck`, `ticketPurchaseRow`, `bidderService` and `winningBidChecks`. Treat surviving mutants as missing tests.
+- **[DONE 2026-10-29, Phase 6] T12 - No mutation testing.** Changes have been mutation-checked by hand, one at a time. *Fix:* run Stryker (`@stryker-mutator/vitest-runner`) now and then on the money paths: `financeUtils`, `checkoutService`, `ticketPaymentCheck`, `ticketPurchaseRow`, `bidderService` and `winningBidChecks`. Treat surviving mutants as missing tests.
+  *Done: `npm run test:mutation` (Stryker 10.1, `stryker.config.json`, about 4 minutes; HTML report in `reports/mutation/`, gitignored). There is no `checkoutService`; checkout is in `bidderService`. First run: score 78.6% (598 killed, 127 survived, 36 in untested code). `financeUtils` scored 100%. The survivors that matter are T15-T18. The rest are low-risk: optional chaining, empty-array fallbacks, log text, and lock keys collapsed to one (still serialised). Decision: don't run it in CI (too slow for every PR, and the score isn't a useful gate yet). Run it after changing a money-path file and once before the auction, and treat new survivors as missing tests.*
+- **T15 - Ticket payment check: untested decisions** (Stryker, `ticketPaymentCheck.ts`). Each of these mutants survived:
+  - Which PayPal it asks: forcing live or sandbox (line 35) passes every test. On sales day it could check the wrong account unnoticed.
+  - Check-only mode: `mode === "write"` -> `true` before `flagForReview` (line 109) survives, so a check that should only report could write a review flag.
+  - The status write's `clearCacheForSpreadsheet` and its Action History name ("Confirm ticket payment" / "Record ticket refund") aren't asserted.
+  - Only PayPal transactions count (line 102), and `PENDING` + `PENDING_REVIEW` (line 128). The 0.005 amount tolerance has no test at the boundary.
+- **T16 - Online ticket rows: mapping and limits** (Stryker, `ticketPurchaseRow.ts`).
+  - Blanking any entry of `PAYMENT_STATUSES` (paid -> Paid, pending/processing -> Pending, refunded...) survives.
+  - So do `tickets >= MAX_TICKETS`, a total of 0 rejected, the "more than MAX_GUESTS guests" problem, and a guest needing only one of first or last name.
+  - Trimming of the entry ID and names, and the entry-ID regex's `^` anchor, are untested.
+- **T17 - Winning-bid checks: the already-won scan** (Stryker, `winningBidChecks.ts`).
+  - "Allow multiple winners" stored as a real boolean `true` (not the text "TRUE") is never tested.
+  - Which column holds the item number (the "item number"/"number"/"id" names and the fallback) and skipping the header row aren't tested.
+  - Whitespace around IDs and blank bidder headers are untested.
+- **T18 - Bidder service: undo values and walk-in setup** (Stryker, `bidderService.ts`).
+  - Setting a bidder flag returns `before` for undo; every mutation of it survives (line 326), so an undo could restore the wrong value.
+  - Walk-in: finding the tickets tab by any capitalisation, the missing-sheet guard (line 150), and the size of the column append (line 169) are untested. "Bid sheet is empty" and "Bidder column not found" (lines 256-258) are too.
 - **[DONE 2026-10-29, Phase 1] T13 - Coverage isn't measurable from the repo.** `@vitest/coverage-v8` isn't a dev dependency, so nobody can see the numbers above without installing it. *Fix:* add it, plus an `npm run test:coverage` script, and record the totals in `testing-batches.md` beside the pass counts. Hold off on a coverage threshold until T1 exists to enforce it.
 
-- **T14 - Rare 401s and timeouts in full parallel runs** (found in Phase 2's loop, 2026-10-29). Not from fixed waits; Phase 2 didn't fix them.
+- **[DONE 2026-10-29, Phase 6] T14 - Rare 401s and timeouts in full parallel runs** (found in Phase 2's loop, 2026-10-29). Not from fixed waits; Phase 2 didn't fix them.
+  - **Cause: the test requests reached another program, not the app.** supertest's `request(app)` listens on port 0 with no host, which binds `[::]`, then sends to `127.0.0.1`. On macOS the system can hand out a port that another process already holds on `127.0.0.1` (VS Code's helper and CleanMyMac do, in the same range), and the request then goes to that process. One failure's body proved it: `{"type":"error","error":{"type":"authentication_error","message":"Invalid authentication"}}`, which is not this app's response. A process that never answers gives the timeouts. Reproduced directly with two servers on one port.
+  - **Why the earlier logging saw nothing:** Vitest's default reporter, as run here, hides console output from tests that pass, so the `console.error` in `requireAuth` never printed. Use `--reporter=verbose` or write to `process.stderr` when logging from a loop. The cookie result still stands.
+  - **Fix (tests only):** `setup.ts` makes supertest's servers listen on `127.0.0.1`, which only hands out ports free there, and each request waits for that bind. `testHarness.test.ts` checks the request arrives on 127.0.0.1 (mutation-checked). Loop: 2 failures in 50 backend runs before the fix, 0 in 50 after. CI on Linux was unlikely to hit this; it was this Mac's other programs.
   - **401 (2 of 30 runs).** `bugReportRoutes` "writes 'Fixed' to column C" (staff session) and `volunteers` "is refused a walk-in" (volunteer session, expected 403) were each refused once as not signed in. Both pass on their own. Same family as the earlier `tickets` 401 and `userRoles` flakes.
   - **What's ruled out:** the cookie encoding. 20,000 freshly signed test cookies sent one after another all got through. A 19-run loop with `requireAuth` logging every 401 that carried a cookie caught no unexpected one: only the two tests that send a bad cookie on purpose.
   - **Timeout (1 of 19 runs).** `items` "invalid field name test" timed out at 5 s. That suggests a loaded machine, not a logic fault.
@@ -197,7 +218,7 @@ Work in order: each phase makes the next one cheaper or safer. One branch and PR
 
 - T9 and T10: fix the test file being edited for other work. Swap class assertions for `toBeVisible`/`toBeDisabled`, test IDs for role and label queries, `fireEvent` for `userEvent`, and `toBeTruthy()` for `toBeInTheDocument()`.
 - T11: add the snapshot rule to `testing-batches.md` in Phase 1's PR.
-- T12: once Phases 1-5 are done, run Stryker once on the money-path files, list the surviving mutants here as new items, and decide then whether to run it regularly.
+- [DONE] T12: once Phases 1-5 are done, run Stryker once on the money-path files, list the surviving mutants here as new items, and decide then whether to run it regularly.
 
 Rough size: Phase 1 is small (one workflow and one setting). Phases 2 and 5 are medium. Phase 3 is the largest, at about 60-80 new or extended tests. Phase 4 is about 30-40 tests. Expected totals after Phases 1-5: roughly 1,050-1,100 frontend and 1,150-1,200 backend.
 

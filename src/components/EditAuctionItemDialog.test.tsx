@@ -10,7 +10,7 @@
  * T6); setup.ts gives jsdom the pointer stubs it needs.
  */
 import "@testing-library/jest-dom";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { EditAuctionItemDialog } from "./EditAuctionItemDialog";

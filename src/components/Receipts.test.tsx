@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import "@testing-library/jest-dom";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Receipts from "./Receipts";
@@ -51,8 +52,8 @@ describe("Receipts", () => {
 
     render(<Receipts />);
     
-    expect(await screen.findByText(/Receipt_Jane_Doe/)).toBeTruthy();
-    expect(await screen.findByText(/Receipt_John_Smith/)).toBeTruthy();
+    expect(await screen.findByText(/Receipt_Jane_Doe/)).toBeInTheDocument();
+    expect(await screen.findByText(/Receipt_John_Smith/)).toBeInTheDocument();
   });
 
   it("Empty state when no files exist", async () => {
@@ -64,7 +65,7 @@ describe("Receipts", () => {
 
     render(<Receipts />);
     
-    expect(await screen.findByText(/No receipts found in this folder/)).toBeTruthy();
+    expect(await screen.findByText(/No receipts found in this folder/)).toBeInTheDocument();
   });
 
   it("Refresh button triggers a new fetch", async () => {

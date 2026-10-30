@@ -16,7 +16,8 @@
  */
 import "@testing-library/jest-dom";
 import type { ComponentProps } from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { AuctionItemsFilterControls } from "./AuctionItemsFilterControls";
 
@@ -53,10 +54,11 @@ describe("AuctionItemsFilterControls - Select display labels and popup width", (
     expect(screen.getAllByText("Food").length).toBeGreaterThan(0);
   });
 
-  it("renders every category option's full, untruncated text when the dropdown is open", () => {
+  it("renders every category option's full, untruncated text when the dropdown is open", async () => {
+    const user = userEvent.setup();
     renderControls();
 
-    fireEvent.click(screen.getAllByRole("combobox")[0]);
+    await user.click(screen.getByRole("combobox", { name: "Filter by category" }));
 
     for (const category of CATEGORIES) {
       expect(screen.getByText(category)).toBeInTheDocument();
@@ -65,11 +67,12 @@ describe("AuctionItemsFilterControls - Select display labels and popup width", (
 });
 
 describe("AuctionItemsFilterControls - Reset", () => {
-  it("calls onReset when 'Reset Filters' is clicked", () => {
+  it("calls onReset when 'Reset Filters' is clicked", async () => {
+    const user = userEvent.setup();
     const onReset = vi.fn();
     renderControls({ onReset });
 
-    fireEvent.click(screen.getByText("Reset Filters"));
+    await user.click(screen.getByRole("button", { name: "Reset Filters" }));
 
     expect(onReset).toHaveBeenCalledTimes(1);
   });

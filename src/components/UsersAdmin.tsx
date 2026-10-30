@@ -91,7 +91,7 @@ export default function UsersAdmin() {
           }
           emptyMessage="No users found."
           renderRow={(u) => (
-            <TableRow key={u.email} data-testid={`staff-row-${u.email}`}>
+            <TableRow key={u.email}>
               <TableCell className="font-medium">{u.email}</TableCell>
               <TableCell>
                 {lockReason(u) ? (

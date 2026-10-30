@@ -62,7 +62,7 @@ export function AuctionItemRow({
       )}
     >
       <div className="pt-1">
-        <Checkbox checked={isSelected} onCheckedChange={() => onToggleSelect(item.rowIndex)} />
+        <Checkbox aria-label={`Select item ${item.id}`} checked={isSelected} onCheckedChange={() => onToggleSelect(item.rowIndex)} />
       </div>
 
       <RowIdTile value={item.id} caption="Item" className="pt-0.5" />

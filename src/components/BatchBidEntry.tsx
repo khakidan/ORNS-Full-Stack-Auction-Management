@@ -62,7 +62,7 @@ export function BatchBidEntry({ items, bidders, winners, recordWinningBid }: Bat
             </thead>
             <tbody>
               {state.resolved.map((r, i) => (
-                <tr key={r.row.key} className={cn("border-b last:border-0", STATUS_ROW_CLASS[r.status])} data-testid={`batch-row-${i}`}>
+                <tr key={r.row.key} className={cn("border-b last:border-0", STATUS_ROW_CLASS[r.status])}>
                   <td className="px-4 py-1.5 text-xs text-muted-foreground font-mono">{i + 1}</td>
                   <td className="px-2 py-1.5">
                     <Input
@@ -70,6 +70,7 @@ export function BatchBidEntry({ items, bidders, winners, recordWinningBid }: Bat
                       value={r.row.itemId}
                       onChange={e => state.updateRow(r.row.key, "itemId", e.target.value)}
                       placeholder="&hellip;"
+                      aria-label={`Row ${i + 1} item number`}
                     />
                   </td>
                   <td className="px-2 py-1.5 text-xs">
@@ -94,6 +95,7 @@ export function BatchBidEntry({ items, bidders, winners, recordWinningBid }: Bat
                       value={r.row.bidderId}
                       onChange={e => state.updateRow(r.row.key, "bidderId", e.target.value)}
                       placeholder="&hellip;"
+                      aria-label={`Row ${i + 1} bidder number`}
                     />
                   </td>
                   <td className="px-2 py-1.5 text-xs">
@@ -115,6 +117,7 @@ export function BatchBidEntry({ items, bidders, winners, recordWinningBid }: Bat
                       value={r.row.price}
                       onChange={e => state.updateRow(r.row.key, "price", e.target.value)}
                       placeholder="&hellip;"
+                      aria-label={`Row ${i + 1} price`}
                     />
                     {r.status === "check" && (
                       <div className="mt-1 space-y-1 max-w-64">

@@ -2,7 +2,8 @@
  * @vitest-environment jsdom
  */
 import "@testing-library/jest-dom";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import PayPalSweeperStatusCard from "./PayPalSweeperStatusCard";
 
@@ -90,6 +91,7 @@ describe("PayPalSweeperStatusCard", () => {
   });
 
   it("lets the user trigger an immediate sweep via the Run Sweep Now button", async () => {
+    const user = userEvent.setup();
     mockedGetStatus.mockResolvedValue({
       credentialConfigured: true,
       credentialUpdatedBy: "staff@orns.org",
@@ -105,7 +107,7 @@ describe("PayPalSweeperStatusCard", () => {
     render(<PayPalSweeperStatusCard />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Run Sweep Now" })).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Run Sweep Now" }));
+    await user.click(screen.getByRole("button", { name: "Run Sweep Now" }));
 
     await waitFor(() => expect(mockedRunNow).toHaveBeenCalledTimes(1));
   });
