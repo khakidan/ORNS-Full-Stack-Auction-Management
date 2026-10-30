@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "npm run test:mutation - mutation testing on the money paths (ROADMAP T12). Surviving mutants are missing tests.",
+  "testRunner": "vitest",
+  "vitest": { "configFile": "vitest.config.ts", "dir": "server" },
+  "mutate": [
+    "server/utils/financeUtils.ts",
+    "server/utils/winningBidChecks.ts",
+    "server/services/ticketPaymentCheck.ts",
+    "server/services/ticketPurchaseRow.ts",
+    "server/services/bidderService.ts"
+  ],
+  "coverageAnalysis": "perTest",
+  "reporters": ["clear-text", "progress", "html"],
+  "htmlReporter": { "fileName": "reports/mutation/index.html" },
+  "concurrency": 4,
+  "timeoutMS": 20000
+}

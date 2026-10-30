@@ -6,6 +6,11 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **Mutation testing on the money paths** (ROADMAP T12, 2026-10-29).
+  - `npm run test:mutation` runs Stryker on `financeUtils`, `winningBidChecks`, `ticketPaymentCheck`, `ticketPurchaseRow` and `bidderService`. Not in CI; see `testing-batches.md`.
+  - First score 78.6%: 598 mutants killed, 127 survived, 36 in untested code. `financeUtils` scored 100%.
+  - The survivors that matter are listed as ROADMAP T15-T18. For example: no test checks whether the ticket check asks live or sandbox PayPal, Fluent Forms' payment-status mapping is untested, and the "before" value for undoing a bidder flag is never checked.
+
 - **Tests query like a user, and stop checking cosmetic classes** (ROADMAP T9, T10, 2026-10-29).
   - **Accessibility fixes found on the way:**
     - The Batch Bid Entry boxes had no labels (screen readers heard three unnamed boxes per row); they're now "Row 1 item number", "Row 1 bidder number" and "Row 1 price".
