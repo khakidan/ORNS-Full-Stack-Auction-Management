@@ -7,6 +7,7 @@
 import { describe, it, expect } from "vitest";
 import { saveSpecialWinner } from "../services/specialWinnerService";
 import { withLock } from "../utils/asyncLock";
+import { createGate, waitUntilQueuedOnLock } from "./helpers/gate";
 
 function fakeSheets(existingTabs: string[]) {
   const tabs = [...existingTabs];
@@ -74,18 +75,18 @@ describe("saveSpecialWinner", () => {
 
   it("waits for the bidder-numbers lock that recordWinningBid's Follow-Up writes hold", async () => {
     const order: string[] = [];
-    let release: () => void;
+    const winningBid = createGate();
     const held = withLock("bidder-numbers:bm", async () => {
-      await new Promise<void>((resolve) => { release = resolve; });
+      await winningBid.wait();
       order.push("winning-bid-done");
     });
     const { sheets } = fakeSheets(["Special-Winners", "Follow-Up"]);
     const save = saveSpecialWinner(sheets, { spreadsheetId: "bm", prize: "raffle", bidderId: "7", addFollowUp: true })
       .then(() => order.push("special-winner-done"));
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitUntilQueuedOnLock("bidder-numbers:bm");
     expect(order).toEqual([]);
-    release!();
+    winningBid.release();
     await Promise.all([held, save]);
     expect(order).toEqual(["winning-bid-done", "special-winner-done"]);
   });

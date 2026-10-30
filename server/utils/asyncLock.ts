@@ -14,18 +14,28 @@
  * queue up behind one another.
  */
 const locks = new Map<string, Promise<void>>();
+/** How many callers are waiting behind the holder, per key - read only by tests (`_waitingForLockForTesting`). */
+const waiting = new Map<string, number>();
 
 export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
   // Capture whoever's ahead of us, then immediately (synchronously, before
   // any await) claim the tail position for ourselves - JS's single-threaded
   // execution means this registration can't race with another synchronous
   // caller of withLock() for the same key.
+  const queued = locks.has(key);
   const previousTail = locks.get(key) ?? Promise.resolve();
   let releaseThisTail: () => void;
   const thisTail = new Promise<void>((resolve) => { releaseThisTail = resolve; });
   locks.set(key, thisTail);
 
+  // A tail only ever resolves, so no try/finally is needed around the count.
+  if (queued) waiting.set(key, (waiting.get(key) ?? 0) + 1);
   await previousTail;
+  if (queued) {
+    const left = waiting.get(key)! - 1;
+    if (left === 0) waiting.delete(key);
+    else waiting.set(key, left);
+  }
   try {
     return await fn();
   } finally {
@@ -70,4 +80,13 @@ export async function runIfIdle<T>(key: string, fn: () => Promise<T>): Promise<T
 /** Test-only: the number of keys currently held in the lock map, to verify cleanup actually happens rather than leaking an entry per key forever. */
 export function _getLockMapSizeForTesting(): number {
   return locks.size;
+}
+
+/**
+ * Test-only: how many callers are queued on `key` right now. A concurrency
+ * test waits for this to reach 1 before releasing the holder - proof that
+ * the second caller is held by the lock, not just slow to get there.
+ */
+export function _waitingForLockForTesting(key: string): number {
+  return waiting.get(key) ?? 0;
 }

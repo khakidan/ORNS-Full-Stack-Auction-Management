@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { server } from "./setup";
 import { http, HttpResponse } from "msw";
 import { resetHandlersState, valuesBatchUpdateRequests } from "./handlers";
+import { createGate, waitUntilQueuedOnLock } from "./helpers/gate";
 
 const mockExtractInvoiceIdFromUrl = vi.fn();
 const mockGetInvoiceStatus = vi.fn();
@@ -345,14 +346,14 @@ describe("runPaypalSweep - never overwrites a row staff changed mid-sweep (ROADM
     const writes = captureWrites();
 
     // Stand-in for a checkout holding the lock on the same spreadsheet.
-    let releaseCheckout!: () => void;
-    const checkoutHolding = withLock("bidder-numbers:bm-id", () => new Promise<void>((resolve) => { releaseCheckout = resolve; }));
+    const checkout = createGate();
+    const checkoutHolding = withLock("bidder-numbers:bm-id", () => checkout.wait());
 
     const sweep = runPaypalSweep();
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await waitUntilQueuedOnLock("bidder-numbers:bm-id");
     expect(writes).toEqual([]);
 
-    releaseCheckout();
+    checkout.release();
     await checkoutHolding;
     expect(await sweep).toEqual({ pending: 1, resolved: 1, escalated: 0 });
     expect(writes.length).toBeGreaterThan(0);

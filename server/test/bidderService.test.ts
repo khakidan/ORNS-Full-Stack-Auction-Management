@@ -20,6 +20,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { registerWalkInBidder, checkInBidderWithBid, setBidderFlag } from "../services/bidderService";
 import { withLock } from "../utils/asyncLock";
+import { createGate, waitUntilQueuedOnLock } from "./helpers/gate";
 
 const SPREADSHEET_ID = "bm-spreadsheet-id";
 const BIDDER_NUMBERS_SHEET = "Bidder-Numbers";
@@ -129,8 +130,7 @@ describe("checkInBidderWithBid - concurrency (defense-in-depth)", () => {
   // finishes.
   it("does not start a second concurrent check-in's Bid-Management read until the first one (same spreadsheet) has fully finished", async () => {
     const callOrder: string[] = [];
-    let releaseFirst: () => void;
-    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const firstGate = createGate();
 
     // Row 0: header pairs for bidders 201 (cols 0/1) and 202 (cols 2/3).
     // Rows 1-2 are name/label rows (not scanned); row 3 onward is the
@@ -155,7 +155,7 @@ describe("checkInBidderWithBid - concurrency (defense-in-depth)", () => {
               wideReadCount++;
               const isFirst = wideReadCount === 1;
               callOrder.push(isFirst ? "201-start" : "202-start");
-              if (isFirst) await firstGate;
+              if (isFirst) await firstGate.wait();
               return { data: { values: bidManagementGrid.map((r) => [...r]) } };
             }
             if (range.includes("Bidder-Numbers")) {
@@ -184,10 +184,12 @@ describe("checkInBidderWithBid - concurrency (defense-in-depth)", () => {
       bidderId: "202", spreadsheetId: "same-bm-id", bidManagementSheet: "Bid-Management", bidderNumbersSheet: "Bidder-Numbers", bidValue: 35,
     });
 
-    // Fired both without awaiting either yet. Give both a moment to
-    // actually reach the mocked Bid-Management read, then release 201.
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    releaseFirst!();
+    // Fired both without awaiting either yet. Release 201 only once it's
+    // inside its Bid-Management read and 202 is queued on the lock behind
+    // it. Without the lock, 202 never queues, so this wait fails the test.
+    await firstGate.reached;
+    await waitUntilQueuedOnLock("bidder-numbers:same-bm-id");
+    firstGate.release();
 
     const [result201, result202] = await Promise.all([checkIn201, checkIn202]);
 
@@ -239,19 +241,19 @@ describe("setBidderFlag", () => {
 
   it("waits for the bidder-numbers lock, so it can't interleave with a walk-in registration on the same sheet", async () => {
     const order: string[] = [];
-    let release: () => void;
+    const otherWriter = createGate();
     const held = withLock(`bidder-numbers:${SPREADSHEET_ID}`, async () => {
       order.push("other-writer-start");
-      await new Promise<void>((resolve) => { release = resolve; });
+      await otherWriter.wait();
       order.push("other-writer-end");
     });
     const { sheets } = fakeSheets(["101"]);
     const flag = setBidderFlag(sheets, { spreadsheetId: SPREADSHEET_ID, bidderNumbersSheet: BIDDER_NUMBERS_SHEET, bidderId: "101", flag: "checkedIn" })
       .then(() => order.push("set-flag-done"));
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitUntilQueuedOnLock(`bidder-numbers:${SPREADSHEET_ID}`);
     expect(order).toEqual(["other-writer-start"]);
-    release!();
+    otherWriter.release();
     await Promise.all([held, flag]);
     expect(order).toEqual(["other-writer-start", "other-writer-end", "set-flag-done"]);
   });

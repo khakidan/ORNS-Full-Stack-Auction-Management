@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { AlreadyRunningError, runIfIdle, withLock, _getLockMapSizeForTesting } from "../utils/asyncLock";
+import { AlreadyRunningError, runIfIdle, withLock, _getLockMapSizeForTesting, _waitingForLockForTesting } from "../utils/asyncLock";
 
 /** A promise plus its externally-callable resolve, for precisely controlling ordering in tests. */
 function deferred<T = void>() {
@@ -105,6 +105,23 @@ describe("withLock", () => {
     const before = _getLockMapSizeForTesting();
     await withLock("key-f", async () => {});
     expect(_getLockMapSizeForTesting()).toBe(before);
+  });
+});
+
+describe("_waitingForLockForTesting (what concurrency tests wait on)", () => {
+  it("counts only callers queued behind a holder, and drops to 0 as each gets the lock", async () => {
+    const gate = deferred();
+    const holder = withLock("key-w", () => gate.promise);
+    expect(_waitingForLockForTesting("key-w")).toBe(0);
+
+    const second = withLock("key-w", async () => {});
+    const third = withLock("key-w", async () => {});
+    expect(_waitingForLockForTesting("key-w")).toBe(2);
+    expect(_waitingForLockForTesting("key-other")).toBe(0);
+
+    gate.resolve();
+    await Promise.all([holder, second, third]);
+    expect(_waitingForLockForTesting("key-w")).toBe(0);
   });
 });
 

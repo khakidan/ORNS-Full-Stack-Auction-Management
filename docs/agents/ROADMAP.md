@@ -68,7 +68,7 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 
 ### Medium
 
-- **T4 - Concurrency tests that wait a fixed time.** Two patterns use a real `setTimeout` instead of waiting for a signal:
+- **[DONE 2026-10-29, Phase 2] T4 - Concurrency tests that wait a fixed time.** Two patterns use a real `setTimeout` instead of waiting for a signal:
   - *Wait, then act* ("give both a moment to reach the gate"): `auction-setup.test.ts:83`, `receipts.test.ts:611`, `auctionService.test.ts:186`, `bidderService.test.ts:189` and `itemService-concurrency.test.ts:73`. On a busy machine the first call may not have reached the lock yet, and the test fails.
   - *Wait, then check nothing happened*: `bidderService.test.ts:252`, `paypalSweeperJob.test.ts:352` and `specialWinnerService.test.ts:86`. These can pass even with the lock removed, because the code simply hasn't got there in 20-50 ms.
   The suite has intermittent single-run failures that pass on a rerun: a 429 in `bid-management.test.ts`, a 401 in `tickets.test.ts`, production's bidder labels, and `userRoles.test.ts` "a User can't change roles" (1 failure in 15 backend runs during this audit). Fixed-time waits are the likely cause of some of them.
@@ -102,6 +102,12 @@ Item IDs are stable - refer to them by ID in commits and `CHANGELOG.md` entries.
 - **T12 - No mutation testing.** Changes have been mutation-checked by hand, one at a time. *Fix:* run Stryker (`@stryker-mutator/vitest-runner`) now and then on the money paths: `financeUtils`, `checkoutService`, `ticketPaymentCheck`, `ticketPurchaseRow`, `bidderService` and `winningBidChecks`. Treat surviving mutants as missing tests.
 - **[DONE 2026-10-29, Phase 1] T13 - Coverage isn't measurable from the repo.** `@vitest/coverage-v8` isn't a dev dependency, so nobody can see the numbers above without installing it. *Fix:* add it, plus an `npm run test:coverage` script, and record the totals in `testing-batches.md` beside the pass counts. Hold off on a coverage threshold until T1 exists to enforce it.
 
+- **T14 - Rare 401s and timeouts in full parallel runs** (found in Phase 2's loop, 2026-10-29). Not from fixed waits; Phase 2 didn't fix them.
+  - **401 (2 of 30 runs).** `bugReportRoutes` "writes 'Fixed' to column C" (staff session) and `volunteers` "is refused a walk-in" (volunteer session, expected 403) were each refused once as not signed in. Both pass on their own. Same family as the earlier `tickets` 401 and `userRoles` flakes.
+  - **What's ruled out:** the cookie encoding. 20,000 freshly signed test cookies sent one after another all got through. A 19-run loop with `requireAuth` logging every 401 that carried a cookie caught no unexpected one: only the two tests that send a bad cookie on purpose.
+  - **Timeout (1 of 19 runs).** `items` "invalid field name test" timed out at 5 s. That suggests a loaded machine, not a logic fault.
+  - *Next step:* the 401 needs full parallel load to appear. Log it the same way in a long loop (50+ runs) and read what the session held. Suspects: anything shared within one test file that runs late, such as fire-and-forget writes (`touchVolunteer`) or a cache filled after a test's reset. Rerun the suite once before treating a lone 401 as real.
+
 ### Plan for writing the tests
 
 Work in order: each phase makes the next one cheaper or safer. One branch and PR per phase (or per item where marked). Every PR follows the standing rules: `npm run test:quiet`, `npm run lint`, the totals in `testing-batches.md`, and a `CHANGELOG.md` entry naming the item IDs.
@@ -115,7 +121,9 @@ Work in order: each phase makes the next one cheaper or safer. One branch and PR
 3. Add `@vitest/coverage-v8` (pinned to the installed vitest version) as a dev dependency and an `npm run test:coverage` script. Record the four percentages in `testing-batches.md`. No threshold yet.
 4. Prove it: open a throwaway PR with one deliberately failing test, confirm the check fails and the merge is blocked, then close the PR.
 
-**Phase 2 - T4: make the concurrency tests deterministic** (before adding more, so new tests don't copy the pattern).
+**Phase 2 - T4: make the concurrency tests deterministic** (before adding more, so new tests don't copy the pattern). *Done 2026-10-29 (branch `deterministic-concurrency-tests`). Instead of order-of-events alone, the "check nothing happened" tests wait until the second writer is queued on the lock (`waitUntilQueuedOnLock`), which never happens without the lock - so a missing lock fails every run. 3 more tests with the same fixed wait were converted too (`receipts` H1 and print, `production` catalog); all 11 fail 5 runs out of 5 with their lock or guard given another key.*
+
+  *Loop result: 2 failures in 30 backend runs, neither from a fixed wait, so they're now T14 (below).*
 
 - Add a small helper, `server/test/helpers/gate.ts`:
   - `const gate = createGate()` gives `gate.wait()` (for a fake to `await`), `gate.reached` (a promise resolved when the fake first calls `wait`) and `gate.release()`.
