@@ -4,6 +4,7 @@ import { fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import { parseDollar, calculateAutoBids } from "@/lib/auctionItemPricing";
 import { AuctionItem } from "@/types";
 import { postJson } from "@/services/apiClient";
+import type { BundleSuggestRequest } from "../../shared/apiTypes";
 
 interface BundlingSelection {
   [rowIndex: number]: boolean;
@@ -84,7 +85,7 @@ export function useBundling(
       const res = await fetchWithRetry(`${getBaseUrl()}/api/bundle/suggest-names`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: selectedItems })
+        body: JSON.stringify({ items: selectedItems } satisfies BundleSuggestRequest)
       });
       // A Gemini failure arrives as a 5xx, which fetchWithRetry throws on.
       const data = await res.json();
@@ -104,7 +105,7 @@ export function useBundling(
       const res = await fetchWithRetry(`${getBaseUrl()}/api/bundle/suggest-description`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: selectedItems })
+        body: JSON.stringify({ items: selectedItems } satisfies BundleSuggestRequest)
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);

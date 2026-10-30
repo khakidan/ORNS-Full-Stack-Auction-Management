@@ -84,7 +84,7 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
 
   const saveConfig = async (newConfig: Config) => {
     try {
-      const saved = await postJson<Record<string, unknown>>("/api/config", newConfig, "Couldn't save the settings");
+      const saved: Record<string, unknown> = await postJson("/api/config", newConfig, "Couldn't save the settings");
       setConfig(toConfig(saved));
       toast.success("Settings saved for everyone.");
     } catch (error: any) {

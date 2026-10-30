@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { errorTextFrom, getBaseUrl, postOnce } from "@/services/google-api";
 import { useConfig } from "@/context/ConfigContext";
 import { Config } from "@/types";
+import type { MasterSpreadsheetsRequest } from "../../shared/apiTypes";
 
 export function extractId(input: string): string {
   if (!input) return "";
@@ -73,7 +74,7 @@ export function useConfigSettingsState() {
         ticketsSpreadsheetId: auctionTicketsId,
         itemEntrySpreadsheetId: auctionItemsId,
         bidManagementSpreadsheetId: bidMgtId
-      });
+      } satisfies MasterSpreadsheetsRequest);
       if (!response.ok) {
         const refusal = await response.json().catch(() => ({}));
         throw new Error(errorTextFrom(refusal, `Couldn't start setting up the new auction year (status ${response.status})`));

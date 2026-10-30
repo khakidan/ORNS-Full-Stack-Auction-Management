@@ -6,6 +6,22 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **Request bodies are shared between the browser and the server** (ROADMAP T5's follow-up, 2026-10-29).
+  - **How it works:**
+    - New `shared/apiTypes.ts` has a type for each write route's body.
+    - `postJson`/`postJsonOnce` take the body type from the path, and the other calls use `satisfies`.
+    - Each route reads `req.body as` its type.
+    - A field renamed or misspelt on either side now fails `npm run lint`. A never-called check in `apiClient.test.ts` fails lint if that stops working.
+    - Type-only imports, so nothing changes at runtime.
+  - **What the types turned up:**
+    - Checkout sent an `amount` the server never reads (it works out the total itself), so the browser no longer sends it.
+    - Walk-in's `ticketPrice` arrives as text ("35", from the Config), but the service declared a number. The type now says `string | number`. Behaviour is unchanged, which keeps "$37.50" from becoming "$37.5".
+- **Record-winning-bid's stored range is quoted** (the note from ROADMAP T2).
+  - It kept `Bid-Management!A4:B4` for Action History and Undo. Undo reads the range as-is, so a Bid Management tab name with a space would have broken it. It's now `'Bid-Management'!A4:B4`.
+  - The writes to Sheets are unchanged: the recorded-call snapshots pass untouched. Only the reported range and Action History's location and undo range gained quotes.
+- **ROADMAP:** the finished test-audit items (T1-T18) and their plan were removed, as the file's own rule asks. Their history is here.
+- Backend 1169 -> 1170, total 2062 -> 2063.
+
 - **The money-path gaps the mutation run found are tested** (ROADMAP T15-T18, 2026-10-29). 51 new backend tests. Stryker went from 78.6% to 91.1% on the five files; every remaining survivor is equivalent.
   - **Ticket payment check:**
     - which PayPal it asks (live, sandbox, or sandbox when unset), checked against the host it actually calls

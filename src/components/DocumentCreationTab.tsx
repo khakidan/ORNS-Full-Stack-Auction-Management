@@ -9,6 +9,7 @@ import { FolderFilesCard } from "@/components/FolderFilesCard";
 
 import { useAuction } from "@/context/AuctionContext";
 import { isConfiguredId } from "@/lib/configuredId";
+import type { ItemDocumentRequest } from "../../shared/apiTypes";
 
 export default function DocumentCreationTab() {
   const { isAuctionClosed } = useAuction();
@@ -45,7 +46,7 @@ export default function DocumentCreationTab() {
       toast.loading(`Running ${label}...`, { id: functionName });
       // Sent once, never retried: each run creates a new file, so a retry
       // after a timeout made duplicates.
-      const res = await postOnce(`${getBaseUrl()}${endpoint}`, { folderId: config.forPrintFolderId, spreadsheetId });
+      const res = await postOnce(`${getBaseUrl()}${endpoint}`, { folderId: config.forPrintFolderId, spreadsheetId } satisfies ItemDocumentRequest);
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.error) throw new Error(errorTextFrom(data, `Failed with status ${res.status}`));
 

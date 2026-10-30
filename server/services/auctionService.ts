@@ -11,6 +11,7 @@ import { findExistingWins, isRepeatableItem, WinningBidConflictError } from "../
 import { BIDDER_COL, TICKETS_COL } from "../utils/sheetColumns";
 import { AUCTION_STATE_CELL, parseAuctionState } from "../utils/auctionState";
 import { findBidderColumn, findBidderRowIndex, firstEmptyBidRow } from "../utils/bidGrid";
+import { quoteSheetName } from '../utils/rangeUtils';
 
 export interface RecordWinningBidParams {
   bidderId: string;
@@ -123,7 +124,8 @@ async function recordWinningBidLocked(
 
   // 4. Write the bid in the bidder's first empty row (and the Follow-Up row).
   const rowIndex = firstEmptyBidRow(values, colIndex);
-  const range = `${bidManagementSheet}!${getColumnLetter(colIndex)}${rowIndex}:${getColumnLetter(colIndex + 1)}${rowIndex}`;
+  // Quoted, since this range is also kept for Undo, which reads it as-is: a tab name with a space would break it.
+  const range = `${quoteSheetName(bidManagementSheet)}!${getColumnLetter(colIndex)}${rowIndex}:${getColumnLetter(colIndex + 1)}${rowIndex}`;
   const operations: SheetOp[] = [{
     type: 'UPDATE',
     spreadsheetId,

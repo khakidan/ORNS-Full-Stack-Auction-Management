@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { errorTextFrom, getBaseUrl, NO_ANSWER_MESSAGE, postOnce, ServerUnreachableError } from "@/services/google-api";
 import { postJson } from "@/services/apiClient";
+import type { GenerateAllReceiptsRequest } from "../../shared/apiTypes";
 
 interface UseCheckoutBatchActionsArgs {
   spreadsheetId: string;
@@ -56,7 +57,7 @@ export function useCheckoutBatchActions({ spreadsheetId, itemsSpreadsheetId, fol
         toast.loading(totalParts > 1 ? `Printing receipts: part ${part} of ${totalParts}...` : "Printing receipts...", { id: toastId });
         const res = await postOnce(`${getBaseUrl()}/api/receipts/generate-all`, {
           spreadsheetId, itemsSpreadsheetId, bidderNumbersSheet, bidManagementSheet, receiptFolderId: folderId, part
-        });
+        } satisfies GenerateAllReceiptsRequest);
         const data = await res.json().catch(() => ({}));
         if (!res.ok || data.success === false) throw new Error(errorTextFrom(data, "Batch generation failed"));
 

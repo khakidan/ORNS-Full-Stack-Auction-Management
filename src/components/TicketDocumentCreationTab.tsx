@@ -10,6 +10,7 @@ import { useAuction } from "@/context/AuctionContext";
 import { useAuth } from "@/context/AuthContext";
 import { useConfig } from "@/context/ConfigContext";
 import { isConfiguredId } from "@/lib/configuredId";
+import type { BidderLabelsRequest } from "../../shared/apiTypes";
 
 export default function TicketDocumentCreationTab() {
   const { isAuctionClosed } = useAuction();
@@ -39,7 +40,7 @@ export default function TicketDocumentCreationTab() {
 
       // Sent once, never retried: each run creates a new file, so a retry
       // after a timeout made duplicates.
-      const res = await postOnce(`${getBaseUrl()}${endpoint}`, { folderId: forPrintFolderId, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId: spreadsheetId });
+      const res = await postOnce(`${getBaseUrl()}${endpoint}`, { folderId: forPrintFolderId, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId: spreadsheetId } satisfies BidderLabelsRequest);
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.error) throw new Error(errorTextFrom(data, `Failed with status ${res.status}`));
 

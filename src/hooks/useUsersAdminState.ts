@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { errorTextFrom, fetchWithRetry, getBaseUrl } from "@/services/google-api";
 import type { Role } from "@/lib/permissions";
+import type { SetRoleRequest } from "../../shared/apiTypes";
 
 export interface StaffUser {
   email: string;
@@ -44,7 +45,7 @@ export function useUsersAdminState() {
       const res = await fetchWithRetry(`${getBaseUrl()}/api/users/${encodeURIComponent(email)}/role`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
+        body: JSON.stringify({ role } satisfies SetRoleRequest),
         credentials: "include",
       });
       const data = await res.json().catch(() => ({}));

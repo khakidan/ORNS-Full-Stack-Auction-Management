@@ -121,8 +121,8 @@ describe("bidRoutes - /api/auction/record-winning-bid", () => {
       target: "Item I01",
       summary: "Bidder 1001 won item I01 for $100.00",
       after: { bidderId: "1001", itemId: "I01", price: 100 },
-      location: "Bid Management Bid-Management!A4:B4",
-      undo: { kind: "cells", spreadsheetId: "ss-id", range: "Bid-Management!A4:B4", before: [["", ""]], after: [["I01", 100]], lock: "bidder-numbers:ss-id" },
+      location: "Bid Management 'Bid-Management'!A4:B4",
+      undo: { kind: "cells", spreadsheetId: "ss-id", range: "'Bid-Management'!A4:B4", before: [["", ""]], after: [["I01", 100]], lock: "bidder-numbers:ss-id" },
     });
     expect(changesSince(version).changed).toContain("ss-id");
   });

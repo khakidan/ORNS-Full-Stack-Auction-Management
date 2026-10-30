@@ -196,3 +196,28 @@ describe("checkoutMarkPaid - concurrency (defense-in-depth)", () => {
     expect(callOrder).toEqual(["42-start", "42-end", "99-start", "99-end"]);
   });
 });
+
+describe("recordWinningBid - the range it reports", () => {
+  it("quotes the tab name, so Undo can use the range as-is even when the tab name has a space", async () => {
+    const grid = [["105", ""], ["Winner", "One"], ["Item #:", "Price:"]];
+    const sheets = {
+      spreadsheets: {
+        get: async () => ({ data: { sheets: [{ properties: { title: "Follow-Up" } }] } }),
+        values: {
+          get: async ({ range }: { range: string }) => ({
+            data: { values: range.startsWith("'Bid Management'") ? grid : range.startsWith("'Bidder Numbers'") ? [["ID"], ["105", "", "", "", true, false, false]] : [] },
+          }),
+          update: async () => ({ data: {} }),
+          append: async ({ range }: any) => ({ data: { updates: { updatedRange: range } } }),
+        },
+      },
+    } as any;
+
+    const result = await recordWinningBid(sheets, {
+      bidderId: "105", itemId: "301", price: 50, spreadsheetId: SPREADSHEET_ID,
+      bidManagementSheet: "Bid Management", bidderNumbersSheet: "Bidder Numbers",
+    });
+
+    expect(result.range).toBe("'Bid Management'!A4:B4");
+  });
+});

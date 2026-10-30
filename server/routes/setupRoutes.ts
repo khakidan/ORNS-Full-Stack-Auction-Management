@@ -14,6 +14,7 @@ import { CONFIG_KEY, noteChange } from '../utils/changeFeed';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { AlreadyRunningError, runIfIdle } from '../utils/asyncLock';
 import { startNewTicketSeason } from '../services/ticketPoll';
+import type { ArchiveAuctionRequest, MasterSpreadsheetsRequest } from "../../shared/apiTypes";
 
 export default function createSetupRouter() {
   const router = Router();
@@ -24,7 +25,7 @@ export default function createSetupRouter() {
       ticketsSpreadsheetId, 
       itemEntrySpreadsheetId, 
       bidManagementSpreadsheetId 
-    } = req.body;
+    } = req.body as MasterSpreadsheetsRequest;
 
     if (!ticketsSpreadsheetId || !itemEntrySpreadsheetId || !bidManagementSpreadsheetId) {
       return res.status(400).json({ error: "Missing required spreadsheet IDs for auction setup." });
@@ -139,7 +140,7 @@ export default function createSetupRouter() {
    * again - the earlier copy goes to the Drive trash.
    */
   router.post("/archive", requirePermission("settings"), fromConfig(MASTER_SPREADSHEET_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
-    const { year, ticketsSpreadsheetId, itemEntrySpreadsheetId, bidManagementSpreadsheetId } = req.body || {};
+    const { year, ticketsSpreadsheetId, itemEntrySpreadsheetId, bidManagementSpreadsheetId } = (req.body || {}) as Partial<ArchiveAuctionRequest>;
     const parentFolderId = process.env.DRIVE_PARENT_FOLDER_ID;
 
     if (!Number.isInteger(year) || year < 2000 || year > 2100) {

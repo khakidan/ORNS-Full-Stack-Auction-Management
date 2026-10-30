@@ -156,7 +156,7 @@ export function useActionHistoryState() {
     const verb = enabled ? "on" : "off";
     setEnablingTracking(true);
     try {
-      const data = await postJson<{ success: boolean; results: { name: string; success: boolean; error?: string }[] }>(
+      const data: { success: boolean; results: { name: string; success: boolean; error?: string }[] } = await postJson(
         "/api/action-history/edit-tracking",
         { enabled, itemsSpreadsheetId, ticketsSpreadsheetId },
         `Couldn't turn ${verb} edit tracking`

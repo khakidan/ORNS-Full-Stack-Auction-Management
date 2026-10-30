@@ -13,6 +13,7 @@ import { sheetsFor } from '../utils/googleClients';
 import { syncBiddersFromTickets } from '../services/bidderTicketSync';
 import { pollTicketPurchasesFirst } from '../services/ticketPoll';
 import { requirePermission } from '../middleware/requirePermission';
+import type { BidderLabelsRequest, ItemDocumentRequest } from "../../shared/apiTypes";
 
 /**
  * Documents always go to the Config's For Print folder: without one the
@@ -107,7 +108,7 @@ export default function createProductionRouter() {
     next: NextFunction,
     functionName: string
   ) => {
-    const { folderId, spreadsheetId, ornsLogoId } = req.body;
+    const { folderId, spreadsheetId, ornsLogoId } = req.body as ItemDocumentRequest;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
     if (!folderId) return res.status(400).json({ error: MISSING_PRINT_FOLDER });
 
@@ -159,7 +160,7 @@ export default function createProductionRouter() {
    */
 
   router.post("/tickets/bidder-labels", requirePermission("tickets.edit"), fromConfig(BIDDER_LABEL_FIELDS), async (req, res, next) => {
-    const { folderId, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId } = req.body;
+    const { folderId, bidManagementSpreadsheetId, auctionTicketsSpreadsheetId } = req.body as BidderLabelsRequest;
     if (!folderId) return res.status(400).json({ error: MISSING_PRINT_FOLDER });
 
     // Real auction workflow (see CHANGELOG.md): bidder labels get printed

@@ -29,6 +29,10 @@ npm run test:coverage   # the whole suite, with a coverage summary; full report 
 
 There is no coverage threshold. Record the four totals in the table below when they move; a drop on a change that adds code means the new code went untested.
 
+## Chasing a Flaky Test
+
+Run the suite in a loop (`for i in $(seq 1 50); do npx vitest run server > run-$i.log 2>&1; done`) and keep each run's output. Vitest's default reporter hides console output from tests that pass, so a `console.log` added to find the cause prints nothing: use `--reporter=verbose`, or write to `process.stderr`. Supertest's servers listen on `127.0.0.1` (`setup.ts`, ROADMAP T14) - a request that reaches another program on the machine was the cause of the last "rare 401".
+
 ## Mutation Testing
 
 ```bash
@@ -59,9 +63,9 @@ npx vitest run src/           # frontend
 
 | Layer | Path | Tests |
 |---|---|---|
-| **Backend** | `server/test/` | **1169 passed** |
+| **Backend** | `server/test/` | **1170 passed** |
 | **Frontend** | `src/` | **893 passed** |
-| **Total** | `npm run test:quiet` | **2062 passed** |
+| **Total** | `npm run test:quiet` | **2063 passed** |
 
 | Coverage (`npm run test:coverage`, 2026-10-29) | |
 |---|---|

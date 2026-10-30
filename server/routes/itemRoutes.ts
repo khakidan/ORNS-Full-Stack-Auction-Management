@@ -5,6 +5,7 @@ import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { addItem, deleteItem, updateItem, bulkUpdateItems, ItemChangedError } from '../services/itemService';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { sheetsFor } from '../utils/googleClients';
+import type { AddItemRequest, BulkUpdateItemsRequest, DeleteItemRequest, UpdateItemRequest } from "../../shared/apiTypes";
 
 /** Auction-Items add / edit / bulk edit / delete. Each service call holds the `auction-items:` lock. */
 export default function createItemRouter() {
@@ -12,7 +13,7 @@ export default function createItemRouter() {
 
   // Add Auction Item and resequence
   router.post("/auction/add-item", fromConfig(ITEM_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, category, name, description, value, donor, itemType, allowMultipleWinners, idempotencyKey } = req.body;
+    const { spreadsheetId, category, name, description, value, donor, itemType, allowMultipleWinners, idempotencyKey } = req.body as AddItemRequest;
     if (!spreadsheetId || !category || !name) {
       return res.status(400).json({ error: "Missing required parameters for adding item" });
     }
@@ -51,7 +52,7 @@ export default function createItemRouter() {
   // re-deleting a blanked row is harmless, but a retried duplicate still
   // short-circuits like every other mutating route.
   router.post("/auction/delete-item", fromConfig(ITEM_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, rowIndex, idempotencyKey } = req.body;
+    const { spreadsheetId, rowIndex, idempotencyKey } = req.body as DeleteItemRequest;
     if (!spreadsheetId || !rowIndex) {
       return res.status(400).json({ error: "Missing required parameters for deletion" });
     }
@@ -81,7 +82,7 @@ export default function createItemRouter() {
 
   // Save one item's changed fields (locked) & resequence IDs on a category/status change
   router.post("/auction/update-item", fromConfig(ITEM_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, rowIndex, changes, expectedName } = req.body;
+    const { spreadsheetId, rowIndex, changes, expectedName } = req.body as UpdateItemRequest;
     if (!spreadsheetId || !Number.isInteger(rowIndex) || !changes || typeof changes !== "object" || Array.isArray(changes)) {
       return res.status(400).json({ error: "Missing required parameters" });
     }
@@ -116,7 +117,7 @@ export default function createItemRouter() {
 
   // Bulk Update Auction Item Rows & Manage Sequencing on Change
   router.post("/auction/bulk-update-items", fromConfig(ITEM_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, rowIndices, field, value, idempotencyKey } = req.body;
+    const { spreadsheetId, rowIndices, field, value, idempotencyKey } = req.body as BulkUpdateItemsRequest;
     if (!spreadsheetId || !rowIndices || !rowIndices.length || !field) {
       return res.status(400).json({ error: "Missing required bulk update parameters" });
     }

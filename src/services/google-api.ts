@@ -1,6 +1,7 @@
 import { SweeperStatus, PaypalSweepOutcome, ArchivedAuction, TicketPurchaseStatus, TicketPollRun } from "@/types";
 import { newRequestId, reportDone, reportRetry } from "@/lib/syncStatus";
 import { isConfiguredId } from "@/lib/configuredId";
+import type { AddAttendeeRequest, DeleteItemRequest, UpdateAttendeeRequest } from "../../shared/apiTypes";
 
 export const getBaseUrl = () => {
   return "";
@@ -140,7 +141,7 @@ export async function deleteAuctionItem(spreadsheetId: string, rowIndex: number)
   const res = await fetchWithRetry(`${getBaseUrl()}/api/auction/delete-item`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ spreadsheetId, rowIndex, idempotencyKey: window.crypto.randomUUID() }),
+    body: JSON.stringify({ spreadsheetId, rowIndex, idempotencyKey: window.crypto.randomUUID() } satisfies DeleteItemRequest),
     credentials: "include"
   });
   if (!res.ok) {
@@ -241,7 +242,7 @@ export async function updateAttendeeCells(spreadsheetId: string, range: string, 
   const res = await fetchWithRetry(`${getBaseUrl()}/api/attendees/update`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ spreadsheetId, range, values }),
+    body: JSON.stringify({ spreadsheetId, range, values } satisfies UpdateAttendeeRequest),
     credentials: "include"
   });
   if (!res.ok) {
@@ -260,7 +261,7 @@ export async function appendAttendeeRow(spreadsheetId: string, sheet: string, ro
   const res = await fetchWithRetry(`${getBaseUrl()}/api/attendees/add`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ spreadsheetId, sheet, row, idempotencyKey: window.crypto.randomUUID() }),
+    body: JSON.stringify({ spreadsheetId, sheet, row, idempotencyKey: window.crypto.randomUUID() } satisfies AddAttendeeRequest),
     credentials: "include"
   });
   if (!res.ok) {

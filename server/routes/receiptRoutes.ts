@@ -13,6 +13,7 @@ import { requireAuth } from '../middleware/requireAuth';
 import { AlreadyRunningError, runIfIdle, withLock } from '../utils/asyncLock';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { syncBiddersFromTickets } from '../services/bidderTicketSync';
+import type { EmailAllReceiptsRequest, EmailReceiptRequest, GenerateAllReceiptsRequest, GenerateReceiptRequest } from "../../shared/apiTypes";
 
 const MISSING_RECEIPT_FOLDER = "Set the Receipts Folder ID in Settings before printing receipts.";
 
@@ -32,7 +33,7 @@ export default function createReceiptsRouter() {
   });
 
   router.post("/generate", fromConfig(RECEIPT_FIELDS), async (req, res, next) => {
-    const { bidderId, spreadsheetId, itemsSpreadsheetId } = req.body;
+    const { bidderId, spreadsheetId, itemsSpreadsheetId } = req.body as GenerateReceiptRequest;
     const scriptId = process.env.SCRIPT_ID_BID_MANAGEMENT;
 
     if (!scriptId) return res.status(500).json({ error: "SCRIPT_ID_BID_MANAGEMENT not configured." });
@@ -89,7 +90,7 @@ export default function createReceiptsRouter() {
    * boundary - print after bidding closes.
    */
   router.post("/generate-all", fromConfig(RECEIPT_FIELDS), async (req, res, next) => {
-    const { spreadsheetId, itemsSpreadsheetId } = req.body;
+    const { spreadsheetId, itemsSpreadsheetId } = req.body as GenerateAllReceiptsRequest;
     const scriptId = process.env.SCRIPT_ID_BID_MANAGEMENT;
     const part = req.body.part === undefined ? 1 : Number(req.body.part);
 
@@ -131,7 +132,7 @@ export default function createReceiptsRouter() {
   // Emailing resolves each bidder's PayPal invoice (ROADMAP.md H2), so,
   // like /generate, these routes need a PayPalService.
   router.post("/email-all", fromConfig(RECEIPT_FIELDS), async (req, res, next) => {
-    const { spreadsheetId, itemsSpreadsheetId, idempotencyKey } = req.body;
+    const { spreadsheetId, itemsSpreadsheetId, idempotencyKey } = req.body as EmailAllReceiptsRequest;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
 
     try {
@@ -155,7 +156,7 @@ export default function createReceiptsRouter() {
    * gets 409) - either would otherwise email the bidder twice (ROADMAP B2).
    */
   router.post("/email-only", fromConfig(RECEIPT_FIELDS), async (req, res, next) => {
-    const { bidderId, spreadsheetId, itemsSpreadsheetId, idempotencyKey } = req.body;
+    const { bidderId, spreadsheetId, itemsSpreadsheetId, idempotencyKey } = req.body as EmailReceiptRequest;
     if (!spreadsheetId) return res.status(400).json({ error: "spreadsheetId required" });
     if (typeof bidderId !== "string" && typeof bidderId !== "number") return res.status(400).json({ error: "bidderId required" });
     if (String(bidderId).trim() === "") return res.status(400).json({ error: "bidderId required" });

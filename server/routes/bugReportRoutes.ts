@@ -11,6 +11,7 @@ import { sheetsFor, driveFor } from '../utils/googleClients';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { logAction } from '../services/actionLog';
 import { clearCacheForSpreadsheet } from '../utils/sheetCache';
+import type { BugReportRequest, ResolveBugReportRequest } from "../../shared/apiTypes";
 
 const BUG_REPORT_TYPES: BugReportType[] = ["Bug", "UI Issue", "Workflow Issue"];
 const MAX_TEXT_LENGTH = 50_000;
@@ -104,7 +105,7 @@ export default function createBugReportRouter() {
   // text field is length-capped, and `type`/`timestamp` are validated
   // rather than written as sent.
   router.post("/", fromConfig(BUG_REPORT_FIELDS), async (req: Request, res: Response) => {
-    const { title, description, type, timestamp, route, appState, browserInfo, consoleActivity, screenshotBase64, bugReportsSpreadsheetId, bugReportsFolderId, idempotencyKey } = req.body;
+    const { title, description, type, timestamp, route, appState, browserInfo, consoleActivity, screenshotBase64, bugReportsSpreadsheetId, bugReportsFolderId, idempotencyKey } = req.body as BugReportRequest;
 
     if (!title || !description || !type) {
       return res.status(400).json({ error: "Missing required fields: title, description, and type are required." });
@@ -179,7 +180,7 @@ export default function createBugReportRouter() {
   });
 
   router.post("/resolve", requireAuth, requirePermission("settings.system"), fromConfig(BUG_REPORT_ADMIN_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, reportId } = req.body;
+    const { spreadsheetId, reportId } = req.body as ResolveBugReportRequest;
     if (!spreadsheetId || !reportId) {
       return res.status(400).json({ error: "spreadsheetId and reportId are required" });
     }

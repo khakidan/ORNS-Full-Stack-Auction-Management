@@ -11,6 +11,7 @@ import {
 } from '../services/bundleService';
 import { requireAuth } from '../middleware/requireAuth';
 import { sheetsFor } from '../utils/googleClients';
+import type { BundleProcessRequest, BundleRestoreRequest, BundleSuggestRequest } from "../../shared/apiTypes";
 
 export default function createBundleRouter() {
   const router = Router();
@@ -19,7 +20,7 @@ export default function createBundleRouter() {
   router.post("/suggest-names", async (req: Request, res: Response, next: NextFunction) => {
     if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
 
-    const { items } = req.body;
+    const { items } = req.body as BundleSuggestRequest;
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "No items provided" });
     }
@@ -35,7 +36,7 @@ export default function createBundleRouter() {
   router.post("/suggest-description", async (req: Request, res: Response, next: NextFunction) => {
     if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
 
-    const { items } = req.body;
+    const { items } = req.body as BundleSuggestRequest;
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "No items provided" });
     }
@@ -63,7 +64,7 @@ export default function createBundleRouter() {
       bundleEventToken, 
       timestamp, 
       idempotencyKey 
-    } = req.body;
+    } = req.body as BundleProcessRequest;
 
     if (!spreadsheetId || !targetIds || !targetIds.length || !newName || !targetCategory) {
       return res.status(400).json({ error: "Missing required parameters" });
@@ -108,7 +109,7 @@ export default function createBundleRouter() {
   });
 
   router.post("/restore", fromConfig(ITEM_FIELDS), async (req: Request, res: Response, next: NextFunction) => {
-    const { spreadsheetId, targetBundleToken, idempotencyKey } = req.body;
+    const { spreadsheetId, targetBundleToken, idempotencyKey } = req.body as BundleRestoreRequest;
     
     if (!spreadsheetId || !targetBundleToken) {
       return res.status(400).json({ error: "Missing required parameters" });
