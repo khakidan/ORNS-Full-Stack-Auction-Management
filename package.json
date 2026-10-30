@@ -16,7 +16,8 @@
     "test:coverage": "vitest run --coverage",
     "gas:stamp": "node scripts/apps-script/cli.mjs stamp",
     "gas:deploy": "node scripts/apps-script/cli.mjs deploy",
-    "gas:check": "node scripts/apps-script/cli.mjs check"
+    "gas:check": "node scripts/apps-script/cli.mjs check",
+    "test:mutation": "stryker run"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -46,6 +47,8 @@
   },
   "devDependencies": {
     "@firebase/eslint-plugin-security-rules": "^0.0.2",
+    "@stryker-mutator/core": "^10.1.1",
+    "@stryker-mutator/vitest-runner": "^10.1.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

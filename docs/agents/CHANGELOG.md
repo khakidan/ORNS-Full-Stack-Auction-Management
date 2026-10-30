@@ -6,6 +6,11 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **Mutation testing on the money paths** (ROADMAP T12, 2026-10-29).
+  - `npm run test:mutation` runs Stryker on `financeUtils`, `winningBidChecks`, `ticketPaymentCheck`, `ticketPurchaseRow` and `bidderService`. Not in CI; see `testing-batches.md`.
+  - First score 78.6%: 598 mutants killed, 127 survived, 36 in untested code. `financeUtils` scored 100%.
+  - The survivors that matter are listed as ROADMAP T15-T18. For example: no test checks whether the ticket check asks live or sandbox PayPal, Fluent Forms' payment-status mapping is untested, and the "before" value for undoing a bidder flag is never checked.
+
 - **Tests use the real Dialog and Select, and check exact values** (ROADMAP T6, T8, 2026-10-29).
   - No test stubs the Dialog, AlertDialog or Select any more (12 files). Tests open dialogs through their triggers and pick options through the real dropdowns. jsdom's pointer shims moved into `setup.ts`. The add-attendee tests now open the dialog first: with the stub always rendering it, "payment fields aren't shown" passed without the dialog ever being open.
   - **Accessibility:** the toolbars' dropdowns had no accessible name, so screen readers announced each as just "combobox". They now have `aria-label`s: Filter by category / item type / source / check-in status / payment, and Sort items / bidders by.
