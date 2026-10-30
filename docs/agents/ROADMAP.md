@@ -8,26 +8,6 @@ This document holds the **ORNS Charity Auction Manager**'s outstanding work: the
 
 ## ⚠️ DO THIS BEFORE THE AUCTION
 
-**Test the cash/check surcharge removal against real PayPal (sandbox mode) at least once.** It's covered by unit tests that simulate PayPal's API (see `CHANGELOG.md`'s L3 entry, `PayPalService.removeSurchargeLine` in `server/services/paypalService.ts`).
-
-*First run (2026-10-30, bidder 115, invoice #0085): the fee stayed on and $104.12 was recorded. PayPal refused the update with `USER_NOT_FOUND`, because invoices named `pavetheway@orns.org` as the invoicer and the sandbox account doesn't have that email. Fixed (see `CHANGELOG.md`). Run it again with a bidder who has no invoice yet, so step 3 makes a new one; #0085 was made before the fix.*
-
-Steps:
-
-1. Confirm the app is in PayPal sandbox mode (Config's `paypalIsSandbox`, or check the PayPal Integration tab in Settings).
-2. Pick a test bidder who's won at least one item but hasn't checked out.
-3. Print or email that bidder's receipt first, so a PayPal invoice exists for them (Checkout page, or Bidders page).
-4. Log into the PayPal sandbox dashboard and find that invoice; note its total (it should include the processing fee).
-5. In the app's Checkout page, mark that bidder paid with **Cash** (or **Check**).
-6. If a yellow warning toast appears, the fee removal didn't go through cleanly - read what it says (it tells you what to do, e.g. mark the invoice paid by hand in PayPal) and note the wording so it can be looked into.
-7. If no warning appears, refresh the invoice in the PayPal sandbox dashboard and confirm:
-   - The processing-fee line item is gone.
-   - The invoice total is now just the sum of the bidder's winning bids (no fee).
-   - The invoice shows as **Paid**.
-8. Once this works, remove this item and note the result in `CHANGELOG.md`.
-
-If step 7 doesn't check out, cash/check checkouts will still work (the code falls back to recording the full fee-inclusive amount if the removal call fails) - but the bidder's invoice will keep showing the fee amount even though cash was collected without it. In that case let the dev know what happened in step 6/7 instead of using this feature for real auction checkouts yet.
-
 **Put the live PayPal app's credentials on the server before ticket sales open** - see "Webhooks with Fluent Forms" step 2 below. The server still has the sandbox app, so it can't confirm real website ticket payments (or, at the auction, real checkouts).
 
 ---
@@ -94,10 +74,11 @@ All items, A1-A17, are done - see `CHANGELOG.md` (search for the item ID).
 Goal: no website ticket purchase silently missing from the app, and payment status that's right at the door. W1-W7 are built and deployed (see `CHANGELOG.md`; set-up in `README.md` "Ticket payments (W4)", "Website ticket poll", "Website Ticket Check" and "Purchases after Go Live"), and the switch-over is done (2026-10-29): the app writes each `tickets` row (Pending until PayPal confirms the payment) and its bidder, and the form's Google Sheets feed (feed 89) is off - never turn it back on while `FLUENT_FORMS_TICKETS_MODE=write`, or a purchase is added twice. What's left:
 
 1. **Rehearse in write mode** - the 2026-10-28 rehearsal ran in shadow mode only, so the write path (appending the row, Action History, the bidder sync, setting Paid) has only run in tests. With Fluent Forms' PayPal set to Sandbox Mode paying `web-admin@orns.org` (the account that owns the server's sandbox app) and the form submitted from its Preview link:
-   - a PayPal purchase and a cash/check purchase each get their row from the app, Pending;
-   - a PayPal payment PayPal releases is set Paid by the next poll, and one PayPal holds for review (`PENDING_REVIEW`, common in the sandbox) shows on the card's Needs review list until it is - neither has been seen live yet;
-   - a refund, if the sandbox allows it (it refused while the payment was held on 2026-10-28) - the refund path has only run in tests;
-   - then delete the test rows and entries, and set Fluent Forms back to **Live Mode** paying `pavetheway@orns.org`.
+   - ~~a PayPal purchase and a cash/check purchase each get their row from the app, Pending~~ - done 2026-10-29 (entries 1486/1487);
+   - ~~one PayPal holds for review (`PENDING_REVIEW`) shows on the card's Needs review list~~ - done 2026-10-30 (entries 1488/1489); still to see: once PayPal releases it, the next poll sets it Paid and it leaves the list;
+   - in Prep, each test buyer gets **their own new** bidder number (a row number reused after deleting old test rows must no longer take over the old bidder - fixed 2026-10-30), and an old bidder whose row was reused shows "No ticket link";
+   - a refund, if the sandbox allows it (it refused while the payment was held on 2026-10-28) - the refund path has only run in tests; a refunded entry stays on Needs review until **Clear** takes it off;
+   - then delete the test rows and the test bidders (in Prep, Set Up rebuilds Bidder-Numbers from the tickets), Clear anything left on Needs review, trash the entries, and set Fluent Forms back to **Live Mode** paying `pavetheway@orns.org`.
 2. **Before ticket sales open:** put the **live** PayPal app's credentials ("Auction AI Receipts"; Transaction Search is already on) in `PAYPAL_CLIENT_ID` and the `PAYPAL_CLIENT_SECRET` secret - the sandbox app's are in `SANDBOX_PAYPAL_*` since 2026-10-29, so this can be done any time - and on the day, set PayPal to live on Settings > PayPal Integration and Fluent Forms' PayPal to Live Mode paying `pavetheway@orns.org` (the two must match). Until then every real PayPal ticket payment lands on the review list.
 3. **Rotate `FLUENT_FORMS_WEBHOOK_SECRET`** (it appeared in a screenshot on 2026-10-28): a new value in Secret Manager, the same value in the form's Webhook feed request header, then redeploy.
 4. **Publish form 7** for the season, and watch the Website Ticket Check tab through the first week of real sales.

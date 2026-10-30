@@ -105,6 +105,31 @@ describe("GET /api/tickets/fluent-forms/status", () => {
   });
 });
 
+describe("POST /api/tickets/fluent-forms/review/:entryId/clear", () => {
+  const reviewList = () => getAdminFirestore().collection("ticketPurchaseReview");
+  const clear = (id: string, email?: string) => request(app).post(`/api/tickets/fluent-forms/review/${id}/clear`).set(authCookieHeader(tokens, email));
+
+  it("takes a sorted-out purchase off the review list, and records who and what it said", async () => {
+    await reviewList().doc("1488").set({ entryId: "1488", name: "Pat Lee", problems: ["PayPal says payment X is REFUNDED, not completed."], firstSeenAt: "a", lastSeenAt: "b" });
+
+    const res = await clear("1488");
+
+    expect(res.status).toBe(200);
+    expect((await request(app).get("/api/tickets/fluent-forms/status").set(authCookieHeader(tokens))).body.review).toEqual([]);
+    expect(vi.mocked(logAction)).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      area: "Tickets", action: "Clear website purchase review", target: "Pat Lee", summary: expect.stringContaining("REFUNDED"),
+    }));
+    expect((await clear("1488")).status).toBe(404);
+  });
+
+  it("is for staff who can run the auction's stages", async () => {
+    await reviewList().doc("1488").set({ entryId: "1488", name: "Pat Lee", problems: [] });
+    await getAdminFirestore().collection("userRoles").doc("helper@orns.org").set({ role: "user" });
+    expect((await clear("1488", "helper@orns.org")).status).toBe(403);
+    expect((await reviewList().doc("1488").get()).exists).toBe(true);
+  });
+});
+
 describe("POST /api/tickets/fluent-forms/after-go-live/:entryId/handled (W7)", () => {
   const late = () => getAdminFirestore().collection("ticketPurchasesAfterGoLive");
   const handled = (id: string, email?: string) => request(app).post(`/api/tickets/fluent-forms/after-go-live/${id}/handled`).set(authCookieHeader(tokens, email));

@@ -203,4 +203,11 @@ describe("getBidderAttendeeInfo - multiple guests and attendees", () => {
 
     expect(getBidderAttendeeInfo(bidder, [ticket])).toEqual({ attendee: ticket, isGuest: true });
   });
+
+  it("never gives a bidder whose row now holds someone else (\"tickets!2 - now someone else\") that newcomer's ticket", () => {
+    const bidder = makeBidder({ firstName: "Old", lastName: "Buyer", email: "old@x.org", ticketRef: "tickets!2 - now someone else" });
+    const newcomer = makeAttendee({ rowIndex: 2, firstName: "New", lastName: "Buyer", paymentStatus: "Paid" });
+
+    expect(getBidderAttendeeInfo(bidder, [newcomer])).toEqual({ attendee: undefined, isGuest: false });
+  });
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { checkWebsiteTicketsNow, getTicketPurchaseStatus, markLateWebsitePurchaseHandled } from "@/services/google-api";
+import { checkWebsiteTicketsNow, clearWebsitePurchaseReview, getTicketPurchaseStatus, markLateWebsitePurchaseHandled } from "@/services/google-api";
 import { TicketPurchaseStatus } from "@/types";
 import { toast } from "sonner";
 
@@ -68,5 +68,16 @@ export function useTicketPurchaseStatus(onAdded?: () => void, enabled = true) {
     }
   };
 
-  return { status, loading, checking, checkNow, markHandled };
+  /** Staff sorted out an entry on the review list themselves. */
+  const clearReview = async (entryId: string) => {
+    try {
+      await clearWebsitePurchaseReview(entryId);
+      toast.success("Cleared from the review list.");
+      await refresh();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to clear the purchase from the review list");
+    }
+  };
+
+  return { status, loading, checking, checkNow, markHandled, clearReview };
 }

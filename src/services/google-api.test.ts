@@ -154,6 +154,7 @@ describe("the requests each function sends", () => {
     ["getTicketPurchaseStatus", () => api.getTicketPurchaseStatus(), "GET", "/api/tickets/fluent-forms/status", undefined],
     ["checkWebsiteTicketsNow", () => api.checkWebsiteTicketsNow(), "POST", "/api/tickets/fluent-forms/check-now", undefined],
     ["markLateWebsitePurchaseHandled", () => api.markLateWebsitePurchaseHandled("entry 4/5"), "POST", "/api/tickets/fluent-forms/after-go-live/entry%204%2F5/handled", undefined],
+    ["clearWebsitePurchaseReview", () => api.clearWebsitePurchaseReview("entry 4/5"), "POST", "/api/tickets/fluent-forms/review/entry%204%2F5/clear", undefined],
     ["getAppsScriptVersions", () => api.getAppsScriptVersions(), "GET", "/api/apps-script/versions", undefined],
     ["getArchivedAuctions", () => api.getArchivedAuctions(), "GET", "/api/archive/auctions", undefined],
     ["updateAttendeeCells", () => api.updateAttendeeCells(SHEET, "tickets!C4", [["new@x.org"]]), "POST", "/api/attendees/update", { spreadsheetId: SHEET, range: "tickets!C4", values: [["new@x.org"]] }],

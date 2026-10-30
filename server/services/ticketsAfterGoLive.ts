@@ -4,6 +4,7 @@ import { getAdminFirestore } from "./firebaseAdmin";
 import { TicketPurchase } from "./ticketPurchaseRow";
 import { BIDDER_COL } from "../utils/sheetColumns";
 import { getColumnLetter } from "../utils/columnUtils";
+import { bidderEmail, bidderName } from "./ticketPeople";
 import { readAuctionState } from "../utils/auctionState";
 
 const AFTER_GO_LIVE = () => getAdminFirestore().collection("ticketPurchasesAfterGoLive");
@@ -31,7 +32,9 @@ export interface TicketPurchaseAfterGoLive {
  * Called for each purchase the webhook or the poll handles (in both
  * modes - in shadow mode the Sheets feed wrote the row). A purchase whose
  * buyer already has a bidder (bought before Go Live; its row is tied to a
- * Bidder-Numbers line) isn't flagged. Already flagged - or already
+ * Bidder-Numbers line with the buyer's email or name) isn't flagged. A
+ * bidder tied to the row who shares neither was someone whose row was
+ * deleted, and the purchase reused its number - that buyer has no bidder. Already flagged - or already
  * handled - stays as it is. Returns whether it's on the list.
  */
 export async function noteIfAfterGoLive(
@@ -47,9 +50,14 @@ export async function noteIfAfterGoLive(
 
   if (rowIndex !== null) {
     const refColumn = getColumnLetter(BIDDER_COL.ticketRef);
-    const res = await sheets.spreadsheets.values.get({ spreadsheetId: config.bidManagementSpreadsheetId, range: `'${config.bidderNumbersSheet}'!${refColumn}:${refColumn}` });
-    const refs = new Set((res.data.values || []).map((r) => String(r[0] ?? "").trim()));
-    if (refs.has(`tickets!${rowIndex}`)) return false;
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: config.bidManagementSpreadsheetId, range: `'${config.bidderNumbersSheet}'!A:${refColumn}` });
+    const fullName = (first: unknown, last: unknown) => `${bidderName(first)} ${bidderName(last)}`.trim().toLowerCase();
+    const buyerEmail = bidderEmail(purchase.email);
+    const buyerName = fullName(purchase.firstName, purchase.lastName);
+    const hasBidder = (res.data.values || []).some((r) =>
+      String(r[BIDDER_COL.ticketRef] ?? "").trim() === `tickets!${rowIndex}` &&
+      ((!!buyerEmail && bidderEmail(r[BIDDER_COL.email]) === buyerEmail) || (!!buyerName && fullName(r[BIDDER_COL.firstName], r[BIDDER_COL.lastName]) === buyerName)));
+    if (hasBidder) return false;
   }
 
   const doc = AFTER_GO_LIVE().doc(purchase.entryId);

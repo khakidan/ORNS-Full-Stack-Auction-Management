@@ -170,3 +170,17 @@ export async function listReview(): Promise<TicketReviewItem[]> {
 export async function clearReview(entryId: string): Promise<void> {
   await REVIEW().doc(entryId).delete().catch(() => {});
 }
+
+/**
+ * Staff sorted an entry out themselves (a refunded or trashed test entry,
+ * a payment checked in PayPal): it leaves the list, and comes back only if
+ * the next check finds the same problem. Null if it isn't on the list.
+ */
+export async function dismissReview(entryId: string): Promise<TicketReviewItem | null> {
+  if (!entryId || entryId.includes("/")) return null;
+  const doc = REVIEW().doc(entryId);
+  const data = (await doc.get()).data();
+  if (!data) return null;
+  await doc.delete();
+  return data as TicketReviewItem;
+}

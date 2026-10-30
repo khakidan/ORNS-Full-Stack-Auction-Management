@@ -4,7 +4,7 @@ import { logAction } from "../services/actionLog";
 import { fluentFormsApiFromEnv } from "../services/fluentFormsApi";
 import { getAdminFirestore } from "../services/firebaseAdmin";
 import { pollTicketPurchasesNow, readTicketPollStatus } from "../services/ticketPoll";
-import { listReview, ticketWriteMode } from "../services/ticketPurchaseService";
+import { dismissReview, listReview, ticketWriteMode } from "../services/ticketPurchaseService";
 import { listAfterGoLive, markAfterGoLiveHandled } from "../services/ticketsAfterGoLive";
 import { AlreadyRunningError } from "../utils/asyncLock";
 
@@ -63,6 +63,24 @@ export default function createTicketPollRouter() {
         target: handled.name,
         summary: `Marked ${handled.name}'s website purchase (entry ${handled.entryId}, bought after Go Live) as registered as a walk-in`,
         notUndoableReason: "it only takes the purchase off the Website Ticket Check list",
+      });
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /** Staff sorted out an entry on the review list themselves - it leaves the card (back if the next check finds the same problem). */
+  router.post("/tickets/fluent-forms/review/:entryId/clear", requirePermission("auction.stage"), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const cleared = await dismissReview(String(req.params.entryId));
+      if (!cleared) return res.status(404).json({ error: "That purchase isn't on the review list." });
+      await logAction(req, {
+        area: "Tickets",
+        action: "Clear website purchase review",
+        target: cleared.name,
+        summary: `Took ${cleared.name || "a website purchase"}'s entry ${cleared.entryId} off the Website Ticket Check review list (${cleared.problems.join("; ").slice(0, 300)})`,
+        notUndoableReason: "it only takes the purchase off the Website Ticket Check list; the next check puts it back if the problem is still there",
       });
       res.json({ success: true });
     } catch (error) {

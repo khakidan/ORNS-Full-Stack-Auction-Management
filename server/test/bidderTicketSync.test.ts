@@ -19,9 +19,28 @@ describe("planBidderSync", () => {
       .toEqual({ "101": "staff tickets!2" });
   });
 
-  it("keeps a recorded tie when both name and email were changed in the sheet, if nobody else is that person", () => {
-    expect(plan([bidder("101", "Old", "Name", "old@x.org", "tickets!2")], [person("tickets!2", "New", "Person", "new@x.org")]))
-      .toEqual({ "101": "tickets!2" });
+  it("drops a recorded tie when the row shares neither name nor email - someone new has the row - and lists them as new", () => {
+    // The refunded buyer's row was deleted; the next purchase landed on the same row number.
+    const result = planBidderSync([bidder("101", "Old", "Name", "old@x.org", "tickets!2")], [person("tickets!2", "New", "Person", "new@x.org")]);
+    expect(result.ties).toEqual([]);
+    expect(result.replaced.map((b) => b.id)).toEqual(["101"]);
+    expect(result.newPeople.map((p) => p.ref)).toEqual(["tickets!2"]);
+  });
+
+  it("never ties a bidder who lost their row by bidder number, even when Set Up would give the newcomer that number", () => {
+    const people = [person("tickets!2", "Dan", "Sage", "dan@x.org"), person("tickets!3", "New", "Buyer", "new@x.org")];
+    const numbers = new Map([["tickets!2", 101], ["tickets!3", 102]]);
+    const bidders = [bidder("101", "Dan", "Sage", "dan@x.org", "tickets!2"), bidder("102", "Refunded", "Buyer", "gone@x.org", "tickets!3")];
+    expect(plan(bidders, people, numbers)).toEqual({ "101": "tickets!2" });
+    // Nor once their column O says so.
+    expect(plan([bidders[0], { ...bidders[1], ref: "tickets!3 - now someone else" }], people, numbers)).toEqual({ "101": "tickets!2" });
+  });
+
+  it("a bidder who lost their row is still found again by email or name elsewhere", () => {
+    const people = [person("tickets!2", "New", "Buyer", "new@x.org"), person("tickets!3", "Old", "Name", "old@x.org")];
+    const result = planBidderSync([bidder("101", "Old", "Name", "old@x.org", "tickets!2")], people);
+    expect(result.ties.map((t) => [t.bidder.id, t.person.ref])).toEqual([["101", "tickets!3"]]);
+    expect(result.replaced).toEqual([]);
   });
 
   it("drops a tie whose row now holds exactly another bidder (rows sorted by hand), and matches both again", () => {
@@ -110,9 +129,9 @@ describe("syncBidderNamesWithTickets", () => {
     expect(sheets.spreadsheets.values.batchUpdate).toHaveBeenCalledWith(expect.objectContaining({ requestBody: expect.objectContaining({ valueInputOption: "RAW" }) }));
   });
 
-  it("copies a guest's edited name and email onto the guest's own bidder (guest slots on the tickets tab)", async () => {
+  it("copies a guest's edited name onto the guest's own bidder (guest slots on the tickets tab)", async () => {
     // Guest 1 on the tickets tab: H-J name/email, K "own bidder number".
-    const row = ["Dan", "Sage", "dan@x.org", "", "2", "Yes", "", "Jimmie", "Smyth", "jimmie@new.org", "yes"];
+    const row = ["Dan", "Sage", "dan@x.org", "", "2", "Yes", "", "Jimmie", "Smyth", "smith@smith.com", "yes"];
     const sheets = fakeSheets({
       "'tickets'!A:S": [["H"], row],
       "'Bidder-Numbers'!A:O": [HEADER, bnRow(101, "Dan", "Sage", "dan@x.org", "tickets!2"), bnRow(102, "Jimmy", "Smith", "smith@smith.com", "tickets!2#1")],
@@ -122,9 +141,9 @@ describe("syncBidderNamesWithTickets", () => {
 
     const renames = await syncBidderNamesWithTickets(sheets, params);
 
-    expect(renames.renamed.map((r) => [r.id, r.after])).toEqual([["102", { firstName: "Jimmie", lastName: "Smyth", email: "jimmie@new.org" }]]);
+    expect(renames.renamed.map((r) => [r.id, r.after])).toEqual([["102", { firstName: "Jimmie", lastName: "Smyth", email: "smith@smith.com" }]]);
     expect(batch).toEqual([
-      { range: "'Bidder-Numbers'!B3:D3", values: [["Jimmie", "Smyth", "jimmie@new.org"]] },
+      { range: "'Bidder-Numbers'!B3:D3", values: [["Jimmie", "Smyth", "smith@smith.com"]] },
       { range: "'Bid-Management'!C2:D2", values: [["Jimmie", "Smyth"]] },
     ]);
   });
@@ -156,6 +175,37 @@ describe("syncBidderNamesWithTickets", () => {
       const result = await syncBidderNamesWithTickets(withState(state), params);
       expect(result.added).toEqual([]);
       expect(batch).toEqual([]);
+    });
+
+    it("a bidder whose row now holds the new buyer keeps their name, is marked 'tickets!3 - now someone else', and the buyer gets their own number", async () => {
+      const sheets = withState("PREP", {
+        "'Bidder-Numbers'!A:O": [...bnRows, bnRow(102, "Refunded", "Person", "gone@x.org", "tickets!3")],
+        "'Bid-Management'!1:5": [[101, "", 102, ""], ["Jane", "Jones", "Refunded", "Person"], ["Item #:", "Price:", "Item #:", "Price:"]],
+      });
+
+      const result = await syncBidderNamesWithTickets(sheets, params);
+
+      expect(result.renamed).toEqual([]);
+      expect(result.unlinked).toEqual(["102"]);
+      expect(result.added).toEqual([{ id: "103", firstName: "New", lastName: "Buyer", email: "new@x.org", ref: "tickets!3" }]);
+      expect(batch).toEqual([
+        { range: "'Bidder-Numbers'!O3", values: [["tickets!3 - now someone else"]] },
+        { range: "'Bidder-Numbers'!A4:O4", values: [[103, "New", "Buyer", "new@x.org", false, false, false, false, "", "", "", "", "", "", "tickets!3"]] },
+      ]);
+    });
+
+    it("once marked 'tickets!3 - now someone else', that bidder no longer holds up new bidders, and isn't written again", async () => {
+      const sheets = withState("PREP", { "'Bidder-Numbers'!A:O": [...bnRows, bnRow(102, "Refunded", "Person", "gone@x.org", "tickets!3 - now someone else")] });
+      const result = await syncBidderNamesWithTickets(sheets, params);
+      expect(result.added.map((a) => a.id)).toEqual(["103"]);
+      expect(batch.map((w) => w.range)).toEqual(["'Bidder-Numbers'!A4:O4"]);
+    });
+
+    it("once Live, the bidder who lost their row is only marked - never renamed to the new buyer", async () => {
+      const sheets = withState("LIVE", { "'Bidder-Numbers'!A:O": [...bnRows, bnRow(102, "Refunded", "Person", "gone@x.org", "tickets!3")] });
+      const result = await syncBidderNamesWithTickets(sheets, params);
+      expect(result).toEqual({ renamed: [], added: [], unlinked: ["102"] });
+      expect(batch).toEqual([{ range: "'Bidder-Numbers'!O3", values: [["tickets!3 - now someone else"]] }]);
     });
 
     it("never while a bidder is still untied - they might be the 'new' person, renamed", async () => {
