@@ -218,7 +218,8 @@ function paymentStatusOps(
  * and the payment is recorded at what's left - leaving no balance
  * (ROADMAP.md L3). If the surcharge can't be removed, the payment is
  * recorded at the invoice's full total (Column K) instead, which still
- * closes it. Column K is left as is: it's what a later receipt run compares
+ * closes it - and staff are told, since PayPal then shows more paid than
+ * was taken. Column K is left as is: it's what a later receipt run compares
  * against to reuse this invoice, so changing it would make that run cancel
  * this invoice and send a new one.
  *
@@ -234,11 +235,13 @@ async function settleOfflineInvoice(
 ): Promise<string | undefined> {
   let amount = parseFloat(invoicedAmountCell) || 0;
   let paidOnlineStatus: string | null = null;
+  let surchargeKept = false;
   try {
     const adjusted = await paypal.removeSurchargeLine(invoiceId);
     if (isPaidInvoiceStatus(adjusted.status)) paidOnlineStatus = adjusted.status;
     else amount = adjusted.total;
   } catch (e: any) {
+    surchargeKept = true;
     console.warn(`[checkout] Couldn't remove the card surcharge from invoice ${invoiceId}; recording the full invoice amount instead: ${e?.message || e}`);
   }
 
@@ -254,7 +257,11 @@ async function settleOfflineInvoice(
   } catch (e: any) {
     reason = e?.message || String(e);
   }
-  if (recorded) return undefined;
+  if (recorded) {
+    if (!surchargeKept) return undefined;
+    return `Bidder ${bidderId} is marked paid (${label}), but PayPal wouldn't take the card fee off invoice ${invoiceId}, ` +
+      `so it shows $${amount.toFixed(2)} paid, fee included. In the PayPal dashboard, undo that payment, delete the fee line, then record the ${label.toLowerCase()} again.`;
+  }
   console.warn(`[checkout] Couldn't record bidder ${bidderId}'s ${label.toLowerCase()} payment on PayPal invoice ${invoiceId}: ${reason}`);
   return `Bidder ${bidderId} is marked paid (${label}), but PayPal didn't record the payment on invoice ${invoiceId}, so it can still be paid online. ` +
     `Mark it paid in the PayPal dashboard.`;

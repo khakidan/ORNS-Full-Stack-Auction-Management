@@ -170,7 +170,7 @@ describe("checkoutMarkPaid - offline payment methods (cash/check)", () => {
     expect(result.warning).toMatch(/marked paid \(Check\).*Mark it paid in the PayPal dashboard/);
   });
 
-  it("falls back to recording the full invoice amount when the surcharge can't be removed", async () => {
+  it("falls back to recording the full invoice amount when the surcharge can't be removed, and tells staff how to fix PayPal's record", async () => {
     const row = makeBidderRow({ 9: "https://www.paypal.com/invoice/p/#INV2-X", 10: 104.12 });
     mockBidderNumbers(row);
     mockExtractInvoiceIdFromUrl.mockReturnValue("INV2-X");
@@ -182,7 +182,10 @@ describe("checkoutMarkPaid - offline payment methods (cash/check)", () => {
 
     expect(result.success).toBe(true);
     expect(mockRecordOfflinePayment).toHaveBeenCalledWith("INV2-X", "Cash", 104.12);
-    expect(result.warning).toBeUndefined();
+    expect(result.warning).toBe(
+      "Bidder 101 is marked paid (Cash), but PayPal wouldn't take the card fee off invoice INV2-X, so it shows $104.12 paid, fee included. " +
+      "In the PayPal dashboard, undo that payment, delete the fee line, then record the cash again."
+    );
   });
 
   it("doesn't record cash on an invoice PayPal shows as already paid, and warns about a possible double payment", async () => {

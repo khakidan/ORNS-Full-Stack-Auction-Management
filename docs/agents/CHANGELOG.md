@@ -6,6 +6,15 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **Cash/check checkout: the card fee comes off in sandbox, and staff are told when it can't** (found by the first real sandbox test, 2026-10-30).
+  - **What happened:** bidder 115 paid $100 cash, but PayPal invoice #0085 kept its $4.12 fee and recorded $104.12 paid, with no warning. The server log showed PayPal refusing the update: `422 USER_NOT_FOUND - User is not associated with paypal based on invoicer email`. Every invoice named `pavetheway@orns.org` as the invoicer, which the sandbox app's account doesn't have. PayPal checks that email on an update, not on create.
+  - **Fixed in three places:**
+    - Sandbox invoices no longer name an invoicer, so PayPal uses the account's own. Live ones still name `pavetheway@orns.org`.
+    - `removeSurchargeLine` retries a `USER_NOT_FOUND` refusal once without the invoicer email, keeping the rest of the invoicer. This covers invoices made before the fix, and a live app on a different account.
+  - **Live checked (2026-10-30):** the live app ("Auction AI Receipts") is on the account whose primary email is `pavetheway@orns.org`, so live updates should succeed first time.
+    - When the fee can't be removed, checkout still records the full amount (as before), but now also warns staff. The warning says PayPal shows the fee included, and to undo that payment in PayPal, delete the fee line and record it again. Before, this only went to the server log, though the ROADMAP's test steps expected a warning.
+  - Backend 1170 -> 1174, total 2063 -> 2067.
+
 - **Request bodies are shared between the browser and the server** (ROADMAP T5's follow-up, 2026-10-29).
   - **How it works:**
     - New `shared/apiTypes.ts` has a type for each write route's body.

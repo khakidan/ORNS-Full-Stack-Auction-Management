@@ -8,7 +8,9 @@ This document holds the **ORNS Charity Auction Manager**'s outstanding work: the
 
 ## ⚠️ DO THIS BEFORE THE AUCTION
 
-**Test the cash/check surcharge removal against real PayPal (sandbox mode) at least once.** It's covered by unit tests that simulate PayPal's API, but has never been exercised against PayPal itself (see `CHANGELOG.md`'s L3 entry, `PayPalService.removeSurchargeLine` in `server/services/paypalService.ts`).
+**Test the cash/check surcharge removal against real PayPal (sandbox mode) at least once.** It's covered by unit tests that simulate PayPal's API (see `CHANGELOG.md`'s L3 entry, `PayPalService.removeSurchargeLine` in `server/services/paypalService.ts`).
+
+*First run (2026-10-30, bidder 115, invoice #0085): the fee stayed on and $104.12 was recorded. PayPal refused the update with `USER_NOT_FOUND`, because invoices named `pavetheway@orns.org` as the invoicer and the sandbox account doesn't have that email. Fixed (see `CHANGELOG.md`). Run it again with a bidder who has no invoice yet, so step 3 makes a new one; #0085 was made before the fix.*
 
 Steps:
 
