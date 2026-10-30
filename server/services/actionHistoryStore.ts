@@ -27,7 +27,8 @@ export async function getActionHistorySpreadsheetId(now = Date.now()): Promise<s
 }
 
 export async function setActionHistorySpreadsheetId(spreadsheetId: string, createdBy: string): Promise<void> {
-  await DOC().set({ spreadsheetId, createdBy, createdAt: new Date().toISOString() });
+  // Merged, so a record of who turned edit tracking on (same doc) survives.
+  await DOC().set({ spreadsheetId, createdBy, createdAt: new Date().toISOString() }, { merge: true });
   cached = { id: spreadsheetId, readAt: Date.now() };
 }
 

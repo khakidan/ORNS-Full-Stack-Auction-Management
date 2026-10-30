@@ -6,6 +6,8 @@ import { server } from "./setup";
 import { authCookieHeader } from "./helpers/session";
 import { parseAuctionState } from "../utils/auctionState";
 import { goLiveAuction, AuctionStateError } from "../services/auctionService";
+import { logAction } from "../services/actionLog";
+import { changesSince } from "../utils/changeFeed";
 
 describe("parseAuctionState", () => {
   it("reads the three words, ignoring case and spacing", () => {
@@ -58,6 +60,28 @@ describe("POST /api/auction/go-live", () => {
   it("answers 400 without a spreadsheet ID", async () => {
     const res = await request(app).post("/api/auction/go-live").set(auth).send({});
     expect(res.status).toBe(400);
+  });
+
+  it("takes a Prep auction Live, records it in Action History, and tells open browsers", async () => {
+    const writes: { range: string; values: unknown }[] = [];
+    server.use(
+      http.get("https://sheets.googleapis.com/v4/spreadsheets/:id/values/:range", () => HttpResponse.json({ values: [["Prep"]] })),
+      http.put("https://sheets.googleapis.com/v4/spreadsheets/:id/values/:range", async ({ params, request }) => {
+        writes.push({ range: decodeURIComponent(String(params.range)), values: ((await request.json()) as any).values });
+        return HttpResponse.json({});
+      })
+    );
+    const version = changesSince(0).version;
+
+    const res = await request(app).post("/api/auction/go-live").set(auth).send({ spreadsheetId: "ss-prep" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ state: "live" });
+    expect(writes).toEqual([{ range: "'Auction-Status'!A2", values: [["Live"]] }]);
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      area: "Bid Management", action: "Go Live", summary: "Took the auction Live", notUndoableReason: expect.stringMatching(/\S/),
+    }));
+    expect(changesSince(version).changed).toContain("ss-prep");
   });
 
   it("answers 409 when the auction is already Closed", async () => {
