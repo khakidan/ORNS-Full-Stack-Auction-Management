@@ -196,7 +196,10 @@ export class PayPalService {
         reference: `Bidder #${bidderInfo.id}`,
         note: "Thank you for supporting our school charity auction! A standard merchant processing fee has been added to ensure 100% of your winning bids go directly to our programs.",
       },
-      invoicer: { email_address: this.merchantEmail },
+      // Live only: the sandbox app's account doesn't have pavetheway@orns.org, and
+      // PayPal refuses an invoice update naming an email the account lacks
+      // (USER_NOT_FOUND), so a sandbox invoice is sent as the account's own.
+      ...(this.isSandbox ? {} : { invoicer: { email_address: this.merchantEmail } }),
       primary_recipients: [
         {
           billing_info: {
@@ -297,6 +300,12 @@ export class PayPalService {
    *
    * Does nothing to an invoice that's already paid (the caller decides
    * what to do) or that has no surcharge line.
+   *
+   * PayPal checks the invoicer's email on an update (not on create): one
+   * that isn't on the app's own PayPal account is refused with
+   * USER_NOT_FOUND. Invoices are created with pavetheway@orns.org, which
+   * the sandbox app's account doesn't have, so that refusal is retried once
+   * without the email and PayPal uses the account's own.
    */
   async removeSurchargeLine(invoiceId: string): Promise<RemoveSurchargeResult> {
     if (!invoiceId) throw new Error("Invoice ID is required to remove the surcharge.");
@@ -324,13 +333,20 @@ export class PayPalService {
     }
 
     const { links, amount, due_amount, payments, refunds, ...rest } = invoice;
-    const putResponse = await this.fetcher(`${url}?send_to_recipient=false&send_to_invoicer=false`, {
+    const put = (body: unknown) => this.fetcher(`${url}?send_to_recipient=false&send_to_invoicer=false`, {
       method: "PUT",
       headers,
-      body: JSON.stringify({ ...rest, items: kept }),
+      body: JSON.stringify(body),
     });
+    let putResponse = await put({ ...rest, items: kept });
+    let putText = putResponse.status === 200 ? "" : await putResponse.text();
+    if (putResponse.status === 422 && putText.includes("USER_NOT_FOUND") && rest.invoicer?.email_address) {
+      const { email_address, ...invoicer } = rest.invoicer;
+      putResponse = await put({ ...rest, invoicer, items: kept });
+      putText = putResponse.status === 200 ? "" : await putResponse.text();
+    }
     if (putResponse.status !== 200) {
-      throw new Error(`PayPal invoice update failed (${putResponse.status}): ${await putResponse.text()}`);
+      throw new Error(`PayPal invoice update failed (${putResponse.status}): ${putText}`);
     }
     return { status, total: lineTotal(kept), removed: true };
   }

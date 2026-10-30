@@ -214,6 +214,23 @@ describe("PayPalService.createAndSendInvoice", () => {
     expect(draftPayload.primary_recipients[0].billing_info.email_address).toBe("bidder@example.com");
   });
 
+  it.each([
+    [false, { email_address: "pavetheway@orns.org" }],
+    [true, undefined],
+  ])("names pavetheway@orns.org as the invoicer only in live mode (sandbox: %s) - the sandbox account doesn't have it, and PayPal refuses updates that name it", async (isSandbox, invoicer) => {
+    const bodies: string[] = [];
+    const responses = [
+      mockFetchResponse(200, { access_token: "tok" }),
+      mockFetchResponse(201, { id: "INV2-TEST-0000-0000-0001" }),
+      mockFetchResponse(200, { links: [{ rel: "payer-action", href: "https://www.paypal.com/invoice/p/#INV2-TEST" }] }),
+    ];
+    const fetcher = vi.fn((_url: string, options: any) => { bodies.push(options.body); return Promise.resolve(responses[bodies.length - 1]); });
+
+    await newService({ fetcher, isSandbox }).createAndSendInvoice({ email: "bidder@example.com", firstName: "Jane", lastName: "Doe", id: "101" }, [{ name: "Gift Card", amount: 100 }]);
+
+    expect(JSON.parse(bodies[1]).invoicer).toEqual(invoicer);
+  });
+
   it("falls back to a constructed checkout URL when the send response has no payer-action link", async () => {
     const fetcher = vi
       .fn()
@@ -389,6 +406,44 @@ describe("PayPalService.removeSurchargeLine (ROADMAP.md L3 - cash/check payers d
 
     expect(result).toEqual({ status: "UNPAID", total: 100, removed: false });
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries without the invoicer's email when PayPal says it isn't on this app's account, keeping the rest of the invoicer", async () => {
+    // Seen in the sandbox (2026-10-30): invoices are created as pavetheway@orns.org,
+    // which PayPal only checks on an update.
+    const invoicer = { email_address: "pavetheway@orns.org", business_name: "ORNS" };
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(200, { ...INVOICE, invoicer }))
+      .mockResolvedValueOnce(mockFetchResponse(422, { name: "UNPROCESSABLE_ENTITY", details: [{ issue: "USER_NOT_FOUND" }] }))
+      .mockResolvedValueOnce(mockFetchResponse(200, {}));
+    const paypal = newService({ fetcher });
+
+    const result = await paypal.removeSurchargeLine("INV2-AAAA");
+
+    expect(result).toEqual({ status: "UNPAID", total: 100, removed: true });
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(JSON.parse(fetcher.mock.calls[2][1].body).invoicer).toEqual(invoicer);
+    const retry = JSON.parse(fetcher.mock.calls[3][1].body);
+    expect(retry.invoicer).toEqual({ business_name: "ORNS" });
+    expect(retry.items.map((i: any) => i.name)).toEqual(["Weekend Cabin", "Gift Basket"]);
+  });
+
+  it("doesn't retry other refusals, and reports the retry's own refusal", async () => {
+    const invoicer = { email_address: "pavetheway@orns.org" };
+    const other = vi.fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(200, { ...INVOICE, invoicer }))
+      .mockResolvedValueOnce(mockFetchResponse(422, { details: [{ issue: "INVALID_STRING_LENGTH" }] }));
+    await expect(newService({ fetcher: other }).removeSurchargeLine("INV2-AAAA")).rejects.toThrow(/update failed \(422\).*INVALID_STRING_LENGTH/);
+    expect(other).toHaveBeenCalledTimes(3);
+
+    const retried = vi.fn()
+      .mockResolvedValueOnce(mockFetchResponse(200, { access_token: "tok" }))
+      .mockResolvedValueOnce(mockFetchResponse(200, { ...INVOICE, invoicer }))
+      .mockResolvedValueOnce(mockFetchResponse(422, { details: [{ issue: "USER_NOT_FOUND" }] }))
+      .mockResolvedValueOnce(mockFetchResponse(400, { details: [{ issue: "SOMETHING_ELSE" }] }));
+    await expect(newService({ fetcher: retried }).removeSurchargeLine("INV2-AAAA")).rejects.toThrow(/update failed \(400\).*SOMETHING_ELSE/);
   });
 
   it("throws when PayPal rejects the update", async () => {
