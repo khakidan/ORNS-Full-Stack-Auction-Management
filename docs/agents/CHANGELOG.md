@@ -6,6 +6,8 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **ROADMAP: PayPal Paid and Refunded move to a live test on the day sales open** (2026-10-30). The sandbox held test payments 1488/1489 for review and never released them, and wouldn't refund them, so those two steps leave the sandbox rehearsal. They become one real ticket bought, checked, refunded and cleared once live PayPal is set up.
+
 - **A reused ticket row no longer takes over the old bidder** (found in the write-mode rehearsal, 2026-10-30).
   - **What happened:** old test rows on `tickets` were deleted, but their bidders (116-124) stayed in Bidder-Numbers, each still tied to its row by column O. The next two website purchases landed on rows 3 and 4, so the sync renamed bidders 119 and 121 to the new buyers instead of giving them numbers. The same could happen for real: a refunded buyer's row deleted, and the next purchase lands on it. Once Live, the Go-Live check also counted that stale tie as "already has a bidder" and didn't flag the purchase.
   - **Now:**
