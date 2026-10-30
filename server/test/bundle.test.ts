@@ -12,6 +12,8 @@ import { server } from "./setup";
 import { http, HttpResponse } from "msw";
 import { resetHandlersState, bundleWritePayload, updateCallCount } from "./handlers";
 import { authCookieHeader } from "./helpers/session";
+import { logAction } from "../services/actionLog";
+import { changesSince } from "../utils/changeFeed";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -91,6 +93,7 @@ describe('Bundle Creation workflow', () => {
   });
 
   it("Happy path — two items bundled successfully", async () => {
+    const version = changesSince(0).version;
     const response = await request(app)
       .post("/api/bundle/process")
       .set(authHeader)
@@ -124,6 +127,18 @@ describe('Bundle Creation workflow', () => {
     expect(token).toBeTruthy();
     expect(bundleWritePayload[2][10]).toBe(token);
     expect(bundleWritePayload[3][10]).toBe(token);
+
+    const items = response.body.ui_history_log.original_item_names;
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Auction Items",
+      action: "Bundle items",
+      target: "Test Bundle",
+      summary: `Bundled 2 item(s) into "Test Bundle": ${items.join(", ")}`,
+      after: { bundleId: token, items },
+      location: "Auction Items 'Auction-Items'",
+      undo: { kind: "bundle", spreadsheetId: "ss-id", bundleToken: token, bundleName: "Test Bundle" },
+    });
+    expect(changesSince(version).changed).toContain("ss-id");
   });
 
   it("falls back to the Value-Calculations tier table only when minRaise isn't provided", async () => {
@@ -256,6 +271,7 @@ describe('Bundle Restore workflow', () => {
   });
 
   it("Happy path — bundle restored successfully", async () => {
+    const version = changesSince(0).version;
     const response = await request(app)
       .post("/api/bundle/restore")
       .set(authHeader)
@@ -281,6 +297,15 @@ describe('Bundle Restore workflow', () => {
     expect(bundleWritePayload[3][0]).toBe("801");
     expect(bundleWritePayload[3][9]).toBe("Active");
     expect(bundleWritePayload[3][10]).toBe("");
+
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Auction Items",
+      action: "Restore bundle",
+      target: "BND-TEST-001",
+      summary: "Split bundle BND-TEST-001 back into its original items",
+      notUndoableReason: "re-bundle the items instead",
+    });
+    expect(changesSince(version).changed).toContain("ss-id");
   });
 
   it("Idempotency — duplicate restore", async () => {

@@ -12,6 +12,8 @@ import { resetHandlersState, clearedRanges, sheetBatchUpdateRequests, lastBulkWr
 import { AUCTION_TICKETS_ITEM_ID } from "../utils/categoryHelpers";
 import { authCookieHeader } from "./helpers/session";
 import { createGate } from "./helpers/gate";
+import { logAction } from "../services/actionLog";
+import { changesSince } from "../utils/changeFeed";
 import { createFakeFirestore } from "./helpers/fakeFirestore";
 import { _resetConfigCacheForTesting } from "../services/configService";
 
@@ -107,6 +109,7 @@ describe("setupRoutes - /api/auction/setup-new", () => {
   });
 
   it("handles the happy path: full auction setup setup", async () => {
+    const version = changesSince(0).version;
     // setup-new returns a stream of NDJSON
     const response = await request(app)
       .post("/api/auction/setup-new")
@@ -126,6 +129,17 @@ describe("setupRoutes - /api/auction/setup-new", () => {
 
     expect(results).toContainEqual(expect.objectContaining({ log: expect.stringContaining("Starting setup") }));
     expect(results).toContainEqual(expect.objectContaining({ success: true }));
+
+    const { auctionYear } = results[results.length - 1];
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Settings",
+      action: "Set up new auction year",
+      target: `${auctionYear} Auction`,
+      summary: `Started the ${auctionYear} auction year: backed up last year's spreadsheets and cleared the masters; receipts and print documents now go to the new year's folders`,
+      notUndoableReason: "the backups are in last year's folder",
+    });
+    // The masters were cleared: open browsers must reload them (AGENTS.md rule 7).
+    expect(changesSince(version).changed).toEqual(expect.arrayContaining(["s1", "s2", "s3", "config"]));
   });
 
   it("returns 400 for missing required spreadsheet IDs", async () => {
@@ -312,6 +326,29 @@ describe("setupRoutes - POST /api/auction/archive", () => {
     expect(response.status).toBe(401);
   });
 
+  it("copies the three masters into the year's folder and records it in Action History", async () => {
+    const response = await request(app).post("/api/auction/archive").set(authHeader)
+      .send({ year: 2026, ticketsSpreadsheetId: "tickets1234567890", itemEntrySpreadsheetId: "items1234567890", bidManagementSpreadsheetId: "bidmgmt1234567890" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      success: true,
+      year: 2026,
+      results: [
+        { name: "2026 Auction Tickets", status: "copied" },
+        { name: "2026 Auction Items", status: "copied" },
+        { name: "2026 Bid Management", status: "copied" },
+      ],
+    });
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Settings",
+      action: "Archive auction",
+      target: "2026 Auction",
+      summary: "Archived the 2026 auction: 2026 Auction Tickets (copied), 2026 Auction Items (copied), 2026 Bid Management (copied)",
+      notUndoableReason: "archive copies are kept in Drive; re-archive to replace them",
+    });
+  });
+
   it("rejects a missing year or a spreadsheet ID that isn't a plain Drive ID before touching Drive", async () => {
     const noYear = await request(app).post("/api/auction/archive").set(authHeader)
       .send({ ticketsSpreadsheetId: "a", itemEntrySpreadsheetId: "b", bidManagementSpreadsheetId: "c" });
@@ -320,5 +357,6 @@ describe("setupRoutes - POST /api/auction/archive", () => {
     const badId = await request(app).post("/api/auction/archive").set(authHeader)
       .send({ year: 2026, ticketsSpreadsheetId: "a", itemEntrySpreadsheetId: "b' or '1'='1", bidManagementSpreadsheetId: "c" });
     expect(badId.status).toBe(400);
+    expect(logAction).not.toHaveBeenCalled();
   });
 });

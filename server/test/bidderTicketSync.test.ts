@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { TicketPerson } from "../services/ticketPeople";
+import type { ActionEntry } from "../services/actionLog";
+import { getAdminFirestore } from "../services/firebaseAdmin";
+import { _resetConfigCacheForTesting } from "../services/configService";
 
 // setup.ts mocks this module for every other test; this file tests the real one.
-const { planBidderSync, syncBidderNamesWithTickets } =
+const { planBidderSync, syncBidderNamesWithTickets, syncBiddersWith } =
   await vi.importActual<typeof import("../services/bidderTicketSync")>("../services/bidderTicketSync");
 
 const person = (ref: string, firstName: string, lastName: string, email = ""): TicketPerson => ({ ref, firstName, lastName, email });
@@ -180,5 +183,72 @@ describe("syncBidderNamesWithTickets", () => {
     });
     expect(await syncBidderNamesWithTickets(sheets, params)).toEqual({ renamed: [], added: [], unlinked: ["101"] });
     expect(sheets.spreadsheets.values.batchUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("syncBiddersWith - what it records in Action History", () => {
+  const HEADER = ["ID", "First Name", "Last Name", "Email"];
+  const bnRow = (id: number, first: string, last: string, email: string, ref = "") => [id, first, last, email, "FALSE", "FALSE", "FALSE", "FALSE", "", "", "", "", "", "", ref];
+
+  /** Bid Management in Prep, with bidder 101 tied to the first ticket. */
+  function sheetsWith(tickets: unknown[][]) {
+    const ranges: Record<string, unknown[][]> = {
+      "'tickets'!A:S": tickets,
+      "'Bidder-Numbers'!A:O": [HEADER, bnRow(101, "Jane", "Jones", "jane@orns.org", "tickets!2")],
+      "'Bid-Management'!1:5": [[101, ""], ["Jane", "Jones"], ["Item #:", "Price:"]],
+      "'Auction-Status'!A2": [["PREP"]],
+      "'Bidder-Numbers'!L1:O1": [["a", "b", "c", "Ticket"]],
+    };
+    return {
+      spreadsheets: {
+        get: vi.fn(async () => ({ data: { sheets: [{ properties: { sheetId: 7, title: "Bidder-Numbers" } }, { properties: { sheetId: 8, title: "Bid-Management", gridProperties: { columnCount: 2 } } }] } })),
+        batchUpdate: vi.fn(async () => ({})),
+        values: {
+          get: vi.fn(async ({ range }: { range: string }) => ({ data: { values: ranges[range] ?? [] } })),
+          update: vi.fn(async () => ({})),
+          batchUpdate: vi.fn(async () => ({})),
+        },
+      },
+    } as any;
+  }
+
+  beforeEach(async () => {
+    _resetConfigCacheForTesting();
+    await getAdminFirestore().collection("settings").doc("global").set({ bidManagementSpreadsheetId: "bm", auctionTicketsSpreadsheetId: "tk" });
+  });
+
+  it("records a renamed bidder and a new one, each with what changed", async () => {
+    const record = vi.fn(async (_entry: ActionEntry) => {});
+    const sheets = sheetsWith([["H"], ["Jane", "Jonas", "jane@orns.org"], ["New", "Buyer", "new@x.org"]]);
+
+    await syncBiddersWith(sheets, record);
+
+    expect(record.mock.calls.map(([entry]) => entry)).toEqual([
+      {
+        area: "Bid Management",
+        action: "Update bidders from tickets",
+        target: "Bidder 101",
+        summary: "Bidder 101: Jane Jones <jane@orns.org> -> Jane Jonas <jane@orns.org>",
+        before: [{ id: "101", firstName: "Jane", lastName: "Jones", email: "jane@orns.org" }],
+        after: [{ id: "101", firstName: "Jane", lastName: "Jonas", email: "jane@orns.org" }],
+        notUndoableReason: expect.stringMatching(/\S/),
+      },
+      {
+        area: "Bid Management",
+        action: "Add bidders from tickets",
+        target: "Bidder 102",
+        summary: "New on the tickets since Set Up: Bidder 102 New Buyer <new@x.org>",
+        after: [{ id: "102", firstName: "New", lastName: "Buyer", email: "new@x.org", ref: "tickets!3" }],
+        notUndoableReason: expect.stringMatching(/\S/),
+      },
+    ]);
+  });
+
+  it("records nothing when nothing changed", async () => {
+    const record = vi.fn(async (_entry: ActionEntry) => {});
+
+    await syncBiddersWith(sheetsWith([["H"], ["Jane", "Jones", "jane@orns.org"]]), record);
+
+    expect(record).not.toHaveBeenCalled();
   });
 });

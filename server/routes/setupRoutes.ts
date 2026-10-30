@@ -11,6 +11,7 @@ import { isDriveId } from '../services/driveService';
 import { getActionHistorySpreadsheetId } from '../services/actionHistoryStore';
 import { updateSharedConfigFields } from '../services/configService';
 import { CONFIG_KEY, noteChange } from '../utils/changeFeed';
+import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { AlreadyRunningError, runIfIdle } from '../utils/asyncLock';
 import { startNewTicketSeason } from '../services/ticketPoll';
 
@@ -49,17 +50,26 @@ export default function createSetupRouter() {
           res.write(JSON.stringify({ log: msg }) + "\n");
         };
 
+        // Setup clears the masters, so their cached reads go - even when it
+        // stops partway, after clearing some of them.
+        const forgetMasters = () => [ticketsSpreadsheetId, itemEntrySpreadsheetId, bidManagementSpreadsheetId].forEach(clearCacheForSpreadsheet);
+
         try {
-          const result = await setupNewAuction(
-            drive,
-            sheets,
-            {
-              ticketsSpreadsheetId,
-              itemEntrySpreadsheetId,
-              bidManagementSpreadsheetId
-            },
-            onLog
-          );
+          let result;
+          try {
+            result = await setupNewAuction(
+              drive,
+              sheets,
+              {
+                ticketsSpreadsheetId,
+                itemEntrySpreadsheetId,
+                bidManagementSpreadsheetId
+              },
+              onLog
+            );
+          } finally {
+            forgetMasters();
+          }
 
           // Point the Config at the new year's folders here, not from the
           // browser afterwards - a closed tab or lost connection would leave

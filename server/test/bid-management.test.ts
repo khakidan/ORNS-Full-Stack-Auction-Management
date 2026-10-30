@@ -13,6 +13,10 @@ import { resetHandlersState, lastBulkWritePayload, updateCallCount,
          appendCallCount, lastAppendedRow,
          valuesBatchUpdateRequests } from "./handlers";
 import { _resetIdempotencyForTesting } from "../utils/idempotency";
+import { logAction } from "../services/actionLog";
+import { changesSince } from "../utils/changeFeed";
+import { syncBiddersFromTickets } from "../services/bidderTicketSync";
+import { TICKETS_COL } from "../utils/sheetColumns";
 
 const mockTokens = {
   access_token: "workflow-mock-token",
@@ -96,6 +100,7 @@ describe("bidRoutes - /api/auction/record-winning-bid", () => {
 
   it("records a winning bid successfully", async () => {
     setupBidMocks();
+    const version = changesSince(0).version;
 
     const response = await request(app)
       .post("/api/auction/record-winning-bid")
@@ -110,6 +115,16 @@ describe("bidRoutes - /api/auction/record-winning-bid", () => {
         expect.arrayContaining([validBody.itemId, validBody.price])
       ])
     );
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Bid Management",
+      action: "Record winning bid",
+      target: "Item I01",
+      summary: "Bidder 1001 won item I01 for $100.00",
+      after: { bidderId: "1001", itemId: "I01", price: 100 },
+      location: "Bid Management Bid-Management!A4:B4",
+      undo: { kind: "cells", spreadsheetId: "ss-id", range: "Bid-Management!A4:B4", before: [["", ""]], after: [["I01", 100]], lock: "bidder-numbers:ss-id" },
+    });
+    expect(changesSince(version).changed).toContain("ss-id");
   });
 
   it("returns cached response for duplicate idempotency key", async () => {
@@ -301,6 +316,7 @@ describe("bidRoutes - /api/auction/record-winning-bid - one winner per item and 
 
 describe("bidRoutes - /api/bidders/walk-in", () => {
   it("performs walk-in successfully", async () => {
+    const version = changesSince(0).version;
     const response = await request(app)
       .post("/api/bidders/walk-in")
       .set(authHeader)
@@ -322,6 +338,60 @@ describe("bidRoutes - /api/bidders/walk-in", () => {
     expect(lastAppendedRow[2]).toBe("Doe");
     expect(lastAppendedRow[3]).toBe("john@example.com");
     expect(lastAppendedRow[4]).toBe(true);
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      area: "Bid Management",
+      action: "Register walk-in",
+      target: `Bidder ${response.body.bidder.id}`,
+      summary: `Registered walk-in John Doe as bidder ${response.body.bidder.id}`,
+      // ticketPrice comes from the Config, not the request.
+      after: { firstName: "John", lastName: "Doe", email: "john@example.com", ticketPrice: "35" },
+      notUndoableReason: expect.stringMatching(/\S/),
+    }));
+    expect(changesSince(version).changed).toContain("ss-id");
+  });
+
+  describe("with the tickets spreadsheet", () => {
+    let ticketAppends: string[][];
+    beforeEach(() => {
+      ticketAppends = [];
+      vi.mocked(syncBiddersFromTickets).mockClear();
+      server.use(
+        http.get("https://sheets.googleapis.com/v4/spreadsheets/:id", ({ params }) =>
+          params.id === "tk-id" ? HttpResponse.json({ sheets: [{ properties: { title: "Tickets" } }] }) : undefined),
+        http.post("https://sheets.googleapis.com/v4/spreadsheets/:id/values/:range\\:append", async ({ params, request }) => {
+          if (params.id !== "tk-id") return undefined;
+          ticketAppends.push(...((await request.json()) as any).values);
+          return HttpResponse.json({ updates: {} });
+        }),
+      );
+    });
+    const walkIn = (extra: Record<string, unknown>) => request(app).post("/api/bidders/walk-in").set(authHeader)
+      .send({ firstName: "John", lastName: "Doe", email: "john@example.com", spreadsheetId: "ss-id", ...extra });
+
+    it("adds their ticket at the Config's price, tells open browsers about both spreadsheets, and ties the bidder to it", async () => {
+      const version = changesSince(0).version;
+
+      const response = await walkIn({ ticketsSpreadsheetId: "tk-id", idempotencyKey: "walkin-ticket-1" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.ticketAppended).toBe(true);
+      expect(ticketAppends).toHaveLength(1);
+      const row = ticketAppends[0];
+      expect([row[TICKETS_COL.firstName], row[TICKETS_COL.lastName], row[TICKETS_COL.email]]).toEqual(["John", "Doe", "john@example.com"]);
+      expect([row[TICKETS_COL.ticketsPurchased], row[TICKETS_COL.paymentMethod], row[TICKETS_COL.paymentStatus], row[TICKETS_COL.totalPaid]])
+        .toEqual(["1", "Auction Checkout", "Pending", "$35"]);
+      expect(changesSince(version).changed).toEqual(expect.arrayContaining(["ss-id", "tk-id"]));
+      expect(syncBiddersFromTickets).toHaveBeenCalledTimes(1);
+    });
+
+    it("doesn't run the ticket sync when there's no tickets spreadsheet", async () => {
+      const response = await walkIn({ idempotencyKey: "walkin-ticket-2" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.ticketAppended).toBe(false);
+      expect(ticketAppends).toEqual([]);
+      expect(syncBiddersFromTickets).not.toHaveBeenCalled();
+    });
   });
 
   it("returns 400 when the name is missing", async () => {
@@ -353,12 +423,100 @@ describe("bidRoutes - /api/bidders/walk-in", () => {
   });
 });
 
+describe("bidRoutes - /api/auction/special-winner", () => {
+  const SHEETS = "https://sheets.googleapis.com/v4/spreadsheets";
+  let writes: string[];
+
+  /** A Bid Management spreadsheet with both tabs, whose gift card winner is bidder 5. */
+  beforeEach(() => {
+    writes = [];
+    server.use(
+      http.get(`${SHEETS}/:id`, () => HttpResponse.json({ sheets: [{ properties: { title: "Special-Winners" } }, { properties: { title: "Follow-Up" } }] })),
+      http.get(`${SHEETS}/:id/values/:range`, ({ params }) =>
+        HttpResponse.json({ values: decodeURIComponent(String(params.range)) === "'Special-Winners'!B2" ? [["5"]] : [] })),
+      http.put(`${SHEETS}/:id/values/:range`, async ({ params, request }) => {
+        writes.push(`update ${params.id} ${decodeURIComponent(String(params.range))} ${JSON.stringify(((await request.json()) as any).values)}`);
+        return HttpResponse.json({});
+      }),
+      http.post(`${SHEETS}/:id/values/:range\\:append`, async ({ params, request }) => {
+        writes.push(`append ${params.id} ${decodeURIComponent(String(params.range))} ${JSON.stringify(((await request.json()) as any).values)}`);
+        return HttpResponse.json({ updates: {} });
+      }),
+    );
+  });
+
+  const save = (body: Record<string, unknown>) => request(app).post("/api/auction/special-winner").set(authHeader).send({ spreadsheetId: "bm", ...body });
+
+  it.each([
+    ["an unknown prize", { prize: "toString", bidderId: "12" }],
+    ["a bidder number that isn't a string", { prize: "giftCard", bidderId: 12 }],
+  ])("refuses %s with 400, writing nothing", async (_label, body) => {
+    const res = await save(body);
+
+    expect(res.status).toBe(400);
+    expect(writes).toEqual([]);
+    expect(logAction).not.toHaveBeenCalled();
+  });
+
+  it("saves the winner, and records it in Action History with an undo back to the old winner", async () => {
+    const version = changesSince(0).version;
+
+    const res = await save({ prize: "giftCard", bidderId: " 12 ", addFollowUp: false });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, range: "'Special-Winners'!B2", before: "5" });
+    expect(writes).toEqual([`update bm 'Special-Winners'!B2 [["12"]]`]);
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Bid Management",
+      action: "Set special winner",
+      target: "$500 Amazon Gift Card",
+      summary: "$500 Amazon Gift Card winner: bidder 12",
+      before: "5",
+      after: "12",
+      location: "Bid Management 'Special-Winners'!B2",
+      undo: { kind: "cells", spreadsheetId: "bm", range: "'Special-Winners'!B2", before: [["5"]], after: [["12"]], lock: "bidder-numbers:bm" },
+    });
+    expect(changesSince(version).changed).toContain("bm");
+  });
+
+  it("clears the winner with an empty bidder number", async () => {
+    const res = await save({ prize: "giftCard", bidderId: "", addFollowUp: true });
+
+    expect(res.status).toBe(200);
+    expect(writes).toEqual([`update bm 'Special-Winners'!B2 [[""]]`]);
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      summary: "Cleared the $500 Amazon Gift Card winner", before: "5", after: undefined,
+    }));
+  });
+
+  it("adds a Follow-Up row only when asked (the winner already checked out)", async () => {
+    await save({ prize: "raffle", bidderId: "7", addFollowUp: true });
+    expect(writes).toEqual([`update bm 'Special-Winners'!B3 [["7"]]`, `append bm 'Follow-Up'!A:C [["7","50/50 Raffle",""]]`]);
+
+    writes.length = 0;
+    await save({ prize: "raffle", bidderId: "7", addFollowUp: false });
+    expect(writes).toEqual([`update bm 'Special-Winners'!B3 [["7"]]`]);
+  });
+
+  it("writes once for a resend with the same key", async () => {
+    const body = { prize: "raffle", bidderId: "7", addFollowUp: true, idempotencyKey: "special-winner-once" };
+
+    const [first, resent] = [await save(body), await save(body)];
+
+    expect([first.status, resent.status]).toEqual([200, 200]);
+    expect(resent.body.duplicated).toBe(true);
+    expect(writes).toHaveLength(2);
+    expect(logAction).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("bidRoutes - /api/auction/close-and-cleanup", () => {
   beforeEach(() => {
     resetHandlersState();
   });
 
   it("checks out only the non-winners who are checked in and not already checked out - not winners, not un-checked-in bidders, not already-checked-out bidders", async () => {
+    const version = changesSince(0).version;
     server.use(
       http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
         const url = new URL(request.url);
@@ -407,6 +565,13 @@ describe("bidRoutes - /api/auction/close-and-cleanup", () => {
     expect(bidMgmtUpdates[0].data).toEqual([
       { range: "'Bidder-Numbers'!G3:H3", values: [[true, true]] }
     ]);
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      area: "Bid Management",
+      action: "Close auction",
+      summary: "Closed the auction, checked out 1 bidder(s) who won nothing, and ended 0 volunteer(s)' access",
+      notUndoableReason: expect.stringMatching(/\S/),
+    }));
+    expect(changesSince(version).changed).toContain("ss-id");
   });
 
   it("closes the auction with a count of 0 and issues no batch update when there is nothing to clean up", async () => {

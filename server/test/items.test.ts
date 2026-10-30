@@ -32,6 +32,8 @@ const mockTokens = {
   refresh_token: "workflow-mock-refresh",
   expiry_date: Date.now() + 3600000
 };
+import { logAction } from "../services/actionLog";
+import { changesSince } from "../utils/changeFeed";
 const authHeader = authCookieHeader(mockTokens);
 
 describe("Add Auction Item workflow", () => {
@@ -51,6 +53,7 @@ describe("Add Auction Item workflow", () => {
   });
 
   it("handles the happy path", async () => {
+    const version = changesSince(0).version;
     const response = await request(app)
       .post("/api/auction/add-item")
       .set(authHeader)
@@ -73,6 +76,19 @@ describe("Add Auction Item workflow", () => {
     expect(lastAppendedRow[10]).toBe(""); // Bundle ID
     expect(lastAppendedRow[11]).toBe(""); // Bundled Date
     expect(lastAppendedRow.length).toBe(12);
+
+    const rowIndex = response.body.rowIndex;
+    expect(rowIndex).toBeGreaterThan(1);
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Auction Items",
+      action: "Add item",
+      target: "Item 802",
+      summary: 'Added "Dinner for Two" (Food) as item 802',
+      after: { category: "Food", name: "Dinner for Two", description: "A lovely dinner for two at a local restaurant.", value: "$100.00", donor: "Jane Smith", itemType: "Certificate", allowMultipleWinners: false },
+      location: `Auction Items 'Auction-Items' row ${rowIndex}`,
+      undo: { kind: "item-add", spreadsheetId: "test-spreadsheet-id", rowIndex, name: "Dinner for Two" },
+    });
+    expect(changesSince(version).changed).toContain("test-spreadsheet-id");
   });
 
   it("writes the new item's Allow Multiple Winners flag to its own column M cell", async () => {
@@ -221,6 +237,7 @@ describe("Batch Update workflow — Set Category", () => {
   });
 
   it("Happy path — category update triggers re-sequencing", async () => {
+    const version = changesSince(0).version;
     server.use(
       http.get('https://sheets.googleapis.com/v4/spreadsheets/:spreadsheetId/values/:range', ({ request }) => {
         const url = new URL(request.url);
@@ -275,6 +292,21 @@ describe("Batch Update workflow — Set Category", () => {
     // Index 3 (Spa Day) remains unchanged
     expect(lastBulkWritePayload[3][0]).toBe("301");
     expect(lastBulkWritePayload[3][1]).toBe("Health & Beauty");
+
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Auction Items",
+      action: "Bulk edit items",
+      target: "2 item(s)",
+      summary: 'Set category to "Travel" on "Pizza Night", "Sushi Dinner"',
+      before: [{ item: "Pizza Night", category: "Food" }, { item: "Sushi Dinner", category: "Food" }],
+      after: { category: "Travel" },
+      location: "Auction Items 'Auction-Items'",
+      undo: { kind: "items", spreadsheetId: "test-spreadsheet-id", rows: [
+        { rowIndex: 2, name: "Pizza Night", before: { category: "Food" }, after: { category: "Travel" } },
+        { rowIndex: 3, name: "Sushi Dinner", before: { category: "Food" }, after: { category: "Travel" } },
+      ] },
+    });
+    expect(changesSince(version).changed).toContain("test-spreadsheet-id");
   });
 
   it("Category update — idempotency", async () => {
@@ -695,6 +727,7 @@ describe("Delete Auction Item workflow", () => {
   });
 
   it("Happy path — delete marks item correctly", async () => {
+    const version = changesSince(0).version;
     const response = await request(app)
       .post("/api/auction/delete-item")
       .set(authHeader)
@@ -708,6 +741,18 @@ describe("Delete Auction Item workflow", () => {
     const updatedRow = lastBulkWritePayload[1];
     expect(updatedRow[0]).toBe("");
     expect(updatedRow[9]).toBe("Deleted");
+
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), {
+      area: "Auction Items",
+      action: "Delete item",
+      target: "Pizza Night",
+      summary: 'Deleted "Pizza Night"',
+      before: { status: "Active" },
+      after: { status: "Deleted" },
+      location: "Auction Items 'Auction-Items' row 2",
+      undo: { kind: "items", spreadsheetId, rows: [{ rowIndex: 2, name: "Pizza Night", before: { status: "Active" }, after: { status: "Deleted" } }] },
+    });
+    expect(changesSince(version).changed).toContain(spreadsheetId);
   });
 
   it("Auth failure", async () => {

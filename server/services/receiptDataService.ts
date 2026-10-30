@@ -5,6 +5,7 @@ import { quoteSheetName } from "../utils/rangeUtils";
 import { isValidEmailAddress } from "../utils/emailAddress";
 import { BIDDER_COL } from "../utils/sheetColumns";
 import { findBidderColumn } from "../utils/bidGrid";
+import { clearCacheForSpreadsheet } from "../utils/sheetCache";
 
 /**
  * Who a PayPal invoice goes to when the bidder has no usable email address
@@ -392,6 +393,7 @@ async function persistInvoice(
     valueInputOption: "RAW",
     requestBody: { values: [[paymentUrl, totalAmount]] },
   });
+  clearCacheForSpreadsheet(spreadsheetId);
 }
 
 /**

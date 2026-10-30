@@ -14,7 +14,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { server } from "./setup";
 import { resetHandlersState } from "./handlers";
-import { processEmail, createRawEmail, generateEmailHtml } from "../services/emailService";
+import { processEmail, createRawEmail, generateEmailHtml, recordReceiptEmailed } from "../services/emailService";
+import { changesSince } from "../utils/changeFeed";
 import { getAuthenticatedClient } from "../services/oauth";
 import { PayPalService } from "../services/paypalService";
 import { calculatePayPalSurcharge } from "../utils/financeUtils";
@@ -172,6 +173,24 @@ describe("emailService.processEmail", () => {
     const headerLines = mock.sentEmails[0].headers.split("\r\n");
     expect(headerLines.some((line) => /^bcc:/i.test(line))).toBe(false);
     expect(headerLines.filter((line) => line.startsWith("Subject:"))).toHaveLength(1);
+  });
+});
+
+describe("emailService.recordReceiptEmailed", () => {
+  it("records the send in Bidder-Numbers M/N and tells open browsers (AGENTS.md rule 7)", async () => {
+    const writes: unknown[] = [];
+    const sheets = { spreadsheets: { values: { update: async (req: unknown) => { writes.push(req); return { data: {} }; } } } } as any;
+    const version = changesSince(0).version;
+
+    await recordReceiptEmailed(sheets, "bm-1", 7, "https://paypal.example/inv/1", "Bidder-Numbers");
+
+    expect(writes).toEqual([{
+      spreadsheetId: "bm-1",
+      range: "'Bidder-Numbers'!M7:N7",
+      valueInputOption: "RAW",
+      requestBody: { values: [[expect.stringMatching(/^\d{4}-\d\d-\d\dT/), "https://paypal.example/inv/1"]] },
+    }]);
+    expect(changesSince(version).changed).toEqual(["bm-1"]);
   });
 });
 

@@ -12,6 +12,8 @@ import { resetHandlersState, lastBulkWritePayload } from "./handlers";
 import { AUCTION_TICKETS_ITEM_ID } from "../utils/categoryHelpers";
 import { authCookieHeader } from "./helpers/session";
 import { pollTicketPurchasesFirst } from "../services/ticketPoll";
+import { logAction } from "../services/actionLog";
+import { changesSince } from "../utils/changeFeed";
 
 // Website purchases are checked first (ROADMAP W6); the check itself is tested in ticketPoll.test.ts.
 vi.mock("../services/ticketPoll", async (importOriginal) => ({
@@ -79,6 +81,7 @@ describe("Ticket Payment Status workflow", () => {
     );
 
     // Step 1: POST check-in-with-bid
+    const version = changesSince(0).version;
     const step1Response = await request(app)
       .post("/api/auction/check-in-with-bid")
       .set(authHeader)
@@ -102,6 +105,15 @@ describe("Ticket Payment Status workflow", () => {
       values.some(row => row.includes(AUCTION_TICKETS_ITEM_ID) && (row.includes(35) || row.includes("35")))
     );
     expect(hasTicketBid).toBe(true);
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      area: "Bid Management",
+      action: "Check in with ticket payment",
+      target: "Bidder 1001",
+      summary: "Checked in bidder 1001 and recorded their $35.00 ticket on their bid sheet",
+      after: { bidValue: 35 },
+      notUndoableReason: expect.stringMatching(/\S/),
+    }));
+    expect(changesSince(version).changed).toContain("test-spread-id");
 
     // Step 2: POST checkout-mark-paid
     const step2Response = await request(app)
