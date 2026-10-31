@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { computeBidderNumbersRows, ensureBidderNumbersSheet, performSheetSync } from "../services/syncService";
+import { computeBidderNumbersRows, ensureBidderNumbersSheet, performSheetSync, protectAppManagedTabs, APP_MANAGED_PROTECTION } from "../services/syncService";
 
 // Column layout matches attendeeParsing.ts/syncService.ts's own: 0 first,
 // 1 last, 2 email, 3-6 unused here, 7/8/9 guest 1, 10 guest 1 own-number
@@ -205,5 +205,31 @@ describe("performSheetSync - full rebuild", () => {
 
     await expect(performSheetSync(sheets, "bm-id", "tickets-id")).rejects.toThrow(/Cannot re-sync: 1 walk-in bidder\(s\).*Pat Lee/);
     expect(calls.filter((c) => c.op !== "get")).toEqual([]);
+  });
+});
+
+describe("protectAppManagedTabs", () => {
+  const sheetsWith = (tabs: { title: string; sheetId: number; protectedRanges?: { description: string }[] }[]) => ({
+    spreadsheets: {
+      get: vi.fn(async () => ({ data: { sheets: tabs.map((t) => ({ properties: { sheetId: t.sheetId, title: t.title }, protectedRanges: t.protectedRanges })) } })),
+      batchUpdate: vi.fn(async () => ({})),
+    },
+  }) as any;
+
+  it("gives the app's tabs a warning-only protection - everyone keeps edit access - and leaves other tabs alone", async () => {
+    const sheets = sheetsWith([{ title: "Bidder-Numbers", sheetId: 1 }, { title: "Auction-Status", sheetId: 3 }, { title: "Notes", sheetId: 4 }]);
+
+    await protectAppManagedTabs(sheets, "bm");
+
+    expect(sheets.spreadsheets.batchUpdate).toHaveBeenCalledWith({ spreadsheetId: "bm", requestBody: { requests: [
+      { addProtectedRange: { protectedRange: { range: { sheetId: 1 }, description: APP_MANAGED_PROTECTION, warningOnly: true } } },
+      { addProtectedRange: { protectedRange: { range: { sheetId: 3 }, description: APP_MANAGED_PROTECTION, warningOnly: true } } },
+    ] } });
+  });
+
+  it("never protects a tab twice", async () => {
+    const sheets = sheetsWith([{ title: "Auction-Status", sheetId: 3, protectedRanges: [{ description: APP_MANAGED_PROTECTION }] }]);
+    await protectAppManagedTabs(sheets, "bm");
+    expect(sheets.spreadsheets.batchUpdate).not.toHaveBeenCalled();
   });
 });

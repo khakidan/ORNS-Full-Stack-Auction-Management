@@ -479,5 +479,32 @@ exports[`performSheetSync - full rebuild > archives the old tabs, then writes Bi
     ],
     "op": "batchUpdate",
   },
+  {
+    "args": [
+      {
+        "addProtectedRange": {
+          "protectedRange": {
+            "description": "Written by the ORNS Auction Manager - make changes in the app. Edit here only to fix a mistake.",
+            "range": {
+              "sheetId": 10,
+            },
+            "warningOnly": true,
+          },
+        },
+      },
+      {
+        "addProtectedRange": {
+          "protectedRange": {
+            "description": "Written by the ORNS Auction Manager - make changes in the app. Edit here only to fix a mistake.",
+            "range": {
+              "sheetId": 11,
+            },
+            "warningOnly": true,
+          },
+        },
+      },
+    ],
+    "op": "batchUpdate",
+  },
 ]
 `;

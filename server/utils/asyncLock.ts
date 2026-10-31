@@ -1,7 +1,9 @@
 /**
  * A simple in-process async mutex, keyed by resource. Google Sheets has no
  * row/range-level locking of its own, and this app runs as a single Node
- * process (not horizontally scaled), so a promise chain per key is enough
+ * process (not horizontally scaled - Cloud Run's service-level maxScale: 1,
+ * and --max-instances=1 on every revision from cloudbuild.yaml), so a
+ * promise chain per key is enough
  * to fully serialize concurrent writers to the same resource without any
  * new infrastructure - see docs/agents/ROADMAP.md's "Concurrency Safety
  * for Simultaneous Bidder Operations" milestone for the real bugs this

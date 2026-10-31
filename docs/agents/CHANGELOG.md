@@ -6,6 +6,19 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **Deploy settings in the repo, protected tabs, and a ROADMAP rewritten as a pre-auction checklist** (2026-10-31).
+  - **`cloudbuild.yaml`:** the build steps, copied from the trigger, with three changes:
+    - each revision gets `--max-instances=1`;
+    - revisions beyond the newest 15 are deleted after each deploy;
+    - only this build's image is pulled. The old "Pull --all-tags" step downloaded all 139 earlier images every build, which took about 15 of the ~20 minutes.
+    - It takes effect once the trigger points at the file (ROADMAP section 1).
+    - The service was already capped at one instance (service-level `maxScale: 1`), so this is a second layer, not a fix for a live bug.
+  - **Warning-only protection on Bidder-Numbers, Bid-Management and Auction-Status**, added by Set Up (`protectAppManagedTabs`, never twice).
+    - Anyone editing these tabs by hand in Google Sheets is asked to confirm; the stale test bidders of 2026-10-30 came from hand edits.
+    - It's warning-only, not "only these people may edit", because the app writes as each staff member's own Google account (and volunteers' shared one). A strict list would block their bid entry. Everyone, `web-admin@orns.org` included, keeps edit access.
+  - **ROADMAP.md** is now a checklist in order: one-time setup, ticket-sales day (the live PayPal test), the first week of sales, a dress rehearsal 3-4 weeks out (including a live $1 checkout and a multi-person bid-entry test), the week before (deploy freeze, `gas:check`, minimum instances 1), auction day and after. The finished audits' "confirmed fine" notes are condensed into a reference section.
+  - Backend 1205 -> 1207, total 2104 -> 2106.
+
 - **The standard items are in every auction, priced, and only Administrators can change them** (2026-10-31).
   - **Before:** Setup New Auction Year seeded the 11 standard items into the Auction-Items spreadsheet, with a blank Value. Nothing put one back if it was deleted during the year. The Items tab and the Auction Items page already read that same spreadsheet, so they can't drift apart.
   - **Now:**

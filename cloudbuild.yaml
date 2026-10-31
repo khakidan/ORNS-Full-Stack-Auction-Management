@@ -1,0 +1,83 @@
+# Build and deploy to Cloud Run on every push to main (Cloud Build trigger
+# 887c5ab9-..., europe-west1). The trigger's own substitutions
+# (_SERVICE_NAME, _DEPLOY_REGION, ...) override the defaults below.
+#
+# Kept in the repo, not only in the trigger, so these settings can't be
+# lost by editing the trigger:
+# - --max-instances=1: the app's locks, cache, live-refresh feed and
+#   duplicate-request protection live in the server's memory
+#   (server/utils/asyncLock.ts), so there must only ever be one copy. The
+#   service is also capped at one (service-level maxScale: 1, set by hand);
+#   this caps each revision too, so losing either setting isn't enough.
+#   One copy (80 requests at once) is plenty for the auction.
+# - Only this build's image is pulled, not every earlier one (that took
+#   ~15 minutes per build).
+# - After deploying, revisions beyond the newest 15 are deleted. Never fails
+#   the build.
+steps:
+  - id: Buildpack
+    name: gcr.io/k8s-skaffold/pack
+    entrypoint: pack
+    args:
+      - build
+      - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      - --builder=gcr.io/buildpacks/builder:latest
+      - --network=cloudbuild
+      - --publish
+      - --path=.
+
+  # The image `images:` below records for this build (Buildpack already pushed it).
+  - id: Pull
+    name: gcr.io/cloud-builders/docker
+    args:
+      - pull
+      - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+
+  - id: Deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update
+      - $_SERVICE_NAME
+      - --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      - --max-instances=1
+      - --update-labels=managed-by=gcp-cloud-build-deploy-cloud-run,gcb-trigger-id=$_TRIGGER_ID,gcb-trigger-region=$LOCATION,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID
+      - --region=$_DEPLOY_REGION
+      - --quiet
+
+  - id: Prune old revisions
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    allowFailure: true
+    args:
+      - -c
+      - |
+        gcloud run revisions list --service=$_SERVICE_NAME --region=$_DEPLOY_REGION \
+          --sort-by=~metadata.creationTimestamp --format='value(metadata.name)' \
+          | tail -n +16 \
+          | while read -r rev; do
+              gcloud run revisions delete "$$rev" --region=$_DEPLOY_REGION --quiet || echo "Couldn't delete $$rev (still serving traffic?)"
+            done
+
+images:
+  - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+
+substitutions:
+  REPO_NAME: khakidan-orns-full-stack-auction-management
+  _AR_HOSTNAME: us-east1-docker.pkg.dev
+  _AR_PROJECT_ID: orns-auction-bid-management
+  _AR_REPOSITORY: cloud-run-source-deploy
+  _DEPLOY_REGION: us-east1
+  _SERVICE_NAME: orns-auction-manager-gh
+  _TRIGGER_ID: 887c5ab9-bfb5-495d-8e29-61755aa8504d
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  requestedVerifyOption: VERIFIED
+  substitutionOption: ALLOW_LOOSE
+
+tags:
+  - gcp-cloud-build-deploy-cloud-run
+  - orns-auction-manager-gh
