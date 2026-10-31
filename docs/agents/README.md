@@ -141,6 +141,17 @@ Dockerfile - it runs `npm run build`, then starts the container with
 itself lives in `europe-west1` - a quirk of how it was created - but it
 deploys to us-east1.)
 
+The build steps are in [`cloudbuild.yaml`](../../cloudbuild.yaml) at the
+repo root (once the trigger points at it - see the ROADMAP's section 1):
+
+- **One server copy only:** each revision gets `--max-instances=1`, and
+  the service is capped at one too (service-level `maxScale: 1`). The
+  app's locks, cache and live-refresh feed are in memory, so a second
+  copy would let two writers race. Never raise either.
+- **The newest 15 revisions are kept;** older ones are deleted after each
+  deploy (a step that never fails the build).
+- Only this build's image is pulled, which keeps builds to a few minutes.
+
 Workflow:
 
 1.  Do work on a branch, never directly on `main`.

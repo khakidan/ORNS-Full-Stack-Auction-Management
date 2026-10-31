@@ -358,6 +358,32 @@ async function performSheetSyncLocked(sheets: sheets_v4.Sheets, spreadsheetId: s
     requestBody: { requests: bidManagementFormatRequests(bmSheetId, finalBidders.length) }
   });
 
+  // Never stops Set Up: the rebuild is done, and the tabs work unprotected.
+  await protectAppManagedTabs(sheets, spreadsheetId).catch((e) => console.warn("[Sync] Couldn't protect the app's tabs:", e?.message || e));
+
   console.log(`[Sync] Rebuilt Bidder-Numbers and Bid-Management in ${spreadsheetId} with ${finalBidders.length} bidders.`);
   return { success: true };
+}
+
+/** The tabs only the app should write: the bidder list, the bid grid and the auction's state. */
+export const APP_MANAGED_TABS = ["Bidder-Numbers", "Bid-Management", "Auction-Status"];
+export const APP_MANAGED_PROTECTION = "Written by the ORNS Auction Manager - make changes in the app. Edit here only to fix a mistake.";
+
+/**
+ * Gives each app-managed tab a warning-only protection, like Action
+ * History's: anyone typing in it in Google Sheets is asked to confirm
+ * first, so a stray edit or deleted row (the stale test bidders of
+ * 2026-10-30) is less likely. Warning-only on purpose - the app writes as
+ * each staff member's own Google account (and volunteers' shared one),
+ * so every editor, web-admin@orns.org included, keeps full edit access
+ * and the app's writes go through untouched. Adds nothing to a tab that
+ * already has it, or that doesn't exist yet.
+ */
+export async function protectAppManagedTabs(sheets: sheets_v4.Sheets, spreadsheetId: string): Promise<void> {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets(properties(sheetId,title),protectedRanges(description))" });
+  const requests: sheets_v4.Schema$Request[] = (meta.data.sheets || [])
+    .filter((s) => APP_MANAGED_TABS.includes(s.properties?.title || ""))
+    .filter((s) => !(s.protectedRanges || []).some((p) => p.description === APP_MANAGED_PROTECTION))
+    .map((s) => ({ addProtectedRange: { protectedRange: { range: { sheetId: s.properties!.sheetId }, description: APP_MANAGED_PROTECTION, warningOnly: true } } }));
+  if (requests.length > 0) await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } });
 }
