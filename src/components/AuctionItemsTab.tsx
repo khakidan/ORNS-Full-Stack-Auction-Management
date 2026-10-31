@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useConfig } from "@/context/ConfigContext";
 import { useAuction } from "@/context/AuctionContext";
+import { useAuth } from "@/context/AuthContext";
+import { isStandardItemRow } from "@/lib/standardItems";
 import { ListPageCard } from "@/components/ui/ListPageCard";
 import { Button } from "@/components/ui/button";
 import { Package, Plus, Trash2 } from "lucide-react";
@@ -34,7 +36,12 @@ export default function AuctionItemsTab() {
     refresh: fetchData
   } = useAuctionItems(spreadsheetId);
 
-  const table = useAuctionItemsTableState(items, setItems, spreadsheetId, valueCalculations, fetchData);
+  // The standard items (raffle tickets, Open Appeal...) are Administrators'
+  // to change; the server refuses anyone else (403).
+  const { can } = useAuth();
+  const canChangeStandard = can("items.standard");
+  const isLocked = useCallback((item: AuctionItem) => !canChangeStandard && isStandardItemRow(item.id, item.category, item.name), [canChangeStandard]);
+  const table = useAuctionItemsTableState(items, setItems, spreadsheetId, valueCalculations, fetchData, isLocked);
 
   // Live refresh: this page reads the items itself, so re-read them when
   // someone else (or an Undo) changed the Auction Items spreadsheet.
@@ -136,6 +143,8 @@ export default function AuctionItemsTab() {
           loading={loading}
           selectedRows={table.selectedRows}
           selectedItemsCount={table.selectedItemsCount}
+          selectableCount={table.selectableCount}
+          isLocked={isLocked}
           onToggleRow={table.toggleRow}
           onToggleAll={table.toggleAll}
           onEditRequest={setItemToEdit}

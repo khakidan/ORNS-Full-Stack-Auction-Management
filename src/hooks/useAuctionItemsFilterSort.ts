@@ -33,7 +33,8 @@ function pruneToVisible(selection: BundlingSelection, visible: AuctionItem[]): B
  * lines) so that container stays focused on composing the split-out
  * pieces.
  */
-export function useAuctionItemsFilterSort(items: AuctionItem[]) {
+/** `isLocked`: rows that can't be selected - a standard item, for someone who may not change one. */
+export function useAuctionItemsFilterSort(items: AuctionItem[], isLocked: (item: AuctionItem) => boolean = () => false) {
   const [sortConfig, setSortConfig] = useState<AuctionItemSortConfig>({ key: "id", direction: "asc" });
   // Every row the user has ticked, visible or not - see selectedRows below.
   const [checkedRows, setCheckedRows] = useState<BundlingSelection>({});
@@ -102,13 +103,15 @@ export function useAuctionItemsFilterSort(items: AuctionItem[]) {
     }));
   };
 
+  const selectableCount = sortedItems.filter(item => !isLocked(item)).length;
+
   const toggleAll = () => {
-    if (selectedItemsCount === sortedItems.length && sortedItems.length > 0) {
+    if (selectedItemsCount === selectableCount && selectableCount > 0) {
       setCheckedRows({});
     } else {
       const all: BundlingSelection = {};
       sortedItems.forEach(item => {
-        all[item.rowIndex] = true;
+        if (!isLocked(item)) all[item.rowIndex] = true;
       });
       setCheckedRows(all);
     }
@@ -136,6 +139,7 @@ export function useAuctionItemsFilterSort(items: AuctionItem[]) {
     selectedItemsCount,
     toggleRow,
     toggleAll,
+    selectableCount,
     clearSelection: () => setCheckedRows({}),
   };
 }

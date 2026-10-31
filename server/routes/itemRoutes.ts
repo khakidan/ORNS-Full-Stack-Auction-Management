@@ -5,6 +5,7 @@ import { clearCacheForSpreadsheet } from '../utils/sheetCache';
 import { addItem, deleteItem, updateItem, bulkUpdateItems, ItemChangedError } from '../services/itemService';
 import { withIdempotency, idempotentBody } from '../utils/idempotency';
 import { sheetsFor } from '../utils/googleClients';
+import { refuseStandardItemChange } from '../services/standardItems';
 import type { AddItemRequest, BulkUpdateItemsRequest, DeleteItemRequest, UpdateItemRequest } from "../../shared/apiTypes";
 
 /** Auction-Items add / edit / bulk edit / delete. Each service call holds the `auction-items:` lock. */
@@ -58,6 +59,8 @@ export default function createItemRouter() {
     }
 
     try {
+      const refusal = await refuseStandardItemChange(req, spreadsheetId, { rowIndices: [rowIndex] });
+      if (refusal) return res.status(403).json({ error: refusal });
       const outcome = await withIdempotency("auction/delete-item", idempotencyKey, async () => {
         const result = await deleteItem(sheetsFor(req), { spreadsheetId, rowIndex });
         clearCacheForSpreadsheet(spreadsheetId);
@@ -91,6 +94,8 @@ export default function createItemRouter() {
     }
 
     try {
+      const refusal = await refuseStandardItemChange(req, spreadsheetId, { rowIndices: [rowIndex] });
+      if (refusal) return res.status(403).json({ error: refusal });
       const result = await updateItem(sheetsFor(req), { spreadsheetId, rowIndex, changes, expectedName });
       await logAction(req, {
         area: "Auction Items",
@@ -123,6 +128,8 @@ export default function createItemRouter() {
     }
 
     try {
+      const refusal = await refuseStandardItemChange(req, spreadsheetId, { rowIndices });
+      if (refusal) return res.status(403).json({ error: refusal });
       const outcome = await withIdempotency("auction/bulk-update-items", idempotencyKey, async () => {
         const result = await bulkUpdateItems(sheetsFor(req), { spreadsheetId, rowIndices, field, value });
         await logAction(req, {

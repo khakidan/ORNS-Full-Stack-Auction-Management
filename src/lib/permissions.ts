@@ -8,7 +8,7 @@ export type Role = "full_admin" | "admin" | "user";
 /** Whoever is signed in: a staff role, or a volunteer. */
 export type UserRole = Role | "volunteer";
 
-export type Capability = "settings" | "settings.system" | "users.manage" | "auction.stage" | "tickets.edit" | "attendees.delete" | "bidders.walkIn";
+export type Capability = "settings" | "settings.system" | "users.manage" | "auction.stage" | "tickets.edit" | "attendees.delete" | "bidders.walkIn" | "items.standard";
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   full_admin: "Full Administrator",

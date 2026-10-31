@@ -10,6 +10,7 @@ import {
   restoreBundle
 } from '../services/bundleService';
 import { requireAuth } from '../middleware/requireAuth';
+import { refuseStandardItemChange } from '../services/standardItems';
 import { sheetsFor } from '../utils/googleClients';
 import type { BundleProcessRequest, BundleRestoreRequest, BundleSuggestRequest } from "../../shared/apiTypes";
 
@@ -71,6 +72,8 @@ export default function createBundleRouter() {
     }
 
     try {
+      const refusal = await refuseStandardItemChange(req, spreadsheetId, { ids: targetIds });
+      if (refusal) return res.status(403).json({ error: refusal });
       const outcome = await withIdempotency("bundle/process", idempotencyKey, async () => {
         const sheets = sheetsFor(req);
 

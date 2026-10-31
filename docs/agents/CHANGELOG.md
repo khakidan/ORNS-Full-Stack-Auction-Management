@@ -6,6 +6,21 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **The standard items are in every auction, priced, and only Administrators can change them** (2026-10-31).
+  - **Before:** Setup New Auction Year seeded the 11 standard items into the Auction-Items spreadsheet, with a blank Value. Nothing put one back if it was deleted during the year. The Items tab and the Auction Items page already read that same spreadsheet, so they can't drift apart.
+  - **Now:**
+    - The list lives in `src/lib/standardItems.ts`, shared by the server and the Auction Items page. Each item has its price in Value: 1401 $30, 1501-1504 $5/$15/$30/$20, Open Appeal 1601-1605 $500-$25.
+    - Auction Tickets (1701) takes the Config's ticket price. 1504 is now "One 50/50 Raffle Ticket"; the old name with "$20" still counts as the same item.
+    - **Set Up and Go Live check the list** (`ensureStandardItems`). They put back a missing item, fill in a blank price, turn Allow Multiple Winners back on, and keep Auction Tickets at the ticket price.
+      - Items are matched by name, so a renumbered category still matches. Failing that, by ID and category, so an item an Administrator renamed still counts.
+      - A price someone typed is kept.
+      - Changes are recorded in Action History and shown to staff, and a failed check never stops Set Up or Go Live.
+    - **Bid entry:** `isRepeatableItem` treats every standard item as allowing several winners, Movie Night and Auction Tickets included, whatever the sheet's flag says.
+    - **Administrators only** (new `items.standard` capability): editing, deleting, bulk-editing or bundling a standard item is refused (403) for other roles.
+      - The Auction Items page marks each standard item **Standard item**. For other roles it hides that item's Edit and Delete and turns off its checkbox, so Select all skips it.
+    - **Left out of every printed document:** catalog, bid sheets, table tents, bidding guide, item labels, bundling doc and slideshow. `getValidSortedItems` drops them, since they're sold at a fixed price, not bid on. The slideshow's Open Appeal paddle-raise slides are written by the script itself, so they're unchanged.
+  - Backend 1183 -> 1205, frontend 897 -> 899, total 2080 -> 2104.
+
 - **`FLUENT_FORMS_WEBHOOK_SECRET` rotated** (it appeared in a screenshot on 2026-10-28; done 2026-10-30).
   - The new value went into Secret Manager as version 2, and into form 7's Webhook feed `X-ORNS-Webhook-Secret` header, without being displayed.
   - Redeployed as revision 00075 on the same commit. The app then refused the old value (401) and took the new one (400 for an empty body).

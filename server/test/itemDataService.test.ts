@@ -47,6 +47,21 @@ beforeEach(() => {
 });
 
 describe("getValidSortedItems", () => {
+  it("leaves out the standard items - printed documents are for items people bid on", async () => {
+    mockAuctionItems([
+      itemRow("101"),
+      itemRow("1401", { 1: "Movie Night", 2: "A Night with the ORNS Staff" }),
+      itemRow("1501", { 1: "Raffle Tickets", 2: "One Raffle Ticket for a $500 Amazon Gift Card" }),
+      itemRow("1504", { 1: "Raffle Tickets", 2: "One 50/50 Raffle Ticket $20" }),
+      // Renamed by an Administrator: still Open Appeal's 1601.
+      itemRow("1601", { 1: "Open Appeal", 2: "Paddle Raise $500" }),
+      itemRow("1701", { 1: "Auction Tickets", 2: "Auction Tickets" }),
+    ]);
+
+    const items = await getValidSortedItems(sheets, "items-ss-id");
+    expect(items.map((i) => i.id)).toEqual(["101"]);
+  });
+
   it("excludes items with status 'inactive' or 'deleted' (case/whitespace-insensitive)", async () => {
     mockAuctionItems([
       itemRow("101", { 9: "Active" }),

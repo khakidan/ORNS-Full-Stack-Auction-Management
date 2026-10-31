@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { Heart, Package, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { Heart, Lock, Package, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingButton } from "@/components/ui/LoadingButton";
 import { IconButton } from "@/components/ui/IconButton";
@@ -12,6 +12,10 @@ import { RowIdTile } from "@/components/RowIdTile";
 interface AuctionItemRowProps {
   item: AuctionItem;
   isSelected: boolean;
+  /** One of the items in every auction (src/lib/standardItems.ts). */
+  isStandard?: boolean;
+  /** A standard item this person may not change: no select, edit or delete. */
+  locked?: boolean;
   onToggleSelect: (rowIndex: number) => void;
   onEditRequest: (item: AuctionItem) => void;
   isAuctionClosed: boolean;
@@ -36,6 +40,8 @@ interface AuctionItemRowProps {
 export function AuctionItemRow({
   item,
   isSelected,
+  isStandard = false,
+  locked = false,
   onToggleSelect,
   onEditRequest,
   isAuctionClosed,
@@ -62,7 +68,7 @@ export function AuctionItemRow({
       )}
     >
       <div className="pt-1">
-        <Checkbox aria-label={`Select item ${item.id}`} checked={isSelected} onCheckedChange={() => onToggleSelect(item.rowIndex)} />
+        <Checkbox aria-label={`Select item ${item.id}`} checked={isSelected} disabled={locked} onCheckedChange={() => onToggleSelect(item.rowIndex)} />
       </div>
 
       <RowIdTile value={item.id} caption="Item" className="pt-0.5" />
@@ -78,6 +84,15 @@ export function AuctionItemRow({
           {typeStyle && TypeIcon && (
             <Badge variant="outline" className={cn("text-xs font-normal", typeStyle.className)}>
               <TypeIcon className="w-3 h-3 mr-1" /> {item.itemType}
+            </Badge>
+          )}
+          {isStandard && (
+            <Badge
+              variant="outline"
+              className="text-xs font-normal text-slate-600 border-slate-300 bg-slate-50"
+              title={locked ? "In every auction. Only an Administrator can change it." : "In every auction - Set Up puts it back if it's removed."}
+            >
+              <Lock className="w-3 h-3 mr-1" /> Standard item
             </Badge>
           )}
           {isBundled && (
@@ -121,7 +136,7 @@ export function AuctionItemRow({
         )}
       </div>
 
-      {!isAuctionClosed && (
+      {!isAuctionClosed && !locked && (
         <div className="flex gap-1 shrink-0 pt-0.5 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 transition-opacity">
           <IconButton
             variant="ghost"

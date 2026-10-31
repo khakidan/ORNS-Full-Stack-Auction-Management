@@ -15,6 +15,9 @@ import { deleteAuctionItem } from "@/services/google-api";
 import { toast } from "sonner";
 
 vi.mock("@/context/ConfigContext", () => ({ useConfig: () => ({ config: { auctionItemsSpreadsheetId: "items-sheet" } }) }));
+// An Administrator (AuctionItemsTab.test.tsx covers who may not change standard items).
+vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ can: () => true }) }));
+
 vi.mock("@/context/AuctionContext", () => ({ useAuction: () => ({ isAuctionClosed: false }) }));
 
 const ITEMS = [

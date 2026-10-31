@@ -37,21 +37,24 @@ export default function BidManagementWorkflow({ activeBidTab, onBidTabChange, is
     const toastId = toast.loading("Checking credentials and backing up existing Bid-Management layers...");
     try {
       // Sent once: a resend would rebuild the bid sheet a second time (ROADMAP B3).
-      const reply: { ticketPrice?: { outcome: string; message: string } } = await postJsonOnce("/api/bidders/sync", {
+      const reply: { ticketPrice?: { outcome: string; message: string }; standardItems?: { message?: string } } = await postJsonOnce("/api/bidders/sync", {
         spreadsheetId: config.bidManagementSpreadsheetId,
         auctionTicketSheetsID: config.auctionTicketsSpreadsheetId,
       }, "Failed to setup bid management app");
 
-      // The ticket price is read from the website during Set Up; a change, or a failure to check it, stays up long enough to read.
+      // The ticket price is read from the website during Set Up, and the
+      // standard items checked; a change, or a failure to check, stays up
+      // long enough to read.
       const price = reply.ticketPrice;
-      const priceNeedsReading = !!price && price.outcome !== "unchanged";
+      const itemsNote = reply.standardItems?.message;
+      const needsReading = (!!price && price.outcome !== "unchanged") || !!itemsNote;
       toast.success("Successfully synchronized and re-sequenced all bidders, imported ticket sales, and generated full bid sheets!", {
         id: toastId,
-        description: price?.message,
+        description: [price?.message, itemsNote].filter(Boolean).join(" "),
       });
       setTimeout(() => {
         window.location.reload();
-      }, priceNeedsReading ? 6000 : 1500);
+      }, needsReading ? 6000 : 1500);
     } catch (e: any) {
       console.error("[Sync Error] Failed to setup bid management app:", e);
       toast.error(e.message || "Failed to setup bid management app", { id: toastId });

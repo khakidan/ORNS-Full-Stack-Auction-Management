@@ -9,7 +9,8 @@
  *   Administrator can see, they can use in full - except that on Users
  *   they grant only their own level or lower (roleChangeRefusal).
  * - User: no Settings page; the Auction Tickets page is view-only; can't
- *   Go Live, Close the auction, or Set Up the Bid Management App.
+ *   Go Live, Close the auction, or Set Up the Bid Management App; can't
+ *   change the standard Auction Items (raffle tickets, Open Appeal...).
  * - Volunteer (not an @orns.org address; only while the auction is Live):
  *   none of these capabilities, and only the Bid Management routes listed
  *   in server/middleware/volunteerAccess.ts.
@@ -33,11 +34,13 @@ export type Capability =
   /** Deleting an attendee from the Attendee List. */
   | "attendees.delete"
   /** Registering a walk-in bidder (staff only - not in the volunteers' list). */
-  | "bidders.walkIn";
+  | "bidders.walkIn"
+  /** Editing, deleting or bundling a standard Auction Item (src/lib/standardItems.ts). */
+  | "items.standard";
 
 const CAPABILITIES: Record<UserRole, readonly Capability[]> = {
-  full_admin: ["settings", "settings.system", "users.manage", "auction.stage", "tickets.edit", "attendees.delete", "bidders.walkIn"],
-  admin: ["settings", "users.manage", "auction.stage", "tickets.edit", "attendees.delete", "bidders.walkIn"],
+  full_admin: ["settings", "settings.system", "users.manage", "auction.stage", "tickets.edit", "attendees.delete", "bidders.walkIn", "items.standard"],
+  admin: ["settings", "users.manage", "auction.stage", "tickets.edit", "attendees.delete", "bidders.walkIn", "items.standard"],
   user: ["bidders.walkIn"],
   volunteer: [],
 };

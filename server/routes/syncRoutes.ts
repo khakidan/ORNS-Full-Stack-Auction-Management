@@ -8,6 +8,7 @@ import { AlreadyRunningError, runIfIdle } from '../utils/asyncLock';
 import { pollTicketPurchasesFirst } from '../services/ticketPoll';
 import { describeWebsiteTicketPrice, syncTicketPriceFromWebsite } from '../services/ticketPriceFromWebsite';
 import { CONFIG_KEY, noteChange } from '../utils/changeFeed';
+import { ensureStandardItemsFor } from '../services/standardItems';
 import type { SyncBiddersRequest } from "../../shared/apiTypes";
 
 /** Builds Bidder-Numbers / Bid-Management from the ticket sheets (syncService.ts). */
@@ -25,7 +26,7 @@ export default function createSyncRouter() {
       // Website purchases first, so no bidder is missing (ROADMAP W6).
       // Then the ticket price from the website: ticket sales are open by now
       // and the price won't change again this year.
-      const { result, ticketPrice } = await runIfIdle(`bidders-sync:${spreadsheetId}`, async () => {
+      const { result, ticketPrice, standardItems } = await runIfIdle(`bidders-sync:${spreadsheetId}`, async () => {
         await pollTicketPurchasesFirst(`Set Up Bid Management App: ${req.user?.email || "unknown"}`);
         const ticketPrice = await syncTicketPriceFromWebsite(req.user!.email);
         if (ticketPrice.outcome === "updated" || ticketPrice.outcome === "unchanged") noteChange(CONFIG_KEY);
@@ -39,7 +40,9 @@ export default function createSyncRouter() {
             notUndoableReason: "it's the price the website form charges - change it on the form, then run Set Up again",
           });
         }
-        return { ticketPrice, result: await performSheetSync(sheetsFor(req), spreadsheetId, auctionTicketSheetsID) };
+        // With this year's ticket price, the items every auction sells (standardItems.ts).
+        const standardItems = await ensureStandardItemsFor(req);
+        return { ticketPrice, standardItems, result: await performSheetSync(sheetsFor(req), spreadsheetId, auctionTicketSheetsID) };
       });
       await logAction(req, {
         area: "Bid Management",
@@ -47,7 +50,7 @@ export default function createSyncRouter() {
         summary: "Rebuilt Bidder-Numbers and the bid sheet from the ticket spreadsheet (the previous tabs were kept as backups)",
         notUndoableReason: "the previous tabs were kept as renamed backups in the spreadsheet",
       });
-      res.json({ success: true, result, ticketPrice: { ...ticketPrice, message: describeWebsiteTicketPrice(ticketPrice) } });
+      res.json({ success: true, result, ticketPrice: { ...ticketPrice, message: describeWebsiteTicketPrice(ticketPrice) }, standardItems });
     } catch (error: any) {
       if (error instanceof AlreadyRunningError) return res.status(409).json({ error: "Set Up is already running. Wait for it to finish." });
       console.error(`[Sync Route Error] Native synchronization flow failed:`, error);

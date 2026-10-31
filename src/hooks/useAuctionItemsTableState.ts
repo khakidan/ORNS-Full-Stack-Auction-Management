@@ -27,9 +27,10 @@ export function useAuctionItemsTableState(
   setItems: React.Dispatch<React.SetStateAction<AuctionItem[]>>,
   spreadsheetId: string,
   valueCalculations: ValueCalculationTier[],
-  fetchData: () => Promise<void> | void
+  fetchData: () => Promise<void> | void,
+  isLocked?: (item: AuctionItem) => boolean
 ) {
-  const filterSort = useAuctionItemsFilterSort(items);
+  const filterSort = useAuctionItemsFilterSort(items, isLocked);
   const { saveItemChanges } = useAuctionItemUpdate(items, setItems, spreadsheetId, valueCalculations, fetchData);
   const bulkEdit = useAuctionItemsBulkEdit(items, setItems, spreadsheetId, filterSort.selectedRows, filterSort.clearSelection, fetchData);
   const addItem = useAddAuctionItem(items, setItems, spreadsheetId, fetchData);
@@ -53,6 +54,7 @@ export function useAuctionItemsTableState(
     selectedItemsCount: filterSort.selectedItemsCount,
     toggleRow: filterSort.toggleRow,
     toggleAll: filterSort.toggleAll,
+    selectableCount: filterSort.selectableCount,
     clearSelection: filterSort.clearSelection,
 
     // Edit dialog save

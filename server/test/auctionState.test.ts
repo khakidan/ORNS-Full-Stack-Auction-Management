@@ -76,7 +76,8 @@ describe("POST /api/auction/go-live", () => {
     const res = await request(app).post("/api/auction/go-live").set(auth).send({ spreadsheetId: "ss-prep" });
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ state: "live" });
+    // standardItems: nothing to tell staff (no Auction Items spreadsheet set here).
+    expect(res.body).toEqual({ state: "live", standardItems: {} });
     expect(writes).toEqual([{ range: "'Auction-Status'!A2", values: [["Live"]] }]);
     expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       area: "Bid Management", action: "Go Live", summary: "Took the auction Live", notUndoableReason: expect.stringMatching(/\S/),

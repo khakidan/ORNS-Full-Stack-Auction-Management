@@ -6,6 +6,7 @@
  * while it was offline, and resent later, can't know what other devices
  * recorded in the meantime, so the server checks too.
  */
+import { isStandardItemName } from "../../src/lib/standardItems";
 
 export interface ExistingWin {
   bidderId: string;
@@ -36,9 +37,11 @@ export function findExistingWins(grid: any[][], itemId: string): ExistingWin[] {
 /**
  * Whether the Items sheet marks `itemId` as allowing more than one winner
  * (raffle tickets, Open Appeal tiers). Columns are found by header name
- * with the same fallbacks as src/lib/itemParsing.ts (ID in A, the flag in
- * M). Returns undefined when the item isn't listed, so the caller can
- * decide what an unknown item means.
+ * with the same fallbacks as src/lib/itemParsing.ts (ID in A, name in C,
+ * the flag in M). A standard item (Movie Night, raffle tickets, Open
+ * Appeal, Auction Tickets - standardItems.ts) always does, whatever its
+ * flag says. Returns undefined when the item isn't listed, so the caller
+ * can decide what an unknown item means.
  */
 export function isRepeatableItem(itemRows: any[][], itemId: string): boolean | undefined {
   const headers = (itemRows[0] || []).map((h: any) => String(h ?? "").toLowerCase().trim());
@@ -48,8 +51,10 @@ export function isRepeatableItem(itemRows: any[][], itemId: string): boolean | u
   };
   const idIdx = col(["item number", "number", "id"], 0);
   const flagIdx = col(["allow multiple winners", "multiple winners"], 12);
+  const nameIdx = col(["item name", "name"], 2);
   const row = itemRows.slice(1).find((r) => String(r?.[idIdx] ?? "").trim() === String(itemId).trim());
   if (!row) return undefined;
+  if (isStandardItemName(row[nameIdx])) return true;
   const flag = row[flagIdx];
   return flag === true || String(flag ?? "").toUpperCase() === "TRUE";
 }

@@ -1,6 +1,7 @@
 import { sheets_v4 } from "googleapis";
 import { AuctionItem } from "../../src/types";
 import { parseItemRows } from "../../src/lib/itemParsing";
+import { isStandardItemRow } from "../../src/lib/standardItems";
 
 /**
  * Node-side port of
@@ -10,6 +11,13 @@ import { parseItemRows } from "../../src/lib/itemParsing";
  * not a bug fix (see docs/agents/CHANGELOG.md). Reuses
  * `src/lib/itemParsing.ts`'s existing header-aware row parsing rather
  * than re-encoding the Auction-Items schema a second time.
+ *
+ * These are the items for the printed documents (catalog, bid sheets,
+ * table tents, bidding guide, labels, bundling doc, slideshow), so the
+ * standard items - Movie Night, raffle tickets, Open Appeal, Auction
+ * Tickets (src/lib/standardItems.ts) - are left out: they're sold at a
+ * fixed price, not bid on. The slideshow's Open Appeal slides are written
+ * by the script itself.
  */
 export async function getValidSortedItems(sheets: sheets_v4.Sheets, spreadsheetId: string): Promise<AuctionItem[]> {
   // UNFORMATTED_VALUE is required here, not the API's FORMATTED_VALUE
@@ -36,7 +44,7 @@ export async function getValidSortedItems(sheets: sheets_v4.Sheets, spreadsheetI
 
   const validItems = items.filter((item) => {
     const status = (item.status || "").toLowerCase().trim();
-    return status !== "inactive" && status !== "deleted";
+    return status !== "inactive" && status !== "deleted" && !isStandardItemRow(item.id, item.category, item.name);
   });
 
   validItems.sort((a, b) => (parseInt(a.id, 10) || 0) - (parseInt(b.id, 10) || 0));

@@ -12,6 +12,7 @@ import { sheetsFor, googleAuthFor } from '../utils/googleClients';
 import { logAction } from '../services/actionLog';
 import { deactivateAllVolunteers, forgetAuctionState } from '../services/volunteerService';
 import { syncBiddersFromTickets } from '../services/bidderTicketSync';
+import { ensureStandardItemsFor } from '../services/standardItems';
 import type { CheckInWithBidRequest, CheckoutMarkPaidRequest, CloseAuctionRequest, GoLiveRequest, RecordWinningBidRequest, SetBidderFlagRequest, SpecialWinnerRequest, WalkInRequest } from "../../shared/apiTypes";
 
 export default function createBidRouter() {
@@ -170,7 +171,9 @@ export default function createBidRouter() {
       clearCacheForSpreadsheet(spreadsheetId);
       forgetAuctionState();
       await logAction(req, { area: "Bid Management", action: "Go Live", summary: "Took the auction Live", notUndoableReason: "the auction only moves forward; go back to Prep by editing Auction-Status!A2 by hand" });
-      res.json(result);
+      // A standard item removed since Set Up is back before the first bid (standardItems.ts).
+      const standardItems = await ensureStandardItemsFor(req);
+      res.json({ ...result, standardItems });
     } catch (error: any) {
       console.error("[Route Error] go-live:", error);
       if (error instanceof AuctionStateError) {
