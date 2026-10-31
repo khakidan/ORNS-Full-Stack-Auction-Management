@@ -9,9 +9,9 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 - **Deploys now use `cloudbuild.yaml`, and old revisions and images are cleaned up** (ROADMAP's one-time setup, 2026-10-31).
   - **Trigger:** it now reads `cloudbuild.yaml` instead of its built-in steps. The old settings were saved before the switch.
   - **Test run:** the first build on the file (`f762321`, revision 00079) passed all four steps (Buildpack, Pull, Deploy, Prune old revisions) in **3.5 minutes**, down from about 20.
-  - **Revisions:** 64 -> 15.
+  - **Revisions:** 64 -> 15, then to 5 (the newest 5 are kept from now on; git has every version, and a rebuild takes a few minutes).
   - **Live check:** the service runs with `maxScale` 1 on both the service and the revision, the 900s timeout, and answers HTTP 200.
-  - **Images:** Artifact Registry `cloud-run-source-deploy` now keeps the newest 15 images and deletes older ones, alongside the existing untagged-image policy. Before the change there were 139 images (5.6 GB); the clean-up runs about once a day.
+  - **Images:** Artifact Registry `cloud-run-source-deploy` now keeps the newest 5 images (matching the revisions) and deletes older ones, alongside the existing untagged-image policy. Before the change there were 139 images (5.6 GB); the clean-up runs about once a day.
 
 - **Deploy settings in the repo, protected tabs, and a ROADMAP rewritten as a pre-auction checklist** (2026-10-31).
   - **`cloudbuild.yaml`:** the build steps, copied from the trigger, with three changes:

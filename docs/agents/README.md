@@ -149,7 +149,8 @@ file is a change to how the app deploys:
   the service is capped at one too (service-level `maxScale: 1`). The
   app's locks, cache and live-refresh feed are in memory, so a second
   copy would let two writers race. Never raise either.
-- **The newest 15 revisions are kept;** older ones are deleted after each
+- **The newest 5 revisions are kept** (and the newest 5 images in Artifact
+  Registry, so each can be rolled back to); older ones are deleted after each
   deploy (a step that never fails the build).
 - Only this build's image is pulled, which keeps builds to a few minutes.
 
