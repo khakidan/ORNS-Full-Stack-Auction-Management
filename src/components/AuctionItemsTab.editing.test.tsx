@@ -20,6 +20,9 @@ vi.mock("@/context/ConfigContext", () => ({
   useConfig: () => ({ config: { auctionItemsSpreadsheetId: "test-sheet-id" } })
 }));
 
+// An Administrator (AuctionItemsTab.test.tsx covers who may not change standard items).
+vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ can: () => true }) }));
+
 vi.mock("@/context/AuctionContext", () => ({
   useAuction: () => ({ isAuctionClosed: false })
 }));

@@ -69,9 +69,9 @@ export function useAuctionStatusData(spreadsheetId: string, bidManagementSheet: 
   const requestGoLive = useCallback(async (): Promise<boolean> => {
     if (!spreadsheetId) return false;
     try {
-      await postJson("/api/auction/go-live", { spreadsheetId }, "Failed to take the auction live");
+      const reply: { standardItems?: { message?: string } } = await postJson("/api/auction/go-live", { spreadsheetId }, "Failed to take the auction live");
       setAuctionState("live");
-      toast.success("The auction is now Live.");
+      toast.success("The auction is now Live.", reply?.standardItems?.message ? { description: reply.standardItems.message } : undefined);
       return true;
     } catch (e: any) {
       console.error("Error taking the auction live:", e);

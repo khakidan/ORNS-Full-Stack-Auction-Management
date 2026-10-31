@@ -3,10 +3,10 @@
  */
 import React from "react";
 import "@testing-library/jest-dom";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AuctionItemsTab from "./AuctionItemsTab";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { useAuctionItems } from "@/hooks/useAuctionItems";
 
 vi.mock('motion/react', () => ({
@@ -29,6 +29,12 @@ vi.mock("@/context/ConfigContext", () => ({
       auctionItemsSpreadsheetId: "test-sheet-id",
     }
   })
+}));
+
+// Whether this person may change the standard items (set per test; reset after each).
+let mockCanChangeStandard = true;
+vi.mock("@/context/AuthContext", () => ({
+  useAuth: () => ({ can: (cap: string) => cap !== "items.standard" || mockCanChangeStandard }),
 }));
 
 vi.mock("@/context/AuctionContext", () => ({
@@ -280,5 +286,51 @@ describe("AuctionItemsTab - Search", () => {
     expect(screen.getByText("Food 2")).toBeInTheDocument();
     expect(screen.getByText("Health 1")).toBeInTheDocument();
     expect(screen.getByText("Health 2")).toBeInTheDocument();
+  });
+});
+
+describe("AuctionItemsTab - standard items", () => {
+  const withStandard = () => vi.mocked(useAuctionItems).mockReturnValue({
+    ...defaultAuctionItemsReturn,
+    items: [
+      ...defaultAuctionItemsReturn.items,
+      { id: "1501", rowIndex: 6, name: "One Raffle Ticket for a $500 Amazon Gift Card", description: "", category: "Raffle Tickets", value: "5", donor: "", itemType: "", status: "Active" },
+    ],
+  } as any);
+  afterEach(() => {
+    mockCanChangeStandard = true;
+    vi.mocked(useAuctionItems).mockReturnValue(defaultAuctionItemsReturn as any);
+  });
+
+  it("marks a standard item, and lets someone who isn't an Administrator neither select, edit nor delete it", async () => {
+    mockCanChangeStandard = false;
+    withStandard();
+    const user = userEvent.setup();
+    render(<AuctionItemsTab />);
+
+    const row = screen.getByTestId("auction-item-row-6");
+    expect(within(row).getByText("Standard item")).toBeInTheDocument();
+    expect(within(row).getByRole("checkbox", { name: "Select item 1501" })).toHaveAttribute("aria-disabled", "true");
+    expect(within(row).queryByRole("button", { name: /^Edit / })).not.toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: /^Delete / })).not.toBeInTheDocument();
+    // An ordinary item is still theirs to change.
+    expect(within(screen.getByTestId("auction-item-row-2")).getByRole("button", { name: "Edit Food 1" })).toBeInTheDocument();
+
+    // Select all takes every other item, and counts as all of them.
+    await user.click(screen.getByRole("checkbox", { name: "Select all items" }));
+    expect(screen.getByText("4 of 5 selected")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Select all items" })).toBeChecked();
+    expect(within(row).getByRole("checkbox", { name: "Select item 1501" })).not.toBeChecked();
+  });
+
+  it("an Administrator can select, edit and delete a standard item", () => {
+    withStandard();
+    render(<AuctionItemsTab />);
+
+    const row = screen.getByTestId("auction-item-row-6");
+    expect(within(row).getByText("Standard item")).toBeInTheDocument();
+    expect(within(row).getByRole("checkbox", { name: "Select item 1501" })).not.toHaveAttribute("aria-disabled", "true");
+    expect(within(row).getByRole("button", { name: /^Edit / })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: /^Delete / })).toBeInTheDocument();
   });
 });

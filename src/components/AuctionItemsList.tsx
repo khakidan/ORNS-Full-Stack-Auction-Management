@@ -3,12 +3,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RowListShell } from "@/components/RowListShell";
 import { AuctionItemRow } from "@/components/AuctionItemRow";
 import { AuctionItem } from "@/types";
+import { isStandardItemRow } from "@/lib/standardItems";
 
 interface AuctionItemsListProps {
   items: AuctionItem[];
   loading?: boolean;
   selectedRows: Record<number, boolean>;
   selectedItemsCount: number;
+  /** Rows that can be selected (all but locked ones); defaults to every row. */
+  selectableCount?: number;
+  /** A standard item this person may not change. */
+  isLocked?: (item: AuctionItem) => boolean;
   onToggleRow: (rowIndex: number) => void;
   onToggleAll: () => void;
   onEditRequest: (item: AuctionItem) => void;
@@ -35,6 +40,8 @@ export function AuctionItemsList({
   loading = false,
   selectedRows,
   selectedItemsCount,
+  selectableCount = items.length,
+  isLocked = () => false,
   onToggleRow,
   onToggleAll,
   onEditRequest,
@@ -49,7 +56,7 @@ export function AuctionItemsList({
       <div className="flex items-center gap-3 px-5 py-2.5 border-b text-xs">
         <Checkbox
           aria-label="Select all items"
-          checked={selectedItemsCount === items.length && items.length > 0}
+          checked={selectedItemsCount === selectableCount && selectableCount > 0}
           onCheckedChange={onToggleAll}
         />
         <span className="text-muted-foreground font-medium">
@@ -68,6 +75,8 @@ export function AuctionItemsList({
             key={item.rowIndex}
             item={item}
             isSelected={!!selectedRows[item.rowIndex]}
+            isStandard={isStandardItemRow(item.id, item.category, item.name)}
+            locked={isLocked(item)}
             onToggleSelect={onToggleRow}
             onEditRequest={onEditRequest}
             isAuctionClosed={isAuctionClosed}

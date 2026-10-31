@@ -273,7 +273,7 @@ describe("setupRoutes - /api/auction/setup-new", () => {
       const ids = bundleWritePayload.map((row: any[]) => row[0]);
       expect(ids).toEqual(["1401", "1501", "1502", "1503", "1504", "1601", "1602", "1603", "1604", "1605", AUCTION_TICKETS_ITEM_ID]);
 
-      // Every row: real category/name, blank price fields, Active status
+      // Every row: real category/name, Active status
       // (Items.tsx's Auction Catalog only shows Active items), and Allow
       // Multiple Winners (column M, index 12) set to true.
       for (const row of bundleWritePayload) {
@@ -286,6 +286,9 @@ describe("setupRoutes - /api/auction/setup-new", () => {
 
       const ticketsRow = bundleWritePayload.find((row: any[]) => row[0] === AUCTION_TICKETS_ITEM_ID);
       expect(ticketsRow[1]).toBe("Auction Tickets");
+      // Prices in Value (standardItems.ts); Auction Tickets at the Config's ticket price.
+      expect(raffleRow[4]).toBe("15");
+      expect(ticketsRow[4]).toBe("35");
     });
 
     it("surfaces a Bid-Management reset failure to the operator via the streamed log, instead of only the server console, and still finishes", async () => {

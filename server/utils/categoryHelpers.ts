@@ -66,7 +66,7 @@ export function getCategoryBase(categoryName: string): number {
  * can never drift from the ID the standard item is actually seeded with.
  */
 export const AUCTION_TICKETS_CATEGORY_BASE = 1701;
-export const AUCTION_TICKETS_ITEM_ID = "1701";
+export { AUCTION_TICKETS_ITEM_ID } from "../../src/lib/standardItems";
 
 /**
  * Re-sequences IDs for specific categories in the values array to ensure no gaps.

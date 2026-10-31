@@ -37,6 +37,11 @@ describe("isRepeatableItem", () => {
   it("finds the column by its header when it has moved", () => {
     expect(isRepeatableItem([["ID", "Multiple Winners"], ["7", "TRUE"]], "7")).toBe(true);
   });
+  it("always lets a standard item have several winners - Movie Night and Auction Tickets too - whatever its flag says", () => {
+    expect(isRepeatableItem([header, ["1401", "", "A Night with the ORNS Staff", ...Array(9).fill(""), false]], "1401")).toBe(true);
+    expect(isRepeatableItem([header, ["1701", "", "Auction Tickets", ...Array(9).fill(""), ""]], "1701")).toBe(true);
+    expect(isRepeatableItem([header, ["1504", "", "One 50/50 Raffle Ticket $20", ...Array(9).fill(""), false]], "1504")).toBe(true);
+  });
 });
 
 // ROADMAP T17: what Stryker showed no test checked.
