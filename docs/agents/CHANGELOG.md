@@ -6,6 +6,22 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **`FLUENT_FORMS_WEBHOOK_SECRET` rotated** (it appeared in a screenshot on 2026-10-28; done 2026-10-30).
+  - The new value went into Secret Manager as version 2, and into form 7's Webhook feed `X-ORNS-Webhook-Secret` header, without being displayed.
+  - Redeployed as revision 00075 on the same commit. The app then refused the old value (401) and took the new one (400 for an empty body).
+  - Version 1 is disabled.
+  - A cash/check test purchase from the form's Preview link arrived through the webhook. Its row, bidder and entry were then removed.
+
+- **Live PayPal credentials checked on Cloud Run** (ROADMAP "Before ticket sales open", 2026-10-30). `PAYPAL_CLIENT_ID` (not the sandbox ID) and the `PAYPAL_CLIENT_SECRET` secret are both set, and live PayPal accepts them; the sandbox server rejects them. The token includes Invoicing, Transaction Search and payment lookup. What remains is the switch to live on the day sales open, now the first step of the launch-day test.
+
+- **The write-mode rehearsal in the sandbox is done** (ROADMAP "Webhooks with Fluent Forms" item 1, 2026-10-30).
+  - The app wrote each purchase's row itself, Pending (entries 1486/1487, 2026-10-29).
+  - Payments PayPal held for review showed on Needs review (1488/1489).
+  - With the reused-row fix deployed, a purchase landing on a deleted row's number got its own new bidder number.
+  - The test rows, bidders and entries were then cleared, 1488/1489 cleared from Needs review, and Fluent Forms' PayPal set back to Live Mode paying `pavetheway@orns.org`.
+
+- **ROADMAP: PayPal Paid and Refunded move to a live test on the day sales open** (2026-10-30). The sandbox held test payments 1488/1489 for review and never released them, and wouldn't refund them, so those two steps leave the sandbox rehearsal. They become one real ticket bought, checked, refunded and cleared once live PayPal is set up.
+
 - **A reused ticket row no longer takes over the old bidder** (found in the write-mode rehearsal, 2026-10-30).
   - **What happened:** old test rows on `tickets` were deleted, but their bidders (116-124) stayed in Bidder-Numbers, each still tied to its row by column O. The next two website purchases landed on rows 3 and 4, so the sync renamed bidders 119 and 121 to the new buyers instead of giving them numbers. The same could happen for real: a refunded buyer's row deleted, and the next purchase lands on it. Once Live, the Go-Live check also counted that stale tie as "already has a bidder" and didn't flag the purchase.
   - **Now:**
