@@ -12,8 +12,8 @@
 #   One copy (80 requests at once) is plenty for the auction.
 # - Only this build's image is pulled, not every earlier one (that took
 #   ~15 minutes per build).
-# - After deploying, revisions beyond the newest 15 are deleted. Never fails
-#   the build.
+# - After deploying, revisions beyond the newest 5 are deleted (Artifact
+#   Registry keeps the newest 5 images to match). Never fails the build.
 steps:
   - id: Buildpack
     name: gcr.io/k8s-skaffold/pack
@@ -56,7 +56,7 @@ steps:
       - |
         gcloud run revisions list --service=$_SERVICE_NAME --region=$_DEPLOY_REGION \
           --sort-by=~metadata.creationTimestamp --format='value(metadata.name)' \
-          | tail -n +16 \
+          | tail -n +6 \
           | while read -r rev; do
               gcloud run revisions delete "$$rev" --region=$_DEPLOY_REGION --quiet || echo "Couldn't delete $$rev (still serving traffic?)"
             done
