@@ -18,7 +18,8 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
     - **Bid entry:** `isRepeatableItem` treats every standard item as allowing several winners, Movie Night and Auction Tickets included, whatever the sheet's flag says.
     - **Administrators only** (new `items.standard` capability): editing, deleting, bulk-editing or bundling a standard item is refused (403) for other roles.
       - The Auction Items page marks each standard item **Standard item**. For other roles it hides that item's Edit and Delete and turns off its checkbox, so Select all skips it.
-  - Backend 1183 -> 1204, frontend 897 -> 899, total 2080 -> 2103.
+    - **Left out of every printed document:** catalog, bid sheets, table tents, bidding guide, item labels, bundling doc and slideshow. `getValidSortedItems` drops them, since they're sold at a fixed price, not bid on. The slideshow's Open Appeal paddle-raise slides are written by the script itself, so they're unchanged.
+  - Backend 1183 -> 1205, frontend 897 -> 899, total 2080 -> 2104.
 
 - **`FLUENT_FORMS_WEBHOOK_SECRET` rotated** (it appeared in a screenshot on 2026-10-28; done 2026-10-30).
   - The new value went into Secret Manager as version 2, and into form 7's Webhook feed `X-ORNS-Webhook-Secret` header, without being displayed.
