@@ -6,6 +6,12 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ### Changed
 
+- **`FLUENT_FORMS_WEBHOOK_SECRET` rotated** (it appeared in a screenshot on 2026-10-28; done 2026-10-30).
+  - The new value went into Secret Manager as version 2, and into form 7's Webhook feed `X-ORNS-Webhook-Secret` header, without being displayed.
+  - Redeployed as revision 00075 on the same commit. The app then refused the old value (401) and took the new one (400 for an empty body).
+  - Version 1 is disabled.
+  - A cash/check test purchase from the form's Preview link arrived through the webhook. Its row, bidder and entry were then removed.
+
 - **Live PayPal credentials checked on Cloud Run** (ROADMAP "Before ticket sales open", 2026-10-30). `PAYPAL_CLIENT_ID` (not the sandbox ID) and the `PAYPAL_CLIENT_SECRET` secret are both set, and live PayPal accepts them; the sandbox server rejects them. The token includes Invoicing, Transaction Search and payment lookup. What remains is the switch to live on the day sales open, now the first step of the launch-day test.
 
 - **The write-mode rehearsal in the sandbox is done** (ROADMAP "Webhooks with Fluent Forms" item 1, 2026-10-30).

@@ -78,7 +78,6 @@ Goal: no website ticket purchase silently missing from the app, and payment stat
    - buy one ticket with a real card from the form's Preview link (works before form 7 is published), click **Check Now**, and see the row go **Paid** (and its bidder added, in Prep);
    - refund it in PayPal (`pavetheway@orns.org`'s account), click **Check Now**, and see the row go **Refunded** and onto Needs review;
    - **Clear** it, delete its ticket row and bidder, and trash the entry. PayPal may keep part of its fee on the refund.
-2. **Rotate `FLUENT_FORMS_WEBHOOK_SECRET`** (it appeared in a screenshot on 2026-10-28): a new value in Secret Manager, the same value in the form's Webhook feed request header, then redeploy.
-3. **Publish form 7** for the season, and watch the Website Ticket Check tab through the first week of real sales.
+2. **Publish form 7** for the season, and watch the Website Ticket Check tab through the first week of real sales.
 
 Background (2026-10-28): the Sheets feed alone could miss a purchase without telling anyone, wrote Pending rows that were never updated when a PayPal payment completed later, and in the rehearsal wrote **Paid** for a payment PayPal was still holding for review. "Pending" means paying offline - cash or check to the Director, or at the door. The Cloud Scheduler job `fluent-forms-poll` runs all year (it's free while nothing changes).
