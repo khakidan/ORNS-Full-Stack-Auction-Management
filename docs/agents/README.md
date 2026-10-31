@@ -142,7 +142,8 @@ itself lives in `europe-west1` - a quirk of how it was created - but it
 deploys to us-east1.)
 
 The build steps are in [`cloudbuild.yaml`](../../cloudbuild.yaml) at the
-repo root (once the trigger points at it - see the ROADMAP's section 1):
+repo root - the trigger reads it (since 2026-10-31), so a change to the
+file is a change to how the app deploys:
 
 - **One server copy only:** each revision gets `--max-instances=1`, and
   the service is capped at one too (service-level `maxScale: 1`). The

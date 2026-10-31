@@ -8,14 +8,7 @@ What still has to be **done, tested or checked** for the **ORNS Charity Auction 
 
 ---
 
-## 1. Any time now - one-time setup (Developer)
-
-- [ ] **Point the Cloud Build trigger at `cloudbuild.yaml`**, once the PR that adds it is merged. Until then the file is ignored and the trigger keeps its old built-in settings.
-  - Cloud Build > Triggers (region europe-west1) > `cloudrun-orns-auction-manager-gh-...` > Edit > Configuration: **Cloud Build configuration file**, location **Repository**, path `cloudbuild.yaml` > Save.
-  - **Check it worked:** the next deploy's build log has a "Prune old revisions" step, Cloud Run lists at most 15 revisions afterwards, and the build takes a few minutes instead of ~20.
-- [ ] **Keep only the newest 15 images** in Artifact Registry (the images behind old revisions; 139 on 2026-10-31). Artifact Registry > `cloud-run-source-deploy` (us-east1) > Edit > Cleanup policies: a **Keep most recent versions: 15** policy, plus a **Delete** policy for any tag state. Cleanup runs about once a day.
-
-## 2. On the day ticket sales open (Admin + Developer)
+## 1. On the day ticket sales open (Admin + Developer)
 
 PayPal **Paid** and **Refunded** have only run in tests: the sandbox held its test payments for review and never released or refunded them. This is their first real run.
 
@@ -27,13 +20,13 @@ PayPal **Paid** and **Refunded** have only run in tests: the sandbox held its te
 - [ ] **Clean up:** click **Clear** on that Needs review line, delete the test ticket row and its bidder, and trash the entry in Fluent Forms. PayPal may keep part of its fee on the refund.
 - [ ] **Publish form 7** for the season.
 
-## 3. First week of ticket sales (Admin)
+## 2. First week of ticket sales (Admin)
 
 - [ ] **Look at Website Ticket Check every day or two.** Each website purchase should show as added, with no Needs review line you can't explain.
   - If it says the server has **no stored Google sign-in**, a staff member must sign in to the app once. Until then website purchases aren't written (the 5-hourly check adds them afterwards).
   - A held PayPal payment clears itself once PayPal releases it. If one is still held after a few days, look it up in PayPal.
 
-## 4. 3-4 weeks before the auction - dress rehearsal (Admin, with 3-4 helpers)
+## 3. 3-4 weeks before the auction - dress rehearsal (Admin, with 3-4 helpers)
 
 The automated tests (2,100+) use stand-ins for Google, PayPal and Apps Script; this is the one chance to run the whole night for real before it counts. Work on **copies** of the three spreadsheets, set in Settings > Configuration, so no real data is touched.
 
@@ -52,20 +45,20 @@ The automated tests (2,100+) use stand-ins for Google, PayPal and Apps Script; t
   - **Expect:** it finishes. It's the slowest Apps Script job, so watch for a time-out.
 - [ ] **Close** the auction, then point Settings back at the real spreadsheets.
 
-## 5. The week before the auction (Developer + Admin)
+## 4. The week before the auction (Developer + Admin)
 
 - [ ] **Deploy freeze:** merge nothing to `main` this week unless it fixes a problem the rehearsal found. Every merge deploys straight to the live app.
 - [ ] **Check the Apps Scripts are current:** `npm run gas:check` (each deployed script version should match the code).
-- [ ] **Keep the app awake** for auction week, so nobody waits for it to start up: `gcloud run services update orns-auction-manager-gh --region=us-east1 --min-instances=1`. Costs a few dollars for the week; undo it in section 7.
+- [ ] **Keep the app awake** for auction week, so nobody waits for it to start up: `gcloud run services update orns-auction-manager-gh --region=us-east1 --min-instances=1`. Costs a few dollars for the week; undo it in section 6.
 - [ ] **Run Set Up for real** once ticket sales have closed, then print the bidder labels and documents.
 - [ ] **Plan for the venue's internet failing:** a phone hotspot the bid-entry devices can join, and the printed bid sheets as the paper record. Bids can be entered afterwards; Action History and Undo handle corrections.
 
-## 6. Auction day (Admin)
+## 5. Auction day (Admin)
 
 - [ ] **Go Live** when bidding opens, and **Close** when it ends.
 - [ ] Watch the **Bought after Go Live** list on Website Ticket Check: register each as a walk-in, then click **Done**.
 
-## 7. After the auction (Developer)
+## 6. After the auction (Developer)
 
 - [ ] **Let the app sleep again:** `gcloud run services update orns-auction-manager-gh --region=us-east1 --min-instances=0`.
 
