@@ -15,13 +15,38 @@ import { AuthLoadingScreen, SignInScreen, VolunteerThanksScreen } from "./compon
 import BidManagementWorkflow from "./components/BidManagementWorkflow";
 import { useOutboxReplay } from "./hooks/useOutboxReplay";
 import { useWorkflowNavigation } from "./hooks/useWorkflowNavigation";
+import { CLOSE_OUT_REPORT_PATH } from "./lib/closeOutReport";
 
 const ConfigSettings = lazy(() => import("./components/ConfigSettings"));
 const AuctionTicketsWorkflow = lazy(() => import("./components/AuctionTicketsWorkflow"));
 const AuctionItemsWorkflow = lazy(() => import("./components/AuctionItemsWorkflow"));
 const ArchivedAuctionsWorkflow = lazy(() => import("./components/ArchivedAuctionsWorkflow"));
+const CloseOutReportPage = lazy(() => import("./components/closeout/CloseOutReportPage"));
 
 export default function App() {
+  return window.location.pathname === CLOSE_OUT_REPORT_PATH ? <CloseOutReportShell /> : <WorkflowApp />;
+}
+
+/**
+ * The printable close-out report, in its own tab: signed-in staff only, and
+ * outside the sidebar layout so only the report prints.
+ */
+function CloseOutReportShell() {
+  const { authenticated, user, signedOutReason, handleLogin } = useAuth();
+  if (authenticated === null) return <AuthLoadingScreen />;
+  if (!authenticated && signedOutReason === "volunteer_access_ended") return <VolunteerThanksScreen />;
+  if (!authenticated) return <SignInScreen onSignIn={handleLogin} />;
+  if (user?.role === "volunteer") {
+    return <p className="p-10 text-center text-muted-foreground">The close-out report is for auction staff.</p>;
+  }
+  return (
+    <Suspense fallback={<AuthLoadingScreen />}>
+      <CloseOutReportPage />
+    </Suspense>
+  );
+}
+
+function WorkflowApp() {
   const { authenticated, can, signedOutReason, handleLogin } = useAuth();
   const { activeWorkflow, setActiveWorkflow, activeBidTab, setActiveBidTab, isVolunteer } = useWorkflowNavigation();
   // Open with labels on a desktop, icons only on a phone-width screen.

@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { getSheetData } from "@/services/google-api";
 import { Bidder } from "@/types";
 import { postJson } from "@/services/apiClient";
+import { pendingCheckoutBidders as pendingCheckout } from "@/lib/closeOutReport";
 
 interface UseDashboardStateArgs {
   bidders: Bidder[];
@@ -125,17 +126,10 @@ export function useDashboardState({ bidders, items, winners, spreadsheetId, isAu
     return b ? `${b.firstName} ${b.lastName}` : "Bidder not found";
   };
 
-  const winningNames = useMemo(() => new Set(Object.values(winners)), [winners]);
-
   const checkedInCount = bidders.filter(b => b.checkedIn).length;
   const checkedOutCount = bidders.filter(b => b.checkedOut).length;
-  const pendingCheckoutBidders = bidders.filter(b => {
-    if (b.checkedOut) return false;
-    if (b.checkedIn) return true;
-    const fullName = `${b.firstName} ${b.lastName}`;
-    if (b.isProxy && winningNames.has(fullName)) return true;
-    return false;
-  });
+  // Shared with the printable close-out report (src/lib/closeOutReport.ts).
+  const pendingCheckoutBidders = useMemo(() => pendingCheckout(bidders, winners), [bidders, winners]);
   const pendingCheckoutCount = pendingCheckoutBidders.length;
   const totalBidders = bidders.length;
   const itemsCount = items.length;

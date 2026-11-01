@@ -1,10 +1,11 @@
-import { AlertCircle, Clock, ExternalLink, RefreshCw, UserX } from "lucide-react";
+import { AlertCircle, Clock, ExternalLink, Printer, RefreshCw, UserX } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FollowUpListPanel } from "@/components/FollowUpListPanel";
 import { Bidder } from "@/types";
 import { cn } from "@/lib/utils";
+import { CLOSE_OUT_REPORT_PATH } from "@/lib/closeOutReport";
 
 interface PostAuctionFollowUpProps {
   pendingCheckoutBidders: Bidder[];
@@ -36,10 +37,22 @@ export function PostAuctionFollowUp({
               Critical actions to take after the auction has closed.
             </CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={onRefresh} disabled={loadingFollowUp}>
-            <RefreshCw className={cn("w-4 h-4 mr-2", loadingFollowUp && "animate-spin")} />
-            Refresh Lists
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* A link, not window.open, so a pop-up blocker can't stop it. */}
+            <a
+              href={CLOSE_OUT_REPORT_PATH}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Printer className="w-4 h-4 mr-2" />
+              Print Close-Out Report
+            </a>
+            <Button variant="outline" size="sm" onClick={onRefresh} disabled={loadingFollowUp}>
+              <RefreshCw className={cn("w-4 h-4 mr-2", loadingFollowUp && "animate-spin")} />
+              Refresh Lists
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

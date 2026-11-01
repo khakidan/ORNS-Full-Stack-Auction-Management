@@ -64,8 +64,8 @@ npx vitest run src/           # frontend
 | Layer | Path | Tests |
 |---|---|---|
 | **Backend** | `server/test/` | **1207 passed** |
-| **Frontend** | `src/` | **899 passed** |
-| **Total** | `npm run test:quiet` | **2106 passed** |
+| **Frontend** | `src/` | **922 passed** |
+| **Total** | `npm run test:quiet` | **2129 passed** |
 
 | Coverage (`npm run test:coverage`, 2026-10-29) | |
 |---|---|
