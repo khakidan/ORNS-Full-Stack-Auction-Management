@@ -4,6 +4,23 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ## [Unreleased]
 
+### Added
+
+- **A printable close-out report for after the auction** (2026-11-01).
+  - **Where:** the Dashboard's Post-Auction Follow-Up card (shown once the auction is closed) has a **Print Close-Out Report** button. It opens the report in a new tab at `/CloseOutReport`, outside the sidebar layout, with a **Print / Save as PDF** button that opens the browser's print dialog - the same pattern as the D&D and Daggerheart apps' printable sheets. Signed-in staff only; volunteers' access has ended by then anyway.
+  - **What it shows** (US Letter sheets, boxes to tick by hand):
+    1. The Dashboard's four figures and attendance.
+    2. The special winners, with tasks to tell and pay them.
+    3. The follow-up lists: who still has to check out (with what an unpaid bidder owes), post-checkout wins (item names looked up), and no-shows.
+    4. Proxy bidders, with their winning-bid counts.
+    5. **New:** where the money stands - collected vs still owed, by payment method, by source (every category other than Live Auction, Open Appeal, Raffle Tickets, Auction Tickets and Movie Night counts as Silent Auction) and the top five winning bids.
+    6. A 12-step wrap-up checklist ending with Archive, then sign-off lines for the Director, Auction Chair, Application Administrator and the date.
+  - **The rule it prints first:** anything done offline (cash taken, a prize delivered) must also be recorded in the app; every task says where.
+  - **Pages:** blocks are measured and flowed onto pages (`src/lib/reportPagination.ts`), so a long list continues on the next page under a "continued" title instead of leaving a gap. Sections 3, 5 and 6 start their own page.
+  - **Code:** `src/lib/closeOutReport.ts` (the figures, from what AuctionContext already loads plus the Follow-Up and Special-Winners tabs; no new `/api` route), `src/components/closeout/`. The Dashboard's "Still Need to Check Out" rule moved into `pendingCheckoutBidders` there so the report and the Dashboard can't drift apart.
+  - **Fonts:** the report adds Newsreader (headings) and Geist Mono (figures), loaded only with the report's own chunk (see `style_guide.md`).
+  - Frontend 899 -> 922, total 2106 -> 2129.
+
 ### Changed
 
 - **Deploys now use `cloudbuild.yaml`, and old revisions and images are cleaned up** (ROADMAP's one-time setup, 2026-10-31).

@@ -110,11 +110,13 @@ This document maps the real layout of the **ORNS Charity Auction Manager** codeb
     │   └── apiClient.ts       # postJson (JSON POST + the server's error text, throws HttpError with the status); postJsonOnce (the same, sent once)
     ├── hooks/                 # One hook per view/state concern (useCheckoutState, useGoogleAuth, ...); useOutboxReplay sends saved bids
     ├── lib/                   # Pure parsing/validation/formatting helpers (configuredId.ts: isConfiguredId), error buffer, screenshot capture;
-    │                          #   bidOutbox.ts (winning bids saved on the device while offline), syncStatus.ts (retry state)
+    │                          #   bidOutbox.ts (winning bids saved on the device while offline), syncStatus.ts (retry state);
+    │                          #   closeOutReport.ts (the close-out report's figures), reportPagination.ts (its page breaks)
     └── components/            # Views (Dashboard, Bidders, Items, Checkout, Receipts, ConfigSettings, BidEntry, ...) and their sub-components;
                                #   SyncStatusBanner.tsx (connection banner above every page + sidebar waiting count);
                                #   FormField.tsx (labelled dialog field), RowIdTile.tsx (list-row number box);
                                #   AppSidebar.tsx, SignInScreens.tsx, BackToTop.tsx, BidManagementWorkflow.tsx (App.tsx's pieces);
-                               #   ArchivedOverviewSection.tsx, ArchivedListSections.tsx (ArchivedYearPanel.tsx's sections)
+                               #   ArchivedOverviewSection.tsx, ArchivedListSections.tsx (ArchivedYearPanel.tsx's sections);
+                               #   closeout/ (the printable close-out report at /CloseOutReport: CloseOutReportPage.tsx, closeOutBlocks.tsx, closeOutReport.css)
         └── ui/                # Primitives: button, card, select, dialog, table, ... plus IconButton, LoadingButton, ConfirmationDialog, ListPageCard
 ```

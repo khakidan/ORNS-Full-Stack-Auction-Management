@@ -405,6 +405,16 @@ describe("Dashboard - Special Winners & Follow-Up", () => {
     expect(screen.getByText("Won Item: item-101")).toBeInTheDocument();
   });
 
+  it("Print Close-Out Report opens the printable report in a new tab", async () => {
+    await act(async () => {
+      render(<Dashboard />);
+    });
+    const link = screen.getByRole("link", { name: /Print Close-Out Report/ });
+    expect(link).toHaveAttribute("href", "/CloseOutReport");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+  });
+
   it("swallows a failed follow-up fetch without crashing (records stay empty)", async () => {
     mockedGetSheetData.mockImplementation((_spreadsheetId: string, range: string) => {
       if (range.startsWith("Follow-Up")) return Promise.reject(new Error("network down"));

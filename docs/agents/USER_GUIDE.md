@@ -46,6 +46,13 @@ The app asks **Check the bid sheet** before recording an amount that looks misty
 7. **Print All Receipts** prints 25 bidders per file, in alphabetical order, and shows "part 2 of 4" as it goes. The files are named like "Receipts - Part 2 of 4 (Garcia - Lopez)". Use it after bidding has closed.
    - If it stops partway, the message says which parts were printed. Those files are already in the Receipts folder.
 
+### 4. Closing Out After the Auction
+1. Once the auction is closed, open **Bid Management > Dashboard**.
+2. On the **Post-Auction Follow-Up** card, click **Print Close-Out Report**. The report opens in a new tab.
+3. Click **Print / Save as PDF**, then print it or choose **Save as PDF** in the print dialog (US Letter).
+4. Work through it with a pen. **Anything done offline (cash taken, a check collected, a prize delivered) must also be recorded in the app** - each task says where. Tick a box only when both are done.
+5. Print a fresh copy whenever you want an up-to-date one: it is built from the app's data at the moment it opens.
+
 ## Troubleshooting / Quick Fixes
 
 - **"Item #:" vs "Walk-In Ticket" Error**: If an item shows "Walk-In Ticket" instead of an ID, contact the technical administrator immediately to fix the spreadsheet row mapping.

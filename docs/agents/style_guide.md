@@ -19,6 +19,14 @@ three appear anywhere). If a distinct monospace treatment for bidder IDs
 or pricing metrics is wanted, that is a real design decision to make
 going forward, not an existing convention to document.
 
+The one exception is the printable close-out report
+(`src/components/closeout/`, 2026-11-01): a document meant for paper,
+it pairs **Newsreader Variable** (`@fontsource-variable/newsreader`,
+headings and big figures) with Geist for body text and **Geist Mono
+Variable** (`@fontsource-variable/geist-mono`, bidder numbers and
+amounts). Both are imported only by `CloseOutReportPage.tsx`, so they
+download only when the report opens.
+
 ---
 
 ## 2. Styling Patterns & Tailwind Guidelines
@@ -65,6 +73,7 @@ lazy-loading the Dashboard's attendance pie, see below):
 | *Lazy:* `BugReportsAdmin` | 6.21 kB | 2.23 kB |
 | *Lazy:* `FolderFilesCard` | 5.45 kB | 2.10 kB |
 | *Lazy:* `AttendancePie` | 0.47 kB | 0.34 kB |
+| *Lazy:* `CloseOutReportPage` (printable close-out report, 2026-11-01) | 26.22 kB | 8.08 kB |
 
 The browser no longer loads Firebase at all (since 2026-10-27, the
 shared Config comes from `GET /api/config`); before that it was a lazy
