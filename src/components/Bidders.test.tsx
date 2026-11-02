@@ -215,8 +215,9 @@ vi.mock("@/context/ConfigContext", () => ({
 }));
 
 let mockCanWalkIn = true;
+let mockCanAfterClose = true;
 vi.mock("@/context/AuthContext", () => ({
-  useAuth: () => ({ can: (cap: string) => cap !== "bidders.walkIn" || mockCanWalkIn }),
+  useAuth: () => ({ can: (cap: string) => (cap === "auction.afterClose" ? mockCanAfterClose : cap !== "bidders.walkIn" || mockCanWalkIn) }),
 }));
 
 vi.mock("@/context/AuctionContext", () => ({
@@ -236,6 +237,34 @@ afterEach(() => {
   authOverride = null;
   configOverride = null;
   mockCanWalkIn = true;
+  mockCanAfterClose = true;
+});
+
+describe('Bidders - after the auction is closed', () => {
+  const closed = () => ({
+    bidders: mockBidders, attendees: mockAttendees, loading: false,
+    checkInBidder: mockCheckInBidder, markBidderAsProxy: mockMarkBidderAsProxy,
+    fetchBidders: mockFetchBidders, fetchAttendees: mockFetchAttendees, isAuctionClosed: true,
+  });
+
+  it('an Administrator can still check bidders in and register walk-ins', () => {
+    authOverride = closed();
+    render(<Bidders />);
+    expect(screen.getAllByRole('button', { name: /Check In/ }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('New Walk-In Ticket').length).toBeGreaterThan(0);
+    expect(screen.getByText('Auction Closed')).toBeInTheDocument();
+    expect(screen.queryByText('Read Only')).not.toBeInTheDocument();
+  });
+
+  it('a User sees the list read-only', () => {
+    authOverride = closed();
+    mockCanAfterClose = false;
+    render(<Bidders />);
+    expect(screen.queryByRole('button', { name: /Check In/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('New Walk-In Ticket')).not.toBeInTheDocument();
+    expect(screen.getByText('Auction Closed (Read Only)')).toBeInTheDocument();
+    expect(screen.getAllByText('Read Only').length).toBeGreaterThan(0);
+  });
 });
 
 describe('Bidders - walk-ins', () => {

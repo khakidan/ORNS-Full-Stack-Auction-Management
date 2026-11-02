@@ -10,6 +10,8 @@ export const REFUSALS: Record<Capability, string> = {
   "attendees.delete": "Only an Administrator can delete attendees.",
   "bidders.walkIn": "Volunteers can't register walk-ins - ask a staff member.",
   "items.standard": "Only an Administrator can change the standard items (Movie Night, raffle tickets, Open Appeal, Auction Tickets).",
+  // A screen lock today, like the Closed state's other limits (src/hooks/useClosedReadOnly.ts): no route requires it yet.
+  "auction.afterClose": "The auction is closed - only an Administrator can change Bid Management now.",
 };
 
 /**

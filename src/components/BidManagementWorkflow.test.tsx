@@ -27,11 +27,14 @@ vi.mock("@/services/apiClient", async (importOriginal) => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: vi.fn(() => "setup-toast") } }));
 
 let canStage = true;
+let canAfterClose = true;
 let auction: { auctionState: string; isAuctionClosed: boolean; isBidManagementSetUp: boolean | null; goLive: () => void; closeAuction: () => void };
 vi.mock("@/context/ConfigContext", () => ({
   useConfig: () => ({ config: { bidManagementSpreadsheetId: "bm-sheet", auctionTicketsSpreadsheetId: "tickets-sheet" } }),
 }));
-vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ can: (cap: string) => cap !== "auction.stage" || canStage }) }));
+vi.mock("@/context/AuthContext", () => ({
+  useAuth: () => ({ can: (cap: string) => (cap === "auction.afterClose" ? canAfterClose : cap !== "auction.stage" || canStage) }),
+}));
 vi.mock("@/context/AuctionContext", () => ({ useAuction: () => auction }));
 
 const page = () => render(<BidManagementWorkflow activeBidTab="dashboard" onBidTabChange={() => {}} isVolunteer={false} />);
@@ -40,6 +43,7 @@ const reload = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks();
   canStage = true;
+  canAfterClose = true;
   auction = { auctionState: "prep", isAuctionClosed: false, isBidManagementSetUp: true, goLive: vi.fn(), closeAuction: vi.fn() };
   vi.stubGlobal("location", { ...window.location, reload });
 });
@@ -163,6 +167,18 @@ describe("Go Live and Close", () => {
     for (const name of ["Go Live", "Close Auction", "Set Up Bid Management App"]) {
       expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
     }
+  });
+
+  it("keeps the Bid Entry tab for an Administrator after Close, and takes it away from a User", () => {
+    Object.assign(auction, { auctionState: "closed", isAuctionClosed: true });
+    const { unmount } = page();
+    expect(screen.getByRole("tab", { name: /Bid Entry/ })).toBeInTheDocument();
+    unmount();
+
+    canAfterClose = false;
+    page();
+    expect(screen.queryByRole("tab", { name: /Bid Entry/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Checkout/ })).toBeInTheDocument();
   });
 
   it("offers no stage buttons once the auction is closed", () => {

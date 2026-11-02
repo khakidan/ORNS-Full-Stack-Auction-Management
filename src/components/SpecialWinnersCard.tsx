@@ -11,7 +11,8 @@ interface SpecialWinnersCardProps {
   onRaffleWinnerIdChange: (value: string) => void;
   savingRaffle: boolean;
   onSaveRaffle: () => void;
-  isAuctionClosed: boolean;
+  /** Closed and this person can't work on it after Close (useClosedReadOnly). */
+  readOnly: boolean;
   getBidderName: (id: string) => string;
 }
 
@@ -24,7 +25,7 @@ export function SpecialWinnersCard({
   onRaffleWinnerIdChange,
   savingRaffle,
   onSaveRaffle,
-  isAuctionClosed,
+  readOnly,
   getBidderName,
 }: SpecialWinnersCardProps) {
   return (
@@ -46,7 +47,7 @@ export function SpecialWinnersCard({
           onChange={onGiftCardWinnerIdChange}
           onSave={onSaveGiftCard}
           saving={savingGiftCard}
-          disabled={savingGiftCard || isAuctionClosed}
+          disabled={savingGiftCard || readOnly}
           winnerName={getBidderName(giftCardWinnerId)}
         />
         <SpecialWinnerField
@@ -56,7 +57,7 @@ export function SpecialWinnersCard({
           onChange={onRaffleWinnerIdChange}
           onSave={onSaveRaffle}
           saving={savingRaffle}
-          disabled={savingRaffle || isAuctionClosed}
+          disabled={savingRaffle || readOnly}
           winnerName={getBidderName(raffleWinnerId)}
           bordered
         />

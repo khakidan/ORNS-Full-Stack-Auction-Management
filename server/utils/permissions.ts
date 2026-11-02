@@ -10,7 +10,11 @@
  *   they grant only their own level or lower (roleChangeRefusal).
  * - User: no Settings page; the Auction Tickets page is view-only; can't
  *   Go Live, Close the auction, or Set Up the Bid Management App; can't
- *   change the standard Auction Items (raffle tickets, Open Appeal...).
+ *   change the standard Auction Items (raffle tickets, Open Appeal...);
+ *   once the auction is Closed, Bid Management is read-only for them
+ *   apart from Checkout and Receipts (Administrators keep working on it,
+ *   "auction.afterClose" - a screen lock only, like the Closed state's
+ *   other limits: no route refuses staff after Close).
  * - Volunteer (not an @orns.org address; only while the auction is Live):
  *   none of these capabilities, and only the Bid Management routes listed
  *   in server/middleware/volunteerAccess.ts.
@@ -36,11 +40,13 @@ export type Capability =
   /** Registering a walk-in bidder (staff only - not in the volunteers' list). */
   | "bidders.walkIn"
   /** Editing, deleting or bundling a standard Auction Item (src/lib/standardItems.ts). */
-  | "items.standard";
+  | "items.standard"
+  /** Working on Bid Management after the auction is Closed: Bid Entry, check-in, walk-ins, the special winners and Auction Items changes - so the close-out report's tasks can be finished. */
+  | "auction.afterClose";
 
 const CAPABILITIES: Record<UserRole, readonly Capability[]> = {
-  full_admin: ["settings", "settings.system", "users.manage", "auction.stage", "tickets.edit", "attendees.delete", "bidders.walkIn", "items.standard"],
-  admin: ["settings", "users.manage", "auction.stage", "tickets.edit", "attendees.delete", "bidders.walkIn", "items.standard"],
+  full_admin: ["settings", "settings.system", "users.manage", "auction.stage", "tickets.edit", "attendees.delete", "bidders.walkIn", "items.standard", "auction.afterClose"],
+  admin: ["settings", "users.manage", "auction.stage", "tickets.edit", "attendees.delete", "bidders.walkIn", "items.standard", "auction.afterClose"],
   user: ["bidders.walkIn"],
   volunteer: [],
 };

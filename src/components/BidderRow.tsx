@@ -17,6 +17,8 @@ interface BidderRowProps {
   bidder: Bidder;
   attendeeInfo: BidderAttendeeInfo;
   isAuctionClosed: boolean;
+  /** Closed and this person can't work on it after Close (useClosedReadOnly): no Check In / Proxy buttons. */
+  readOnly: boolean;
   processingId: string | null;
   isAddingTicketToReceipt: boolean;
   onCheckInAttempt: (bidder: Bidder) => void;
@@ -37,6 +39,7 @@ export function BidderRow({
   bidder,
   attendeeInfo,
   isAuctionClosed,
+  readOnly,
   processingId,
   isAddingTicketToReceipt,
   onCheckInAttempt,
@@ -133,7 +136,7 @@ export function BidderRow({
       </div>
 
       <div className="flex gap-1.5 md:gap-2 shrink-0">
-        {isAuctionClosed ? (
+        {readOnly ? (
           <span className="text-xs text-muted-foreground italic">Read Only</span>
         ) : (
           <>

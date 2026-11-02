@@ -2,6 +2,7 @@
 import { useAuction } from "@/context/AuctionContext";
 import { useConfig } from "@/context/ConfigContext";
 import { useAuth } from "@/context/AuthContext";
+import { useClosedReadOnly } from "@/hooks/useClosedReadOnly";
 import { ListPageCard } from "@/components/ui/ListPageCard";
 import { Badge } from "@/components/ui/badge";
 import { FilterToolbar } from "@/components/FilterToolbar";
@@ -15,6 +16,7 @@ export default function Bidders() {
   const { bidders, loading, checkInBidder, markBidderAsProxy, fetchBidders, fetchAttendees, attendees, isAuctionClosed } = useAuction();
   const { config } = useConfig();
   const { can } = useAuth();
+  const readOnly = useClosedReadOnly();
   const spreadsheetId = config.bidManagementSpreadsheetId;
   const ticketsSpreadsheetId = config.auctionTicketsSpreadsheetId;
   const ticketPrice = config.ticketPrice;
@@ -58,7 +60,7 @@ export default function Bidders() {
         }
         trailing={
           <>
-            {!isAuctionClosed && can("bidders.walkIn") && (
+            {!readOnly && can("bidders.walkIn") && (
               <WalkInTicketDialog
                 open={state.isWalkInOpen}
                 onOpenChange={state.setIsWalkInOpen}
@@ -70,7 +72,7 @@ export default function Bidders() {
             )}
             {isAuctionClosed && (
               <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 px-4 h-10">
-                Auction Closed (Read Only)
+                {readOnly ? "Auction Closed (Read Only)" : "Auction Closed"}
               </Badge>
             )}
           </>
@@ -88,6 +90,7 @@ export default function Bidders() {
           hasActiveFilters={state.hasActiveFilters}
           getAttendeeInfo={state.getAttendeeInfo}
           isAuctionClosed={isAuctionClosed}
+          readOnly={readOnly}
           processingId={state.processingId}
           isAddingTicketToReceipt={state.isAddingTicketToReceipt}
           onCheckInAttempt={state.handleCheckInAttempt}

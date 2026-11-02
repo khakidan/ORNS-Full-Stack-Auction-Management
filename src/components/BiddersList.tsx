@@ -12,6 +12,7 @@ interface BiddersListProps {
   hasActiveFilters: boolean;
   getAttendeeInfo: (bidder: Bidder) => BidderAttendeeInfo;
   isAuctionClosed: boolean;
+  readOnly: boolean;
   processingId: string | null;
   isAddingTicketToReceipt: boolean;
   onCheckInAttempt: (bidder: Bidder) => void;
@@ -33,6 +34,7 @@ export function BiddersList({
   hasActiveFilters,
   getAttendeeInfo,
   isAuctionClosed,
+  readOnly,
   processingId,
   isAddingTicketToReceipt,
   onCheckInAttempt,
@@ -57,6 +59,7 @@ export function BiddersList({
           bidder={bidder}
           attendeeInfo={getAttendeeInfo(bidder)}
           isAuctionClosed={isAuctionClosed}
+          readOnly={readOnly}
           processingId={processingId}
           isAddingTicketToReceipt={isAddingTicketToReceipt}
           onCheckInAttempt={onCheckInAttempt}

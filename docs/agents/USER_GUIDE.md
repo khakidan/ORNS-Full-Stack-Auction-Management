@@ -52,6 +52,7 @@ The app asks **Check the bid sheet** before recording an amount that looks misty
 3. Click **Print / Save as PDF**, then print it or choose **Save as PDF** in the print dialog (US Letter).
 4. Work through it with a pen. **Anything done offline (cash taken, a check collected, a prize delivered) must also be recorded in the app** - each task says where. Tick a box only when both are done.
 5. Print a fresh copy whenever you want an up-to-date one: it is built from the app's data at the moment it opens.
+6. **Who can do what after Close:** everyone can still use **Checkout** and **Receipts**. **Bid Entry**, checking a bidder in, walk-ins, the **Special Winners** and changes on the **Auction Items** page are for Administrators and Full Administrators; for Users those pages are read-only.
 
 ## Troubleshooting / Quick Fixes
 

@@ -18,7 +18,8 @@ interface AuctionItemRowProps {
   locked?: boolean;
   onToggleSelect: (rowIndex: number) => void;
   onEditRequest: (item: AuctionItem) => void;
-  isAuctionClosed: boolean;
+  /** Closed and this person can't work on it after Close (useClosedReadOnly): no edit, delete or restore controls. */
+  readOnly: boolean;
   isExecutingRestore: boolean;
   restoreBundleId: string | null;
   onRestoreBundle: (bundleId: string) => void;
@@ -44,7 +45,7 @@ export function AuctionItemRow({
   locked = false,
   onToggleSelect,
   onEditRequest,
-  isAuctionClosed,
+  readOnly,
   isExecutingRestore,
   restoreBundleId,
   onRestoreBundle,
@@ -120,7 +121,7 @@ export function AuctionItemRow({
           </div>
         )}
 
-        {isBundled && !isAuctionClosed && (
+        {isBundled && !readOnly && (
           <LoadingButton
             size="sm"
             variant="outline"
@@ -136,7 +137,7 @@ export function AuctionItemRow({
         )}
       </div>
 
-      {!isAuctionClosed && !locked && (
+      {!readOnly && !locked && (
         <div className="flex gap-1 shrink-0 pt-0.5 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 transition-opacity">
           <IconButton
             variant="ghost"
