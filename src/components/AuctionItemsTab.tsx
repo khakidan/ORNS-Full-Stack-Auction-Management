@@ -22,10 +22,12 @@ import { AddAuctionItemDialog } from "@/components/AddAuctionItemDialog";
 import { EditAuctionItemDialog } from "@/components/EditAuctionItemDialog";
 import type { AuctionItemEditChange } from "@/hooks/useAuctionItemUpdate";
 import { AuctionItem } from "@/types";
+import { useClosedReadOnly } from "@/hooks/useClosedReadOnly";
 
 export default function AuctionItemsTab() {
   const { config } = useConfig();
   const { isAuctionClosed, dataVersion, lastChangedKeys } = useAuction();
+  const readOnly = useClosedReadOnly();
   const spreadsheetId = config.auctionItemsSpreadsheetId;
   const {
     items,
@@ -120,14 +122,14 @@ export default function AuctionItemsTab() {
         }
         trailing={
           <>
-            {!isAuctionClosed && (
+            {!readOnly && (
               <Button onClick={table.openAddItemDialog} className="flex items-center gap-2">
                 <Plus className="w-4 h-4" /> Add New Item
               </Button>
             )}
             {isAuctionClosed && (
               <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 h-10 px-4">
-                Auction Closed (Read Only)
+                {readOnly ? "Auction Closed (Read Only)" : "Auction Closed"}
               </Badge>
             )}
           </>
@@ -148,7 +150,7 @@ export default function AuctionItemsTab() {
           onToggleRow={table.toggleRow}
           onToggleAll={table.toggleAll}
           onEditRequest={setItemToEdit}
-          isAuctionClosed={isAuctionClosed}
+          readOnly={readOnly}
           isExecutingRestore={isExecutingRestore}
           restoreBundleId={restoreBundleId}
           onRestoreBundle={handleRestoreBundle}

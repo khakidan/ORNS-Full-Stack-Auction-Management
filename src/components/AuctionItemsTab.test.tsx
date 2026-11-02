@@ -33,13 +33,16 @@ vi.mock("@/context/ConfigContext", () => ({
 
 // Whether this person may change the standard items (set per test; reset after each).
 let mockCanChangeStandard = true;
+// After Close: whether the auction is closed, and whether this person may still work on it.
+let mockClosed = false;
+let mockCanAfterClose = true;
 vi.mock("@/context/AuthContext", () => ({
-  useAuth: () => ({ can: (cap: string) => cap !== "items.standard" || mockCanChangeStandard }),
+  useAuth: () => ({ can: (cap: string) => (cap === "auction.afterClose" ? mockCanAfterClose : cap !== "items.standard" || mockCanChangeStandard) }),
 }));
 
 vi.mock("@/context/AuctionContext", () => ({
   useAuction: () => ({
-    isAuctionClosed: false,
+    isAuctionClosed: mockClosed,
   })
 }));
 
@@ -332,5 +335,29 @@ describe("AuctionItemsTab - standard items", () => {
     expect(within(row).getByRole("checkbox", { name: "Select item 1501" })).not.toHaveAttribute("aria-disabled", "true");
     expect(within(row).getByRole("button", { name: /^Edit / })).toBeInTheDocument();
     expect(within(row).getByRole("button", { name: /^Delete / })).toBeInTheDocument();
+  });
+});
+
+describe("AuctionItemsTab - after the auction is closed", () => {
+  afterEach(() => {
+    mockClosed = false;
+    mockCanAfterClose = true;
+  });
+
+  it("an Administrator can still add and edit items", () => {
+    mockClosed = true;
+    render(<AuctionItemsTab />);
+    expect(screen.getByRole("button", { name: /Add New Item/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Food 1" })).toBeInTheDocument();
+    expect(screen.getByText("Auction Closed")).toBeInTheDocument();
+  });
+
+  it("a User sees the items read-only", () => {
+    mockClosed = true;
+    mockCanAfterClose = false;
+    render(<AuctionItemsTab />);
+    expect(screen.queryByRole("button", { name: /Add New Item/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit Food 1" })).not.toBeInTheDocument();
+    expect(screen.getByText("Auction Closed (Read Only)")).toBeInTheDocument();
   });
 });

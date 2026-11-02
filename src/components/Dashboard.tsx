@@ -6,11 +6,13 @@ import { AttendanceChart } from "@/components/AttendanceChart";
 import { ProxyBiddersCard } from "@/components/ProxyBiddersCard";
 import { SpecialWinnersCard } from "@/components/SpecialWinnersCard";
 import { useDashboardState } from "@/hooks/useDashboardState";
+import { useClosedReadOnly } from "@/hooks/useClosedReadOnly";
 
 export default function Dashboard() {
   const { bidders, items, totalRaised, isAuctionClosed, winners, dataVersion } = useAuction();
   const { config } = useConfig();
   const spreadsheetId = config.bidManagementSpreadsheetId;
+  const readOnly = useClosedReadOnly();
 
   const state = useDashboardState({ bidders, items, winners, spreadsheetId, isAuctionClosed, dataVersion });
 
@@ -48,7 +50,7 @@ export default function Dashboard() {
           onRaffleWinnerIdChange={state.setRaffleWinnerId}
           savingRaffle={state.savingRaffle}
           onSaveRaffle={state.saveRaffleWinner}
-          isAuctionClosed={isAuctionClosed}
+          readOnly={readOnly}
           getBidderName={state.getBidderName}
         />
       </div>

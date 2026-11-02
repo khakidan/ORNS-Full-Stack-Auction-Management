@@ -42,7 +42,7 @@ function renderRow(overrides: Partial<ComponentProps<typeof AuctionItemRow>> = {
       isSelected={false}
       onToggleSelect={() => {}}
       onEditRequest={() => {}}
-      isAuctionClosed={false}
+      readOnly={false}
       isExecutingRestore={false}
       restoreBundleId={null}
       onRestoreBundle={() => {}}
@@ -63,7 +63,7 @@ describe("AuctionItemRow - action-button keyboard-focus reveal", () => {
   });
 
   it("does not render Edit/Delete buttons once the auction is closed", () => {
-    renderRow({ isAuctionClosed: true });
+    renderRow({ readOnly: true });
 
     expect(screen.queryByRole("button", { name: `Delete ${ITEM.name}` })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: `Edit ${ITEM.name}` })).not.toBeInTheDocument();
@@ -102,7 +102,7 @@ describe("AuctionItemRow - bundle restore", () => {
   });
 
   it("hides the Restore Items button once the auction is closed", () => {
-    renderRow({ item: { ...ITEM, bundleId: "BND-1", status: "Active" }, isAuctionClosed: true });
+    renderRow({ item: { ...ITEM, bundleId: "BND-1", status: "Active" }, readOnly: true });
     expect(screen.queryByRole("button", { name: /restore items/i })).not.toBeInTheDocument();
   });
 });

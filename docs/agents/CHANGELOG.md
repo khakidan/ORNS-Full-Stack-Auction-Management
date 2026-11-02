@@ -4,6 +4,16 @@ All notable changes to the **ORNS Charity Auction Manager** will be documented i
 
 ## [Unreleased]
 
+### Changed
+
+- **Administrators can still work on Bid Management after the auction is Closed** (2026-11-01).
+  - **Why:** Close made Bid Entry, check-in, walk-ins, the Special Winners and Auction Items changes read-only for everyone, so several close-out report tasks (checking in someone who did attend, recording a late special winner, fixing a bid, updating unsold items) couldn't be done in the app.
+  - **Now:** a new capability, `auction.afterClose`, for Full Administrators and Administrators, keeps those open for them (`src/hooks/useClosedReadOnly.ts`). Users keep Checkout and Receipts, as before, and see the rest read-only. The Close confirmation says so.
+  - **A screen lock, like before:** the Closed state's limits were never enforced by the server (no route refuses staff after Close), and this doesn't add any. `auction.afterClose` has a refusal message ready in `requirePermission.ts` if a route ever needs it.
+  - **Report wording:** the close-out report says who can do what after Close, has an Administrator check in a late arrival on the Bidders tab, and no longer says Action History can correct a payment (a checkout can't be undone: fix the Payment Method on Bidder-Numbers, and a card amount in PayPal).
+  - **Also fixed:** a User whose remembered tab was Bid Entry still saw the Bid Entry form after Close, because only its tab button was hidden.
+  - Frontend 922 -> 929, total 2129 -> 2136.
+
 ### Added
 
 - **A printable close-out report for after the auction** (2026-11-01).

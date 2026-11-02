@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useConfig } from "@/context/ConfigContext";
 import { useAuth } from "@/context/AuthContext";
 import { useAuction } from "@/context/AuctionContext";
+import { useClosedReadOnly } from "@/hooks/useClosedReadOnly";
 import { postJsonOnce } from "@/services/apiClient";
 import Dashboard from "./Dashboard";
 import Bidders from "./Bidders";
@@ -30,6 +31,7 @@ export default function BidManagementWorkflow({ activeBidTab, onBidTabChange, is
   const { config } = useConfig();
   const { can } = useAuth();
   const { auctionState, isAuctionClosed, isBidManagementSetUp, closeAuction, goLive } = useAuction();
+  const readOnly = useClosedReadOnly();
   const [isSyncing, setIsSyncing] = useState(false);
 
   const handleSyncBidders = async () => {
@@ -93,7 +95,7 @@ export default function BidManagementWorkflow({ activeBidTab, onBidTabChange, is
               {auctionState === "live" && (
                 <Button
                   onClick={() => {
-                    if (window.confirm("Are you sure you want to CLOSE the auction? This will disable further bid entries.")) {
+                    if (window.confirm("Are you sure you want to CLOSE the auction? Bid entry, check-in and item changes will then be for Administrators only.")) {
                       closeAuction();
                     }
                   }}
@@ -149,7 +151,7 @@ export default function BidManagementWorkflow({ activeBidTab, onBidTabChange, is
                 <span className="hidden sm:inline">Items</span>
               </TabsTrigger>
             )}
-            {!isAuctionClosed && (
+            {!readOnly && (
               <TabsTrigger value="bids" className="gap-2 px-4 py-2">
                 <CreditCard className="w-4 h-4" />
                 <span className="hidden sm:inline">Bid Entry</span>
@@ -177,9 +179,11 @@ export default function BidManagementWorkflow({ activeBidTab, onBidTabChange, is
             <Items />
           </TabsContent>
         )}
-        <TabsContent value="bids" className="m-0 mt-2">
-          <BidEntry />
-        </TabsContent>
+        {!readOnly && (
+          <TabsContent value="bids" className="m-0 mt-2">
+            <BidEntry />
+          </TabsContent>
+        )}
         <TabsContent value="checkout" className="m-0 mt-2">
           <Checkout />
         </TabsContent>

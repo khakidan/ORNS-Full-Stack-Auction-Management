@@ -17,7 +17,7 @@ interface AuctionItemsListProps {
   onToggleRow: (rowIndex: number) => void;
   onToggleAll: () => void;
   onEditRequest: (item: AuctionItem) => void;
-  isAuctionClosed: boolean;
+  readOnly: boolean;
   isExecutingRestore: boolean;
   restoreBundleId: string | null;
   onRestoreBundle: (bundleId: string) => void;
@@ -45,7 +45,7 @@ export function AuctionItemsList({
   onToggleRow,
   onToggleAll,
   onEditRequest,
-  isAuctionClosed,
+  readOnly,
   isExecutingRestore,
   restoreBundleId,
   onRestoreBundle,
@@ -79,7 +79,7 @@ export function AuctionItemsList({
             locked={isLocked(item)}
             onToggleSelect={onToggleRow}
             onEditRequest={onEditRequest}
-            isAuctionClosed={isAuctionClosed}
+            readOnly={readOnly}
             isExecutingRestore={isExecutingRestore}
             restoreBundleId={restoreBundleId}
             onRestoreBundle={onRestoreBundle}

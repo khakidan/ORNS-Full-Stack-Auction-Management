@@ -105,7 +105,7 @@ export function buildCloseOutBlocks(r: CloseOutReport, { year, printedAt, isAuct
         <h2>Done it offline? Record it in the app too.</h2>
         <div>
           <p>Most of this work happens away from a screen: cash taken at the door, a check handed over in the car park, a prize dropped off on Monday. Each of those must also be recorded in the auction app. Until it is, the app still shows the bidder as unpaid, their receipt is wrong, and the archive won't match the bank deposit.</p>
-          <p>Every task says what to do in the app. <strong>Tick the box only when both halves are done.</strong></p>
+          <p>Every task says what to do in the app. <strong>Tick the box only when both halves are done.</strong> After Close, Checkout and Receipts stay open to everyone; Bid Entry, check-in, item changes and the special winners are for Administrators and Full Administrators.</p>
         </div>
       </aside>
     </div>
@@ -142,7 +142,7 @@ export function buildCloseOutBlocks(r: CloseOutReport, { year, printedAt, isAuct
   ));
 
   // 2. Special winners
-  head("2", "Special winners", "The two draws recorded on the Dashboard. The winner fields lock at Close, so save them before closing.", "From the Dashboard's Special Winners card");
+  head("2", "Special winners", "The two draws recorded on the Dashboard. After Close, only an Administrator can record or change a winner.", "From the Dashboard's Special Winners card");
   const prizeWho = (w: CloseOutReport["giftCard"]) => w
     ? <div className="co-prize-who"><span className="co-id">#{w.id}</span><strong>{w.name}</strong></div>
     : <p className="co-empty">No winner recorded on the Dashboard.</p>;
@@ -221,7 +221,7 @@ export function buildCloseOutBlocks(r: CloseOutReport, { year, printedAt, isAuct
       <Task
         title="Reviewed the no-show list"
         sub="None of these bidders has a winning bid or an amount owed. Anyone who does belongs in the checkout list instead."
-        note={<InApp>Search the bidder number on <Path>Bid Management</Path>. If someone did attend, check them in and out on the Checkout page so their record isn't left blank.</InApp>}
+        note={<InApp>Search the bidder number on <Path>Bid Management</Path>. If someone did attend, an Administrator checks them in on the <Path>Bidders</Path> tab, then they're checked out on the Checkout page, so their record isn't left blank.</InApp>}
       />
     ));
   }
@@ -314,7 +314,7 @@ export function buildCloseOutBlocks(r: CloseOutReport, { year, printedAt, isAuct
       note: <InApp>Each one is recorded as a checkout on the <Path>Checkout</Path> page. The Dashboard's "Still Need to Check Out" list should be empty.</InApp> },
     { title: "Count the cash and checks and compare them with the app",
       sub: `The app shows cash ${usd2(cash?.amount ?? 0)} from ${cash?.count ?? 0} bidder${cash?.count === 1 ? "" : "s"}, checks ${usd2(check?.amount ?? 0)} from ${check?.count ?? 0}.`, who: "Treasurer",
-      note: <InApp>If a count differs, find that checkout in <Path>Settings → Action History</Path> and correct its payment method or amount.</InApp> },
+      note: <InApp>If a count differs, <Path>Settings → Action History</Path> shows who checked each bidder out, and how. A checkout can't be undone in the app: correct the bidder's Payment Method on the Bid Management spreadsheet's Bidder-Numbers tab, and a card amount in PayPal.</InApp> },
     { title: "Deposit the cash and checks", sub: "Keep the deposit slip with the auction records.", who: "Treasurer", note: <OfflineOnly /> },
     { title: "Confirm every card payment has cleared in PayPal", sub: "Check pavetheway@orns.org's account for held or unpaid invoices.", who: "Admin",
       note: <InApp>The <Path>PayPal Sweeper Status</Path> card shows nothing still waiting. A bidder who paid another way is marked paid with Cash or Check.</InApp> },

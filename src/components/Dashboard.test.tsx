@@ -122,6 +122,13 @@ vi.mock("@/context/AuctionContext", () => ({
   useAuction: () => mockContextValue,
 }));
 
+// The signed-in person's rights. An Administrator by default (can work on
+// Bid Management after Close); a test switches to a User.
+let canAfterClose = true;
+vi.mock("@/context/AuthContext", () => ({
+  useAuth: () => ({ can: (capability: string) => capability === "auction.afterClose" ? canAfterClose : true }),
+}));
+
 vi.mock("@/context/ConfigContext", () => ({
   useConfig: () => ({
     config: {
@@ -240,6 +247,7 @@ function mockSpecialWinners(giftCardId: string, raffleId: string) {
 describe("Dashboard - Special Winners & Follow-Up", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    canAfterClose = true;
     mockedGetSheetData.mockResolvedValue({ values: [] });
     mockedFetchWithRetry.mockResolvedValue(savedOk());
   });
@@ -370,6 +378,26 @@ describe("Dashboard - Special Winners & Follow-Up", () => {
       expect(specialWinnerBodies()).toEqual([expect.objectContaining({ prize: "raffle", bidderId: "2", addFollowUp: false })]);
     });
     expect(toast.success).toHaveBeenCalledWith("Updated 50/50 Raffle winner");
+  });
+
+  it("after Close, an Administrator can still record a special winner (the auction is closed in these tests)", async () => {
+    mockSpecialWinners("", "");
+    await act(async () => {
+      render(<Dashboard />);
+    });
+    expect(screen.getByLabelText("$500 Amazon Gift Card")).toBeEnabled();
+    expect(screen.getByLabelText("50/50 Raffle")).toBeEnabled();
+  });
+
+  it("after Close, a User sees the special winners but can't change them", async () => {
+    canAfterClose = false;
+    mockSpecialWinners("1", "2");
+    await act(async () => {
+      render(<Dashboard />);
+    });
+    await waitFor(() => expect(screen.getByLabelText("50/50 Raffle")).toHaveValue("2"));
+    expect(screen.getByLabelText("$500 Amazon Gift Card")).toBeDisabled();
+    expect(screen.getByLabelText("50/50 Raffle")).toBeDisabled();
   });
 
   it("Refresh Lists re-fetches Follow-Up records and renders them in the Post-Checkout Item Wins panel", async () => {

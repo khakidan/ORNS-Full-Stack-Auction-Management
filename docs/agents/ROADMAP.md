@@ -68,6 +68,9 @@ The automated tests (2,100+) use stand-ins for Google, PayPal and Apps Script; t
 
 - **An email alert when website purchases can't be written** (no stored Google sign-in, or a check failing), so nobody has to remember to look at Website Ticket Check.
 - **A staging copy of the app** that `main` deploys to first, so a change can be tried before it reaches the live app.
+- **Have the server enforce the after-Close limits.** Once the auction is Closed, Users can only use Checkout and Receipts on Bid Management; Bid Entry, check-in, walk-ins, the special winners and Auction Items changes are for Administrators and Full Administrators (`auction.afterClose`). Today that is only a screen lock (`src/hooks/useClosedReadOnly.ts`): the buttons are hidden, but the server still accepts those changes from any staff member.
+  - **Why it's needed:** a screen lock isn't protection. A User with a page still open from before Close (the buttons only disappear once their page learns the auction closed), an old browser tab, or a request sent another way could still record a bid, check someone in or edit an item after Close. The close-out report and the archive then stop matching what the treasurer counted. AGENTS.md's own rule: hiding a button is never the protection.
+  - **What it takes:** the routes behind those screens (record winning bid, bidder check-in/proxy, walk-ins, special winner, the Auction Items writes) refuse a User once Auction-Status reads Closed, with the message already in `requirePermission.ts`. That means reading the auction state on each such write (cached, like the volunteers' check) and deciding what happens if it can't be read. It touches the bid-recording money path and its recorded snapshots, so do it with the mutation tests, well before an auction.
 
 ---
 
